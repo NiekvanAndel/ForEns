@@ -125,13 +125,15 @@ body{
       </div>
       <!-- Rij 3: komende 3 uur -->
       <div style="display:flex;flex-direction:column;border-top:0.5px solid rgba(128,128,128,.18)" id="hero3h"></div>
+      <!-- Bekijk meer -->
+      <div onclick="openHourlyPopup()" style="padding:12px 16px;text-align:center;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);cursor:pointer;border-top:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">Bekijk meer ›</div>
     </div>
   </div>
 
   <div id="mainContent" style="display:none">
 
     <div class="card">
-      <div class="card-title"><i class="ti ti-calendar"></i> 7 dagen · ECMWF ENS 51 members</div>
+      <div class="card-title"><i class="ti ti-calendar"></i> <span id="dailyCardTitle">7 dagen · ECMWF ENS 51 members</span></div>
       <div class="tab-row">
         <button class="tab-btn active" onclick="setTab('overzicht',this)">Overzicht</button>
         <button class="tab-btn" onclick="setTab('neerslag',this)">☔ Neerslag</button>
@@ -176,7 +178,7 @@ body{
         <span id="dayPopupTitle" style="font-family:var(--sans);font-size:16px;font-weight:700"></span>
         <button onclick="closeDayPopup()" style="background:var(--surface2);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
       </div>
-      <div id="dayPopupBody" style="padding:16px 18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+      <div id="dayPopupBody" style="overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:calc(85dvh - 52px)"></div>
     </div>
   </div>
 
@@ -274,6 +276,16 @@ function showErr(m){
   document.getElementById('loadingBlock').style.display='none';
   document.getElementById('errBlock').style.display='';
   document.getElementById('errMsg').textContent='Fout: '+m;
+  // Voeg opnieuw proberen knop toe
+  const eb=document.getElementById('errBlock');
+  if(!eb.querySelector('button')){
+    const btn=document.createElement('button');
+    btn.textContent='Opnieuw proberen';
+    btn.className='loc-btn primary';
+    btn.style.marginTop='12px';
+    btn.onclick=()=>{eb.querySelector('button')?.remove();showLoad();run().catch(e=>showErr(e.message));};
+    eb.appendChild(btn);
+  }
 }
 
 async function loadLocation(){
@@ -294,31 +306,83 @@ function useGPS(){
 
 async function run(){
   const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
-  const vars='temperature_2m,precipitation,windspeed_10m,weathercode,relativehumidity_2m,is_day';
+  const vars='temperature_2m,precipitation,windspeed_10m,winddirection_10m,weathercode,relativehumidity_2m,cloudcover,dewpoint_2m,apparent_temperature,surface_pressure,et0_fao_evapotranspiration,windgusts_10m';
 
-  // current_weather=true gives us the API's own local "now" timestamp — timezone-safe
-  const obsUrl  =`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars}&current_weather=true&past_days=1&forecast_days=1`;
-  const harmUrl =`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars},apparent_temperature,windgusts_10m,et0_fao_evapotranspiration,pressure_msl&current_weather=true&forecast_days=2&models=knmi_harmonie_arome_europe`;
-  const ensUrl  =`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&hourly=${vars}&models=ecmwf_ifs025&forecast_days=7`;
-  // Sunshine via reguliere forecast (ENS heeft geen sunshine_duration)
-  const sunUrl  =`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,winddirection_10m&forecast_days=7`;
+  const safeFetch=async(url,name,retries=2)=>{
+    for(let i=0;i<=retries;i++){
+      try{
+        const r=await fetch(url);
+        if(r.status===429&&i<retries){await new Promise(r=>setTimeout(r,600*(i+1)));continue;}
+        return r;
+      }catch(e){
+        if(i===retries)throw new Error(`${name}: ${e.message}`);
+        await new Promise(r=>setTimeout(r,400*(i+1)));
+      }
+    }
+  };
 
-  const [oR,hR,eR,sR]=await Promise.all([fetch(obsUrl),fetch(harmUrl),fetch(ensUrl),fetch(sunUrl)]);
-  const errs=[];
-  if(!oR.ok)errs.push(`Obs ${oR.status}`);
-  if(!hR.ok)errs.push(`HARMONIE ${hR.status}`);
-  if(!eR.ok)errs.push(`ENS ${eR.status}`);
-  if(errs.length)throw new Error(errs.join(' · '));
+  // ── Stap 1: OBS + HARMONIE (klein/snel) → toon hero direct ──
+  const obsUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars}&current_weather=true&past_days=1&forecast_days=1`;
+  const harmUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars}&current_weather=true&forecast_days=2&models=knmi_harmonie_arome_europe`;
 
-  const [oJ,hJ,eJ,sJ]=await Promise.all([oR.json(),hR.json(),eR.json(),sR.ok?sR.json():Promise.resolve(null)]);
-  S.data=processAll(oJ,hJ,eJ,sJ);
+  const oR=await safeFetch(obsUrl,'Obs');
+  if(!oR.ok)throw new Error(`Obs ${oR.status}`);
+  const hR=await safeFetch(harmUrl,'HARMONIE');
+  if(!hR.ok)throw new Error(`HARMONIE ${hR.status}`);
+  const [oJ,hJ]=await Promise.all([oR.json(),hR.json()]);
+
+  S.data=processAll(oJ,hJ,null,null,null,null);
   document.getElementById('loadingBlock').style.display='none';
   document.getElementById('heroBlock').style.display='';
   document.getElementById('mainContent').style.display='';
   render();
+
+  // ── Stap 2: ENS dagelijks + Sun + IFS dagelijks parallel op achtergrond ──
+  const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&hourly=relativehumidity_2m,weathercode&models=ecmwf_ifs025&forecast_days=7`;
+  const sunUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,winddirection_10m&forecast_days=7`;
+  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code&forecast_days=7`;
+  try{
+    const [eR,sR,iR]=await Promise.all([safeFetch(ensUrl,'ENS'),safeFetch(sunUrl,'Sun'),safeFetch(hresUrl,'IFS')]);
+    const eJ=eR?.ok?await eR.json():null;
+    const sJ=sR?.ok?await sR.json():null;
+    const iJ=iR?.ok?await iR.json():null;
+    S._oJ=oJ;S._hJ=hJ;S._eJ=eJ;S._sJ=sJ;S._ifsJ=iJ;
+    if(iJ) S._ifsLoaded=true;
+    S.data=processAll(oJ,hJ,eJ,sJ,iJ,null);
+    renderDaily();
+    updateDailyTitle();
+  }catch(e){console.warn('Achtergrond laden mislukt:',e.message);}
+
+  // ── IFS uurlijks: alleen bij klikken neerslag popup ──
+  S._oJ=S._oJ||oJ; S._hJ=S._hJ||hJ;
 }
 
-function processAll(oJ,hJ,eJ,sJ){
+async function loadIfsIfNeeded(){
+  if(S._ifsLoaded||S._ifsLoading) return;
+  S._ifsLoading=true;
+  const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+  const safeFetch=async(url,name)=>{
+    try{ const r=await fetch(url); return r; }
+    catch(e){ console.warn(name+' mislukt:',e.message); return null; }
+  };
+  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code&forecast_days=7`;
+  try{
+    const iR=await safeFetch(hresUrl,'IFS');
+    const iJ=iR?.ok?await iR.json():null;
+    if(iJ){
+      S._ifsJ=iJ;
+      S.data=processAll(S._oJ,S._hJ,S._eJ,S._sJ,iJ,null);
+      S._ifsLoaded=true;
+      updateDailyTitle();
+      if(dTab==='overzicht')renderDaily();
+    }
+  }catch(e){console.warn('IFS dagelijks mislukt:',e.message);}
+  S._ifsLoading=false;
+}
+
+
+function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
+  const iphJ=ihJ; // precipitation+weather_code zitten in ihJ
   // ── Determine "nowHour" robustly ──
   // current_weather.time is in the API's local timezone (same as timezone=auto).
   // It may be "YYYY-MM-DDTHH:MM" — truncate to the hour boundary.
@@ -343,7 +407,7 @@ function processAll(oJ,hJ,eJ,sJ){
     wind: oh.windspeed_10m[i]!=null ? Math.round(oh.windspeed_10m[i]) : null,
     humidity: oh.relativehumidity_2m?.[i]!=null ? Math.round(oh.relativehumidity_2m[i]) : null,
     wmo: oh.weathercode[i]??0,
-    isDay: oh.is_day?.[i]??1,
+    isDay: isHourDay(oh.time[i], S.lat),
     isPast: true,
   }));
 
@@ -357,58 +421,60 @@ function processAll(oJ,hJ,eJ,sJ){
         temp: hh.temperature_2m[i]!=null ? Math.round(hh.temperature_2m[i]) : null,
         precip: r1(hh.precipitation[i]??0),
         wind: hh.windspeed_10m[i]!=null ? Math.round(hh.windspeed_10m[i]) : null,
-        gusts: hh.windgusts_10m?.[i]!=null ? Math.round(hh.windgusts_10m[i]) : null,
-        feelsLike: hh.apparent_temperature?.[i]!=null ? Math.round(hh.apparent_temperature[i]) : null,
-        et0h: hh.et0_fao_evapotranspiration?.[i]!=null ? r1(hh.et0_fao_evapotranspiration[i]) : null,
-        pressure: hh.pressure_msl?.[i]!=null ? Math.round(hh.pressure_msl[i]) : null,
+        gusts: hh.windgusts_10m?.[i]!=null?Math.round(hh.windgusts_10m[i]):null,
+        feelsLike: hh.apparent_temperature?.[i]!=null?Math.round(hh.apparent_temperature[i]):null,
+        et0h: hh.et0_fao_evapotranspiration?.[i]!=null?r1(hh.et0_fao_evapotranspiration[i]):null,
+        pressure: hh.surface_pressure?.[i]!=null?Math.round(hh.surface_pressure[i]):null,
+        dewpoint: hh.dewpoint_2m?.[i]!=null?Math.round(hh.dewpoint_2m[i]):null,
         humidity: hh.relativehumidity_2m?.[i]!=null ? Math.round(hh.relativehumidity_2m[i]) : null,
         wmo: hh.weathercode[i]??0,
-        isDay: hh.is_day?.[i]??1,
+        isDay: isHourDay(ht[i], S.lat),
+        sunMin: isHourDay(ht[i],S.lat)?Math.round((1-(hh.cloudcover?.[i]??100)/100)*60):0,
+        windDir: hh.winddirection_10m?.[i]!=null?Math.round(hh.winddirection_10m[i]):null,
         isPast: false,
         pChance:null, p2mm:null, p10mm:null,
       });
     }
   }
 
-  // ── Overlay sunshine + windrichting op futureHours ──
-  if(sJ?.hourly?.time){
-    const st=sJ.hourly.time, sd=sJ.hourly.sunshine_duration||[], wd2=sJ.hourly.winddirection_10m||[];
-    futureHours.forEach(h=>{
-      const si=st.indexOf(h.time);
-      h.sunMin=si>=0?Math.round((sd[si]??0)/60):null;
-      h.windDir=si>=0&&wd2[si]!=null?Math.round(wd2[si]):null;
-    });
-  }
+  // windDir en sunMin komen nu direct uit HARMONIE
 
-  // ── Overlay ENS probs onto future hours ──
-  const en=eJ.hourly, et=en.time;
-  function getM(pfx){return Object.keys(en).filter(k=>k.startsWith(pfx+'_member')).map(k=>en[k]);}
-  const PM=getM('precipitation'); const PM2=PM.length?PM:[en.precipitation||[]];
-  const TM=getM('temperature_2m'); const TM2=TM.length?TM:[en.temperature_2m||[]];
-  const WM=getM('windspeed_10m'); const WM2=WM.length?WM:[en.windspeed_10m||[]];
+  // ── ENS: dagelijkse members ──
+  const ed=eJ?.daily||{}, edt=ed.time||[];
+  const eh=eJ?.hourly||{}, eht=eh.time||[];
+  function getDM(pfx){return Object.keys(ed).filter(k=>k.startsWith(pfx+'_member')).map(k=>ed[k]);}
+  const PM=getDM('precipitation_sum'); const PM2=PM.length?PM:[ed.precipitation_sum||[]];
+  const TMaxM=getDM('temperature_2m_max'); const TMaxM2=TMaxM.length?TMaxM:[ed.temperature_2m_max||[]];
+  const TMinM=getDM('temperature_2m_min'); const TMinM2=TMinM.length?TMinM:[ed.temperature_2m_min||[]];
+  const WM=getDM('windspeed_10m_max'); const WM2=WM.length?WM:[ed.windspeed_10m_max||[]];
 
+  // futureHours pChance: null — wordt lazy berekend bij klik neerslag dag popup
   futureHours.forEach(h=>{
-    const ei=et.indexOf(h.time);
-    if(ei<0)return;
-    const pa=PM2.map(m=>m[ei]??0);
-    h.pChance=Math.round(pge(pa,.1));
-    h.p2mm=Math.round(pge(pa,2));
-    h.p10mm=Math.round(pge(pa,10));
+    h.pChance=null;
+    h.precipP10=null; h.precipP25=null; h.precipP50=null; h.precipP75=null; h.precipP90=null;
   });
 
-  // ── ENS daily ──
+  // ── ENS dagelijkse aggregatie ──
   const dayMap={}, dayOrder=[];
-  for(let i=0;i<et.length;i++){
-    if(et[i] < nowHour) continue;
-    const d=et[i].slice(0,10);
-    if(!dayMap[d]){dayMap[d]={date:d,ps:Array(PM2.length).fill(0),taMax:Array(TM2.length).fill(-Infinity),taMin:Array(TM2.length).fill(Infinity),waMax:Array(WM2.length).fill(-Infinity),ha:[],wmos:[]};dayOrder.push(d);}
+  for(let i=0;i<edt.length;i++){
+    const d=edt[i];
+    if(d<=nowHour.slice(0,10)) continue;
+    dayMap[d]={date:d,
+      ps:PM2.map(m=>m[i]??0),
+      taMax:TMaxM2.map(m=>m[i]??-Infinity),
+      taMin:TMinM2.map(m=>m[i]??Infinity),
+      waMax:WM2.map(m=>m[i]??-Infinity),
+      ha:[], wmos:[]};
+    dayOrder.push(d);
+  }
+  // Uurlijkse humidity + weathercode (enkelvoudig, niet per member)
+  for(let i=0;i<eht.length;i++){
+    const d=eht[i].slice(0,10);
+    if(!dayMap[d])continue;
     const o=dayMap[d];
-    PM2.forEach((m,mi)=>{o.ps[mi]+=(m[i]||0);});
-    TM2.forEach((m,mi)=>{const v=m[i]; if(v!=null){o.taMax[mi]=Math.max(o.taMax[mi],v);o.taMin[mi]=Math.min(o.taMin[mi],v);}});
-    WM2.forEach((m,mi)=>{const v=m[i]; if(v!=null){o.waMax[mi]=Math.max(o.waMax[mi],v);}});
-    const hVal=en.relativehumidity_2m?.[i];
+    const hVal=eh.relativehumidity_2m?.[i];
     if(hVal!=null)o.ha.push(hVal);
-    if(en.weathercode?.[i]!=null)o.wmos.push(en.weathercode[i]);
+    if(eh.weathercode?.[i]!=null)o.wmos.push(eh.weathercode[i]);
   }
   // ── Sunshine per dag (seconden→uren) uit reguliere forecast ──
   const sunByDay={}, et0ByDay={}, windDirByDay={};
@@ -433,7 +499,75 @@ function processAll(oJ,hJ,eJ,sJ){
     });
   }
 
-  const days=dayOrder.slice(1,8).map(d=>{
+  // ── HRES dagdata koppelen ──
+  const hresDays={};
+  let hresRunLabel=null;
+  if(iJ?.daily?.time){
+    const id=iJ.daily;
+    // ECMWF IFS draait 4x per dag: 00, 06, 12, 18 UTC
+    // Open-Meteo geeft geen run-tijd terug, maar we kunnen schatten
+    // op basis van generationtime en huidig uur
+    const genMs=iJ.generationtime_ms??0;
+    const now=new Date();
+    const utcH=now.getUTCHours();
+    // Laatste voltooide run: 00z (+~4u beschikbaar), 06z, 12z, 18z
+    const runs=[0,6,12,18];
+    const lastRun=runs.filter(r=>utcH>=r+3).pop()??18;
+    hresRunLabel=`IFS ${String(lastRun).padStart(2,'0')}z`;
+    id.time.forEach((t,i)=>{
+      hresDays[t]={
+        hresTempMax: id.temperature_2m_max?.[i]!=null ? Math.round(id.temperature_2m_max[i]) : null,
+        hresTempMin: id.temperature_2m_min?.[i]!=null ? Math.round(id.temperature_2m_min[i]) : null,
+        hresPrecip:  r1(id.precipitation_sum?.[i]??0),
+        hresPrecipChance: id.precipitation_probability_max?.[i]??null,
+        hresWindMax: id.windspeed_10m_max?.[i]!=null ? Math.round(id.windspeed_10m_max[i]) : null,
+        hresWindDir: id.winddirection_10m_dominant?.[i]!=null ? Math.round(id.winddirection_10m_dominant[i]) : null,
+        hresWmo: id.weather_code?.[i]??null,
+      };
+    });
+  }
+
+  // ── IFS uurlijkse neerslag per dag ──
+  const hresHoursByDay={};
+  if(iphJ?.hourly?.time){
+    const pt=iphJ.hourly.time, pp=iphJ.hourly.precipitation||[], pw=iphJ.hourly.weather_code||iphJ.hourly.weathercode||[];
+    // Eerste 90u = echt uurlijks, daarna 3-uurlijks (elke 3u een echte waarde)
+    pt.forEach((t,i)=>{
+      const day=t.slice(0,10);
+      const hourNum=parseInt(t.slice(11,13));
+      // Na 90u: alleen uren deelbaar door 3 tonen (3-uurlijkse resolutie)
+      const isReal=i<90||(hourNum%3===0);
+      if(!isReal)return;
+      if(!hresHoursByDay[day])hresHoursByDay[day]=[];
+      hresHoursByDay[day].push({
+        time:t,
+        hour:hourNum,
+        precip:pp[i]!=null?r1(pp[i]):0,
+        wmo:pw[i]??0,
+        is3h:i>=90,
+      });
+    });
+  }
+
+  // ── IFS RH uit dauwpunt + temperatuur (Magnus formule) ──
+  const hresRhByDay={};
+  if(ihJ?.hourly?.time){
+    const ht=ihJ.hourly.time, htemp=ihJ.hourly.temperature_2m||[], hdew=ihJ.hourly.dewpoint_2m||[];
+    const magnus=(T,Td)=>{
+      if(T==null||Td==null)return null;
+      return Math.round(100*Math.exp(17.625*Td/(243.04+Td))/Math.exp(17.625*T/(243.04+T)));
+    };
+    ht.forEach((t,i)=>{
+      const day=t.slice(0,10);
+      const rh=magnus(htemp[i],hdew[i]);
+      if(rh==null)return;
+      if(!hresRhByDay[day])hresRhByDay[day]={min:100,max:0};
+      hresRhByDay[day].min=Math.min(hresRhByDay[day].min,rh);
+      hresRhByDay[day].max=Math.max(hresRhByDay[day].max,rh);
+    });
+  }
+
+  const days=dayOrder.slice(0,7).map(d=>{
     const o=dayMap[d];
     const wmoMode=o.wmos.length?o.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,o.wmos[0]):0;
     const sunHours=sunByDay[d]!=null ? r1(sunByDay[d]/3600) : null;
@@ -442,7 +576,7 @@ function processAll(oJ,hJ,eJ,sJ){
     return{date:d,
       precipP10:r1(pct(o.ps,10)),precipP25:r1(pct(o.ps,25)),
       precipMedian:r1(pct(o.ps,50)),precipP75:r1(pct(o.ps,75)),precipP90:r1(pct(o.ps,90)),
-      pChance:Math.round(pge(o.ps,1)),p5mm:Math.round(pge(o.ps,5)),p20mm:Math.round(pge(o.ps,20)),
+      pChance:Math.round(pge(o.ps,.1)),p5mm:Math.round(pge(o.ps,5)),p20mm:Math.round(pge(o.ps,20)),
       tempLo:Math.round(pct(o.taMin.filter(v=>v!==Infinity),10)),tempHi:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),90)),
       tempMaxP10:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),10)),
       tempMaxP50:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),50)),
@@ -450,14 +584,23 @@ function processAll(oJ,hJ,eJ,sJ){
       tempMinP10:Math.round(pct(o.taMin.filter(v=>v!==Infinity),10)),
       tempMinP50:Math.round(pct(o.taMin.filter(v=>v!==Infinity),50)),
       tempMinP90:Math.round(pct(o.taMin.filter(v=>v!==Infinity),90)),
+      tempMaxP25:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),25)),
+      tempMaxP75:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),75)),
+      tempMinP25:Math.round(pct(o.taMin.filter(v=>v!==Infinity),25)),
+      tempMinP75:Math.round(pct(o.taMin.filter(v=>v!==Infinity),75)),
       windP10:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),10)),
+      windP25:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),25)),
+      windP75:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),75)),
       windP50:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),50)),
       windP90:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),90)),
       humidityMedian:o.ha.length?Math.round(pct(o.ha,50)):null,
       humidityP10:o.ha.length?Math.round(pct(o.ha,10)):null,
       humidityP90:o.ha.length?Math.round(pct(o.ha,90)):null,
       sunHours, et0, windDir,
-      wmo:wmoMode, nMembers:PM2.length};
+      wmo:wmoMode, nMembers:PM2.length, ...(hresDays[d]||{}),
+      hresRhMin: hresRhByDay[d]?.min??null,
+      hresRhMax: hresRhByDay[d]?.max??null,
+    };
   });
 
   const curH = futureHours[0] || pastHours[pastHours.length-1];
@@ -469,6 +612,8 @@ function processAll(oJ,hJ,eJ,sJ){
     currentTemp: curH?.temp ?? 0,
     currentWmo: curH?.wmo ?? 0,
     nMembers: PM2.length,
+    hresRunLabel: hresRunLabel??null,
+    hresHoursByDay,
   };
 }
 
@@ -525,15 +670,26 @@ function render(){
       <span></span>
       <span style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--amber)">${h.temp??'—'}°</span>
       <span></span>
-      <span style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:2px">${degToArrow(h.windDir??curWindDir)}<span>${h.wind??'—'} <span style="font-size:11px">km/u</span></span></span>
-      <span></span>
       <span style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--accent)">${(h.precip??0).toFixed(1)} mm</span>
+      <span></span>
+      <span style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:2px">${degToArrow(h.windDir??curWindDir)}<span>${h.wind??'—'} <span style="font-size:11px">km/u</span></span></span>
       <span></span>
       <span style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--amber)">☀ ${h.sunMin??0}m</span>
     </div>`;
   }).join('');
 
-  renderHourly(); renderDaily();
+  renderHourly(); renderDaily(); updateDailyTitle();
+  if(dTab==='overzicht') loadIfsIfNeeded();
+}
+
+function precipColor(mm){
+  // 0 mm = grijs, oplopend naar donkerblauw
+  if(!mm||mm<=0) return 'var(--muted)';
+  const t=Math.min(mm/5,1); // 5mm = vol blauw
+  const r=Math.round(128*(1-t)+Math.round(30*t));
+  const g=Math.round(135*(1-t)+Math.round(100*t));
+  const b=Math.round(153*(1-t)+Math.round(220*t));
+  return `rgb(${r},${g},${b})`;
 }
 
 function renderHourly(){
@@ -543,20 +699,23 @@ function renderHourly(){
   let html='';
   all.forEach((h,i)=>{
     const isPast=h.isPast;
-    const isNow=(i===pastLen); // first future hour
-    const col=isPast?'rgba(128,128,128,.55)':'var(--accent)';
-    const showPct=!isPast&&(h.pChance??0)>5;
-    const showMm=(h.precip??0)>0;
-
-    // Visual left-border on "now" item to mark transition, subtle
+    const isNow=(i===pastLen);
     const nowStyle=isNow?'border-left:2px solid rgba(128,128,128,.25);margin-left:4px;padding-left:5px':'';
+    const precip=h.precip??0;
+    const precipCol=isPast?'var(--muted)':precipColor(precip);
+    const precipStr=precip>0?precip.toFixed(1)+' mm':'0 mm';
+    const sunMin=h.sunMin??0;
+    const wind=h.wind??'—';
+    const windDir=h.windDir??null;
 
     html+=`<div class="hour-item ${isPast?'past':''} ${i===S.hi?'active':''}" onclick="selHour(${i})" style="${nowStyle}">
       <span class="hour-label">${h.time.slice(11,16)}</span>
       <span class="hour-icon" style="${isPast?'filter:saturate(.3)':''}">${wi(h.wmo,h.isDay??1)}</span>
       <span class="hour-temp">${h.temp??'—'}°</span>
-      <span class="hour-precip" style="color:${showPct?col:'transparent'}">${showPct?(h.pChance)+'%':'·'}</span>
-      <span class="hour-mm">${showMm?(h.precip)+' mm':''}</span>
+      <span class="hour-precip" style="color:${precipCol};font-size:11px">${precipStr}</span>
+      <span class="hour-mm" style="color:var(--muted)">${wind}<span style="font-size:9px"> km/u</span></span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--muted);min-height:14px">${windDir!=null?`<span style="display:inline-block;transform:rotate(${(windDir+180)%360}deg)">↑</span>`:'·'}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:${sunMin>0?'var(--amber)':'var(--muted)'};min-height:13px">${sunMin>0?sunMin+'m':'·'}</span>
     </div>`;
   });
 
@@ -568,17 +727,31 @@ function renderHourly(){
     const strip=document.querySelector('.hourly-scroll');
     if(!outer||!strip)return;
     const items=strip.querySelectorAll('.hour-item');
-    const nowItem=items[pastLen];
-    if(nowItem){
-      const target=nowItem.offsetLeft - outer.clientWidth*0.35;
-      outer.scrollLeft=Math.max(0,target);
+    if(S.keepScroll){
+      // Scroll zodat het geklikte uur in het midden staat
+      const sel=items[S.hi];
+      if(sel){
+        const target=sel.offsetLeft - outer.clientWidth/2 + sel.offsetWidth/2;
+        outer.scrollLeft=Math.max(0,target);
+      }
+      S.keepScroll=false;
+    } else {
+      const nowItem=items[pastLen];
+      if(nowItem){
+        const target=nowItem.offsetLeft - outer.clientWidth*0.35;
+        outer.scrollLeft=Math.max(0,target);
+      }
     }
   });
 
   renderHD();
 }
 
-function selHour(i){S.hi=i;renderHourly();}
+function selHour(i){
+  S.hi=i;
+  S.keepScroll=true; // bewaar scrollpositie
+  renderHourly();
+}
 
 function renderHD(){
   const h=S.data.allHours[S.hi];
@@ -591,14 +764,6 @@ function renderHD(){
     :`HARMONIE-AROME · ${h.time.slice(11,16)} · ${wd(h.wmo)}`;
 
   const baseFields=`
-      <div class="${cellClass}">
-        <div class="val-cell-label">Temperatuur</div>
-        <div class="val-cell-val">${h.temp??'—'}<span class="val-cell-unit">°</span></div>
-      </div>
-      <div class="${cellClass}">
-        <div class="val-cell-label">Neerslag</div>
-        <div class="val-cell-val">${h.precip??0}<span class="val-cell-unit"> mm</span></div>
-      </div>
       <div class="${cellClass}">
         <div class="val-cell-label">Wind</div>
         <div class="val-cell-val">${h.wind??'—'}<span class="val-cell-unit"> km/u</span></div>
@@ -614,16 +779,16 @@ function renderHD(){
         <div class="val-cell-val">${h.feelsLike??'—'}<span class="val-cell-unit">°</span></div>
       </div>
       <div class="${cellClass}">
+        <div class="val-cell-label">Dauwpunt</div>
+        <div class="val-cell-val">${h.dewpoint??'—'}<span class="val-cell-unit">°</span></div>
+      </div>
+      <div class="${cellClass}">
         <div class="val-cell-label">Windstoten</div>
         <div class="val-cell-val">${h.gusts??'—'}<span class="val-cell-unit"> km/u</span></div>
       </div>
       <div class="${cellClass}">
         <div class="val-cell-label">Verdamping ET₀</div>
         <div class="val-cell-val">${h.et0h??'—'}<span class="val-cell-unit"> mm</span></div>
-      </div>
-      <div class="${cellClass}">
-        <div class="val-cell-label">Luchtdruk</div>
-        <div class="val-cell-val">${h.pressure??'—'}<span class="val-cell-unit"> hPa</span></div>
       </div>`:'';
 
   el.innerHTML=`
@@ -713,11 +878,38 @@ function renderMeteogram(){
   });
 }
 
-function openHourlyPopup(absIdx){
+async function openHourlyPopup(absIdx){
   if(absIdx!=null) S.hi=absIdx;
   document.getElementById('hourlyOverlay').style.display='flex';
   document.getElementById('hourlyPopup').style.display='block';
   document.body.style.overflow='hidden';
+
+  // Detail data is nu al in initiële HARMONIE call geladen
+  if(false&&!S.harmDetailLoaded){
+    const lat=S.lat, lon=S.lon;
+    const base=`latitude=${lat}&longitude=${lon}&timezone=auto`;
+    const detailVars='apparent_temperature,windgusts_10m,et0_fao_evapotranspiration,pressure_msl';
+    const vars='temperature_2m,precipitation,windspeed_10m,winddirection_10m,weathercode,relativehumidity_2m,cloudcover,dewpoint_2m,apparent_temperature,surface_pressure,et0_fao_evapotranspiration,windgusts_10m';
+    try {
+      const r=await fetch(`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars},${detailVars}&current_weather=true&forecast_days=2&models=knmi_harmonie_arome_europe`);
+      if(r.ok){
+        const hJ=await r.json();
+        // Update futureHours met detail variabelen
+        const hh=hJ.hourly||{};
+        S.data.futureHours.forEach(h=>{
+          const i=hh.time?.indexOf(h.time);
+          if(i>=0){
+            h.feelsLike=hh.apparent_temperature?.[i]!=null?Math.round(hh.apparent_temperature[i]):null;
+            h.gusts=hh.windgusts_10m?.[i]!=null?Math.round(hh.windgusts_10m[i]):null;
+            h.et0h=hh.et0_fao_evapotranspiration?.[i]!=null?r1(hh.et0_fao_evapotranspiration[i]):null;
+            h.pressure=hh.pressure_msl?.[i]!=null?Math.round(hh.pressure_msl[i]):null;
+          }
+        });
+        S.harmDetailLoaded=true;
+      }
+    } catch(e){ console.warn('HARMONIE detail laden mislukt:', e.message); }
+  }
+
   renderHourly();
   renderMeteogram();
   requestAnimationFrame(()=>{
@@ -738,12 +930,71 @@ function closeHourlyPopup(){
   document.body.style.overflow='';
 }
 
-function openDayPopup(date){
+function showP50Popup(e){
+  e.stopPropagation();
+  const DAYS=['Zo','Ma','Di','Wo','Do','Vr','Za'];
+  const p50days=S.data.days.map(d=>{
+    const f=d._p50flags||{};
+    const names=[];
+    if(f.tMin) names.push('min temp');
+    if(f.tMax) names.push('max temp');
+    if(f.wind) names.push('wind');
+    if(f.precip) names.push('neerslag');
+    return names.length?{date:d.date,names}:null;
+  }).filter(Boolean);
+  if(!p50days.length) return;
+  const rows=p50days.map(({date,names})=>{
+    const dt=new Date(date+'T12:00:00');
+    return`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:13px">
+      <span style="color:var(--muted);margin-right:10px">${DAYS[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}</span>
+      <span style="color:var(--amber)">${names.join(', ')}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('dayPopupTitle').textContent='ENS P50 gebruikt i.p.v. IFS';
+  document.getElementById('dayPopupBody').innerHTML=`
+    <div style="grid-column:1/-1;font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:4px">IFS waarde valt buiten ENS P25–P75 bereik</div>
+    <div style="grid-column:1/-1">${rows}</div>`;
+  document.getElementById('dayOverlay').style.display='block';
+  document.getElementById('dayPopup').style.display='block';
+  document.body.style.overflow='hidden';
+}
+
+async function openDayPopup(date, tab='overzicht'){
   const d=S.data.days.find(d=>d.date===date);
   if(!d) return;
   const DAYS=['Zo','Ma','Di','Wo','Do','Vr','Za'];
   const dt=new Date(date+'T12:00:00');
   document.getElementById('dayPopupTitle').textContent=`${DAYS[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}`;
+  document.getElementById('dayOverlay').style.display='block';
+  document.getElementById('dayPopup').style.display='block';
+  document.body.style.overflow='hidden';
+
+  if(tab==='neerslag'){
+    document.getElementById('dayPopupBody').innerHTML=`<div style="padding:2rem;text-align:center;font-family:var(--mono);font-size:13px;color:var(--muted)"><span class="spinner"></span> Data laden…</div>`;
+    // Laad IFS uurdata als nog niet beschikbaar
+    if(!S.data.hresHoursByDay||Object.keys(S.data.hresHoursByDay).length===0){
+      const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+      try{
+        const r=await fetch(`https://api.open-meteo.com/v1/ecmwf?${base}&hourly=temperature_2m,dewpoint_2m,precipitation,weather_code&forecast_days=7`);
+        if(r.ok){
+          const ihJ=await r.json();
+          S.data=processAll(S._oJ,S._hJ,S._eJ,S._sJ,S._ifsLoaded?null:null,ihJ);
+          // Herlaad IFS dagelijks als al beschikbaar
+          if(S._ifsJ) S.data=processAll(S._oJ,S._hJ,S._eJ,S._sJ,S._ifsJ,ihJ);
+        }
+      }catch(e){console.warn('IFS uurdata mislukt:',e.message);}
+    }
+    try {
+      await renderNeerslagDayPopup(d);
+    } catch(e) {
+      document.getElementById('dayPopupBody').innerHTML=`<div style="padding:1rem 18px;font-family:var(--mono);font-size:13px;color:var(--red)">Fout: ${e.message}</div>`;
+    }
+  } else {
+    renderOverzichtDayPopup(d);
+  }
+}
+
+function renderOverzichtDayPopup(d){
   const stats=[
     ['Neerslagkans',`${d.pChance}%`,'var(--accent)'],
     ['Verwachte neerslag (P50)',`${d.precipMedian} mm`,'var(--accent)'],
@@ -758,14 +1009,281 @@ function openDayPopup(date){
     ['Zonuren',`${d.sunHours??'—'} u`,'var(--amber)'],
     ['Verdamping ET₀',`${d.et0??'—'} mm`,'var(--green)'],
   ];
-  document.getElementById('dayPopupBody').innerHTML=stats.map(([label,val,col])=>`
+  document.getElementById('dayPopupBody').innerHTML=`<div style="padding:16px 18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:10px">${stats.map(([label,val,col])=>`
     <div style="background:var(--surface2);border-radius:10px;padding:10px 12px">
       <div style="font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">${label}</div>
       <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${col}">${val}</div>
-    </div>`).join('');
-  document.getElementById('dayOverlay').style.display='block';
-  document.getElementById('dayPopup').style.display='block';
-  document.body.style.overflow='hidden';
+    </div>`).join('')}</div>`;
+}
+
+async function renderNeerslagDayPopup(d){
+  const dayIdx=S.data.days.indexOf(d);
+  const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
+  const usePrecip=forceIfs||(d.hresPrecip!=null&&d.hresPrecip>=d.precipP10&&d.hresPrecip<=d.precipP90);
+  const ifsVal=Number(usePrecip&&d.hresPrecip!=null?d.hresPrecip:d.precipMedian??0);
+
+  // IFS uurdata voor die dag (uurlijks dag 1-2, 3-uurlijks dag 3-7)
+  const ifsHours=S.data.hresHoursByDay?.[d.date]||[];
+  const hasIfsHour=ifsHours.length>0;
+  // isDay op basis van uur (geen HARMONIE nodig)
+  const isDay=h=>parseInt(h.time.slice(11,13))>=6&&parseInt(h.time.slice(11,13))<=21?1:0;
+
+  // ── Uitleg tekst ──
+  let uitlegTekst='';
+  if(d.precipP25>0){
+    uitlegTekst=`${d.pChance}% kans op neerslag · 75% kans op >${d.precipP25} mm · 10% kans op >${d.precipP90} mm`;
+  } else {
+    const pcts=[[10,d.precipP10],[25,d.precipP25],[50,d.precipMedian],[75,d.precipP75],[90,d.precipP90]];
+    const first=pcts.find(([,v])=>v>0);
+    if(first) uitlegTekst=`${d.pChance}% kans op neerslag · ${100-first[0]}% kans op >${first[1]} mm · 10% kans op >${d.precipP90} mm`;
+    else uitlegTekst=`${d.pChance}% kans op neerslag · verwachte hoeveelheid nihil`;
+  }
+
+  // ── Dagsom balk: P0–P100 bereik ──
+  const maxBalk=Math.max(d.precipP90??2, 2);
+  const pctBar=v=>Math.min((v??0)/maxBalk*100,100);
+  const ifsPct=pctBar(ifsVal);
+  const dagBalk=`
+    <div style="padding:14px 18px 6px">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Dagsom · ENS spreiding + ${forceIfs?'IFS':'IFS/ENS P50'}</div>
+      <div onclick="toggleDagBalkDetail(this,${d.precipP10},${d.precipP25},${d.precipP75??d.precipP90},${d.precipP90},${ifsVal.toFixed(1)})" style="position:relative;height:16px;background:rgba(128,128,128,.13);border-radius:4px;cursor:pointer">
+        <div style="position:absolute;left:${pctBar(d.precipP10)}%;width:${Math.max(pctBar(d.precipP90)-pctBar(d.precipP10),1)}%;height:100%;background:rgba(96,165,250,.2);border-radius:4px"></div>
+        <div style="position:absolute;left:${pctBar(d.precipP25)}%;width:${Math.max(pctBar(d.precipP75??d.precipP90)-pctBar(d.precipP25),1)}%;height:100%;background:rgba(96,165,250,.45);border-radius:4px"></div>
+        <div style="position:absolute;left:calc(${ifsPct}% - 4px);top:50%;transform:translateY(-50%);width:8px;height:8px;background:var(--accent);border-radius:50%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px;position:relative">
+        <span>0 mm</span>
+        <span style="position:absolute;left:${ifsPct}%;transform:translateX(-50%);color:var(--accent);font-weight:700;font-size:11px">${ifsVal.toFixed(1)} mm${!usePrecip?'<sup style="font-size:8px">~</sup>':''}</span>
+        <span>${maxBalk.toFixed(1)} mm</span>
+      </div>
+      <div id="dagBalkDetail" style="display:none;margin-top:8px;background:var(--surface2);border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:11px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <div><span style="color:var(--muted)">P50: </span><span style="color:var(--accent);font-weight:700">${(d.precipMedian??0).toFixed(1)} mm</span></div>
+          <div><span style="color:var(--muted)">P25–P75: </span><span style="color:var(--accent)">${d.precipP25}–${d.precipP75??d.precipP90} mm</span></div>
+          <div><span style="color:var(--muted)">P10–P90: </span><span style="color:var(--accent)">${d.precipP10}–${d.precipP90} mm</span></div>
+        </div>
+      </div>
+      <div style="font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5">${uitlegTekst}</div>
+    </div>`;
+
+  // ENS percentielen lazy opgehaald voor deze dag (API call per dag)
+  const ensDay=await getEnsForDay(d.date);
+  const getEns=(timeStr)=>ensDay[timeStr]||{};
+
+  // ── Staafgrafiek: ENS spreiding per uur + IFS stip ──
+  let grafiekHtml='';
+  if(hasIfsHour){
+    const ifsMap={};
+    ifsHours.forEach(h=>{ ifsMap[h.time.slice(11,16)]=h; });
+    // Gebruik IFS uren als leidend (uurlijks of 3-uurlijks)
+    const maxMm=Math.max(
+      ...ifsHours.map(h=>h.precip??0),
+      ...ifsHours.map(h=>getEns(h.time).precipP90??0),
+      1
+    );
+    const pct2=v=>Math.min((v??0)/maxMm*100,100);
+
+    // As altijd vanaf 0, maar ENS balken beginnen bij P10 hoogte
+    const pct2adj=v=>Math.min(Math.max((v??0)/maxMm*100,0),100);
+
+    const bars=ifsHours.map((h,i)=>{
+      const hhmm=h.time.slice(11,16);
+      const ens=getEns(h.time);
+      const p10=pct2adj(ens.precipP10??0);
+      const p25=pct2adj(ens.precipP25??0);
+      const p75=pct2adj(ens.precipP75??0);
+      const p90=pct2adj(ens.precipP90??0);
+      const ifsPctAdj=pct2adj(h.precip??0);
+      const showLbl=h.is3h?(h.hour%6===0):(h.hour%3===0);
+      return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0">
+        <div style="width:100%;flex:1;position:relative">
+          ${p90>0?`<div style="position:absolute;bottom:${p10}%;left:10%;width:80%;height:${Math.max(p90-p10,1)}%;background:rgba(96,165,250,.2);border-radius:2px 2px 0 0"></div>`:''}
+          ${p75>0?`<div style="position:absolute;bottom:${p25}%;left:15%;width:70%;height:${Math.max(p75-p25,1)}%;background:rgba(96,165,250,.45);border-radius:2px 2px 0 0"></div>`:''}
+          <div style="position:absolute;bottom:${ifsPctAdj}%;left:50%;transform:translate(-50%,50%);width:6px;height:6px;background:var(--accent);border-radius:50%;z-index:2${h.precip>0?'':';opacity:.3'}"></div>
+        </div>
+        <div style="font-family:var(--mono);font-size:8px;color:var(--muted);white-space:nowrap">${showLbl?hhmm:''}</div>
+      </div>`;
+    }).join('');
+
+    // Y-as ticks: 4 ticks van 0 tot maxMm
+    const tickCount=4;
+    const tickVals=Array.from({length:tickCount+1},(_,i)=>r1(maxMm*i/tickCount));
+    const yAxisW=28; // breedte y-as in px
+
+    grafiekHtml=`
+      <div style="border-top:1px solid var(--border);padding:12px 18px 10px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">Neerslag per uur${ifsHours.some(h=>h.is3h)?' · 3u na 90u':''}</div>
+          <div style="display:flex;gap:8px;font-family:var(--mono);font-size:9px;color:var(--muted)">
+            <span><span style="display:inline-block;width:8px;height:8px;background:rgba(96,165,250,.2);border-radius:1px;vertical-align:middle"></span> P10–90</span>
+            <span><span style="display:inline-block;width:8px;height:8px;background:rgba(96,165,250,.45);border-radius:1px;vertical-align:middle"></span> P25–75</span>
+            <span><span style="display:inline-block;width:4px;height:8px;background:var(--accent);border-radius:1px;vertical-align:middle"></span> IFS</span>
+          </div>
+        </div>
+        <!-- Grafiek: y-as + balken -->
+        <div style="display:flex;gap:4px">
+          <!-- Y-as -->
+          <div style="width:${yAxisW}px;flex-shrink:0;position:relative;height:150px">
+            ${tickVals.map((v,i)=>`
+              <div style="position:absolute;bottom:${i/tickCount*100}%;right:4px;font-family:var(--mono);font-size:8px;color:var(--muted);transform:translateY(50%);white-space:nowrap">${v}</div>
+              <div style="position:absolute;bottom:${i/tickCount*100}%;right:0;width:4px;height:1px;background:var(--border2)"></div>
+            `).join('')}
+          </div>
+          <!-- Balken + tijdas -->
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;height:150px;gap:1px;align-items:stretch;position:relative">
+              <!-- Horizontale gridlijnen -->
+              ${tickVals.map((_,i)=>`<div style="position:absolute;bottom:${i/tickCount*100}%;left:0;right:0;border-top:1px solid rgba(255,255,255,.04);pointer-events:none"></div>`).join('')}
+              ${ifsHours.map((h,i)=>{
+                const hhmm=h.time.slice(11,16);
+                const ens=getEns(h.time);
+                const p10=pct2adj(ens.precipP10??0);
+                const p25=pct2adj(ens.precipP25??0);
+                const p75=pct2adj(ens.precipP75??0);
+                const p90=pct2adj(ens.precipP90??0);
+                const ifsPctA=pct2adj(h.precip??0);
+                return`<div onclick="showBarDetail(this,'${hhmm}',${h.precip??0},${ens.precipP10??0},${ens.precipP25??0},${ens.precipP50??0},${ens.precipP75??0},${ens.precipP90??0},${ens.pChance??0})" style="flex:1;position:relative;cursor:pointer;border-radius:2px;transition:background .12s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">
+                  ${p90>0?`<div style="position:absolute;bottom:${p10}%;left:10%;width:80%;height:${Math.max(p90-p10,1)}%;background:rgba(96,165,250,.2);border-radius:2px 2px 0 0"></div>`:''}
+                  ${p75>0?`<div style="position:absolute;bottom:${p25}%;left:15%;width:70%;height:${Math.max(p75-p25,1)}%;background:rgba(96,165,250,.45);border-radius:2px 2px 0 0"></div>`:''}
+                  <div style="position:absolute;bottom:${ifsPctA}%;left:50%;transform:translate(-50%,50%);width:6px;height:6px;background:var(--accent);border-radius:50%;z-index:2${h.precip>0?'':';opacity:.3'}"></div>
+                </div>`;
+              }).join('')}
+            </div>
+            <!-- Tijdas -->
+            <div style="display:flex;gap:1px;margin-top:2px">
+              ${ifsHours.map(h=>{
+                const showLbl=h.is3h?(h.hour%6===0):(h.hour%3===0);
+                return`<div style="flex:1;font-family:var(--mono);font-size:8px;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden">${showLbl?h.time.slice(11,16):''}</div>`;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+        <!-- Detail tooltip -->
+        <div id="barDetail" style="display:none;margin-top:8px;background:var(--surface2);border-radius:10px;padding:10px 14px">
+          <div id="barDetailContent" style="font-family:var(--mono);font-size:12px"></div>
+        </div>
+      </div>`;
+  }
+
+  // ── Uurlijst: combineer IFS mm met ENS kans ──
+  // ENS kans per uur via lazy berekening (al gedaan in grafiek sectie hierboven)
+  const dagKans=d.pChance??0;
+
+  let uurHtml='';
+  if(hasIfsHour){
+    uurHtml=`<div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px 4px">Per uur · IFS neerslag + ENS kans</div>
+      ${ifsHours.map((h,i)=>{
+        const hhmm=h.time.slice(11,16);
+        const ens=getEns(h.time);
+        // isDay: bereken op basis van uur (dag = 6-21u als geen betere data)
+        const isd=isHourDay(h.time, S.lat);
+        const wmo=h.wmo??0;
+        const hasUurKans=ens.pChance!=null;
+        const pChance=hasUurKans?ens.pChance:dagKans;
+        const pLabel=hasUurKans?`${pChance}%`:`${pChance}%<sup style="font-size:8px;opacity:.6">dag</sup>`;
+        return`
+        <div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto 1fr auto;align-items:center;padding:9px 18px;${i<ifsHours.length-1?'border-bottom:1px solid var(--border)':''}${h.is3h?'opacity:.75':''}">
+          <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--muted)">${hhmm}${h.is3h?'<sup style="font-size:8px">3h</sup>':''}</span>
+          <span></span>
+          <span style="font-size:20px">${wi(wmo,isd,20)}</span>
+          <span></span>
+          <span style="font-family:var(--mono);font-size:15px;font-weight:700;color:${(h.precip??0)>0?'var(--accent)':'var(--muted)'}">
+            ${(h.precip??0).toFixed(1)} mm
+            ${(ens.precipP10!=null&&!(ens.precipP10===0&&ens.precipP90===0))?`<span style="font-size:11px;color:var(--muted);font-weight:400"> (${ens.precipP10}–${ens.precipP90} mm)</span>`:''}
+          </span>
+          <span></span>
+          <span style="font-family:var(--mono);font-size:15px;font-weight:700;color:rgba(${pChance>0?Math.round(96+(165-96)*pChance/100):128},${pChance>0?Math.round(165*(1-pChance/200)):135},${pChance>0?Math.round(250*(1-pChance/200)):153},${pChance>0?0.4+pChance/100*0.6:0.35})">${pLabel}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } else {
+    uurHtml=`<div style="padding:1rem 18px;font-family:var(--mono);font-size:13px;color:var(--muted)">Geen IFS uurdata beschikbaar.</div>`;
+  }
+
+  document.getElementById('dayPopupBody').innerHTML=dagBalk+grafiekHtml+uurHtml;
+}
+
+// Lazy ENS uurdata per dag: wordt pas opgehaald bij klikken neerslag popup
+const ensHourCache={};
+async function getEnsForDay(date){
+  if(ensHourCache[date]) return ensHourCache[date];
+  // Haal ENS uurdata op voor alleen deze dag
+  const lat=S.lat, lon=S.lon;
+  const url=`https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${lat}&longitude=${lon}&hourly=precipitation&models=ecmwf_ifs025&start_date=${date}&end_date=${date}&timezone=auto`;
+  try {
+    const r=await fetch(url);
+    if(!r.ok) return {};
+    const j=await r.json();
+    const en=j.hourly||{}, et=en.time||[];
+    function getM(pfx){return Object.keys(en).filter(k=>k.startsWith(pfx+'_member')).map(k=>en[k]);}
+    const PM=getM('precipitation');
+    const PM2=PM.length?PM:[en.precipitation||[]];
+    const result={};
+    for(let i=0;i<et.length;i++){
+      const pa=PM2.map(m=>m[i]??0).sort((a,b)=>a-b);
+      result[et[i]]={
+        pChance:Math.round(pge(pa,.1)),
+        precipP10:r1(pct(pa,10)),
+        precipP25:r1(pct(pa,25)),
+        precipP50:r1(pct(pa,50)),
+        precipP75:r1(pct(pa,75)),
+        precipP90:r1(pct(pa,90)),
+      };
+    }
+    ensHourCache[date]=result;
+    return result;
+  } catch(e){ console.warn('ENS uur ophalen mislukt:', e); return {}; }
+}
+
+function toggleDagBalkDetail(el,p10,p25,p75,p90,ifs){
+  const panel=document.getElementById('dagBalkDetail');
+  if(!panel)return;
+  panel.style.display=panel.style.display==='none'?'block':'none';
+}
+
+function showBarDetail(el,hhmm,ifs,p10,p25,p50,p75,p90,kans){
+  const panel=document.getElementById('barDetail');
+  const content=document.getElementById('barDetailContent');
+  if(!panel||!content)return;
+  if(panel.style.display!=='none'&&content.dataset.hour===hhmm){
+    panel.style.display='none';
+    return;
+  }
+  content.dataset.hour=hhmm;
+  content.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <span style="font-family:var(--mono);font-size:13px;font-weight:700">${hhmm}</span>
+      <span style="font-family:var(--mono);color:var(--muted);font-size:11px">ENS kans: <span style="color:var(--accent);font-weight:700">${kans}%</span></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
+      <div style="background:var(--surface);border-radius:8px;padding:7px 9px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">IFS</div>
+        <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent)">${Number(ifs).toFixed(1)} mm</div>
+      </div>
+      <div style="background:var(--surface);border-radius:8px;padding:7px 9px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">P50</div>
+        <div style="font-family:var(--mono);font-size:14px;font-weight:700">${p50} mm</div>
+      </div>
+      <div style="background:var(--surface);border-radius:8px;padding:7px 9px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">P25–P75</div>
+        <div style="font-family:var(--mono);font-size:14px;font-weight:700">${p25}–${p75} mm</div>
+      </div>
+      <div style="background:var(--surface);border-radius:8px;padding:7px 9px">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">P10–P90</div>
+        <div style="font-family:var(--mono);font-size:14px;font-weight:700">${p10}–${p90} mm</div>
+      </div>
+    </div>`;
+  panel.style.display='block';
+}
+
+function toggleHourDetail(el,idx,date){
+  const id=`hourdetail-${idx}-${date}`;
+  const panel=document.getElementById(id);
+  if(!panel)return;
+  panel.style.display=panel.style.display==='none'?'block':'none';
+  el.style.background=panel.style.display!=='none'?'var(--surface2)':'';
+  el.onmouseout=panel.style.display!=='none'?null:()=>{el.style.background='';};
 }
 function closeDayPopup(){
   document.getElementById('dayOverlay').style.display='none';
@@ -773,8 +1291,60 @@ function closeDayPopup(){
   document.body.style.overflow='';
 }
 
+function getSunriseSunset(dateStr, lat){
+  const d=new Date(dateStr+'T12:00:00Z');
+  const doy=Math.floor((d-new Date(Date.UTC(d.getUTCFullYear(),0,0)))/(864e5));
+  const phi=lat*Math.PI/180;
+  const delta=0.409*Math.sin(2*Math.PI/365*doy-1.39);
+  const cosH0=-Math.tan(phi)*Math.tan(delta);
+  if(cosH0<=-1)return{rise:0,set:24};  // middernachtzon
+  if(cosH0>=1)return{rise:12,set:12};  // poolnacht
+  const H0=Math.acos(cosH0)*12/Math.PI;
+  return{rise:12-H0, set:12+H0};
+}
+function isHourDay(timeStr, lat){
+  const date=timeStr.slice(0,10);
+  const hour=parseInt(timeStr.slice(11,13))+parseInt(timeStr.slice(14,16)||'0')/60;
+  const {rise,set}=getSunriseSunset(date, lat);
+  return hour>=rise&&hour<set?1:0;
+}
+
 let dTab='overzicht';
-function setTab(t,btn){dTab=t;document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');renderDaily();}
+function setTab(t,btn){
+  dTab=t;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(t==='overzicht') loadIfsIfNeeded();
+  renderDaily();
+  updateDailyTitle();
+}
+function updateDailyTitle(){
+  const el=document.getElementById('dailyCardTitle');
+  if(!el) return;
+  const hasHres=S.data?.days?.some(d=>d.hresTempMax!=null);
+  const run=S.data?.hresRunLabel??'';
+  if(dTab==='overzicht' && hasHres){
+    // Verzamel welke dagen P50 gebruiken
+    const p50days=S.data.days.map(d=>{
+      const f=d._p50flags||{};
+      const names=[];
+      if(f.tMin) names.push('min temp');
+      if(f.tMax) names.push('max temp');
+      if(f.wind) names.push('wind');
+      if(f.precip) names.push('neerslag');
+      return names.length?{date:d.date,names}:null;
+    }).filter(Boolean);
+    const hasP50=p50days.length>0;
+    const p50title=hasP50
+      ?`IFS HRES ${run} <span style="color:var(--amber);font-size:9px;cursor:pointer" onclick="showP50Popup(event)">~ ENS P50 voor ${p50days.length} dag${p50days.length>1?'en':''} ⓘ</span>`
+      :`IFS HRES ${run}`;
+    el.innerHTML=`7 dagen · <span style="color:var(--green)">${p50title}</span>`;
+  } else if(dTab==='overzicht'){
+    el.innerHTML='7 dagen · ECMWF ENS 51 members <span style="color:var(--red);font-size:9px">IFS niet beschikbaar</span>';
+  } else {
+    el.innerHTML='7 dagen · ECMWF ENS 51 members';
+  }
+}
 
 function renderDaily(){
   const DAYS=['Zo','Ma','Di','Wo','Do','Vr','Za'];
@@ -783,29 +1353,48 @@ function renderDaily(){
     let midHtml='', rightHtml='';
 
     if(dTab==='overzicht'){
+      const dayIdx=S.data.days.indexOf(d);
+      const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
+      const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
+      const useTMin  =forceIfs||inRange(d.hresTempMin, d.tempMinP10, d.tempMinP90);
+      const useTMax  =forceIfs||inRange(d.hresTempMax, d.tempMaxP10, d.tempMaxP90);
+      const usePrecip=forceIfs||inRange(d.hresPrecip,  d.precipP10,  d.precipP90);
+      const useWind  =forceIfs||inRange(d.hresWindMax, d.windP10,    d.windP90);
+      const tMin  =useTMin  ?d.hresTempMin :d.tempMinP50;
+      const tMax  =useTMax  ?d.hresTempMax :d.tempMaxP50;
+      const precip=Number(usePrecip&&d.hresPrecip!=null?d.hresPrecip:d.precipMedian??0).toFixed(1);
+      const wind  =useWind  ?d.hresWindMax :d.windP50;
+      const windDir=d.hresWindDir??d.windDir;
+      const wmo   =d.hresWmo??d.wmo;
+      const sun   =d.sunHours;
+      d._p50flags={tMin:!useTMin,tMax:!useTMax,precip:!usePrecip,wind:!useWind};
+      const s='<sup style="font-size:9px;opacity:.55">~</sup>';
       midHtml=`<div style="display:grid;grid-template-columns:auto 1fr 28px 1fr auto 1fr auto 1fr auto 1fr auto;align-items:center;font-family:var(--mono);font-weight:700">
           <span style="font-size:17px;color:var(--muted)">${nm}</span>
           <span></span>
-          <span style="font-size:24px;line-height:1">${wi(d.wmo,1,24)}</span>
+          <span style="font-size:24px;line-height:1">${wi(wmo,1,24)}</span>
           <span></span>
           <span style="font-size:17px;display:flex;align-items:center;gap:6px">
-            <span style="color:var(--accent)">${d.tempMinP50}°</span>
-            <span style="color:var(--red)">${d.tempMaxP50}°</span>
+            <span style="color:var(--accent)">${tMin}°${!useTMin?s:''}</span>
+            <span style="color:var(--red)">${tMax}°${!useTMax?s:''}</span>
           </span>
           <span></span>
-          <span style="font-size:17px;color:var(--muted);display:flex;align-items:center;gap:2px">${degToArrow(d.windDir)}<span>${d.windP50} <span style="font-size:11px">km/u</span></span></span>
+          <span style="font-size:17px;color:var(--muted);display:flex;align-items:center;gap:2px">${degToArrow(windDir)}<span>${wind}${!useWind?s:''} <span style="font-size:11px">km/u</span></span></span>
           <span></span>
-          <span style="font-size:17px;color:var(--accent)">${d.pChance}% · ${(d.precipMedian??0).toFixed(1)} mm</span>
+          <span style="font-size:15px;color:var(--accent)">${precip}${!usePrecip?s:''} mm</span>
           <span></span>
-          <span style="font-size:17px;color:var(--amber)">☀ ${d.sunHours??'—'}u</span>
+          <span style="font-size:17px;color:var(--amber)">☀ ${sun??'—'}u</span>
         </div>`;
       rightHtml=``;
 
     }else if(dTab==='neerslag'){
-      // Schaal: max P90 van de hele week, minimaal 10mm
+      const dayIdx=S.data.days.indexOf(d);
+      const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
+      const usePrecip=forceIfs||( d.hresPrecip!=null&&d.precipP10!=null&&d.precipP90!=null&&d.hresPrecip>=d.precipP10&&d.hresPrecip<=d.precipP90);
+      const precipVal=(usePrecip?d.hresPrecip:d.precipMedian??0);
+      const s=usePrecip?'':'<sup style="font-size:9px;opacity:.55">~</sup>';
       const scale=Math.max(10, ...S.data.days.map(d=>d.precipP90??0));
       const p10x=Math.min(d.precipP10/scale*100,100);
-      const p25x=Math.min(d.precipP25/scale*100,100);
       const p90x=Math.min(d.precipP90/scale*100,100);
       const p50x=Math.min(d.precipMedian/scale*100,100);
       const rangeW=Math.max(p90x-p10x,1);
@@ -814,11 +1403,12 @@ function renderDaily(){
           <div style="flex:1;min-width:0">
             <div style="position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
               <div style="position:absolute;left:${p10x}%;width:${rangeW}%;height:100%;background:rgba(96,165,250,.25);border-radius:3px"></div>
-              <div style="position:absolute;left:calc(${p50x}% - 2px);top:0;width:4px;height:6px;background:var(--accent);border-radius:2px"></div>
+              <div style="position:absolute;left:calc(${p50x}% - 0.5px);top:0;width:1px;height:6px;background:rgba(96,165,250,.7)"></div>
+              <div style="position:absolute;left:calc(${Math.min(precipVal/scale*100,100)}% - 2px);top:0;width:4px;height:6px;background:var(--accent);border-radius:2px"></div>
             </div>
-            <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px">75% kans > ${d.precipP25} mm &nbsp;·&nbsp; 10% kans > ${d.precipP90} mm</div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;display:flex;justify-content:center;width:100%">${(d.precipP10===0&&d.precipP90===0)?'0 mm':`${d.precipP10} mm – ${d.precipP90} mm`}</div>
           </div>
-          <span style="color:var(--accent);font-family:var(--mono);font-size:15px;font-weight:700;flex-shrink:0;width:56px;text-align:right;white-space:nowrap;align-self:center">${d.precipMedian} <span style="font-size:10px;opacity:.7">mm</span></span>
+          <span style="color:var(--accent);font-family:var(--mono);font-size:15px;font-weight:700;flex-shrink:0;width:60px;text-align:right;white-space:nowrap;align-self:center">${precipVal.toFixed(1)}${s} <span style="font-size:10px;opacity:.7">mm</span></span>
         </div>`;
       rightHtml=``;
 
@@ -831,19 +1421,35 @@ function renderDaily(){
       const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
       const minP10x=pos(d.tempMinP10),minP50x=pos(d.tempMinP50),minP90x=pos(d.tempMinP90);
       const maxP10x=pos(d.tempMaxP10),maxP50x=pos(d.tempMaxP50),maxP90x=pos(d.tempMaxP90);
+      const dayIdx=S.data.days.indexOf(d);
+      const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
+      const useTMin=forceIfs||( d.hresTempMin!=null&&d.tempMinP10!=null&&d.tempMinP90!=null&&d.hresTempMin>=d.tempMinP10&&d.hresTempMin<=d.tempMinP90);
+      const useTMax=forceIfs||( d.hresTempMax!=null&&d.tempMaxP10!=null&&d.tempMaxP90!=null&&d.hresTempMax>=d.tempMaxP10&&d.hresTempMax<=d.tempMaxP90);
+      const tMin=useTMin?d.hresTempMin:d.tempMinP50;
+      const tMax=useTMax?d.hresTempMax:d.tempMaxP50;
+      const tMinX=pos(tMin), tMaxX=pos(tMax);
+      const s='<sup style="font-size:9px;opacity:.55">~</sup>';
       midHtml=`<div class="day-mid-inner">
-          <span class="day-mid-left" style="color:var(--accent)">${d.tempMinP50}°<br><span style="font-size:9px;opacity:.4;color:var(--color-text-secondary,grey)">${d.tempMinP10}–${d.tempMinP90}°</span></span>
+          <span class="day-mid-left" style="color:var(--accent)">${tMin}°${!useTMin?s:''}<br><span style="font-size:9px;opacity:.4">${d.tempMinP10}–${d.tempMinP90}°</span></span>
           <div style="flex:1;position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
             <div style="position:absolute;left:${minP10x}%;width:${Math.max(minP90x-minP10x,1)}%;height:100%;background:rgba(96,165,250,.3);border-radius:3px"></div>
-            <div style="position:absolute;left:calc(${minP50x}% - 2px);width:4px;height:100%;background:var(--accent);border-radius:2px"></div>
+            <div style="position:absolute;left:calc(${minP50x}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.7)"></div>
+            <div style="position:absolute;left:calc(${tMinX}% - 2px);width:4px;height:100%;background:var(--accent);border-radius:2px"></div>
             <div style="position:absolute;left:${maxP10x}%;width:${Math.max(maxP90x-maxP10x,1)}%;height:100%;background:rgba(255,69,58,.28);border-radius:3px"></div>
-            <div style="position:absolute;left:calc(${maxP50x}% - 2px);width:4px;height:100%;background:var(--red);border-radius:2px"></div>
+            <div style="position:absolute;left:calc(${maxP50x}% - 0.5px);width:1px;height:100%;background:rgba(248,113,113,.7)"></div>
+            <div style="position:absolute;left:calc(${tMaxX}% - 2px);width:4px;height:100%;background:var(--red);border-radius:2px"></div>
           </div>
         </div>`;
-      rightHtml=`<span class="day-right-val" style="color:var(--red)">${d.tempMaxP50}°</span>
+      rightHtml=`<span class="day-right-val" style="color:var(--red)">${tMax}°${!useTMax?s:''}</span>
         <span class="day-right-sub">${d.tempMaxP10}–${d.tempMaxP90}°</span>`;
 
     }else if(dTab==='vocht'){
+      const dayIdx=S.data.days.indexOf(d);
+      const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
+      const useRhMin=forceIfs||(d.hresRhMin!=null&&d.humidityP10!=null&&d.humidityP90!=null&&d.hresRhMin>=d.humidityP10&&d.hresRhMin<=d.humidityP90);
+      const useRhMax=forceIfs||(d.hresRhMax!=null&&d.humidityP10!=null&&d.humidityP90!=null&&d.hresRhMax>=d.humidityP10&&d.hresRhMax<=d.humidityP90);
+      const rhMin=useRhMin?(d.hresRhMin??d.humidityP10):d.humidityP10??0;
+      const rhMax=useRhMax?(d.hresRhMax??d.humidityP90):d.humidityP90??100;
       const p10=d.humidityP10??0, p50=d.humidityMedian??0, p90=d.humidityP90??100;
       const allP10=S.data.days.map(d=>d.humidityP10??0);
       const allP90=S.data.days.map(d=>d.humidityP90??100);
@@ -852,17 +1458,28 @@ function renderDaily(){
       const scaleRng=Math.max(scaleMax-scaleMin,1);
       const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
       const p10x=pos(p10), p50x=pos(p50), p90x=pos(p90);
-      const rangeW=Math.max(p90x-p10x,1);
+      const minX=pos(rhMin), maxX=pos(rhMax);
+      const sMin=useRhMin?'':'<sup style="font-size:9px;opacity:.55">~</sup>';
+      const sMax=useRhMax?'':'<sup style="font-size:9px;opacity:.55">~</sup>';
       midHtml=`<div class="day-mid-inner">
-          <span class="day-mid-left" style="color:var(--accent)">${p10}%</span>
+          <span class="day-mid-left" style="color:var(--red)">${rhMin}%${sMin}<br><span style="font-size:9px;opacity:.4">${p10}–${p50}%</span></span>
           <div style="flex:1;position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
-            <div style="position:absolute;left:${p10x}%;width:${rangeW}%;height:100%;background:rgba(96,165,250,.3);border-radius:3px"></div>
-            <div style="position:absolute;left:calc(${p50x}% - 2px);width:4px;height:100%;background:var(--accent);border-radius:2px"></div>
+            <div style="position:absolute;left:${p10x}%;width:${Math.max(p50x-p10x,1)}%;height:100%;background:rgba(248,113,113,.28);border-radius:3px"></div>
+            <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(248,113,113,.6)"></div>
+            <div style="position:absolute;left:calc(${minX}% - 2px);width:4px;height:100%;background:var(--red);border-radius:2px"></div>
+            <div style="position:absolute;left:${p50x}%;width:${Math.max(p90x-p50x,1)}%;height:100%;background:rgba(96,165,250,.28);border-radius:3px"></div>
+            <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.6)"></div>
+            <div style="position:absolute;left:calc(${maxX}% - 2px);width:4px;height:100%;background:var(--accent);border-radius:2px"></div>
           </div>
         </div>`;
-      rightHtml=`<span class="day-right-val" style="color:var(--accent)">${p90}%</span>`;
+      rightHtml=`<span class="day-right-val" style="color:var(--accent)">${rhMax}%${sMax}</span><span class="day-right-sub">${p50}–${p90}%</span>`;
 
     }else if(dTab==='wind'){
+      const dayIdx=S.data.days.indexOf(d);
+      const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
+      const useWind=forceIfs||(d.hresWindMax!=null&&d.windP10!=null&&d.windP90!=null&&d.hresWindMax>=d.windP10&&d.hresWindMax<=d.windP90);
+      const windVal=useWind?d.hresWindMax:d.windP50;
+      const windDir=d.hresWindDir??d.windDir;
       const p10=d.windP10, p50=d.windP50, p90=d.windP90;
       const allP10=S.data.days.map(d=>d.windP10);
       const allP90=S.data.days.map(d=>d.windP90);
@@ -870,18 +1487,20 @@ function renderDaily(){
       const scaleMax=Math.max(...allP90)+5;
       const scaleRng=Math.max(scaleMax-scaleMin,1);
       const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
-      const p10x=pos(p10), p50x=pos(p50), p90x=pos(p90);
+      const p10x=pos(p10),p50x=pos(p50),p90x=pos(p90),valX=pos(windVal);
       const rangeW=Math.max(p90x-p10x,1);
+      const s=useWind?'':'<sup style="font-size:9px;opacity:.55">~</sup>';
       midHtml=`<div style="display:flex;align-items:center;gap:8px">
           <div style="flex:1;min-width:0">
             <div style="position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
               <div style="position:absolute;left:${p10x}%;width:${rangeW}%;height:100%;background:rgba(128,128,128,.25);border-radius:3px"></div>
-              <div style="position:absolute;left:calc(${p50x}% - 2px);width:4px;height:100%;background:rgba(128,128,128,.7);border-radius:2px"></div>
+              <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(128,128,128,.7)"></div>
+              <div style="position:absolute;left:calc(${valX}% - 2px);width:4px;height:100%;background:var(--muted);border-radius:2px"></div>
             </div>
-            <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px">${p10}–${p90} km/u</div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;text-align:center">${p10}–${p90} km/u</div>
           </div>
         </div>`;
-      rightHtml=`<span style="display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0"><span style="font-size:16px;opacity:.7">${degToArrow(d.windDir)}</span><span class="day-right-val">${p50} <span style="font-size:10px;opacity:.5">km/u</span></span></span>`;
+      rightHtml=`<span style="display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0">${degToArrow(windDir)}<span class="day-right-val">${windVal}${s} <span style="font-size:10px;opacity:.5">km/u</span></span></span>`;
 
     }else{ // zon
       function daylightHours(dateStr, lat){
@@ -913,7 +1532,7 @@ function renderDaily(){
         <span class="day-right-sub" style="color:rgba(52,199,89,.9)">${et0??'—'} mm</span>`;
     }
 
-    return`<div class="day-row" ${dTab==='overzicht'?`onclick="openDayPopup('${d.date}')" style="cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''"`:''}>
+    return`<div class="day-row" ${(dTab==='overzicht'||dTab==='neerslag')?`onclick="openDayPopup('${d.date}','${dTab}')" style="cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''"`:''}>
       ${dTab==='overzicht'?'':`<span class="day-name">${nm}</span>`}
       ${dTab==='overzicht'?'':`<span class="day-icon">${wi(d.wmo,1)}</span>`}
       <div class="day-mid">${midHtml}</div>
