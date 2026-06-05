@@ -101,6 +101,7 @@ body{
       <div style="padding:14px 16px 6px">
         <div style="font-family:var(--sans);font-size:clamp(calc(1.3rem*var(--fz)),calc(5vw*var(--fz)),calc(1.8rem*var(--fz)));font-weight:800;letter-spacing:-.03em;color:var(--green)" id="cityName"></div>
         <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:3px;letter-spacing:.06em" id="heroTime"></div>
+        <div id="heroStationBadge" style="display:none;font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--green);margin-top:4px;letter-spacing:.04em"></div>
       </div>
       <!-- Rij 1: min/max · temp · icoon gelijkmatig verdeeld -->
       <div style="padding:4px 16px 12px;display:flex;justify-content:space-evenly;align-items:center">
@@ -409,10 +410,14 @@ async function run(){
   const [oJ,hJ]=await Promise.all([oR.json(),hR.json()]);
 
   S.data=processAll(oJ,hJ,null,null,null,null);
+  S._utcOffset=oJ.utc_offset_seconds??0;
   document.getElementById('loadingBlock').style.display='none';
   document.getElementById('heroBlock').style.display='';
   document.getElementById('mainContent').style.display='';
   render();
+
+  // ── AgroExact stationdata toepassen (indien ingeschakeld) ──
+  if(PREFS.agroExact){ applyAgroStation(S._utcOffset).catch(e=>console.warn('AgroExact:',e.message)); }
 
   // ── Stap 2: ENS dagelijks + Sun + IFS dagelijks parallel op achtergrond ──
   const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&hourly=relativehumidity_2m,weathercode&models=ecmwf_ifs025&forecast_days=7`;
@@ -426,8 +431,10 @@ async function run(){
     S._oJ=oJ;S._hJ=hJ;S._eJ=eJ;S._sJ=sJ;S._ifsJ=iJ;
     if(iJ) S._ifsLoaded=true;
     S.data=processAll(oJ,hJ,eJ,sJ,iJ,null);
+    if(reapplyAgroStation()){ render(); renderHourly(); }
     renderDaily();
     updateDailyTitle();
+    updateAgroSettingsUI();
   }catch(e){console.warn('Achtergrond laden mislukt:',e.message);}
 
   // ── IFS uurlijks: alleen bij klikken neerslag popup ──
@@ -797,10 +804,18 @@ function render(){
   // Locatie + tijd
   document.getElementById('cityName').textContent=S.city;
   const nowH=d.nowHour;
-  document.getElementById('heroTime').textContent=nowH?nowH.slice(11,16):'';
+  // Bij stationdata: toon tijdstip laatste meting
+  if(d.stationCurrent && d._agro){
+    const mt=new Date(d.stationCurrent.measTime);
+    const loc=new Date(mt.getTime()+(S._utcOffset||0)*1000);
+    const p=n=>String(n).padStart(2,'0');
+    document.getElementById('heroTime').textContent=`${p(loc.getUTCHours())}:${p(loc.getUTCMinutes())} (meting)`;
+  } else {
+    document.getElementById('heroTime').textContent=nowH?nowH.slice(11,16):'';
+  }
 
-  // Huidige temp + icoon
-  const curH=d.futureHours[0]||d.pastHours[d.pastHours.length-1];
+  // Huidige temp + icoon — voorkeur voor stationmeting
+  const curH=(d._agro&&d.stationCurrent)||d.futureHours[0]||d.pastHours[d.pastHours.length-1];
   document.getElementById('heroTemp').textContent=fmtTempShort(curH?.temp);
   document.getElementById('heroIcon').innerHTML=wi(curH?.wmo??0,curH?.isDay??1,72);
 
@@ -811,9 +826,9 @@ function render(){
   document.getElementById('heroTempMax').textContent=fmtTempShort(obsMax);
   document.getElementById('heroTempMin').textContent=fmtTempShort(obsMin);
 
-  // Wind huidig uur (eerste future uur)
+  // Wind huidig uur
   const curWind=curH?.wind??null;
-  const curWindDir=d.days[0]?.windDir??null;
+  const curWindDir=(curH&&curH.windDir!=null)?curH.windDir:(d.days[0]?.windDir??null);
   document.getElementById('heroWind').innerHTML=`
     <div class="hero-stat-label">${t('hWind')}</div>
     <div class="hero-stat-val">${degToArrow(curWindDir)} ${fmtWind(curWind)}</div>`;
@@ -823,6 +838,9 @@ function render(){
   document.getElementById('heroRain').innerHTML=`
     <div class="hero-stat-label">${t('hRain24')}</div>
     <div class="hero-stat-val">💧 ${rain24} <span style="font-size:calc(10px*var(--fz));opacity:.5">mm</span></div>`;
+
+  // Stationbadge bijwerken
+  if(typeof updateAgroSettingsUI==='function') updateAgroSettingsUI();
 
   // Luchtvochtigheid huidig uur
   const curHumidity=curH?.humidity??'—';
@@ -2486,7 +2504,7 @@ showLoad();
    INSTELLINGEN – initialisatie vóór run() zodat prefs geladen zijn
    ══════════════════════════════════════════════════════════════════ */
 const PREF_KEY='weer_prefs_v2';
-let PREFS={lang:'nl',tempUnit:'C',windUnit:'kmh',presUnit:'hPa',theme:'dark',fontSize:'md',favs:[]};
+let PREFS={lang:'nl',tempUnit:'C',windUnit:'kmh',presUnit:'hPa',theme:'dark',fontSize:'md',favs:[],agroExact:false,agroToken:'',agroBase:'',agroAuthMode:'token'};
 function loadPrefs(){try{const p=JSON.parse(localStorage.getItem(PREF_KEY));if(p)PREFS={...PREFS,...p};}catch{}}
 function savePrefs(){localStorage.setItem(PREF_KEY,JSON.stringify(PREFS));}
 loadPrefs();
@@ -2505,6 +2523,7 @@ const LANG={
       hWind:'Wind',hRain24:'Neerslag 24u',hHumidity:'Vochtigheid',
       relHumidity:'Rel. vochtigheid',feelsLike:'Gevoelstemperatuur',dewpoint:'Dauwpunt',gusts:'Windstoten',evap:'Verdamping ET₀',
       measurement:'meting',sunHours:'Zonuren',windspeed:'Windsnelheid',windGust:'Windstoot',
+      agroTitle:'AgroExact stationdata',agroConnect:'Verbinden met AgroExact',agroDisconnect:'AgroExact loskoppelen',agroTokenPlaceholder:'API-token (zonder "Token ")',agroModeToken:'Token',agroModeLogin:'Inloggen',agroUserPlaceholder:'Gebruikersnaam',agroPassPlaceholder:'Wachtwoord',agroLoginBtn:'Inloggen & verbinden',agroHint:'Voer je AgroExact API-token in. Bij verbinden zoekt de app het dichtstbijzijnde station; binnen 10 km worden de actuele meting en de afgelopen uren van dat station gebruikt i.p.v. Open-Meteo. (Vereist dat de API CORS-verzoeken vanuit de browser toestaat.)',
       minTemp:'Min temperatuur',maxTemp:'Max temperatuur',spread:'ENS P10–P90 spreiding',
       days7:'7 dagen',members:'ECMWF ENS 51 members',perHour:'Per uur',precipPerHour:'Neerslag per uur',
       daylight:'Daglengte',sunrise:'Zonsopkomst',sunset:'Zonsondergang',
@@ -2524,6 +2543,7 @@ const LANG={
       hWind:'Wind',hRain24:'Precip. 24h',hHumidity:'Humidity',
       relHumidity:'Rel. humidity',feelsLike:'Feels like',dewpoint:'Dew point',gusts:'Wind gusts',evap:'Evaporation ET₀',
       measurement:'measured',sunHours:'Sun hours',windspeed:'Wind speed',windGust:'Wind gust',
+      agroTitle:'AgroExact station data',agroConnect:'Connect to AgroExact',agroDisconnect:'Disconnect AgroExact',agroTokenPlaceholder:'API token (without "Token ")',agroModeToken:'Token',agroModeLogin:'Log in',agroUserPlaceholder:'Username',agroPassPlaceholder:'Password',agroLoginBtn:'Log in & connect',agroHint:'Enter your AgroExact API token. On connect the app finds the nearest station; within 10 km its current measurement and recent hours replace Open-Meteo. (Requires the API to allow browser CORS requests.)',
       minTemp:'Min temperature',maxTemp:'Max temperature',spread:'ENS P10–P90 spread',
       days7:'7 days',members:'ECMWF ENS 51 members',perHour:'Per hour',precipPerHour:'Precipitation per hour',
       daylight:'Daylight',sunrise:'Sunrise',sunset:'Sunset',
@@ -2543,6 +2563,7 @@ const LANG={
       hWind:'Wind',hRain24:'Niederschlag 24h',hHumidity:'Feuchtigkeit',
       relHumidity:'Rel. Feuchtigkeit',feelsLike:'Gefühlt',dewpoint:'Taupunkt',gusts:'Windböen',evap:'Verdunstung ET₀',
       measurement:'Messung',sunHours:'Sonnenstunden',windspeed:'Windgeschw.',windGust:'Windböe',
+      agroTitle:'AgroExact Stationsdaten',agroConnect:'Mit AgroExact verbinden',agroDisconnect:'AgroExact trennen',agroTokenPlaceholder:'API-Token (ohne "Token ")',agroModeToken:'Token',agroModeLogin:'Anmelden',agroUserPlaceholder:'Benutzername',agroPassPlaceholder:'Passwort',agroLoginBtn:'Anmelden & verbinden',agroHint:'Geben Sie Ihren AgroExact API-Token ein. Beim Verbinden wird die nächste Station gesucht; innerhalb 10 km ersetzen deren aktuelle Messung und letzte Stunden Open-Meteo. (Die API muss Browser-CORS erlauben.)',
       minTemp:'Min. Temperatur',maxTemp:'Max. Temperatur',spread:'ENS P10–P90 Streuung',
       days7:'7 Tage',members:'ECMWF ENS 51 Member',perHour:'Pro Stunde',precipPerHour:'Niederschlag pro Stunde',
       daylight:'Tageslänge',sunrise:'Sonnenaufgang',sunset:'Sonnenuntergang',
@@ -2562,6 +2583,7 @@ const LANG={
       hWind:'Vent',hRain24:'Précip. 24h',hHumidity:'Humidité',
       relHumidity:'Humidité rel.',feelsLike:'Ressenti',dewpoint:'Point de rosée',gusts:'Rafales',evap:'Évaporation ET₀',
       measurement:'mesure',sunHours:"Heures d'ensoleillement",windspeed:'Vitesse du vent',windGust:'Rafale',
+      agroTitle:'Données station AgroExact',agroConnect:'Connecter AgroExact',agroDisconnect:'Déconnecter AgroExact',agroTokenPlaceholder:'Jeton API (sans "Token ")',agroModeToken:'Jeton',agroModeLogin:'Connexion',agroUserPlaceholder:"Nom d'utilisateur",agroPassPlaceholder:'Mot de passe',agroLoginBtn:'Se connecter',agroHint:'Entrez votre jeton API AgroExact. À la connexion, la station la plus proche est trouvée ; dans un rayon de 10 km, sa mesure actuelle et ses dernières heures remplacent Open-Meteo. (L API doit autoriser le CORS navigateur.)',
       minTemp:'Température min',maxTemp:'Température max',spread:'Dispersion ENS P10–P90',
       days7:'7 jours',members:'ECMWF ENS 51 membres',perHour:'Par heure',precipPerHour:'Précipitations par heure',
       daylight:'Durée du jour',sunrise:'Lever du soleil',sunset:'Coucher du soleil',
@@ -2581,6 +2603,7 @@ const LANG={
       hWind:'Viento',hRain24:'Precip. 24h',hHumidity:'Humedad',
       relHumidity:'Humedad rel.',feelsLike:'Sensación',dewpoint:'Punto de rocío',gusts:'Ráfagas',evap:'Evaporación ET₀',
       measurement:'medición',sunHours:'Horas de sol',windspeed:'Velocidad del viento',windGust:'Ráfaga',
+      agroTitle:'Datos de estación AgroExact',agroConnect:'Conectar con AgroExact',agroDisconnect:'Desconectar AgroExact',agroTokenPlaceholder:'Token API (sin "Token ")',agroModeToken:'Token',agroModeLogin:'Acceder',agroUserPlaceholder:'Usuario',agroPassPlaceholder:'Contraseña',agroLoginBtn:'Acceder y conectar',agroHint:'Introduce tu token API de AgroExact. Al conectar se busca la estación más cercana; dentro de 10 km su medición actual y últimas horas reemplazan Open-Meteo. (La API debe permitir CORS desde el navegador.)',
       minTemp:'Temperatura mín',maxTemp:'Temperatura máx',spread:'Dispersión ENS P10–P90',
       days7:'7 días',members:'ECMWF ENS 51 miembros',perHour:'Por hora',precipPerHour:'Precipitación por hora',
       daylight:'Horas de luz',sunrise:'Amanecer',sunset:'Atardecer',
@@ -2806,6 +2829,353 @@ function closeSettings(){
 }
 
 /* ── Settings modal bouwen ────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════
+   AGROEXACT INTEGRATIE (REST API)
+   Verbindt met de AgroExact API (app.agroexact.com/api/v2) met een
+   API-token. Zoekt het dichtstbijzijnde station; binnen 10 km wordt de
+   actuele meting + afgelopen uren gebruikt i.p.v. Open-Meteo.
+   NB: vereist dat de API CORS toestaat vanuit de browser. Endpoint-paden
+   staan als constanten hieronder en zijn eenvoudig aan te passen.
+   ══════════════════════════════════════════════════════════════════ */
+const AGRO={stations:null, status:'idle', nearest:null, error:null, data:null};
+// ── Configuratie ──────────────────────────────────────────────
+// Pas deze aan als de AgroExact API andere paden/headers gebruikt.
+const AGRO_DEFAULT_BASE='https://app.agroexact.com/api/v2';
+const AGRO_STATIONS_KEY='weer_agro_stations_v1';
+// Endpoint-paden volgens AgroExact API v2 (base = .../api/v2)
+const AGRO_EP_STATIONS='/stations/';
+const AGRO_EP_READINGS=(id,hours)=>`/readings/${id}/?hours=${hours}`;
+const AGRO_EP_TOKEN='/token/';
+
+function agroBaseUrl(){
+  return (PREFS.agroBase||AGRO_DEFAULT_BASE).replace(/\/+$/,'');
+}
+function agroAuthHeaders(){
+  const tok=(PREFS.agroToken||'').trim();
+  const h={'Accept':'application/json'};
+  if(tok){
+    // AgroExact verwacht: Authorization: Token <api_key>
+    // Als de token al een prefix (Token/Bearer) bevat, niet dubbel toevoegen
+    h['Authorization']=/^(token|bearer)\s/i.test(tok)?tok:('Token '+tok);
+  }
+  return h;
+}
+
+// Generieke GET naar de AgroExact REST API
+async function agroApiGet(path){
+  let resp;
+  try{
+    resp=await fetch(agroBaseUrl()+path,{method:'GET',headers:agroAuthHeaders()});
+  }catch(e){
+    throw new Error('Netwerk/CORS: '+e.message);
+  }
+  if(!resp.ok){
+    let detail='';
+    try{const j=await resp.json(); detail=j?.message||j?.detail||j?.error||'';}catch{}
+    throw new Error('HTTP '+resp.status+(detail?' · '+detail:''));
+  }
+  return resp.json();
+}
+
+// Login met gebruikersnaam/wachtwoord → wisselt om naar een API-token
+async function agroLogin(username,password){
+  let resp;
+  try{
+    resp=await fetch(agroBaseUrl()+AGRO_EP_TOKEN,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Accept':'application/json'},
+      body:JSON.stringify({username,password})
+    });
+  }catch(e){ throw new Error('Netwerk/CORS: '+e.message); }
+  if(!resp.ok){
+    let detail='';
+    try{const j=await resp.json(); detail=j?.detail||j?.message||j?.error||(j&&typeof j==='object'?Object.values(j).flat().join(' '):'');}catch{}
+    if(resp.status===400||resp.status===401) detail=detail||'Onjuiste inloggegevens';
+    throw new Error('Login HTTP '+resp.status+(detail?' · '+detail:''));
+  }
+  const j=await resp.json();
+  const tok=j&&(j.token||j.key||j.access||j.access_token);
+  if(!tok) throw new Error('Geen token in login-respons');
+  return tok;
+}
+
+// Haal een array van records uit een respons (tolerant voor verschillende vormen)
+function agroRecords(json){
+  if(Array.isArray(json)) return json;
+  if(json && Array.isArray(json.records)) return json.records;
+  if(json && Array.isArray(json.data)) return json.data;
+  if(json && Array.isArray(json.results)) return json.results;
+  if(json && Array.isArray(json.stations)) return json.stations;
+  if(json && Array.isArray(json.readings)) return json.readings;
+  return [];
+}
+// Tolerante veld-helpers (verschillende mogelijke veldnamen)
+const _f=(o,...keys)=>{for(const k of keys){if(o[k]!=null)return o[k];}return null;};
+
+// Haal stationlijst op (met cache in localStorage)
+async function agroLoadStations(force){
+  if(AGRO.stations && !force) return AGRO.stations;
+  if(!force){
+    try{
+      const cached=JSON.parse(localStorage.getItem(AGRO_STATIONS_KEY));
+      if(cached && cached.ts && (Date.now()-cached.ts)<7*864e5 && Array.isArray(cached.stations) && cached.base===agroBaseUrl()){
+        AGRO.stations=cached.stations; return AGRO.stations;
+      }
+    }catch{}
+  }
+  const json=await agroApiGet(AGRO_EP_STATIONS);
+  const stations=agroRecords(json)
+    .map(r=>({
+      id:_f(r,'station_id','id','stationId','uuid'),
+      name:_f(r,'name','station_name','label')||'Station',
+      lat:parseFloat(_f(r,'latitude','lat')),
+      lon:parseFloat(_f(r,'longitude','lon','lng')),
+      type:_f(r,'version_type','type','kind'),
+    }))
+    .filter(s=>s.id && isFinite(s.lat) && isFinite(s.lon))
+    // Alleen volledige weerstations (ATMO); als type ontbreekt, toch meenemen
+    .filter(s=>!s.type || /atmo/i.test(s.type));
+  if(!stations.length) throw new Error('Geen stations in respons');
+  AGRO.stations=stations;
+  try{localStorage.setItem(AGRO_STATIONS_KEY,JSON.stringify({ts:Date.now(),base:agroBaseUrl(),stations}));}catch{}
+  return stations;
+}
+
+// Vind dichtstbijzijnde station bij lat/lon
+async function agroNearestStation(lat,lon){
+  const stations=await agroLoadStations(false);
+  let best=null, bestD=Infinity;
+  for(const s of stations){
+    const d=agroDistKm(lat,lon,s.lat,s.lon);
+    if(d<bestD){bestD=d; best=s;}
+  }
+  return best?{...best, dist:bestD}:null;
+}
+
+// Haal ~30u readings op en bouw uur-data + huidige meting
+async function agroFetchStationData(stationId, offsetSec){
+  const json=await agroApiGet(AGRO_EP_READINGS(stationId,30));
+  const recs=agroRecords(json).filter(r=>_f(r,'timestamp','time','datetime'));
+  if(!recs.length) return null;
+  // Sorteer nieuw→oud
+  const ts=r=>_f(r,'timestamp','time','datetime');
+  recs.sort((a,b)=>ts(a)<ts(b)?1:-1);
+
+  const off=offsetSec||0;
+  const pad=n=>String(n).padStart(2,'0');
+  const localHourKey=(utcIso)=>{
+    const d=new Date(utcIso);
+    const l=new Date(d.getTime()+off*1000);
+    return `${l.getUTCFullYear()}-${pad(l.getUTCMonth()+1)}-${pad(l.getUTCDate())}T${pad(l.getUTCHours())}:00`;
+  };
+  const kmh=v=>v==null?null:v*3.6;
+  // Tolerante veld-extractie uit een reading
+  const rTemp=r=>_f(r,'temperature_150','temperature_2m','temperature','temp');
+  const rHum =r=>_f(r,'humidity_150','relativehumidity','humidity','rh');
+  const rWind=r=>_f(r,'windspeed','wind_speed','wind');
+  const rGust=r=>_f(r,'gust','windgust','wind_gust','gusts');
+  const rDir =r=>_f(r,'wind_direction','winddirection','wind_dir');
+  const rDew =r=>_f(r,'dewpoint','dew_point');
+  const rPrec=r=>_f(r,'precipitation','precip','rain');
+
+  // Groepeer per lokaal uur
+  const byHour={};
+  for(const r of recs){
+    const k=localHourKey(ts(r));
+    (byHour[k]=byHour[k]||[]).push(r);
+  }
+  const mean=arr=>arr.length?arr.reduce((s,v)=>s+v,0)/arr.length:null;
+  const circMean=degs=>{
+    if(!degs.length)return null;
+    let x=0,y=0; for(const d of degs){x+=Math.cos(d*Math.PI/180);y+=Math.sin(d*Math.PI/180);}
+    let a=Math.atan2(y/degs.length,x/degs.length)*180/Math.PI; return (a+360)%360;
+  };
+  const hourKeys=Object.keys(byHour).sort(); // oud→nieuw
+  const wmoFromOpenMeteo={};
+  // Map bestaande wmo per uur uit huidige pastHours (zelfde locatie/uur) voor iconen
+  (S.data?.pastHours||[]).forEach(h=>{ wmoFromOpenMeteo[h.time]=h.wmo; });
+
+  const stationHours=hourKeys.map(k=>{
+    const arr=byHour[k];
+    const temps=arr.map(rTemp).filter(v=>v!=null).map(Number);
+    const hums=arr.map(rHum).filter(v=>v!=null).map(Number);
+    const winds=arr.map(rWind).filter(v=>v!=null).map(Number);
+    const gusts=arr.map(rGust).filter(v=>v!=null).map(Number);
+    const dews=arr.map(rDew).filter(v=>v!=null).map(Number);
+    const dirs=arr.map(rDir).filter(v=>v!=null).map(Number);
+    const precSum=arr.reduce((s,r)=>s+(Number(rPrec(r))||0),0);
+    return {
+      time:k,
+      temp:temps.length?Math.round(mean(temps)):null,
+      humidity:hums.length?Math.round(mean(hums)):null,
+      wind:winds.length?Math.round(kmh(mean(winds))):null,
+      gusts:gusts.length?Math.round(kmh(Math.max(...gusts))):null,
+      windDir:dirs.length?Math.round(circMean(dirs)):null,
+      dewpoint:dews.length?Math.round(mean(dews)):null,
+      precip:r1(precSum),
+      wmo:wmoFromOpenMeteo[k]??0,
+      isDay:isHourDay(k,S.lat),
+      isPast:true,
+      _agro:true,
+    };
+  });
+
+  // Huidige meting = nieuwste reading
+  const cur=recs[0];
+  const num=v=>v!=null?Number(v):null;
+  const stationCurrent={
+    time:localHourKey(ts(cur)),
+    measTime:ts(cur),
+    temp:rTemp(cur)!=null?Math.round(num(rTemp(cur))):null,
+    humidity:rHum(cur)!=null?Math.round(num(rHum(cur))):null,
+    wind:rWind(cur)!=null?Math.round(kmh(num(rWind(cur)))):null,
+    gusts:rGust(cur)!=null?Math.round(kmh(num(rGust(cur)))):null,
+    windDir:rDir(cur)!=null?Math.round(num(rDir(cur))):null,
+    dewpoint:rDew(cur)!=null?Math.round(num(rDew(cur))):null,
+    precip:r1(num(rPrec(cur))??0),
+    wmo:(S.data?.futureHours?.[0]?.wmo)??(stationHours[stationHours.length-1]?.wmo)??0,
+    isDay:isHourDay(localHourKey(ts(cur)),S.lat),
+  };
+
+  return {stationHours, stationCurrent};
+}
+
+// Pas gecachte stationdata opnieuw toe op S.data (zonder API-call)
+function reapplyAgroStation(){
+  if(!PREFS.agroExact || !S.data || !AGRO.data) return false;
+  const {stationHours, stationCurrent, name, dist}=AGRO.data;
+  const last12=stationHours.slice(-12);
+  S.data.pastHours=last12;
+  S.data.stationCurrent=stationCurrent;
+  S.data.allHours=[...last12,...S.data.futureHours];
+  S.data._agro={name, dist};
+  return true;
+}
+
+// Hoofdfunctie: zoek station, haal data op, cache, pas toe
+async function applyAgroStation(offsetSec){
+  if(!PREFS.agroExact || !S.data) return;
+  try{
+    AGRO.status='searching'; AGRO.error=null; AGRO.data=null; updateAgroSettingsUI();
+    const near=await agroNearestStation(S.lat,S.lon);
+    AGRO.nearest=near;
+    if(!near || near.dist>10){
+      AGRO.status=near?'too_far':'none';
+      S.data._agro=null; S.data.stationCurrent=null; updateAgroSettingsUI();
+      try{render();}catch{}
+      return;
+    }
+    AGRO.status='loading'; updateAgroSettingsUI();
+    const sd=await agroFetchStationData(near.id, offsetSec);
+    if(!sd){ AGRO.status='error'; AGRO.error='Geen metingen'; updateAgroSettingsUI(); return; }
+    AGRO.data={stationHours:sd.stationHours, stationCurrent:sd.stationCurrent, name:near.name, dist:near.dist};
+    reapplyAgroStation();
+    AGRO.status='connected'; updateAgroSettingsUI();
+    try{render();}catch(e){console.warn(e);}
+    try{renderHourly();}catch{}
+    try{renderDaily();}catch{}
+  }catch(e){
+    AGRO.status='error'; AGRO.error=e.message;
+    S.data._agro=null;
+    updateAgroSettingsUI();
+    try{render();}catch{}
+    console.warn('AgroExact:',e.message);
+  }
+}
+
+// Verbind/ontkoppel via instellingen
+function setAgroToken(v){ PREFS.agroToken=(v||'').trim(); savePrefs(); }
+function setAgroBase(v){ PREFS.agroBase=(v||'').trim(); savePrefs(); }
+function setAgroAuthMode(m){ PREFS.agroAuthMode=m; savePrefs(); buildSettingsModal(); }
+
+async function toggleAgroExact(){
+  if(!PREFS.agroExact){
+    // Lees base-URL
+    const bEl=document.getElementById('agroBaseInput');
+    if(bEl) PREFS.agroBase=(bEl.value||'').trim();
+
+    // Verkrijg token: direct ingevoerd, of via login
+    if(PREFS.agroAuthMode==='login'){
+      const uEl=document.getElementById('agroUserInput');
+      const pEl=document.getElementById('agroPassInput');
+      const user=(uEl?.value||'').trim();
+      const pass=(pEl?.value||'');
+      savePrefs();
+      if(!user||!pass){
+        AGRO.status='error'; AGRO.error='Vul gebruikersnaam en wachtwoord in';
+        buildSettingsModal(); return;
+      }
+      AGRO.status='login'; AGRO.error=null; buildSettingsModal();
+      try{
+        const tok=await agroLogin(user,pass);
+        PREFS.agroToken=tok; savePrefs();   // alleen de token wordt bewaard, niet het wachtwoord
+      }catch(e){
+        AGRO.status='error'; AGRO.error=e.message;
+        buildSettingsModal(); return;
+      }
+    }else{
+      const tEl=document.getElementById('agroTokenInput');
+      if(tEl) PREFS.agroToken=(tEl.value||'').trim();
+      savePrefs();
+      if(!PREFS.agroToken){
+        AGRO.status='error'; AGRO.error='Voer eerst een API-token in';
+        buildSettingsModal(); return;
+      }
+    }
+
+    PREFS.agroExact=true; savePrefs();
+    AGRO.stations=null;
+    try{ localStorage.removeItem(AGRO_STATIONS_KEY); }catch{}
+    AGRO.status='searching'; AGRO.error=null; buildSettingsModal();
+    try{
+      await agroLoadStations(true);   // test verbinding + vul cache
+      await applyAgroStation(S._utcOffset||0);
+    }catch(e){
+      AGRO.status='error'; AGRO.error=e.message;
+      PREFS.agroExact=false; savePrefs();
+    }
+    buildSettingsModal();
+  }else{
+    PREFS.agroExact=false; savePrefs();
+    AGRO.status='idle'; AGRO.nearest=null; AGRO.error=null; AGRO.data=null;
+    if(S.data){ S.data._agro=null; S.data.stationCurrent=null; }
+    // Herlaad Open-Meteo data
+    showLoad(); run().catch(e=>showErr(e.message));
+    buildSettingsModal();
+  }
+}
+
+function updateAgroSettingsUI(){
+  const el=document.getElementById('agroStatusLine');
+  if(el) el.innerHTML=agroStatusHtml();
+  // Hero badge
+  const badge=document.getElementById('heroStationBadge');
+  if(badge){
+    if(S.data && S.data._agro){
+      badge.style.display='';
+      badge.textContent=`📡 AgroExact · ${S.data._agro.name} · ${S.data._agro.dist.toFixed(1)} km`;
+    }else{
+      badge.style.display='none';
+    }
+  }
+}
+
+function agroStatusHtml(){
+  const c={login:'var(--amber)',searching:'var(--amber)',loading:'var(--amber)',connected:'var(--green)',too_far:'var(--muted)',none:'var(--muted)',error:'var(--red)',idle:'var(--muted)'}[AGRO.status]||'var(--muted)';
+  let txt='';
+  switch(AGRO.status){
+    case 'login': txt='Inloggen…'; break;
+    case 'searching': txt='Stations zoeken…'; break;
+    case 'loading': txt='Stationdata laden…'; break;
+    case 'connected': txt=`Verbonden · ${AGRO.nearest?.name} (${AGRO.nearest?.dist.toFixed(1)} km)`; break;
+    case 'too_far': txt=`Dichtstbijzijnde station ${AGRO.nearest?.dist.toFixed(1)} km (>10 km) — Open-Meteo gebruikt`; break;
+    case 'none': txt='Geen station gevonden'; break;
+    case 'error': txt='Fout: '+(AGRO.error||'onbekend'); break;
+    default: txt='Niet verbonden';
+  }
+  return `<span style="color:${c}">${txt}</span>`;
+}
+
 function buildSettingsModal(){
   const L=LANG[PREFS.lang]||LANG.nl;
 
@@ -2852,6 +3222,30 @@ function buildSettingsModal(){
     ${row(L.temp, seg([['C','°C'],['F','°F'],['K','K']],PREFS.tempUnit,'setPrefTempUnit'))}
     ${row(L.wind, seg([['kmh','km/u'],['ms','m/s'],['kn','kn'],['bft','Bft']],PREFS.windUnit,'setPrefWindUnit'))}
     ${row(L.pres, seg([['hPa','hPa'],['mbar','mbar'],['inHg','inHg']],PREFS.presUnit,'setPrefPresUnit'))}
+
+    ${sectionHead(L.agroTitle)}
+    <div style="padding:4px 0 10px">
+      <div id="agroStatusLine" style="font-family:var(--mono);font-size:calc(12px*var(--fz));margin-bottom:8px">${agroStatusHtml()}</div>
+      ${!PREFS.agroExact?`
+      <div style="display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:4px;margin-bottom:8px">
+        <button onclick="setAgroAuthMode('token')" style="flex:1;padding:7px 8px;border-radius:7px;border:${PREFS.agroAuthMode!=='login'?'1px solid var(--border2)':'none'};background:${PREFS.agroAuthMode!=='login'?'var(--bg2)':'transparent'};color:${PREFS.agroAuthMode!=='login'?'var(--text)':'var(--muted)'};font-family:var(--mono);font-size:calc(12px*var(--fz));cursor:pointer;font-weight:${PREFS.agroAuthMode!=='login'?'700':'400'}">${L.agroModeToken}</button>
+        <button onclick="setAgroAuthMode('login')" style="flex:1;padding:7px 8px;border-radius:7px;border:${PREFS.agroAuthMode==='login'?'1px solid var(--border2)':'none'};background:${PREFS.agroAuthMode==='login'?'var(--bg2)':'transparent'};color:${PREFS.agroAuthMode==='login'?'var(--text)':'var(--muted)'};font-family:var(--mono);font-size:calc(12px*var(--fz));cursor:pointer;font-weight:${PREFS.agroAuthMode==='login'?'700':'400'}">${L.agroModeLogin}</button>
+      </div>
+      ${PREFS.agroAuthMode==='login'?`
+      <input id="agroUserInput" type="text" placeholder="${L.agroUserPlaceholder}" autocomplete="username"
+        style="width:100%;box-sizing:border-box;font-size:calc(13px*var(--fz));padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:var(--mono);outline:none;margin-bottom:8px">
+      <input id="agroPassInput" type="password" placeholder="${L.agroPassPlaceholder}" autocomplete="current-password"
+        style="width:100%;box-sizing:border-box;font-size:calc(13px*var(--fz));padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:var(--mono);outline:none;margin-bottom:8px">
+      `:`
+      <input id="agroTokenInput" type="password" placeholder="${L.agroTokenPlaceholder}" autocomplete="off" value="${(PREFS.agroToken||'').replace(/"/g,'&quot;')}"
+        style="width:100%;box-sizing:border-box;font-size:calc(13px*var(--fz));padding:10px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:var(--mono);outline:none;margin-bottom:8px">
+      `}
+      <input id="agroBaseInput" type="text" placeholder="${AGRO_DEFAULT_BASE}" autocomplete="off" value="${(PREFS.agroBase||'').replace(/"/g,'&quot;')}"
+        style="width:100%;box-sizing:border-box;font-size:calc(11px*var(--fz));padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-family:var(--mono);outline:none;margin-bottom:8px">
+      `:''}
+      <button onclick="toggleAgroExact()" style="width:100%;padding:11px;border-radius:10px;border:1px solid ${PREFS.agroExact?'var(--red)':'var(--accent)'};background:${PREFS.agroExact?'transparent':'rgba(96,165,250,.12)'};color:${PREFS.agroExact?'var(--red)':'var(--accent)'};font-family:var(--sans);font-size:calc(13px*var(--fz));font-weight:600;cursor:pointer">${PREFS.agroExact?L.agroDisconnect:(PREFS.agroAuthMode==='login'?L.agroLoginBtn:L.agroConnect)}</button>
+      <div style="font-family:var(--sans);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:8px;line-height:1.5">${L.agroHint}</div>
+    </div>
 
     ${sectionHead(L.favs)}
     ${favsHtml}
