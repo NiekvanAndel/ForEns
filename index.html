@@ -21,6 +21,7 @@
   --sans:-apple-system,'SF Pro Display','SF Pro Text',BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;
   --st:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px);
   --sl:env(safe-area-inset-left,0px);--sr:env(safe-area-inset-right,0px);
+  --fz:1;
 }
 html{height:100%;-webkit-text-size-adjust:100%}
 body{
@@ -32,16 +33,16 @@ body{
     radial-gradient(ellipse 60% 50% at -10% 60%,rgba(30,80,160,.12) 0%,transparent 50%);
   -webkit-tap-highlight-color:transparent;
 }
-.app{max-width:600px;margin:0 auto;padding-bottom:2rem}
+.app{max-width:600px;margin:0 auto;padding-bottom:calc(130px + env(safe-area-inset-bottom,0px))}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:20px;margin-bottom:12px;overflow:hidden}
-.card-title{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;padding:12px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
-.loading{padding:2rem;text-align:center;color:var(--muted);font-family:var(--mono);font-size:13px}
+.card-title{font-family:var(--mono);font-size:calc(11px*var(--fz));font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;padding:12px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.loading{padding:2rem;text-align:center;color:var(--muted);font-family:var(--mono);font-size:calc(13px*var(--fz))}
 .spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-right:8px;vertical-align:-3px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .loc-row{display:flex;gap:6px;padding:12px 14px;align-items:center;border-bottom:1px solid var(--border)}
-.loc-input{flex:1;font-size:14px;padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:var(--mono);outline:none}
+.loc-input{flex:1;font-size:calc(14px*var(--fz));padding:8px 12px;border-radius:10px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:var(--mono);outline:none}
 .loc-input:focus{border-color:var(--accent)}
-.loc-btn{font-size:14px;padding:8px 14px;border-radius:10px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer;font-family:var(--sans)}
+.loc-btn{font-size:calc(14px*var(--fz));padding:8px 14px;border-radius:10px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);cursor:pointer;font-family:var(--sans)}
 .loc-btn:hover{border-color:var(--accent)}
 .loc-btn.primary{background:var(--accent);color:#070a10;border-color:var(--accent)}
 .hourly-outer{overflow-x:auto;scrollbar-width:none}
@@ -51,68 +52,63 @@ body{
 .hour-item:hover,.hour-item.active{background:var(--surface2)}
 .hour-item.past{opacity:.35}
 .hour-item.past:hover,.hour-item.past.active{opacity:.65}
-.hour-label{font-family:var(--mono);font-size:12px;color:var(--muted)}
-.hour-temp{font-family:var(--mono);font-size:15px;font-weight:700}
-.hour-icon{font-size:20px}
-.hour-precip{font-family:var(--mono);font-size:12px;font-weight:700;min-height:16px}
-.hour-mm{font-family:var(--mono);font-size:11px;color:var(--muted);min-height:14px}
+.hour-label{font-family:var(--mono);font-size:calc(12px*var(--fz));color:var(--muted)}
+.hour-temp{font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700}
+.hour-icon{font-size:calc(20px*var(--fz))}
+.hour-precip{font-family:var(--mono);font-size:calc(12px*var(--fz));font-weight:700;min-height:16px}
+.hour-mm{font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);min-height:14px}
 .detail{padding:14px 16px;border-top:1px solid var(--border)}
-.detail-label{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.detail-label{font-family:var(--mono);font-size:calc(10px*var(--fz));font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
 .val-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .val-cell{background:var(--surface2);border-radius:10px;padding:9px 11px}
 .val-cell.future{background:rgba(74,240,168,.07);border:1px solid rgba(74,240,168,.12)}
-.val-cell-label{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
-.val-cell-val{font-family:var(--mono);font-size:20px;font-weight:700}
-.val-cell-unit{font-size:12px;color:var(--muted);font-weight:400}
-.day-row{display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid var(--border);gap:10px}
+.val-cell-label{font-family:var(--mono);font-size:calc(10px*var(--fz));letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.val-cell-val{font-family:var(--mono);font-size:calc(20px*var(--fz));font-weight:700}
+.val-cell-unit{font-size:calc(12px*var(--fz));color:var(--muted);font-weight:400}
+.day-row{display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border);gap:10px;height:50px}
 .day-row:last-child{border-bottom:none}
-.day-name{font-family:var(--sans);font-size:15px;font-weight:700;width:40px;flex-shrink:0}
-.day-icon{font-size:20px;flex-shrink:0}
+.day-name{font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;width:auto;flex-shrink:0;color:var(--muted)}
+.day-icon{font-size:calc(24px*var(--fz));flex-shrink:0;line-height:1}
 .day-mid{flex:1;min-width:0}
 .day-mid-inner{display:flex;align-items:center;gap:8px}
-.day-mid-left{font-family:var(--mono);font-size:14px;font-weight:700;flex-shrink:0;width:40px;text-align:right}
+.day-mid-left{font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;flex-shrink:0;min-width:calc(42px*var(--fz));width:auto;text-align:right;white-space:nowrap}
 .day-row-inner{display:flex;align-items:center;gap:8px;width:100%}
 .day-bar-wrap{position:relative;height:5px;background:var(--surface2);border-radius:3px;margin-top:4px}
 .day-bar-fill{position:absolute;height:100%;border-radius:3px}
 .day-right{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;flex-shrink:0;gap:2px}
-.day-right-val{font-family:var(--mono);font-size:16px;font-weight:700}
-.day-right-sub{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.day-right-val{font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700}
+.day-right-sub{font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted)}
 .tab-row{display:flex;gap:6px;padding:10px 16px 8px;overflow-x:auto;scrollbar-width:none}
 .tab-row::-webkit-scrollbar{display:none}
-.tab-btn{font-family:var(--mono);font-size:12px;padding:6px 14px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s}
+.tab-btn{font-family:var(--mono);font-size:calc(12px*var(--fz));padding:6px 14px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted);cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s}
 .tab-btn.active{background:var(--accent);color:#070a10;border-color:var(--accent);font-weight:700}
 .hero-stat{flex:1;padding:12px 14px;text-align:center}
-.hero-stat-label{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
-.hero-stat-val{font-family:var(--mono);font-family:var(--mono);font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:4px}
+.hero-stat-label{font-family:var(--mono);font-size:calc(10px*var(--fz));letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.hero-stat-val{font-family:var(--mono);font-family:var(--mono);font-size:calc(20px*var(--fz));font-weight:700;display:flex;align-items:center;justify-content:center;gap:4px}
 .hero-stat-div{width:1px;background:var(--border);align-self:stretch}
-.err{color:var(--danger);font-family:var(--mono);font-size:13px;padding:1rem;text-align:center}
+.err{color:var(--danger);font-family:var(--mono);font-size:calc(13px*var(--fz));padding:1rem;text-align:center}
 </style>
 </head>
 <body>
 <div class="app">
 
-  <div class="card" style="margin:1rem 16px 12px">
-    <div class="loc-row">
-      <input class="loc-input" id="locInput" type="text" placeholder="Stad (bijv. Amsterdam)" value="'s-Hertogenbosch">
-      <button class="loc-btn primary" onclick="loadLocation()"><i class="ti ti-search"></i></button>
-      <button class="loc-btn" onclick="useGPS()" title="GPS"><i class="ti ti-current-location"></i></button>
-    </div>
-  </div>
+  <!-- Favorieten strip bovenin -->
+  <div id="favsStrip" style="display:none;padding:6px 12px 8px 12px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:4px"></div>
 
   <div id="heroBlock" style="display:none">
     <div class="card" style="margin-bottom:12px">
       <!-- Rij 0: locatie + tijd -->
       <div style="padding:14px 16px 6px">
-        <div style="font-family:var(--sans);font-size:clamp(1.3rem,5vw,1.8rem);font-weight:800;letter-spacing:-.03em;color:var(--green)" id="cityName"></div>
-        <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px;letter-spacing:.06em" id="heroTime"></div>
+        <div style="font-family:var(--sans);font-size:clamp(calc(1.3rem*var(--fz)),calc(5vw*var(--fz)),calc(1.8rem*var(--fz)));font-weight:800;letter-spacing:-.03em;color:var(--green)" id="cityName"></div>
+        <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:3px;letter-spacing:.06em" id="heroTime"></div>
       </div>
       <!-- Rij 1: min/max · temp · icoon gelijkmatig verdeeld -->
       <div style="padding:4px 16px 12px;display:flex;justify-content:space-evenly;align-items:center">
         <div style="display:flex;flex-direction:column;gap:4px">
-          <div style="font-family:var(--mono);font-size:18px;font-weight:700;display:flex;align-items:center;gap:4px"><span style="color:var(--red)">▲</span><span style="color:var(--muted)" id="heroTempMax"></span></div>
-          <div style="font-family:var(--mono);font-size:18px;font-weight:700;display:flex;align-items:center;gap:4px"><span style="color:var(--accent)">▼</span><span style="color:var(--muted)" id="heroTempMin"></span></div>
+          <div style="font-family:var(--mono);font-size:calc(18px*var(--fz));font-weight:700;display:flex;align-items:center;gap:4px"><span style="color:var(--red)">▲</span><span style="color:var(--muted)" id="heroTempMax"></span></div>
+          <div style="font-family:var(--mono);font-size:calc(18px*var(--fz));font-weight:700;display:flex;align-items:center;gap:4px"><span style="color:var(--accent)">▼</span><span style="color:var(--muted)" id="heroTempMin"></span></div>
         </div>
-        <div style="font-family:var(--mono);font-size:64px;font-weight:700;line-height:1;letter-spacing:-.04em" id="heroTemp"></div>
+        <div style="font-family:var(--mono);font-size:calc(64px*var(--fz));font-weight:700;line-height:1;letter-spacing:-.04em" id="heroTemp"></div>
         <div id="heroIcon"></div>
       </div>
       <!-- Rij 2: wind / neerslag / vochtigheid -->
@@ -126,7 +122,7 @@ body{
       <!-- Rij 3: komende 3 uur -->
       <div style="display:flex;flex-direction:column;border-top:0.5px solid rgba(128,128,128,.18)" id="hero3h"></div>
       <!-- Bekijk meer -->
-      <div onclick="openHourlyPopup()" style="padding:12px 16px;text-align:center;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);cursor:pointer;border-top:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">Bekijk meer ›</div>
+      <div id="viewMoreBtn" onclick="openHourlyPopup()" style="padding:12px 16px;text-align:center;font-family:var(--mono);font-size:calc(13px*var(--fz));font-weight:600;color:var(--accent);cursor:pointer;border-top:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">Bekijk meer ›</div>
     </div>
   </div>
 
@@ -135,12 +131,12 @@ body{
     <div class="card">
       <div class="card-title"><i class="ti ti-calendar"></i> <span id="dailyCardTitle">7 dagen · ECMWF ENS 51 members</span></div>
       <div class="tab-row">
-        <button class="tab-btn active" onclick="setTab('overzicht',this)">Overzicht</button>
-        <button class="tab-btn" onclick="setTab('neerslag',this)">☔ Neerslag</button>
-        <button class="tab-btn" onclick="setTab('temp',this)">🌡 Temperatuur</button>
-        <button class="tab-btn" onclick="setTab('vocht',this)">💧 Vochtigheid</button>
-        <button class="tab-btn" onclick="setTab('wind',this)">💨 Wind</button>
-        <button class="tab-btn" onclick="setTab('zon',this)">☀️ Zon & verdamping</button>
+        <button class="tab-btn active" data-tab="overzicht" onclick="setTab('overzicht',this)">Overzicht</button>
+        <button class="tab-btn" data-tab="neerslag" onclick="setTab('neerslag',this)">☔ Neerslag</button>
+        <button class="tab-btn" data-tab="temp" onclick="setTab('temp',this)">🌡 Temperatuur</button>
+        <button class="tab-btn" data-tab="vocht" onclick="setTab('vocht',this)">💧 Vochtigheid</button>
+        <button class="tab-btn" data-tab="wind" onclick="setTab('wind',this)">💨 Wind</button>
+        <button class="tab-btn" data-tab="zon" onclick="setTab('zon',this)">☀️ Zon & verdamping</button>
       </div>
       <div id="dailyList"></div>
     </div>
@@ -148,12 +144,12 @@ body{
   </div>
 
   <!-- Popup overlay voor uurverwachting -->
-  <div id="hourlyOverlay" onclick="closeHourlyPopup()" style="display:none;position:fixed;inset:0;background:rgba(7,10,16,.85);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:100;align-items:flex-end;justify-content:center"></div>
-  <div id="hourlyPopup" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:420px;z-index:101;padding:0 0 env(safe-area-inset-bottom,0)">
+  <div id="hourlyOverlay" onclick="closeHourlyPopup();if(window._dagDetailCleanup){window._dagDetailCleanup();}" style="display:none;position:fixed;inset:0;background:rgba(7,10,16,.85);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:100;align-items:flex-end;justify-content:center"></div>
+  <div id="hourlyPopup" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:600px;z-index:101;padding:0 0 env(safe-area-inset-bottom,0)">
     <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:24px 24px 0 0;overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;border-bottom:1px solid var(--border)">
-        <span style="font-size:12px;font-weight:600;letter-spacing:.05em;opacity:.5;text-transform:uppercase">Detail korte termijn</span>
-        <button onclick="closeHourlyPopup()" style="border:none;background:var(--surface2);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+        <span id="hourlyPopupTitle" style="font-size:calc(12px*var(--fz));font-weight:600;letter-spacing:.05em;opacity:.5;text-transform:uppercase">Detail korte termijn</span>
+        <button onclick="closeHourlyPopup();if(window._dagDetailCleanup){window._dagDetailCleanup();}" style="border:none;background:var(--surface2);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;font-size:calc(15px*var(--fz));cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
       </div>
       <!-- Meteogram -->
       <div style="border-bottom:1px solid var(--border)">
@@ -175,19 +171,43 @@ body{
   <div id="dayPopup" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;max-width:600px;z-index:101;padding:0 0 env(safe-area-inset-bottom,0)">
     <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:24px 24px 0 0;overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px;border-bottom:1px solid var(--border)">
-        <span id="dayPopupTitle" style="font-family:var(--sans);font-size:16px;font-weight:700"></span>
-        <button onclick="closeDayPopup()" style="background:var(--surface2);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+        <span id="dayPopupTitle" style="font-family:var(--sans);font-size:calc(16px*var(--fz));font-weight:700"></span>
+        <button onclick="closeDayPopup()" style="background:var(--surface2);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;font-size:calc(15px*var(--fz));cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
       </div>
       <div id="dayPopupBody" style="overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:calc(85dvh - 52px)"></div>
     </div>
   </div>
 
   <div id="loadingBlock">
-    <div class="card"><div class="loading"><span class="spinner"></span>Laden (HARMONIE + ECMWF ENS)…</div></div>
+    <div class="card"><div class="loading"><span class="spinner"></span><span id="loadingText">Laden (HARMONIE + ECMWF ENS)…</span></div></div>
   </div>
   <div id="errBlock" style="display:none">
     <div class="card"><div class="err" id="errMsg"></div></div>
   </div>
+</div>
+
+<!-- ══ FAB knoppen rechtsonder ═══════════════════════════════════════ -->
+<div style="position:fixed;bottom:calc(18px + env(safe-area-inset-bottom,0px));right:16px;z-index:290;display:flex;flex-direction:column;gap:10px;align-items:center">
+  <button onclick="openSettings()" title="Instellingen"
+    style="width:50px;height:50px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:calc(20px*var(--fz));background:rgba(30,42,68,0.88);color:var(--text);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 4px 20px rgba(0,0,0,.45);transition:transform .15s,opacity .2s;-webkit-tap-highlight-color:transparent"
+    onmousedown="this.style.transform='scale(.92)'" onmouseup="this.style.transform=''" ontouchstart="this.style.transform='scale(.92)'" ontouchend="this.style.transform=''">⚙</button>
+  <button onclick="openSearch()" title="Zoeken"
+    style="width:50px;height:50px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:calc(22px*var(--fz));background:#3b82f6;color:#fff;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 4px 20px rgba(0,0,0,.45);transition:transform .15s,opacity .2s;-webkit-tap-highlight-color:transparent"
+    onmousedown="this.style.transform='scale(.92)'" onmouseup="this.style.transform=''" ontouchstart="this.style.transform='scale(.92)'" ontouchend="this.style.transform=''">⌕</button>
+</div>
+
+<!-- ══ Zoek-overlay (schuift omhoog) ═════════════════════════════════ -->
+<div id="searchOverlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(7,10,16,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);flex-direction:column;padding:calc(1rem + env(safe-area-inset-top,0px)) 1rem 1rem" onclick="if(event.target===this)closeSearch()">
+  <div style="display:flex;gap:10px;margin-bottom:12px">
+    <input id="locInput" type="search" placeholder="Zoek een stad…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search"
+      style="flex:1;font-size:calc(16px*var(--fz));padding:12px 16px;border-radius:12px;border:1px solid var(--border2);background:rgba(255,255,255,.08);color:var(--text);font-family:var(--mono);outline:none;-webkit-appearance:none"
+      oninput="onSearchInput()" onkeydown="if(event.key==='Enter')doSearch();if(event.key==='Escape')closeSearch()">
+    <button onclick="useGPS()" title="GPS"
+      style="padding:0 14px;border-radius:12px;border:1px solid var(--border2);background:rgba(255,255,255,.08);color:var(--text);font-size:calc(18px*var(--fz));cursor:pointer;white-space:nowrap;flex-shrink:0"><i class="ti ti-current-location"></i></button>
+    <button onclick="closeSearch()" id="searchCancelBtn"
+      style="padding:0 14px;border-radius:12px;border:none;background:none;color:var(--accent);font-family:var(--sans);font-size:calc(15px*var(--fz));font-weight:600;cursor:pointer;flex-shrink:0">Annuleer</button>
+  </div>
+  <div id="searchSuggestions" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -241,7 +261,7 @@ function wi(c,isDay=1,sz=22){return wmoIcon(c,isDay,sz);}
 const WMO={0:'Helder',1:'Meest helder',2:'Gedeeltelijk bewolkt',3:'Bewolkt',45:'Mist',48:'Rijpmist',51:'Motregen (licht)',53:'Motregen',55:'Motregen (zwaar)',61:'Regen (licht)',63:'Regen',65:'Regen (zwaar)',71:'Sneeuw (licht)',73:'Sneeuw',75:'Sneeuw (zwaar)',80:'Buien (licht)',81:'Buien',82:'Hevige buien',95:'Onweer',96:'Onweer + hagel',99:'Zwaar onweer'};
 
 
-function wd(c){return WMO[c]||'Onbekend';}
+function wd(c){return (typeof tWmo==='function')?tWmo(c):(WMO[c]||'Onbekend');}
 function rc(p){return p>=60?'var(--red)':p>=30?'var(--amber)':'var(--green)';}
 function r1(v){return isNaN(v)?0:Math.round(v*10)/10;}
 
@@ -297,11 +317,68 @@ async function loadLocation(){
 }
 function useGPS(){
   if(!navigator.geolocation){showErr('Geolocatie niet beschikbaar');return;}
+  closeSearch();
   showLoad();
   navigator.geolocation.getCurrentPosition(
     async p=>{S.lat=p.coords.latitude;S.lon=p.coords.longitude;S.city='Jouw locatie';
       try{await run();}catch(e){showErr(e.message);}},
     ()=>showErr('Locatietoegang geweigerd'));
+}
+
+/* ── Zoek overlay functies ─────────────────────────────────────── */
+let _searchTmt=null;
+function openSearch(){
+  const el=document.getElementById('searchOverlay');
+  el.style.display='flex';
+  document.body.style.overflow='hidden';
+  setTimeout(()=>document.getElementById('locInput').focus(),80);
+}
+function closeSearch(){
+  document.getElementById('searchOverlay').style.display='none';
+  document.getElementById('searchSuggestions').innerHTML='';
+  document.getElementById('locInput').value='';
+  document.body.style.overflow='';
+}
+function onSearchInput(){
+  clearTimeout(_searchTmt);
+  const q=document.getElementById('locInput').value.trim();
+  if(q.length<2){document.getElementById('searchSuggestions').innerHTML='';return;}
+  _searchTmt=setTimeout(()=>_doGeoSearch(q),360);
+}
+async function _doGeoSearch(q){
+  const lang=(typeof PREFS!=='undefined'&&PREFS.lang)||'nl';
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=7&accept-language=${lang}`);
+    const results=await r.json();
+    const sug=document.getElementById('searchSuggestions');
+    if(!results.length){sug.innerHTML=`<div style="padding:1.2rem;font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--muted)">${t('noResults')}</div>`;return;}
+    sug.innerHTML=results.map(res=>{
+      const parts=res.display_name.split(',');
+      const name=parts.slice(0,2).join(',').trim();
+      const sub=parts.slice(2,4).join(',').trim();
+      const lat=parseFloat(res.lat),lon=parseFloat(res.lon);
+      return`<div
+        onclick="pickLocation(${lat},${lon},'${res.display_name.split(',').slice(0,3).join(',').replace(/'/g,'&#39;')}')"
+        style="padding:14px 18px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;transition:background .12s"
+        onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">
+        <div>
+          <div style="font-family:var(--mono);font-size:calc(14px*var(--fz));color:var(--text);font-weight:600">${name}</div>
+          ${sub?`<div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:2px">${sub}</div>`:''}
+        </div>
+        <span style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);white-space:nowrap;flex-shrink:0">${lat.toFixed(2)}, ${lon.toFixed(2)}</span>
+      </div>`;
+    }).join('');
+  }catch(e){console.warn('Geocode fout',e);}
+}
+function doSearch(){
+  const q=document.getElementById('locInput').value.trim();
+  if(q)_doGeoSearch(q);
+}
+function pickLocation(lat,lon,name){
+  closeSearch();
+  S.lat=lat;S.lon=lon;S.city=name;
+  if(typeof renderFavsStrip==='function') renderFavsStrip();
+  showLoad();run().catch(e=>showErr(e.message));
 }
 
 async function run(){
@@ -340,7 +417,7 @@ async function run(){
   // ── Stap 2: ENS dagelijks + Sun + IFS dagelijks parallel op achtergrond ──
   const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&hourly=relativehumidity_2m,weathercode&models=ecmwf_ifs025&forecast_days=7`;
   const sunUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,winddirection_10m&forecast_days=7`;
-  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code&forecast_days=7`;
+  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=7`;
   try{
     const [eR,sR,iR]=await Promise.all([safeFetch(ensUrl,'ENS'),safeFetch(sunUrl,'Sun'),safeFetch(hresUrl,'IFS')]);
     const eJ=eR?.ok?await eR.json():null;
@@ -357,6 +434,69 @@ async function run(){
   S._oJ=S._oJ||oJ; S._hJ=S._hJ||hJ;
 }
 
+async function loadVochtIfNeeded(){
+  if(S._vochtLoaded) return;
+  const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+  // HARMONIE uurlijks: temp + dauwpunt voor dag 0-1
+  const harmVochtUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=temperature_2m,dewpoint_2m&forecast_days=2&models=knmi_harmonie_arome_europe`;
+  // IFS uurlijks: temp + dauwpunt voor dag 2-3 (al in ihJ als geladen, anders fetch)
+  try{
+    const r=await fetch(harmVochtUrl);
+    if(!r.ok) return;
+    const j=await r.json();
+    const ht=j.hourly?.time||[], temp=j.hourly?.temperature_2m||[], dew=j.hourly?.dewpoint_2m||[];
+    const magnus=(T,Td)=>T!=null&&Td!=null?Math.min(100,Math.round(100*Math.exp(17.625*Td/(243.04+Td))/Math.exp(17.625*T/(243.04+T)))):null;
+    // Bereken RH min/max per dag
+    const harmRhByDay={};
+    ht.forEach((t,i)=>{
+      const day=t.slice(0,10);
+      const rh=magnus(temp[i],dew[i]);
+      if(rh==null) return;
+      if(!harmRhByDay[day]) harmRhByDay[day]={min:100,max:0};
+      harmRhByDay[day].min=Math.min(harmRhByDay[day].min,rh);
+      harmRhByDay[day].max=Math.max(harmRhByDay[day].max,rh);
+    });
+    // Update days met HARMONIE RH
+    S.data.days.forEach(d=>{
+      if(d.useHarm&&harmRhByDay[d.date]){
+        d.harmRhMin=harmRhByDay[d.date].min;
+        d.harmRhMax=harmRhByDay[d.date].max;
+      }
+    });
+    S._vochtLoaded=true;
+  }catch(e){console.warn('HARMONIE vocht laden mislukt:',e.message);}
+
+  // IFS uurlijks voor dag 2-3: gebruik hresRhByDay als ihJ al geladen
+  // Anders: haal IFS uurlijks op
+  if(!S._ifsVochtLoaded){
+    try{
+      const b=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+      const r=await fetch(`https://api.open-meteo.com/v1/ecmwf?${b}&hourly=temperature_2m,dewpoint_2m&forecast_days=7`);
+      if(r.ok){
+        const j=await r.json();
+        const ht=j.hourly?.time||[], temp=j.hourly?.temperature_2m||[], dew=j.hourly?.dewpoint_2m||[];
+        const magnus=(T,Td)=>T!=null&&Td!=null?Math.min(100,Math.round(100*Math.exp(17.625*Td/(243.04+Td))/Math.exp(17.625*T/(243.04+T)))):null;
+        const ifsRhByDay={};
+        ht.forEach((t,i)=>{
+          const day=t.slice(0,10);
+          const rh=magnus(temp[i],dew[i]);
+          if(rh==null) return;
+          if(!ifsRhByDay[day]) ifsRhByDay[day]={min:100,max:0};
+          ifsRhByDay[day].min=Math.min(ifsRhByDay[day].min,rh);
+          ifsRhByDay[day].max=Math.max(ifsRhByDay[day].max,rh);
+        });
+        S.data.days.forEach(d=>{
+          if(!d.useHarm&&ifsRhByDay[d.date]){
+            d.hresRhMin=ifsRhByDay[d.date].min;
+            d.hresRhMax=ifsRhByDay[d.date].max;
+          }
+        });
+        S._ifsVochtLoaded=true;
+      }
+    }catch(e){console.warn('IFS vocht laden mislukt:',e.message);}
+  }
+}
+
 async function loadIfsIfNeeded(){
   if(S._ifsLoaded||S._ifsLoading) return;
   S._ifsLoading=true;
@@ -365,7 +505,7 @@ async function loadIfsIfNeeded(){
     try{ const r=await fetch(url); return r; }
     catch(e){ console.warn(name+' mislukt:',e.message); return null; }
   };
-  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code&forecast_days=7`;
+  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=7`;
   try{
     const iR=await safeFetch(hresUrl,'IFS');
     const iJ=iR?.ok?await iR.json():null;
@@ -415,7 +555,7 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
   const hh=hJ.hourly, ht=hh.time;
   const futureHours = [];
   for(let i=0;i<ht.length;i++){
-    if(ht[i] >= nowHour && futureHours.length < 24){
+    if(ht[i] >= nowHour && futureHours.length < 48){
       futureHours.push({
         time: ht[i],
         temp: hh.temperature_2m[i]!=null ? Math.round(hh.temperature_2m[i]) : null,
@@ -455,10 +595,11 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
   });
 
   // ── ENS dagelijkse aggregatie ──
+  const today=nowHour.slice(0,10);
   const dayMap={}, dayOrder=[];
   for(let i=0;i<edt.length;i++){
     const d=edt[i];
-    if(d<=nowHour.slice(0,10)) continue;
+    if(d<today) continue; // vandaag wél meenemen
     dayMap[d]={date:d,
       ps:PM2.map(m=>m[i]??0),
       taMax:TMaxM2.map(m=>m[i]??-Infinity),
@@ -499,6 +640,23 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
     });
   }
 
+  // ── HARMONIE dag aggregatie (vandaag + morgen) ──
+  const harmDays={};
+  if(hJ?.hourly?.time){
+    const ht=hJ.hourly, htm=ht.time||[];
+    htm.forEach((t,i)=>{
+      const day=t.slice(0,10);
+      if(!harmDays[day]) harmDays[day]={temps:[],precips:[],winds:[],wmos:[],cloud:[]};
+      const o=harmDays[day];
+      if(ht.temperature_2m?.[i]!=null) o.temps.push(ht.temperature_2m[i]);
+      if(ht.precipitation?.[i]!=null) o.precips.push(ht.precipitation[i]);
+      if(ht.windspeed_10m?.[i]!=null) o.winds.push(ht.windspeed_10m[i]);
+      if(ht.weathercode?.[i]!=null) o.wmos.push(ht.weathercode[i]);
+      if(ht.cloudcover?.[i]!=null) o.cloud.push(ht.cloudcover[i]);
+      if(ht.dewpoint_2m?.[i]!=null&&ht.temperature_2m?.[i]!=null) o.rhvals=o.rhvals||[],(()=>{const T=ht.temperature_2m[i],Td=ht.dewpoint_2m[i];const rh=Math.round(100*Math.exp(17.625*Td/(243.04+Td))/Math.exp(17.625*T/(243.04+T)));o.rhvals.push(rh);})();
+    });
+  }
+
   // ── HRES dagdata koppelen ──
   const hresDays={};
   let hresRunLabel=null;
@@ -523,6 +681,9 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
         hresWindMax: id.windspeed_10m_max?.[i]!=null ? Math.round(id.windspeed_10m_max[i]) : null,
         hresWindDir: id.winddirection_10m_dominant?.[i]!=null ? Math.round(id.winddirection_10m_dominant[i]) : null,
         hresWmo: id.weather_code?.[i]??null,
+        // RH uit dauwpunt via Magnus: RH_max uit (Tmin,Tdmax), RH_min uit (Tmax,Tdmin)
+        hresRhMax: (()=>{const T=id.temperature_2m_min?.[i],Td=id.dewpoint_2m_max?.[i];return T!=null&&Td!=null?Math.min(100,Math.round(100*Math.exp(17.625*Td/(243.04+Td))/Math.exp(17.625*T/(243.04+T)))):null;})(),
+        hresRhMin: (()=>{const T=id.temperature_2m_max?.[i],Td=id.dewpoint_2m_min?.[i];return T!=null&&Td!=null?Math.min(100,Math.round(100*Math.exp(17.625*Td/(243.04+Td))/Math.exp(17.625*T/(243.04+T)))):null;})(),
       };
     });
   }
@@ -567,13 +728,22 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
     });
   }
 
-  const days=dayOrder.slice(0,7).map(d=>{
+  const days=dayOrder.slice(0,7).map((d,dayIdx)=>{
     const o=dayMap[d];
-    const wmoMode=o.wmos.length?o.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,o.wmos[0]):0;
+    const harm=harmDays[d]||{};
+    const useHarm=dayIdx<=1; // vandaag + morgen: HARMONIE
+    const wmoMode=o.wmos.length?o.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,o.wmos[0]):(harm.wmos?.length?harm.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,harm.wmos[0]):0);
     const sunHours=sunByDay[d]!=null ? r1(sunByDay[d]/3600) : null;
     const et0=et0ByDay[d]!=null ? r1(et0ByDay[d]) : null;
     const windDir=windDirByDay[d]??null;
-    return{date:d,
+    // HARMONIE dag waarden
+    const harmTempMax=harm.temps?.length?Math.round(Math.max(...harm.temps)):null;
+    const harmTempMin=harm.temps?.length?Math.round(Math.min(...harm.temps)):null;
+    const harmPrecip=harm.precips?.length?r1(harm.precips.reduce((a,b)=>a+b,0)):null;
+    const harmWindMax=harm.winds?.length?Math.round(Math.max(...harm.winds)):null;
+    const harmRhMin=harm.rhvals?.length?Math.min(...harm.rhvals):null;
+    const harmRhMax=harm.rhvals?.length?Math.max(...harm.rhvals):null;
+    return{date:d, useHarm,
       precipP10:r1(pct(o.ps,10)),precipP25:r1(pct(o.ps,25)),
       precipMedian:r1(pct(o.ps,50)),precipP75:r1(pct(o.ps,75)),precipP90:r1(pct(o.ps,90)),
       pChance:Math.round(pge(o.ps,.1)),p5mm:Math.round(pge(o.ps,5)),p20mm:Math.round(pge(o.ps,20)),
@@ -595,9 +765,12 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
       windP90:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),90)),
       humidityMedian:o.ha.length?Math.round(pct(o.ha,50)):null,
       humidityP10:o.ha.length?Math.round(pct(o.ha,10)):null,
+      humidityP25:o.ha.length?Math.round(pct(o.ha,25)):null,
+      humidityP75:o.ha.length?Math.round(pct(o.ha,75)):null,
       humidityP90:o.ha.length?Math.round(pct(o.ha,90)):null,
       sunHours, et0, windDir,
       wmo:wmoMode, nMembers:PM2.length, ...(hresDays[d]||{}),
+      harmTempMax, harmTempMin, harmPrecip, harmWindMax, harmRhMin, harmRhMax,
       hresRhMin: hresRhByDay[d]?.min??null,
       hresRhMax: hresRhByDay[d]?.max??null,
     };
@@ -628,53 +801,52 @@ function render(){
 
   // Huidige temp + icoon
   const curH=d.futureHours[0]||d.pastHours[d.pastHours.length-1];
-  document.getElementById('heroTemp').textContent=(curH?.temp??'—')+'°';
+  document.getElementById('heroTemp').textContent=fmtTempShort(curH?.temp);
   document.getElementById('heroIcon').innerHTML=wi(curH?.wmo??0,curH?.isDay??1,72);
 
   // Max/min afgelopen 24u uit obs
   const obsTemps=d.pastHours.map(h=>h.temp).filter(v=>v!=null);
-  const obsMax=obsTemps.length?Math.max(...obsTemps):'—';
-  const obsMin=obsTemps.length?Math.min(...obsTemps):'—';
-  document.getElementById('heroTempMax').textContent=obsMax+'°';
-  document.getElementById('heroTempMin').textContent=obsMin+'°';
+  const obsMax=obsTemps.length?Math.max(...obsTemps):null;
+  const obsMin=obsTemps.length?Math.min(...obsTemps):null;
+  document.getElementById('heroTempMax').textContent=fmtTempShort(obsMax);
+  document.getElementById('heroTempMin').textContent=fmtTempShort(obsMin);
 
   // Wind huidig uur (eerste future uur)
-  const curWind=curH?.wind??'—';
+  const curWind=curH?.wind??null;
   const curWindDir=d.days[0]?.windDir??null;
   document.getElementById('heroWind').innerHTML=`
-    <div class="hero-stat-label">Wind</div>
-    <div class="hero-stat-val">${degToArrow(curWindDir)} ${curWind} <span style="font-size:10px;opacity:.5">km/u</span></div>`;
+    <div class="hero-stat-label">${t('hWind')}</div>
+    <div class="hero-stat-val">${degToArrow(curWindDir)} ${fmtWind(curWind)}</div>`;
 
   // Neerslag afgelopen 24u (som obs uren)
   const rain24=r1(d.pastHours.reduce((s,h)=>s+(h.precip||0),0));
   document.getElementById('heroRain').innerHTML=`
-    <div class="hero-stat-label">Neerslag 24u</div>
-    <div class="hero-stat-val">💧 ${rain24} <span style="font-size:10px;opacity:.5">mm</span></div>`;
+    <div class="hero-stat-label">${t('hRain24')}</div>
+    <div class="hero-stat-val">💧 ${rain24} <span style="font-size:calc(10px*var(--fz));opacity:.5">mm</span></div>`;
 
   // Luchtvochtigheid huidig uur
   const curHumidity=curH?.humidity??'—';
   document.getElementById('heroHumidity').innerHTML=`
-    <div class="hero-stat-label">Vochtigheid</div>
-    <div class="hero-stat-val">${curHumidity}<span style="font-size:10px;opacity:.5">%</span></div>`;
+    <div class="hero-stat-label">${t('hHumidity')}</div>
+    <div class="hero-stat-val">${curHumidity}<span style="font-size:calc(10px*var(--fz));opacity:.5">%</span></div>`;
 
   // 3-uurs preview: eerste 3 toekomstige uren onder elkaar
   const next3=d.futureHours.slice(1,4);
   const pastLen=d.pastHours.length;
   document.getElementById('hero3h').innerHTML=next3.map((h,i)=>{
-    // index in allHours: pastLen (divider skip) + 1 (huidige uur) + i
     const absIdx=pastLen+1+i;
     return`<div onclick="openHourlyPopup(${absIdx})" style="display:grid;grid-template-columns:40px 1fr 28px 1fr auto 1fr auto 1fr auto 1fr auto;align-items:center;padding:10px 16px;${i<2?'border-bottom:1px solid var(--border)':''}cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-      <span style="font-family:var(--mono);font-size:17px;font-weight:600;color:var(--muted)">${h.time.slice(11,16)}</span>
+      <span style="font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:600;color:var(--muted)">${h.time.slice(11,16)}</span>
       <span></span>
-      <span style="font-size:24px;line-height:1;text-align:center">${wi(h.wmo,h.isDay??1,24)}</span>
+      <span style="font-size:calc(24px*var(--fz));line-height:1;text-align:center">${wi(h.wmo,h.isDay??1,24)}</span>
       <span></span>
-      <span style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--amber)">${h.temp??'—'}°</span>
+      <span style="font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;color:var(--amber)">${fmtTempShort(h.temp)}</span>
       <span></span>
-      <span style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--accent)">${(h.precip??0).toFixed(1)} mm</span>
+      <span style="font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;color:var(--accent)">${(h.precip??0).toFixed(1)} mm</span>
       <span></span>
-      <span style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:2px">${degToArrow(h.windDir??curWindDir)}<span>${h.wind??'—'} <span style="font-size:11px">km/u</span></span></span>
+      <span style="font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;color:var(--muted);display:flex;align-items:center;gap:2px">${degToArrow(h.windDir??curWindDir)}<span>${fmtWind(h.wind)}</span></span>
       <span></span>
-      <span style="font-family:var(--mono);font-size:17px;font-weight:700;color:var(--amber)">☀ ${h.sunMin??0}m</span>
+      <span style="font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;color:var(--amber)">☀ ${h.sunMin??0}m</span>
     </div>`;
   }).join('');
 
@@ -695,11 +867,13 @@ function precipColor(mm){
 function renderHourly(){
   const all=S.data.allHours;
   const pastLen=S.data.pastHours.length;
+  // Eerste toekomstige uur = overgang past→future
+  const firstFutureIdx=all.findIndex(h=>!h.isPast);
 
   let html='';
   all.forEach((h,i)=>{
     const isPast=h.isPast;
-    const isNow=(i===pastLen);
+    const isNow=(i===firstFutureIdx&&firstFutureIdx>0);
     const nowStyle=isNow?'border-left:2px solid rgba(128,128,128,.25);margin-left:4px;padding-left:5px':'';
     const precip=h.precip??0;
     const precipCol=isPast?'var(--muted)':precipColor(precip);
@@ -711,11 +885,11 @@ function renderHourly(){
     html+=`<div class="hour-item ${isPast?'past':''} ${i===S.hi?'active':''}" onclick="selHour(${i})" style="${nowStyle}">
       <span class="hour-label">${h.time.slice(11,16)}</span>
       <span class="hour-icon" style="${isPast?'filter:saturate(.3)':''}">${wi(h.wmo,h.isDay??1)}</span>
-      <span class="hour-temp">${h.temp??'—'}°</span>
-      <span class="hour-precip" style="color:${precipCol};font-size:11px">${precipStr}</span>
-      <span class="hour-mm" style="color:var(--muted)">${wind}<span style="font-size:9px"> km/u</span></span>
-      <span style="font-family:var(--mono);font-size:12px;color:var(--muted);min-height:14px">${windDir!=null?`<span style="display:inline-block;transform:rotate(${(windDir+180)%360}deg)">↑</span>`:'·'}</span>
-      <span style="font-family:var(--mono);font-size:11px;color:${sunMin>0?'var(--amber)':'var(--muted)'};min-height:13px">${sunMin>0?sunMin+'m':'·'}</span>
+      <span class="hour-temp">${fmtTempShort(h.temp)}</span>
+      <span class="hour-precip" style="color:${precipCol};font-size:calc(11px*var(--fz))">${precipStr}</span>
+      <span class="hour-mm" style="color:var(--muted)">${fmtWind(h.wind)}</span>
+      <span style="font-family:var(--mono);font-size:calc(12px*var(--fz));color:var(--muted);min-height:14px">${windDir!=null?`<span style="display:inline-block;transform:rotate(${(windDir+180)%360}deg)">↑</span>`:'·'}</span>
+      <span style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:${sunMin>0?'var(--amber)':'var(--muted)'};min-height:13px">${sunMin>0?sunMin+'m':'·'}</span>
     </div>`;
   });
 
@@ -736,7 +910,7 @@ function renderHourly(){
       }
       S.keepScroll=false;
     } else {
-      const nowItem=items[pastLen];
+      const nowItem=items[firstFutureIdx>=0?firstFutureIdx:0];
       if(nowItem){
         const target=nowItem.offsetLeft - outer.clientWidth*0.35;
         outer.scrollLeft=Math.max(0,target);
@@ -747,10 +921,44 @@ function renderHourly(){
   renderHD();
 }
 
-function selHour(i){
+async function selHour(i){
   S.hi=i;
-  S.keepScroll=true; // bewaar scrollpositie
+  S.keepScroll=true;
   renderHourly();
+
+  const h=S.data.allHours[i];
+  if(h&&!h.isPast&&S._dagDetailBron==='IFS'&&h._ifsDetailLoaded!==true){
+    h._ifsDetailLoaded=true; // sentinel: niet opnieuw proberen
+    const el=document.getElementById('hourDetail');
+    el.querySelectorAll('.val-cell-val').forEach(v=>{
+      if(v.textContent.trim()==='—'){
+        v.innerHTML='<span class="spinner" style="width:12px;height:12px;margin:0"></span>';
+      }
+    });
+    try{
+      const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+      const date=h.time.slice(0,10);
+      const dayNum=S.data.days.findIndex(d=>d.date===date)+1;
+      const fcDays=Math.min(Math.max(dayNum+1,2),7);
+      const r=await fetch(`https://api.open-meteo.com/v1/ecmwf?${base}&hourly=apparent_temperature,dewpoint_2m,wind_gusts_10m,et0_fao_evapotranspiration,relativehumidity_2m&forecast_days=${fcDays}`);
+      if(r.ok){
+        const j=await r.json();
+        const times=j.hourly?.time||[];
+        // Tijdstring normaliseren: vergelijk eerste 16 chars (YYYY-MM-DDTHH:MM)
+        const hTime=h.time.slice(0,16);
+        const idx=times.findIndex(t=>t.slice(0,16)===hTime);
+        console.log('IFS detail: zoek',hTime,'in',times.length,'tijden, gevonden op idx:',idx);
+        if(idx>=0){
+          h.feelsLike=j.hourly.apparent_temperature?.[idx]!=null?Math.round(j.hourly.apparent_temperature[idx]):null;
+          h.dewpoint=j.hourly.dewpoint_2m?.[idx]!=null?Math.round(j.hourly.dewpoint_2m[idx]):null;
+          h.gusts=j.hourly.wind_gusts_10m?.[idx]!=null?Math.round(j.hourly.wind_gusts_10m[idx]):null;
+          h.et0h=j.hourly.et0_fao_evapotranspiration?.[idx]!=null?r1(j.hourly.et0_fao_evapotranspiration[idx]):null;
+          h.humidity=j.hourly.relativehumidity_2m?.[idx]!=null?Math.round(j.hourly.relativehumidity_2m[idx]):null;
+        }
+      }
+    }catch(e){console.warn('IFS detail laden mislukt:',e.message);}
+    renderHD();
+  }
 }
 
 function renderHD(){
@@ -761,33 +969,33 @@ function renderHD(){
   const cellClass=isFuture?'val-cell future':'val-cell';
   const srcLabel=h.isPast
     ?`Meting · ${h.time.slice(11,16)}`
-    :`HARMONIE-AROME · ${h.time.slice(11,16)} · ${wd(h.wmo)}`;
+    :`${S._dagDetailBron||'HARMONIE-AROME'} · ${h.time.slice(11,16)} · ${wd(h.wmo)}`;
 
   const baseFields=`
       <div class="${cellClass}">
-        <div class="val-cell-label">Wind</div>
-        <div class="val-cell-val">${h.wind??'—'}<span class="val-cell-unit"> km/u</span></div>
+        <div class="val-cell-label">${t('hWind')}</div>
+        <div class="val-cell-val">${fmtWind(h.wind)}</div>
       </div>
       <div class="${cellClass}">
-        <div class="val-cell-label">Rel. vochtigheid</div>
+        <div class="val-cell-label">${t('relHumidity')}</div>
         <div class="val-cell-val">${h.humidity??'—'}<span class="val-cell-unit"> %</span></div>
       </div>`;
 
   const extraFields=isFuture?`
       <div class="${cellClass}">
-        <div class="val-cell-label">Gevoelstemperatuur</div>
-        <div class="val-cell-val">${h.feelsLike??'—'}<span class="val-cell-unit">°</span></div>
+        <div class="val-cell-label">${t('feelsLike')}</div>
+        <div class="val-cell-val">${fmtTemp(h.feelsLike)}</div>
       </div>
       <div class="${cellClass}">
-        <div class="val-cell-label">Dauwpunt</div>
-        <div class="val-cell-val">${h.dewpoint??'—'}<span class="val-cell-unit">°</span></div>
+        <div class="val-cell-label">${t('dewpoint')}</div>
+        <div class="val-cell-val">${fmtTemp(h.dewpoint)}</div>
       </div>
       <div class="${cellClass}">
-        <div class="val-cell-label">Windstoten</div>
-        <div class="val-cell-val">${h.gusts??'—'}<span class="val-cell-unit"> km/u</span></div>
+        <div class="val-cell-label">${t('gusts')}</div>
+        <div class="val-cell-val">${fmtWind(h.gusts)}</div>
       </div>
       <div class="${cellClass}">
-        <div class="val-cell-label">Verdamping ET₀</div>
+        <div class="val-cell-label">${t('evap')}</div>
         <div class="val-cell-val">${h.et0h??'—'}<span class="val-cell-unit"> mm</span></div>
       </div>`:'';
 
@@ -797,22 +1005,23 @@ function renderHD(){
 }
 
 function degToCompass(d){if(d==null)return'—';const dirs=['N','NNO','NO','ONO','O','OZO','ZO','ZZO','Z','ZZW','ZW','WZW','W','WNW','NW','NNW'];return dirs[Math.round(d/22.5)%16];}
-function degToArrow(d){if(d==null)return'';const r=(d+180)%360;return`<span style="display:inline-block;transform:rotate(${r}deg);font-size:12px">↑</span>`;}
+function degToArrow(d){if(d==null)return'';const r=(d+180)%360;return`<span style="display:inline-block;transform:rotate(${r}deg);font-size:calc(12px*var(--fz))">↑</span>`;}
 
 
 let meteoChart=null;
 
 function renderMeteogram(){
   const hours=S.data.futureHours;
+  const fzScale=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fz'))||1;
   const labels=hours.map(h=>h.time.slice(11,16));
-  const temps=hours.map(h=>h.temp);
+  const temps=hours.map(h=>convTempVal(h.temp));
   const precips=hours.map(h=>h.precip??0);
 
   // Windpijlen rij
   document.getElementById('meteoWind').innerHTML=hours.map(h=>
     `<span style="flex:1;text-align:center;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0">
-      <span style="font-size:11px;transform:rotate(${((h.windDir??0)+180)%360}deg);display:inline-block;opacity:.7">↑</span>
-      <span style="font-family:var(--mono);font-size:9px;color:var(--muted)">${h.wind??'—'}</span>
+      <span style="font-size:calc(11px*var(--fz));transform:rotate(${((h.windDir??0)+180)%360}deg);display:inline-block;opacity:.7">↑</span>
+      <span style="font-family:var(--mono);font-size:calc(9px*var(--fz));color:var(--muted)">${h.wind??'—'}</span>
     </span>`
   ).join('');
 
@@ -859,23 +1068,128 @@ function renderMeteogram(){
       scales:{
         x:{
           grid:{display:false},
-          ticks:{color:tick,maxTicksLimit:8,maxRotation:0,font:{size:9}},
+          ticks:{color:tick,maxTicksLimit:8,maxRotation:0,font:{size:Math.round(9*fzScale)}},
         },
         yTemp:{
           position:'left',
           grid:{color:grid},
-          ticks:{color:tick,font:{size:9},callback:v=>v+'°'},
+          ticks:{color:tick,font:{size:Math.round(9*fzScale)},callback:v=>fmtTempShort(v)},
         },
         yPrecip:{
           position:'right',
           grid:{display:false},
-          ticks:{color:'rgba(96,165,250,.6)',font:{size:9},callback:v=>v+'mm'},
+          ticks:{color:'rgba(96,165,250,.6)',font:{size:Math.round(9*fzScale)},callback:v=>v+'mm'},
           min:0,
           suggestedMax:Math.max(...precips,2)+0.5,
         }
       }
     }
   });
+}
+
+async function openDagDetailPopup(date){
+  const d=S.data.days.find(d=>d.date===date);
+  if(!d) return;
+  const dayIdx=S.data.days.indexOf(d);
+  const useHarm=d.useHarm;
+  const DAYS=tDays();
+  const dt=new Date(date+'T12:00:00');
+  const dagNaam=`${DAYS[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}`;
+
+  // Open popup met laadindicator
+  document.getElementById('hourlyOverlay').style.display='flex';
+  document.getElementById('hourlyPopup').style.display='block';
+  document.body.style.overflow='hidden';
+  document.querySelector('#hourlyPopup .hourly-scroll').innerHTML=
+    `<div style="padding:2rem;font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--muted)"><span class="spinner"></span> ${t('dataLoading')}</div>`;
+  document.querySelector('#hourlyPopup span[style*="uppercase"]').textContent=
+    `${dagNaam} · ${useHarm?'HARMONIE':dayIdx<=3?'IFS':'IFS + ENS'}`;
+
+  // Bewaar originele allHours
+  const origHours=S.data.allHours;
+  const origHi=S.hi;
+  const origFuture=S.data.futureHours;
+
+  let dagHours=[];
+
+  if(useHarm){
+    // Dag 0: HARMONIE futureHours + OBS pastHours van vandaag
+    const futureDag=S.data.futureHours.filter(h=>h.time.slice(0,10)===date).map(h=>({...h,isPast:false}));
+    if(dayIdx===0){
+      // Voeg gemeten uren toe (OBS pastHours die op deze dag vallen)
+      const pastDag=S.data.pastHours.filter(h=>h.time.slice(0,10)===date);
+      dagHours=[...pastDag,...futureDag];
+    } else {
+      dagHours=futureDag;
+    }
+  } else {
+    // Dag 2+: gebruik gecachete hresHoursByDay of laad per dag
+    const cached=S.data.hresHoursByDay?.[date];
+    if(cached&&cached.length){
+      dagHours=cached.map(h=>({
+        time:h.time, hour:h.hour, temp:null,
+        precip:h.precip, wmo:h.wmo, wind:null, windDir:null,
+        humidity:null, sunMin:isHourDay(h.time,S.lat)?30:0,
+        isPast:false, isDay:isHourDay(h.time,S.lat),
+        feelsLike:null, dewpoint:null, gusts:null, pressure:null, et0h:null,
+      }));
+    }
+    // Haal altijd verse IFS uurdata op voor deze dag (temp + wind ontbreken in cache)
+    const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+    const dayNum=S.data.days.findIndex(d=>d.date===date)+1; // forecast_days offset
+    if(dayNum>0){
+      try{
+        const r=await fetch(`https://api.open-meteo.com/v1/ecmwf?${base}&hourly=temperature_2m,precipitation,weather_code,windspeed_10m,winddirection_10m,sunshine_duration&forecast_days=${Math.min(dayNum+1,7)}`);
+        if(r.ok){
+          const j=await r.json();
+          const ht=j.hourly?.time||[];
+          const dayHoursRaw=ht.map((t,i)=>({
+            time:t,
+            hour:parseInt(t.slice(11,13)),
+            temp:j.hourly.temperature_2m?.[i]!=null?Math.round(j.hourly.temperature_2m[i]):null,
+            precip:j.hourly.precipitation?.[i]!=null?r1(j.hourly.precipitation[i]):0,
+            wmo:j.hourly.weather_code?.[i]??0,
+            wind:j.hourly.windspeed_10m?.[i]!=null?Math.round(j.hourly.windspeed_10m[i]):null,
+            windDir:j.hourly.winddirection_10m?.[i]!=null?Math.round(j.hourly.winddirection_10m[i]):null,
+            sunMin:j.hourly.sunshine_duration?.[i]!=null?Math.round(j.hourly.sunshine_duration[i]/60):null,
+            humidity:null, isPast:false, isDay:isHourDay(t,S.lat),
+            feelsLike:null, dewpoint:null, gusts:null, pressure:null, et0h:null,
+          })).filter(h=>h.time.slice(0,10)===date);
+          if(dayHoursRaw.length) dagHours=dayHoursRaw;
+        }
+      }catch(e){console.warn('IFS dag detail laden mislukt:',e.message);}
+    }
+  }
+
+  if(!dagHours.length){
+    document.querySelector('#hourlyPopup .hourly-scroll').innerHTML=
+      `<div style="padding:1rem;font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--muted)">${t('noIfsHour')}</div>`;
+    return;
+  }
+
+  // Vervang tijdelijk allHours + futureHours met dag data
+  S._dagDetailBron=useHarm?'HARMONIE-AROME':dayIdx<=3?'IFS':'IFS';
+  S.data.allHours=dagHours;
+  S.data.futureHours=dagHours;
+  S.hi=0;
+
+  renderHourly();
+  renderMeteogram();
+
+  // Herstel na sluiten
+  const origClose=window._dagDetailCleanup;
+  window._dagDetailCleanup=()=>{
+    S.data.allHours=origHours;
+    S.data.futureHours=origFuture;
+    S.hi=origHi;
+    S._dagDetailBron=null;
+    window._dagDetailCleanup=origClose;
+  };
+}
+
+function closeDagDetailPopup(){
+  closeHourlyPopup();
+  if(window._dagDetailCleanup) window._dagDetailCleanup();
 }
 
 async function openHourlyPopup(absIdx){
@@ -932,7 +1246,7 @@ function closeHourlyPopup(){
 
 function showP50Popup(e){
   e.stopPropagation();
-  const DAYS=['Zo','Ma','Di','Wo','Do','Vr','Za'];
+  const DAYS=tDays();
   const p50days=S.data.days.map(d=>{
     const f=d._p50flags||{};
     const names=[];
@@ -945,14 +1259,14 @@ function showP50Popup(e){
   if(!p50days.length) return;
   const rows=p50days.map(({date,names})=>{
     const dt=new Date(date+'T12:00:00');
-    return`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:13px">
+    return`<div style="padding:8px 0;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:calc(13px*var(--fz))">
       <span style="color:var(--muted);margin-right:10px">${DAYS[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}</span>
       <span style="color:var(--amber)">${names.join(', ')}</span>
     </div>`;
   }).join('');
   document.getElementById('dayPopupTitle').textContent='ENS P50 gebruikt i.p.v. IFS';
   document.getElementById('dayPopupBody').innerHTML=`
-    <div style="grid-column:1/-1;font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:4px">IFS waarde valt buiten ENS P25–P75 bereik</div>
+    <div style="grid-column:1/-1;font-family:var(--mono);font-size:calc(12px*var(--fz));color:var(--muted);margin-bottom:4px">IFS waarde valt buiten ENS P25–P75 bereik</div>
     <div style="grid-column:1/-1">${rows}</div>`;
   document.getElementById('dayOverlay').style.display='block';
   document.getElementById('dayPopup').style.display='block';
@@ -962,15 +1276,15 @@ function showP50Popup(e){
 async function openDayPopup(date, tab='overzicht'){
   const d=S.data.days.find(d=>d.date===date);
   if(!d) return;
-  const DAYS=['Zo','Ma','Di','Wo','Do','Vr','Za'];
+  S._openDayPopup={date,tab};
+  const DAYS=tDays();
   const dt=new Date(date+'T12:00:00');
   document.getElementById('dayPopupTitle').textContent=`${DAYS[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1}`;
   document.getElementById('dayOverlay').style.display='block';
   document.getElementById('dayPopup').style.display='block';
   document.body.style.overflow='hidden';
 
-  if(tab==='neerslag'){
-    document.getElementById('dayPopupBody').innerHTML=`<div style="padding:2rem;text-align:center;font-family:var(--mono);font-size:13px;color:var(--muted)"><span class="spinner"></span> Data laden…</div>`;
+  if(tab==='neerslag'){    document.getElementById('dayPopupBody').innerHTML=`<div style="padding:2rem;text-align:center;font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--muted)"><span class="spinner"></span> ${t('dataLoading')}</div>`;
     // Laad IFS uurdata als nog niet beschikbaar
     if(!S.data.hresHoursByDay||Object.keys(S.data.hresHoursByDay).length===0){
       const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
@@ -979,7 +1293,6 @@ async function openDayPopup(date, tab='overzicht'){
         if(r.ok){
           const ihJ=await r.json();
           S.data=processAll(S._oJ,S._hJ,S._eJ,S._sJ,S._ifsLoaded?null:null,ihJ);
-          // Herlaad IFS dagelijks als al beschikbaar
           if(S._ifsJ) S.data=processAll(S._oJ,S._hJ,S._eJ,S._sJ,S._ifsJ,ihJ);
         }
       }catch(e){console.warn('IFS uurdata mislukt:',e.message);}
@@ -987,46 +1300,462 @@ async function openDayPopup(date, tab='overzicht'){
     try {
       await renderNeerslagDayPopup(d);
     } catch(e) {
-      document.getElementById('dayPopupBody').innerHTML=`<div style="padding:1rem 18px;font-family:var(--mono);font-size:13px;color:var(--red)">Fout: ${e.message}</div>`;
+      document.getElementById('dayPopupBody').innerHTML=`<div style="padding:1rem 18px;font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--red)">Fout: ${e.message}</div>`;
     }
+  } else if(tab==='temp'){
+    await renderTempDayPopup(d);
+  } else if(tab==='vocht'){
+    await renderVochtDayPopup(d);
+  } else if(tab==='wind'){
+    await renderWindDayPopup(d);
+  } else if(tab==='zon'){
+    await renderZonDayPopup(d);
   } else {
     renderOverzichtDayPopup(d);
   }
 }
 
+// Cache voor lazy uurdata per dag
+const _dagUurCache={};
+function _dagCacheKey(date,type){return date+'_'+type;}
+async function renderVochtDayPopup(d){
+  console.log('renderVochtDayPopup:', d?.date, 'harmRhMin:', d?.harmRhMin, 'hresRhMin:', d?.hresRhMin);
+  const dayIdx=S.data.days.indexOf(d);
+  const useHarm=d.useHarm;
+  const forceIfs=!useHarm&&dayIdx<=3;
+  const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
+  const useRhMin=useHarm?d.harmRhMin!=null:(forceIfs?d.hresRhMin!=null:inRange(d.hresRhMin,d.humidityP10,d.humidityP90));
+  const useRhMax=useHarm?d.harmRhMax!=null:(forceIfs?d.hresRhMax!=null:inRange(d.hresRhMax,d.humidityP10,d.humidityP90));
+  const rhMin=useHarm?(d.harmRhMin??d.humidityMedian??0):(useRhMin?d.hresRhMin:d.humidityP10??0);
+  const rhMax=useHarm?(d.harmRhMax??d.humidityMedian??100):(useRhMax?d.hresRhMax:d.humidityP90??100);
+  const bronLabel=useHarm?'HARMONIE':(forceIfs?'IFS':'IFS/ENS P50');
+  const scaleMin=Math.max(0,(d.humidityP10??rhMin)-5);
+  const scaleMax=Math.min(100,(d.humidityP90??rhMax)+5);
+  const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/(scaleMax-scaleMin)*100));
+  const dagBalk=`
+    <div style="padding:14px 18px 10px">
+      <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">${t('tabHumidity')} · ENS spreiding + ${bronLabel}</div>
+      <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--red);margin-bottom:4px">Min vochtigheid</div>
+      <div style="position:relative;height:calc(18px*var(--fz));margin-bottom:2px">
+        <span style="position:absolute;left:${pos(rhMin)}%;transform:translateX(-50%);font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--red);font-weight:700">${rhMin}%</span>
+      </div>
+      <div onclick="toggleTempDetail('vochtMinDetail')" style="position:relative;height:calc(12px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;margin-bottom:calc(12px*var(--fz));cursor:pointer">
+        <div style="position:absolute;left:${pos(d.humidityP10??rhMin)}%;width:${Math.max(pos(d.humidityP90??rhMin)-pos(d.humidityP10??rhMin),1)}%;height:100%;background:rgba(248,113,113,.2);border-radius:4px"></div>
+        <div style="position:absolute;left:${pos(d.humidityP25??d.humidityP10??rhMin)}%;width:${Math.max(pos(d.humidityP75??d.humidityP90??rhMin)-pos(d.humidityP25??d.humidityP10??rhMin),1)}%;height:100%;background:rgba(248,113,113,.45);border-radius:4px"></div>
+        <div style="position:absolute;left:calc(${pos(d.humidityMedian??rhMin)}% - 0.5px);width:1px;height:100%;background:rgba(248,113,113,.7)"></div>
+        <div style="position:absolute;left:calc(${pos(rhMin)}% - 4px);top:50%;transform:translateY(-50%);width:8px;height:8px;background:var(--red);border-radius:50%"></div>
+      </div>
+      <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--accent);margin-bottom:4px">Max vochtigheid</div>
+      <div style="position:relative;height:calc(18px*var(--fz));margin-bottom:2px">
+        <span style="position:absolute;left:${pos(rhMax)}%;transform:translateX(-50%);font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--accent);font-weight:700">${rhMax}%</span>
+      </div>
+      <div onclick="toggleTempDetail('vochtMaxDetail')" style="position:relative;height:calc(12px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;margin-bottom:calc(12px*var(--fz));cursor:pointer">
+        <div style="position:absolute;left:${pos(d.humidityP10??rhMax)}%;width:${Math.max(pos(d.humidityP90??rhMax)-pos(d.humidityP10??rhMax),1)}%;height:100%;background:rgba(96,165,250,.2);border-radius:4px"></div>
+        <div style="position:absolute;left:${pos(d.humidityP25??d.humidityP10??rhMax)}%;width:${Math.max(pos(d.humidityP75??d.humidityP90??rhMax)-pos(d.humidityP25??d.humidityP10??rhMax),1)}%;height:100%;background:rgba(96,165,250,.45);border-radius:4px"></div>
+        <div style="position:absolute;left:calc(${pos(d.humidityMedian??rhMax)}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.7)"></div>
+        <div style="position:absolute;left:calc(${pos(rhMax)}% - 4px);top:50%;transform:translateY(-50%);width:8px;height:8px;background:var(--accent);border-radius:50%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted)">
+        <span>${Math.round(scaleMin)}%</span>
+        <span>${t('spread')}</span>
+        <span>${Math.round(scaleMax)}%</span>
+      </div>
+      <!-- Detail panels: verschijnen bij klikken op balk -->
+      <div id="vochtMinDetail" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;padding:10px 14px">
+        <div style="display:flex;gap:12px;font-family:var(--mono);font-size:calc(12px*var(--fz));flex-wrap:wrap">
+          <span style="color:var(--muted)">P50: <span style="color:var(--red);font-weight:700">${d.humidityMedian??'—'}%</span></span>
+          <span style="color:var(--muted)">P25–P75: <span style="color:var(--red)">${d.humidityP25??'—'}%–${d.humidityP75??'—'}%</span></span>
+          <span style="color:var(--muted)">P10–P90: <span style="color:var(--red)">${d.humidityP10??'—'}%–${d.humidityP90??'—'}%</span></span>
+        </div>
+      </div>
+      <div id="vochtMaxDetail" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;padding:10px 14px">
+        <div style="display:flex;gap:12px;font-family:var(--mono);font-size:calc(12px*var(--fz));flex-wrap:wrap">
+          <span style="color:var(--muted)">P50: <span style="color:var(--accent);font-weight:700">${d.humidityMedian??'—'}%</span></span>
+          <span style="color:var(--muted)">P25–P75: <span style="color:var(--accent)">${d.humidityP25??'—'}%–${d.humidityP75??'—'}%</span></span>
+          <span style="color:var(--muted)">P10–P90: <span style="color:var(--accent)">${d.humidityP10??'—'}%–${d.humidityP90??'—'}%</span></span>
+        </div>
+      </div>
+    </div>`;
+  const harmHoursV=S.data.futureHours.filter(h=>h.time.slice(0,10)===d.date);
+  const obsHoursV=useHarm&&dayIdx===0?S.data.pastHours.filter(h=>h.time.slice(0,10)===d.date).map(h=>({...h,isPast:true})):[];
+  let forecastHoursV;
+  if(useHarm){
+    forecastHoursV=harmHoursV.map(h=>({...h,isPast:false}));
+  } else {
+    const cacheKey=_dagCacheKey(d.date,'vocht');
+    if(!_dagUurCache[cacheKey]){
+      const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+      try{
+        const r=await fetch(`https://api.open-meteo.com/v1/ecmwf?${base}&hourly=temperature_2m,dewpoint_2m,weather_code&forecast_days=${Math.min(dayIdx+2,7)}`);
+        if(r.ok){
+          const j=await r.json();
+          const magnus=(T,Td)=>T!=null&&Td!=null?Math.min(100,Math.round(100*Math.exp(17.625*Td/(243.04+Td))/Math.exp(17.625*T/(243.04+T)))):null;
+          _dagUurCache[cacheKey]=(j.hourly?.time||[])
+            .map((t,i)=>({time:t,hour:parseInt(t.slice(11,13)),
+              humidity:magnus(j.hourly.temperature_2m?.[i],j.hourly.dewpoint_2m?.[i]),
+              wmo:j.hourly.weather_code?.[i]??0,isPast:false}))
+            .filter(h=>h.time.slice(0,10)===d.date);
+        }
+      }catch(e){console.warn('IFS vocht uur mislukt:',e.message);}
+    }
+    forecastHoursV=_dagUurCache[cacheKey]||[];
+  }
+  const dagHoursV=[...obsHoursV,...forecastHoursV];
+  const uurHtml=dagHoursV.length?`<div style="border-top:1px solid var(--border)">
+    <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px 4px">${t('perHour')} · ${useHarm?'HARMONIE-AROME':'IFS'}</div>
+    ${dagHoursV.map((h,i)=>`<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto;align-items:center;padding:9px 18px;${i<dagHoursV.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
+      <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${h.time.slice(11,16)}</span>
+      <span></span><span style="font-size:calc(20px*var(--fz))">${wi(h.wmo??0,isHourDay(h.time,S.lat),20)}</span><span></span>
+      <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:var(--accent)">${h.humidity!=null?h.humidity+'%':'—'}${h.isPast?'<span style="font-size:calc(11px*var(--fz));color:var(--muted)"> '+t('measurement')+'</span>':''}</span>
+    </div>`).join('')}
+  </div>`:'';
+  const vochtGrafiek=buildLineGrafiek(dagHoursV,h=>h.humidity,'var(--accent)',t('tabHumidity'),'%',useHarm?'HARMONIE-AROME':'IFS');
+  document.getElementById('dayPopupBody').innerHTML=dagBalk+vochtGrafiek+uurHtml;
+}
+
+async function renderWindDayPopup(d){
+  const dayIdx=S.data.days.indexOf(d);
+  const useHarm=d.useHarm;
+  const forceIfs=!useHarm&&dayIdx<=3;
+  const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
+  const useWind=useHarm?d.harmWindMax!=null:(forceIfs||inRange(d.hresWindMax,d.windP10,d.windP90));
+  const windVal=useHarm?(d.harmWindMax??d.windP50):(useWind?d.hresWindMax:d.windP50);
+  const windDir=d.hresWindDir??d.windDir;
+  const bronLabel=useHarm?'HARMONIE':(forceIfs?'IFS':'IFS/ENS P50');
+  const allP10=S.data.days.map(d=>d.windP10??0);
+  const allP90=S.data.days.map(d=>d.windP90??0);
+  const scaleMin=Math.max(0,Math.min(...allP10)-5);
+  const scaleMax=Math.max(...allP90)+5;
+  const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/(scaleMax-scaleMin)*100));
+  const dagBalk=`
+    <div style="padding:14px 18px 10px">
+      <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Wind · ENS spreiding + ${bronLabel}</div>
+      <div style="position:relative;height:calc(18px*var(--fz));margin-bottom:2px">
+        <span style="position:absolute;left:${pos(windVal)}%;transform:translateX(-50%);font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);font-weight:700;white-space:nowrap">${fmtWind(windVal)} ${degToArrow(windDir)}</span>
+      </div>
+      <div onclick="toggleTempDetail('windDetail')" style="position:relative;height:calc(12px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;margin-bottom:calc(8px*var(--fz));cursor:pointer">
+        <div style="position:absolute;left:${pos(d.windP10??windVal)}%;width:${Math.max(pos(d.windP90??windVal)-pos(d.windP10??windVal),1)}%;height:100%;background:rgba(128,128,128,.2);border-radius:4px"></div>
+        <div style="position:absolute;left:${pos(d.windP25??windVal)}%;width:${Math.max(pos(d.windP75??windVal)-pos(d.windP25??windVal),1)}%;height:100%;background:rgba(128,128,128,.45);border-radius:4px"></div>
+        <div style="position:absolute;left:calc(${pos(d.windP50??windVal)}% - 0.5px);width:1px;height:100%;background:rgba(128,128,128,.7)"></div>
+        <div style="position:absolute;left:calc(${pos(windVal)}% - 4px);top:50%;transform:translateY(-50%);width:8px;height:8px;background:var(--muted);border-radius:50%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted)">
+        <span>${fmtWind(Math.round(scaleMin))}</span>
+        <span>ENS P10–P90</span>
+        <span>${fmtWind(Math.round(scaleMax))}</span>
+      </div>
+      <div id="windDetail" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;padding:10px 14px">
+        <div style="display:flex;gap:12px;font-family:var(--mono);font-size:calc(12px*var(--fz));flex-wrap:wrap">
+          <span style="color:var(--muted)">P50: <span style="color:var(--text);font-weight:700">${fmtWind(d.windP50)}</span></span>
+          <span style="color:var(--muted)">P25–P75: <span style="color:var(--text)">${fmtWind(d.windP25)}–${fmtWind(d.windP75)}</span></span>
+          <span style="color:var(--muted)">P10–P90: <span style="color:var(--text)">${fmtWind(d.windP10)}–${fmtWind(d.windP90)}</span></span>
+        </div>
+      </div>
+    </div>`;
+  const harmHoursW=S.data.futureHours.filter(h=>h.time.slice(0,10)===d.date);
+  const obsHoursW=useHarm&&dayIdx===0?S.data.pastHours.filter(h=>h.time.slice(0,10)===d.date).map(h=>({...h,isPast:true})):[];
+  let forecastHoursW;
+  if(useHarm){
+    forecastHoursW=harmHoursW.map(h=>({...h,isPast:false}));
+  } else {
+    const cacheKey=_dagCacheKey(d.date,'wind');
+    if(!_dagUurCache[cacheKey]){
+      const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+      try{
+        const r=await fetch(`https://api.open-meteo.com/v1/ecmwf?${base}&hourly=windspeed_10m,winddirection_10m,wind_gusts_10m,weather_code&forecast_days=${Math.min(dayIdx+2,7)}`);
+        if(r.ok){
+          const j=await r.json();
+          _dagUurCache[cacheKey]=(j.hourly?.time||[])
+            .map((t,i)=>({time:t,hour:parseInt(t.slice(11,13)),
+              wind:j.hourly.windspeed_10m?.[i]!=null?Math.round(j.hourly.windspeed_10m[i]):null,
+              windDir:j.hourly.winddirection_10m?.[i]!=null?Math.round(j.hourly.winddirection_10m[i]):null,
+              gusts:j.hourly.wind_gusts_10m?.[i]!=null?Math.round(j.hourly.wind_gusts_10m[i]):null,
+              wmo:j.hourly.weather_code?.[i]??0,isPast:false}))
+            .filter(h=>h.time.slice(0,10)===d.date);
+        }
+      }catch(e){console.warn('IFS wind uur mislukt:',e.message);}
+    }
+    forecastHoursW=_dagUurCache[cacheKey]||[];
+  }
+  const dagHoursW=[...obsHoursW,...forecastHoursW];
+  const uurHtml=dagHoursW.length?`<div style="border-top:1px solid var(--border)">
+    <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px 4px">${t('perHour')} · ${useHarm?(dayIdx===0?'OBS + HARMONIE-AROME':'HARMONIE-AROME'):'IFS'}</div>
+    ${dagHoursW.map((h,i)=>`<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto 1fr auto;align-items:center;padding:9px 18px;${i<dagHoursW.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
+      <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${h.time.slice(11,16)}</span>
+      <span></span><span style="font-size:calc(20px*var(--fz))">${wi(h.wmo??0,isHourDay(h.time,S.lat),20)}</span><span></span>
+      <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:var(--muted);display:flex;align-items:center;gap:4px">${degToArrow(h.windDir??null)}<span>${fmtWind(h.wind)}</span></span>
+      <span></span>
+      <span style="font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--muted)">${h.gusts!=null?fmtWind(h.gusts)+'↑':'—'}${h.isPast?'<span style="font-size:calc(11px*var(--fz));color:var(--muted)"> '+t('measurement')+'</span>':''}</span>
+    </div>`).join('')}
+  </div>`:'';
+  const windGrafiek=buildLineGrafiek(dagHoursW,h=>convWindVal(h.wind),'var(--muted)',t('windspeed'),windUnit(),useHarm?(dayIdx===0?'OBS + HARMONIE-AROME':'HARMONIE-AROME'):'IFS',h=>h.gusts!=null?convWindVal(h.gusts):null);
+  document.getElementById('dayPopupBody').innerHTML=dagBalk+windGrafiek+uurHtml;
+}
+
+async function renderZonDayPopup(d){
+  function daylightHours(dateStr,lat){
+    const dt=new Date(dateStr+'T12:00:00');
+    const doy=Math.floor((dt-new Date(dt.getFullYear(),0,0))/(864e5));
+    const phi=lat*Math.PI/180;
+    const delta=0.409*Math.sin(2*Math.PI/365*doy-1.39);
+    const cosH0=-Math.tan(phi)*Math.tan(delta);
+    if(cosH0<=-1)return 24; if(cosH0>=1)return 0;
+    return 2*Math.acos(cosH0)*12/Math.PI;
+  }
+  const maxSun=r1(daylightHours(d.date,S.lat));
+  const sh=d.sunHours??0;
+  const et0=d.et0??null;
+  const sunPct=Math.min(sh/maxSun*100,100);
+  const allEt0=S.data.days.map(d=>d.et0??0);
+  const et0Max=Math.max(...allEt0,4)+1;
+  const et0Pct=et0!=null?Math.min(et0/et0Max*100,100):0;
+  const dagBalk=`
+    <div style="padding:14px 18px 10px">
+      <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px">${t('tabSun')} · SunURL model</div>
+      <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--amber);margin-bottom:4px">☀ ${t('sunHours')}</div>
+      <div style="position:relative;height:18px;margin-bottom:4px">
+        <span style="position:absolute;left:${sunPct}%;transform:translateX(-50%);font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--amber);font-weight:700">${sh} u</span>
+      </div>
+      <div style="position:relative;height:calc(12px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;margin-bottom:calc(8px*var(--fz))">
+        <div style="position:absolute;left:0;width:${sunPct}%;height:100%;background:var(--amber);opacity:.5;border-radius:4px"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);margin-bottom:16px">
+        <span>0 u</span><span>Max daglicht: ${maxSun} u</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:rgba(52,199,89,.9);margin-bottom:4px">${t('evap')}</div>
+      <div style="position:relative;height:18px;margin-bottom:4px">
+        <span style="position:absolute;left:${et0Pct}%;transform:translateX(-50%);font-family:var(--mono);font-size:calc(11px*var(--fz));color:rgba(52,199,89,.9);font-weight:700">${et0??'—'} mm</span>
+      </div>
+      <div style="position:relative;height:calc(12px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;margin-bottom:calc(8px*var(--fz))">
+        <div style="position:absolute;left:0;width:${et0Pct}%;height:100%;background:rgba(52,199,89,.5);border-radius:4px"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted)">
+        <span>0 mm</span><span>Max: ${r1(et0Max)} mm</span>
+      </div>
+    </div>`;
+  const harmHoursZ=S.data.futureHours.filter(h=>h.time.slice(0,10)===d.date);
+  const obsHoursZ=S.data.days.indexOf(d)===0?S.data.pastHours.filter(h=>h.time.slice(0,10)===d.date).map(h=>({...h,isPast:true})):[];
+  let forecastHoursZ;
+  if(harmHoursZ.length){
+    forecastHoursZ=harmHoursZ.map(h=>({...h,isPast:false}));
+  } else {
+    const cacheKey=_dagCacheKey(d.date,'zon');
+    if(!_dagUurCache[cacheKey]){
+      const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+      try{
+        const r=await fetch(`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,weathercode&forecast_days=7`);
+        if(r.ok){
+          const j=await r.json();
+          _dagUurCache[cacheKey]=(j.hourly?.time||[])
+            .map((t,i)=>({time:t,hour:parseInt(t.slice(11,13)),
+              sunMin:j.hourly.sunshine_duration?.[i]!=null?Math.round(j.hourly.sunshine_duration[i]/60):0,
+              et0h:j.hourly.et0_fao_evapotranspiration?.[i]!=null?r1(j.hourly.et0_fao_evapotranspiration[i]):null,
+              wmo:j.hourly.weathercode?.[i]??0,isPast:false}))
+            .filter(h=>h.time.slice(0,10)===d.date);
+        }
+      }catch(e){console.warn('Sun uur mislukt:',e.message);}
+    }
+    forecastHoursZ=_dagUurCache[cacheKey]||[];
+  }
+  const dagHoursZ=[...obsHoursZ,...forecastHoursZ];
+  const bronZonLabel=harmHoursZ.length?'HARMONIE cloudcover':'Sun model';
+  const uurHtml=dagHoursZ.length?`<div style="border-top:1px solid var(--border)">
+    <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px 4px">Zonminuten per uur · ${bronZonLabel}</div>
+    ${dagHoursZ.map((h,i)=>`<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto;align-items:center;padding:9px 18px;${i<dagHoursZ.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
+      <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${h.time.slice(11,16)}</span>
+      <span></span><span style="font-size:calc(20px*var(--fz))">${wi(h.wmo??0,isHourDay(h.time,S.lat),20)}</span><span></span>
+      <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:${(h.sunMin??0)>0?'var(--amber)':'var(--muted)'}">
+        ${h.sunMin!=null?(h.sunMin+'m'):'—'}${h.isPast?'<span style="font-size:calc(11px*var(--fz));color:var(--muted)"> '+t('measurement')+'</span>':''}
+      </span>
+    </div>`).join('')}
+  </div>`:'';
+  document.getElementById('dayPopupBody').innerHTML=dagBalk+uurHtml;
+}
+
+async function renderTempDayPopup(d){
+  const dayIdx=S.data.days.indexOf(d);
+  const useHarm=d.useHarm;
+  const forceIfs=!useHarm&&dayIdx<=3;
+  const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
+  const useTMin=useHarm?d.harmTempMin!=null:(forceIfs||inRange(d.hresTempMin,d.tempMinP10,d.tempMinP90));
+  const useTMax=useHarm?d.harmTempMax!=null:(forceIfs||inRange(d.hresTempMax,d.tempMaxP10,d.tempMaxP90));
+  const tMin=useHarm?(d.harmTempMin??d.tempMinP50):(useTMin?d.hresTempMin:d.tempMinP50);
+  const tMax=useHarm?(d.harmTempMax??d.tempMaxP50):(useTMax?d.hresTempMax:d.tempMaxP50);
+  const bronLabel=useHarm?'HARMONIE':(forceIfs?'IFS':'IFS/ENS P50');
+  const s='<sup style="font-size:calc(8px*var(--fz));opacity:.55">~</sup>';
+
+  // Aparte schalen per balk voor betere zichtbaarheid
+  const minScale={lo:(d.tempMinP10??tMin)-2, hi:(d.tempMinP90??tMin)+2};
+  const maxScale={lo:(d.tempMaxP10??tMax)-2, hi:(d.tempMaxP90??tMax)+2};
+  minScale.rng=Math.max(minScale.hi-minScale.lo,1);
+  maxScale.rng=Math.max(maxScale.hi-maxScale.lo,1);
+  const posMin=v=>Math.max(0,Math.min(100,(v-minScale.lo)/minScale.rng*100));
+  const posMax=v=>Math.max(0,Math.min(100,(v-maxScale.lo)/maxScale.rng*100));
+  // Gecombineerde schaal voor labels
+  const scaleMin=Math.min(d.tempMinP10??tMin,tMin)-2;
+  const scaleMax=Math.max(d.tempMaxP90??tMax,tMax)+2;
+  const scaleRng=Math.max(scaleMax-scaleMin,1);
+  const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
+
+  const minP10x=posMin(d.tempMinP10??tMin), minP90x=posMin(d.tempMinP90??tMin);
+  const maxP10x=posMax(d.tempMaxP10??tMax), maxP90x=posMax(d.tempMaxP90??tMax);
+  const tMinX=posMin(tMin), tMaxX=posMax(tMax);
+
+  const dagBalk=`
+    <div style="padding:14px 18px 10px">
+      <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Temperatuur · ENS spreiding + ${bronLabel}</div>
+      <!-- Min temp balk -->
+      <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--accent);margin-bottom:4px">${t('minTemp')}</div>
+      <div style="position:relative;height:calc(18px*var(--fz));margin-bottom:2px">
+        <span style="position:absolute;left:${tMinX}%;transform:translateX(-50%);font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--accent);font-weight:700;white-space:nowrap">${fmtTempShort(tMin)}${!useTMin?s:''}</span>
+      </div>
+      <div onclick="toggleTempDetail('tempMinDetail')" style="position:relative;height:calc(12px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;margin-bottom:calc(12px*var(--fz));cursor:pointer">
+        <div style="position:absolute;left:${minP10x}%;width:${Math.max(minP90x-minP10x,1)}%;height:100%;background:rgba(96,165,250,.2);border-radius:4px"></div>
+        <div style="position:absolute;left:${posMin(d.tempMinP25??d.tempMinP10??tMin)}%;width:${Math.max(posMin(d.tempMinP75??d.tempMinP90??tMin)-posMin(d.tempMinP25??d.tempMinP10??tMin),1)}%;height:100%;background:rgba(96,165,250,.45);border-radius:4px"></div>
+        <div style="position:absolute;left:calc(${posMin(d.tempMinP50??tMin)}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.7)"></div>
+        <div style="position:absolute;left:calc(${tMinX}% - 4px);top:50%;transform:translateY(-50%);width:8px;height:8px;background:var(--accent);border-radius:50%"></div>
+      </div>
+      <!-- Max temp balk -->
+      <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--red);margin-bottom:4px">${t('maxTemp')}</div>
+      <div style="position:relative;height:calc(18px*var(--fz));margin-bottom:2px">
+        <span style="position:absolute;left:${tMaxX}%;transform:translateX(-50%);font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--red);font-weight:700;white-space:nowrap">${fmtTempShort(tMax)}${!useTMax?s:''}</span>
+      </div>
+      <div onclick="toggleTempDetail('tempMaxDetail')" style="position:relative;height:calc(12px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;margin-bottom:calc(12px*var(--fz));cursor:pointer">
+        <div style="position:absolute;left:${maxP10x}%;width:${Math.max(maxP90x-maxP10x,1)}%;height:100%;background:rgba(248,113,113,.2);border-radius:4px"></div>
+        <div style="position:absolute;left:${posMax(d.tempMaxP25??d.tempMaxP10??tMax)}%;width:${Math.max(posMax(d.tempMaxP75??d.tempMaxP90??tMax)-posMax(d.tempMaxP25??d.tempMaxP10??tMax),1)}%;height:100%;background:rgba(248,113,113,.45);border-radius:4px"></div>
+        <div style="position:absolute;left:calc(${posMax(d.tempMaxP50??tMax)}% - 0.5px);width:1px;height:100%;background:rgba(248,113,113,.7)"></div>
+        <div style="position:absolute;left:calc(${tMaxX}% - 4px);top:50%;transform:translateY(-50%);width:8px;height:8px;background:var(--red);border-radius:50%"></div>
+      </div>
+      <!-- Schaal -->
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted)">
+        <span>${fmtTempShort(Math.round(scaleMin))}</span>
+        <span style="font-size:calc(10px*var(--fz))">${t('spread')}</span>
+        <span>${fmtTempShort(Math.round(scaleMax))}</span>
+      </div>
+      <!-- Detail panels: verschijnen bij klikken op balk -->
+      <div id="tempMinDetail" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;padding:10px 14px">
+        <div style="display:flex;gap:12px;font-family:var(--mono);font-size:calc(12px*var(--fz));flex-wrap:wrap">
+          <span style="color:var(--muted)">P50: <span style="color:var(--accent);font-weight:700">${fmtTempShort(d.tempMinP50)}</span></span>
+          <span style="color:var(--muted)">P25–P75: <span style="color:var(--accent)">${fmtTempShort(d.tempMinP25)}–${fmtTempShort(d.tempMinP75)}</span></span>
+          <span style="color:var(--muted)">P10–P90: <span style="color:var(--accent)">${fmtTempShort(d.tempMinP10)}–${fmtTempShort(d.tempMinP90)}</span></span>
+        </div>
+      </div>
+      <div id="tempMaxDetail" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;padding:10px 14px">
+        <div style="display:flex;gap:12px;font-family:var(--mono);font-size:calc(12px*var(--fz));flex-wrap:wrap">
+          <span style="color:var(--muted)">P50: <span style="color:var(--red);font-weight:700">${fmtTempShort(d.tempMaxP50)}</span></span>
+          <span style="color:var(--muted)">P25–P75: <span style="color:var(--red)">${fmtTempShort(d.tempMaxP25)}–${fmtTempShort(d.tempMaxP75)}</span></span>
+          <span style="color:var(--muted)">P10–P90: <span style="color:var(--red)">${fmtTempShort(d.tempMinP10)}–${fmtTempShort(d.tempMaxP90)}</span></span>
+        </div>
+      </div>
+    </div>`;
+
+  // Uurlijst: gebruik IFS of HARMONIE uurdata
+  const harmHours=S.data.futureHours.filter(h=>h.time.slice(0,10)===d.date);
+  const ifsHoursRaw=S.data.hresHoursByDay?.[d.date]||[];
+  const obsHours=useHarm&&dayIdx===0
+    ?S.data.pastHours.filter(h=>h.time.slice(0,10)===d.date).map(h=>({...h,isPast:true}))
+    :[];
+  let forecastHours;
+  if(useHarm){
+    forecastHours=harmHours.map(h=>({...h,isPast:false}));
+  } else {
+    const cacheKey=_dagCacheKey(d.date,'temp');
+    if(!_dagUurCache[cacheKey]){
+      const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+      try{
+        const r=await fetch(`https://api.open-meteo.com/v1/ecmwf?${base}&hourly=temperature_2m,weather_code&forecast_days=${Math.min(dayIdx+2,7)}`);
+        if(r.ok){
+          const j=await r.json();
+          _dagUurCache[cacheKey]=(j.hourly?.time||[])
+            .map((t,i)=>({time:t,hour:parseInt(t.slice(11,13)),
+              temp:j.hourly.temperature_2m?.[i]!=null?Math.round(j.hourly.temperature_2m[i]):null,
+              wmo:j.hourly.weather_code?.[i]??0,isPast:false}))
+            .filter(h=>h.time.slice(0,10)===d.date);
+        }
+      }catch(e){console.warn('IFS temp uur mislukt:',e.message);}
+    }
+    forecastHours=_dagUurCache[cacheKey]||ifsHoursRaw.map(h=>({...h,isPast:false,temp:null}));
+  }
+  const dagHours=[...obsHours,...forecastHours];
+  const bronUurLabel=useHarm?(dayIdx===0?'OBS + HARMONIE-AROME':'HARMONIE-AROME'):'IFS';
+
+  let uurHtml='';
+  if(dagHours.length){
+    uurHtml=`<div style="border-top:1px solid var(--border)">
+      <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px 4px">${t('perHour')} · ${bronUurLabel}</div>
+      ${dagHours.map((h,i)=>{
+        const hhmm=h.time.slice(11,16);
+        const isd=isHourDay(h.time,S.lat);
+        const temp=h.temp??null;
+        return`<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto;align-items:center;padding:9px 18px;${i<dagHours.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
+          <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${hhmm}</span>
+          <span></span>
+          <span style="font-size:calc(20px*var(--fz))">${wi(h.wmo??0,isd,20)}</span>
+          <span></span>
+          <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:${h.isPast?'var(--muted)':'var(--amber)'}">
+            ${temp!=null?fmtTempShort(temp):'—'}${h.isPast?'<span style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted)"> '+t('measurement')+'</span>':''}
+          </span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  const tempVals=dagHours.map(h=>h.temp);
+  console.log('temp dagHours:', dagHours.length, 'temp vals:', tempVals.slice(0,5), 'eerste uur:', dagHours[0]?.time);
+  const tempGrafiek=buildLineGrafiek(dagHours,h=>convTempVal(h.temp),'var(--amber)',t('temp'),tempUnit(),bronUurLabel);
+  document.getElementById('dayPopupBody').innerHTML=dagBalk+tempGrafiek+uurHtml;
+}
+
 function renderOverzichtDayPopup(d){
+  const L=LANG[PREFS.lang]||LANG.nl;
   const stats=[
-    ['Neerslagkans',`${d.pChance}%`,'var(--accent)'],
-    ['Verwachte neerslag (P50)',`${d.precipMedian} mm`,'var(--accent)'],
-    ['75% kans meer dan',`${d.precipP25} mm`,'var(--muted)'],
-    ['10% kans meer dan',`${d.precipP90} mm`,'var(--muted)'],
-    ['Min temperatuur (P50)',`${d.tempMinP50}°`,'var(--accent)'],
-    ['Max temperatuur (P50)',`${d.tempMaxP50}°`,'var(--red)'],
-    ['Temp bereik (P10–P90)',`${d.tempLo}° – ${d.tempHi}°`,'var(--muted)'],
-    ['Windsnelheid (P50)',`${d.windP50} km/u`,'var(--text)'],
-    ['Windstoot (P90)',`${d.windP90} km/u`,'var(--muted)'],
-    ['Luchtvochtigheid',`${d.humidityP10??'—'}–${d.humidityP90??'—'}%`,'var(--text)'],
-    ['Zonuren',`${d.sunHours??'—'} u`,'var(--amber)'],
-    ['Verdamping ET₀',`${d.et0??'—'} mm`,'var(--green)'],
+    [t('tabPrecip')+' %',`${d.pChance}%`,'var(--accent)'],
+    [t('tabPrecip')+' (P50)',`${d.precipMedian} mm`,'var(--accent)'],
+    ['75% '+(PREFS.lang==='nl'?'kans meer dan':PREFS.lang==='de'?'Chance mehr als':PREFS.lang==='fr'?'proba. plus de':PREFS.lang==='es'?'prob. más de':'chance more than'),`${d.precipP25} mm`,'var(--muted)'],
+    ['10% '+(PREFS.lang==='nl'?'kans meer dan':PREFS.lang==='de'?'Chance mehr als':PREFS.lang==='fr'?'proba. plus de':PREFS.lang==='es'?'prob. más de':'chance more than'),`${d.precipP90} mm`,'var(--muted)'],
+    [t('minTemp')+' (P50)',fmtTemp(d.tempMinP50),'var(--accent)'],
+    [t('maxTemp')+' (P50)',fmtTemp(d.tempMaxP50),'var(--red)'],
+    [t('temp')+' (P10–P90)',`${fmtTempShort(d.tempLo)} – ${fmtTempShort(d.tempHi)}`,'var(--muted)'],
+    [t('windspeed')+' (P50)',fmtWind(d.windP50),'var(--text)'],
+    [t('windGust')+' (P90)',fmtWind(d.windP90),'var(--muted)'],
+    [t('tabHumidity'),`${d.humidityP10??'—'}–${d.humidityP90??'—'}%`,'var(--text)'],
+    [t('sunHours'),`${d.sunHours??'—'} u`,'var(--amber)'],
+    [t('evap'),`${d.et0??'—'} mm`,'var(--green)'],
   ];
   document.getElementById('dayPopupBody').innerHTML=`<div style="padding:16px 18px 20px;display:grid;grid-template-columns:1fr 1fr;gap:10px">${stats.map(([label,val,col])=>`
     <div style="background:var(--surface2);border-radius:10px;padding:10px 12px">
-      <div style="font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">${label}</div>
-      <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${col}">${val}</div>
+      <div style="font-family:var(--mono);font-size:calc(9px*var(--fz));letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px">${label}</div>
+      <div style="font-family:var(--mono);font-size:calc(18px*var(--fz));font-weight:700;color:${col}">${val}</div>
     </div>`).join('')}</div>`;
 }
 
 async function renderNeerslagDayPopup(d){
   const dayIdx=S.data.days.indexOf(d);
-  const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
-  const usePrecip=forceIfs||(d.hresPrecip!=null&&d.hresPrecip>=d.precipP10&&d.hresPrecip<=d.precipP90);
-  const ifsVal=Number(usePrecip&&d.hresPrecip!=null?d.hresPrecip:d.precipMedian??0);
+  const useHarm=d.useHarm; // dag 0-1: HARMONIE
+  const forceIfs=!useHarm&&dayIdx<=3; // dag 2-3: altijd IFS
+  // Gebruik dezelfde waarde als neerslag tab rij
+  const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||(d.hresPrecip!=null&&d.hresPrecip>=d.precipP10&&d.hresPrecip<=d.precipP90));
+  const ifsVal=Number(useHarm?(d.harmPrecip??0):(usePrecip&&d.hresPrecip!=null?d.hresPrecip:d.precipMedian??0));
+  const bronLabel=useHarm?'HARMONIE':(forceIfs?'IFS':'IFS/ENS P50');
 
-  // IFS uurdata voor die dag (uurlijks dag 1-2, 3-uurlijks dag 3-7)
-  const ifsHours=S.data.hresHoursByDay?.[d.date]||[];
+  // Uurdata: HARMONIE voor dag 0-1, IFS hresHoursByDay voor dag 2+
+  // Voor dag 0: ook gemeten OBS uren vooraan toevoegen
+  const harmHours=S.data.futureHours.filter(h=>h.time.slice(0,10)===d.date);
+  const ifsHoursRaw=S.data.hresHoursByDay?.[d.date]||[];
+  const obsDagHours=(useHarm&&dayIdx===0)
+    ?S.data.pastHours.filter(h=>h.time.slice(0,10)===d.date).map(h=>({
+        time:h.time, hour:parseInt(h.time.slice(11,13)),
+        precip:h.precip??0, wmo:h.wmo??0, is3h:false, isPast:true
+      }))
+    :[];
+  console.log('neerslag popup dag:', d.date, 'dayIdx:', dayIdx, 'useHarm:', useHarm, 'obsHours:', obsDagHours.length, 'pastHours totaal:', S.data.pastHours.length);
+  const ifsHoursForecast=useHarm?harmHours.map(h=>({
+    time:h.time, hour:parseInt(h.time.slice(11,13)),
+    precip:h.precip??0, wmo:h.wmo??0, is3h:false, isPast:false
+  })):ifsHoursRaw.map(h=>({...h,isPast:false}));
+  const ifsHours=[...obsDagHours,...ifsHoursForecast];
   const hasIfsHour=ifsHours.length>0;
-  // isDay op basis van uur (geen HARMONIE nodig)
-  const isDay=h=>parseInt(h.time.slice(11,13))>=6&&parseInt(h.time.slice(11,13))<=21?1:0;
+  const bronUurLabel=useHarm?'HARMONIE-AROME':'IFS';
 
   // ── Uitleg tekst ──
   let uitlegTekst='';
@@ -1040,30 +1769,29 @@ async function renderNeerslagDayPopup(d){
   }
 
   // ── Dagsom balk: P0–P100 bereik ──
-  const maxBalk=Math.max(d.precipP90??2, 2);
+  const maxBalk=Math.max(d.precipP90??2, ifsVal, 2)+2;
   const pctBar=v=>Math.min((v??0)/maxBalk*100,100);
   const ifsPct=pctBar(ifsVal);
   const dagBalk=`
     <div style="padding:14px 18px 6px">
-      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Dagsom · ENS spreiding + ${forceIfs?'IFS':'IFS/ENS P50'}</div>
-      <div onclick="toggleDagBalkDetail(this,${d.precipP10},${d.precipP25},${d.precipP75??d.precipP90},${d.precipP90},${ifsVal.toFixed(1)})" style="position:relative;height:16px;background:rgba(128,128,128,.13);border-radius:4px;cursor:pointer">
+      <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Dagsom · ENS spreiding + ${bronLabel}</div>
+      <div style="position:relative;height:28px;margin-bottom:4px">
+        <span style="position:absolute;left:${ifsPct}%;transform:translateX(-50%);bottom:0;color:var(--accent);font-weight:700;font-size:calc(11px*var(--fz));font-family:var(--mono);white-space:nowrap">${ifsVal.toFixed(1)} mm${!usePrecip?'<sup style="font-size:calc(8px*var(--fz))">~</sup>':''}</span>
+      </div>
+      <div onclick="toggleDagBalkDetail(this,${d.precipP10},${d.precipP25},${d.precipP75??d.precipP90},${d.precipP90},${ifsVal.toFixed(1)})" style="position:relative;height:calc(16px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;cursor:pointer">
         <div style="position:absolute;left:${pctBar(d.precipP10)}%;width:${Math.max(pctBar(d.precipP90)-pctBar(d.precipP10),1)}%;height:100%;background:rgba(96,165,250,.2);border-radius:4px"></div>
         <div style="position:absolute;left:${pctBar(d.precipP25)}%;width:${Math.max(pctBar(d.precipP75??d.precipP90)-pctBar(d.precipP25),1)}%;height:100%;background:rgba(96,165,250,.45);border-radius:4px"></div>
         <div style="position:absolute;left:calc(${ifsPct}% - 4px);top:50%;transform:translateY(-50%);width:8px;height:8px;background:var(--accent);border-radius:50%"></div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px;position:relative">
-        <span>0 mm</span>
-        <span style="position:absolute;left:${ifsPct}%;transform:translateX(-50%);color:var(--accent);font-weight:700;font-size:11px">${ifsVal.toFixed(1)} mm${!usePrecip?'<sup style="font-size:8px">~</sup>':''}</span>
-        <span>${maxBalk.toFixed(1)} mm</span>
-      </div>
-      <div id="dagBalkDetail" style="display:none;margin-top:8px;background:var(--surface2);border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:11px">
+      <div style="margin-top:4px"></div>
+      <div id="dagBalkDetail" style="display:none;margin-top:8px;background:var(--surface2);border-radius:8px;padding:8px 12px;font-family:var(--mono);font-size:calc(11px*var(--fz))">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
           <div><span style="color:var(--muted)">P50: </span><span style="color:var(--accent);font-weight:700">${(d.precipMedian??0).toFixed(1)} mm</span></div>
           <div><span style="color:var(--muted)">P25–P75: </span><span style="color:var(--accent)">${d.precipP25}–${d.precipP75??d.precipP90} mm</span></div>
           <div><span style="color:var(--muted)">P10–P90: </span><span style="color:var(--accent)">${d.precipP10}–${d.precipP90} mm</span></div>
         </div>
       </div>
-      <div style="font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5">${uitlegTekst}</div>
+      <div style="font-family:var(--sans);font-size:calc(12px*var(--fz));color:var(--muted);margin-top:8px;line-height:1.5">${uitlegTekst}</div>
     </div>`;
 
   // ENS percentielen lazy opgehaald voor deze dag (API call per dag)
@@ -1080,7 +1808,7 @@ async function renderNeerslagDayPopup(d){
       ...ifsHours.map(h=>h.precip??0),
       ...ifsHours.map(h=>getEns(h.time).precipP90??0),
       1
-    );
+    )+2;
     const pct2=v=>Math.min((v??0)/maxMm*100,100);
 
     // As altijd vanaf 0, maar ENS balken beginnen bij P10 hoogte
@@ -1088,20 +1816,29 @@ async function renderNeerslagDayPopup(d){
 
     const bars=ifsHours.map((h,i)=>{
       const hhmm=h.time.slice(11,16);
-      const ens=getEns(h.time);
+      const ens=h.isPast?{}:getEns(h.time);
       const p10=pct2adj(ens.precipP10??0);
       const p25=pct2adj(ens.precipP25??0);
       const p75=pct2adj(ens.precipP75??0);
       const p90=pct2adj(ens.precipP90??0);
       const ifsPctAdj=pct2adj(h.precip??0);
       const showLbl=h.is3h?(h.hour%6===0):(h.hour%3===0);
+      if(h.isPast){
+        // OBS: grijze staaf, geen ENS spreiding
+        return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0">
+          <div style="width:100%;flex:1;position:relative;opacity:.5">
+            ${ifsPctAdj>0?`<div style="position:absolute;bottom:0;left:20%;width:60%;height:${ifsPctAdj}%;background:var(--muted);border-radius:2px 2px 0 0;opacity:.6"></div>`:''}
+          </div>
+          <div style="font-family:var(--mono);font-size:calc(8px*var(--fz));color:var(--muted);white-space:nowrap">${showLbl?hhmm:''}</div>
+        </div>`;
+      }
       return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0">
         <div style="width:100%;flex:1;position:relative">
           ${p90>0?`<div style="position:absolute;bottom:${p10}%;left:10%;width:80%;height:${Math.max(p90-p10,1)}%;background:rgba(96,165,250,.2);border-radius:2px 2px 0 0"></div>`:''}
           ${p75>0?`<div style="position:absolute;bottom:${p25}%;left:15%;width:70%;height:${Math.max(p75-p25,1)}%;background:rgba(96,165,250,.45);border-radius:2px 2px 0 0"></div>`:''}
           <div style="position:absolute;bottom:${ifsPctAdj}%;left:50%;transform:translate(-50%,50%);width:6px;height:6px;background:var(--accent);border-radius:50%;z-index:2${h.precip>0?'':';opacity:.3'}"></div>
         </div>
-        <div style="font-family:var(--mono);font-size:8px;color:var(--muted);white-space:nowrap">${showLbl?hhmm:''}</div>
+        <div style="font-family:var(--mono);font-size:calc(8px*var(--fz));color:var(--muted);white-space:nowrap">${showLbl?hhmm:''}</div>
       </div>`;
     }).join('');
 
@@ -1113,11 +1850,11 @@ async function renderNeerslagDayPopup(d){
     grafiekHtml=`
       <div style="border-top:1px solid var(--border);padding:12px 18px 10px;border-bottom:1px solid var(--border)">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase">Neerslag per uur${ifsHours.some(h=>h.is3h)?' · 3u na 90u':''}</div>
-          <div style="display:flex;gap:8px;font-family:var(--mono);font-size:9px;color:var(--muted)">
+          <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase">${t('precipPerHour')} · ${bronUurLabel}${ifsHours.some(h=>h.is3h)?' · 3u na 90u':''}</div>
+          <div style="display:flex;gap:8px;font-family:var(--mono);font-size:calc(9px*var(--fz));color:var(--muted)">
             <span><span style="display:inline-block;width:8px;height:8px;background:rgba(96,165,250,.2);border-radius:1px;vertical-align:middle"></span> P10–90</span>
             <span><span style="display:inline-block;width:8px;height:8px;background:rgba(96,165,250,.45);border-radius:1px;vertical-align:middle"></span> P25–75</span>
-            <span><span style="display:inline-block;width:4px;height:8px;background:var(--accent);border-radius:1px;vertical-align:middle"></span> IFS</span>
+            <span><span style="display:inline-block;width:4px;height:8px;background:var(--accent);border-radius:1px;vertical-align:middle"></span> ${bronUurLabel}</span>
           </div>
         </div>
         <!-- Grafiek: y-as + balken -->
@@ -1125,7 +1862,7 @@ async function renderNeerslagDayPopup(d){
           <!-- Y-as -->
           <div style="width:${yAxisW}px;flex-shrink:0;position:relative;height:150px">
             ${tickVals.map((v,i)=>`
-              <div style="position:absolute;bottom:${i/tickCount*100}%;right:4px;font-family:var(--mono);font-size:8px;color:var(--muted);transform:translateY(50%);white-space:nowrap">${v}</div>
+              <div style="position:absolute;bottom:${i/tickCount*100}%;right:4px;font-family:var(--mono);font-size:calc(8px*var(--fz));color:var(--muted);transform:translateY(50%);white-space:nowrap">${v}</div>
               <div style="position:absolute;bottom:${i/tickCount*100}%;right:0;width:4px;height:1px;background:var(--border2)"></div>
             `).join('')}
           </div>
@@ -1142,7 +1879,7 @@ async function renderNeerslagDayPopup(d){
                 const p75=pct2adj(ens.precipP75??0);
                 const p90=pct2adj(ens.precipP90??0);
                 const ifsPctA=pct2adj(h.precip??0);
-                return`<div onclick="showBarDetail(this,'${hhmm}',${h.precip??0},${ens.precipP10??0},${ens.precipP25??0},${ens.precipP50??0},${ens.precipP75??0},${ens.precipP90??0},${ens.pChance??0})" style="flex:1;position:relative;cursor:pointer;border-radius:2px;transition:background .12s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">
+                return`<div onclick="showBarDetail(this,'${hhmm}',${h.precip??0},${ens.precipP10??0},${ens.precipP25??0},${ens.precipP50??0},${ens.precipP75??0},${ens.precipP90??0},${ens.pChance??0},'${bronUurLabel}')" style="flex:1;position:relative;cursor:pointer;border-radius:2px;transition:background .12s" onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">
                   ${p90>0?`<div style="position:absolute;bottom:${p10}%;left:10%;width:80%;height:${Math.max(p90-p10,1)}%;background:rgba(96,165,250,.2);border-radius:2px 2px 0 0"></div>`:''}
                   ${p75>0?`<div style="position:absolute;bottom:${p25}%;left:15%;width:70%;height:${Math.max(p75-p25,1)}%;background:rgba(96,165,250,.45);border-radius:2px 2px 0 0"></div>`:''}
                   <div style="position:absolute;bottom:${ifsPctA}%;left:50%;transform:translate(-50%,50%);width:6px;height:6px;background:var(--accent);border-radius:50%;z-index:2${h.precip>0?'':';opacity:.3'}"></div>
@@ -1153,14 +1890,14 @@ async function renderNeerslagDayPopup(d){
             <div style="display:flex;gap:1px;margin-top:2px">
               ${ifsHours.map(h=>{
                 const showLbl=h.is3h?(h.hour%6===0):(h.hour%3===0);
-                return`<div style="flex:1;font-family:var(--mono);font-size:8px;color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden">${showLbl?h.time.slice(11,16):''}</div>`;
+                return`<div style="flex:1;font-family:var(--mono);font-size:calc(8px*var(--fz));color:var(--muted);text-align:center;white-space:nowrap;overflow:hidden">${showLbl?h.time.slice(11,16):''}</div>`;
               }).join('')}
             </div>
           </div>
         </div>
         <!-- Detail tooltip -->
         <div id="barDetail" style="display:none;margin-top:8px;background:var(--surface2);border-radius:10px;padding:10px 14px">
-          <div id="barDetailContent" style="font-family:var(--mono);font-size:12px"></div>
+          <div id="barDetailContent" style="font-family:var(--mono);font-size:calc(12px*var(--fz))"></div>
         </div>
       </div>`;
   }
@@ -1172,33 +1909,32 @@ async function renderNeerslagDayPopup(d){
   let uurHtml='';
   if(hasIfsHour){
     uurHtml=`<div>
-      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px 4px">Per uur · IFS neerslag + ENS kans</div>
+      <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px 4px">${t('perHour')} · ${bronUurLabel} neerslag + ENS kans</div>
       ${ifsHours.map((h,i)=>{
         const hhmm=h.time.slice(11,16);
-        const ens=getEns(h.time);
-        // isDay: bereken op basis van uur (dag = 6-21u als geen betere data)
+        const ens=h.isPast?{}:getEns(h.time);
         const isd=isHourDay(h.time, S.lat);
         const wmo=h.wmo??0;
-        const hasUurKans=ens.pChance!=null;
+        const hasUurKans=!h.isPast&&ens.pChance!=null;
         const pChance=hasUurKans?ens.pChance:dagKans;
-        const pLabel=hasUurKans?`${pChance}%`:`${pChance}%<sup style="font-size:8px;opacity:.6">dag</sup>`;
+        const pLabel=h.isPast?'meting':(hasUurKans?`${pChance}%`:`${pChance}%<sup style="font-size:calc(8px*var(--fz));opacity:.6">dag</sup>`);
         return`
-        <div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto 1fr auto;align-items:center;padding:9px 18px;${i<ifsHours.length-1?'border-bottom:1px solid var(--border)':''}${h.is3h?'opacity:.75':''}">
-          <span style="font-family:var(--mono);font-size:15px;font-weight:600;color:var(--muted)">${hhmm}${h.is3h?'<sup style="font-size:8px">3h</sup>':''}</span>
+        <div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto 1fr auto;align-items:center;padding:9px 18px;${i<ifsHours.length-1?'border-bottom:1px solid var(--border)':''}${h.is3h?';opacity:.75':''}${h.isPast?';opacity:.5':''}">
+          <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${hhmm}${h.is3h?'<sup style="font-size:calc(8px*var(--fz))">3h</sup>':''}</span>
           <span></span>
-          <span style="font-size:20px">${wi(wmo,isd,20)}</span>
+          <span style="font-size:calc(20px*var(--fz))">${wi(wmo,isd,20)}</span>
           <span></span>
-          <span style="font-family:var(--mono);font-size:15px;font-weight:700;color:${(h.precip??0)>0?'var(--accent)':'var(--muted)'}">
+          <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:${(h.precip??0)>0?'var(--accent)':'var(--muted)'}">
             ${(h.precip??0).toFixed(1)} mm
-            ${(ens.precipP10!=null&&!(ens.precipP10===0&&ens.precipP90===0))?`<span style="font-size:11px;color:var(--muted);font-weight:400"> (${ens.precipP10}–${ens.precipP90} mm)</span>`:''}
+            ${(!h.isPast&&ens.precipP10!=null&&!(ens.precipP10===0&&ens.precipP90===0))?`<span style="font-size:calc(11px*var(--fz));color:var(--muted);font-weight:400"> (${ens.precipP10}–${ens.precipP90} mm)</span>`:''}
           </span>
           <span></span>
-          <span style="font-family:var(--mono);font-size:15px;font-weight:700;color:rgba(${pChance>0?Math.round(96+(165-96)*pChance/100):128},${pChance>0?Math.round(165*(1-pChance/200)):135},${pChance>0?Math.round(250*(1-pChance/200)):153},${pChance>0?0.4+pChance/100*0.6:0.35})">${pLabel}</span>
+          <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:${h.isPast?'var(--muted)':'rgba('+`${pChance>0?Math.round(96+(165-96)*pChance/100):128},${pChance>0?Math.round(165*(1-pChance/200)):135},${pChance>0?Math.round(250*(1-pChance/200)):153},${pChance>0?0.4+pChance/100*0.6:0.35}`+')'}">${pLabel}</span>
         </div>`;
       }).join('')}
     </div>`;
   } else {
-    uurHtml=`<div style="padding:1rem 18px;font-family:var(--mono);font-size:13px;color:var(--muted)">Geen IFS uurdata beschikbaar.</div>`;
+    uurHtml=`<div style="padding:1rem 18px;font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--muted)">${t('noIfsHour')}</div>`;
   }
 
   document.getElementById('dayPopupBody').innerHTML=dagBalk+grafiekHtml+uurHtml;
@@ -1236,13 +1972,168 @@ async function getEnsForDay(date){
   } catch(e){ console.warn('ENS uur ophalen mislukt:', e); return {}; }
 }
 
+
+function showTempDetail(type,p10,p25,p50,p75,p90,val){
+  const panel=document.getElementById('tempBalkDetail');
+  const content=document.getElementById('tempBalkContent');
+  if(!panel||!content)return;
+  const col=type==='min'?'var(--accent)':'var(--red)';
+  content.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:6px;font-family:var(--mono)">
+      ${[['P10',p10],['P25',p25],['P50',p50],['P75',p75],['P90',p90]].map(([l,v])=>`
+        <div style="background:var(--surface);border-radius:8px;padding:6px 8px;text-align:center">
+          <div style="font-size:calc(9px*var(--fz));color:var(--muted);margin-bottom:2px">${l}</div>
+          <div style="font-size:calc(13px*var(--fz));font-weight:700">${fmtTempShort(v)}</div>
+        </div>`).join('')}
+    </div>
+    <div style="margin-top:8px;font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted)">${t('temp')}: <span style="color:${col};font-weight:700">${fmtTempShort(val)}</span></div>`;
+  panel.style.display=panel.style.display==='none'?'block':'none';
+}
+function showVochtDetail(type,p10,p25,p50,p75,p90,val){
+  const panel=document.getElementById('vochtBalkDetail');
+  const content=document.getElementById('vochtBalkContent');
+  if(!panel||!content)return;
+  const col=type==='min'?'var(--red)':'var(--accent)';
+  content.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-family:var(--mono)">
+      ${[['P10',p10],['P50',p50],['P90',p90]].map(([l,v])=>`
+        <div style="background:var(--surface);border-radius:8px;padding:6px 8px;text-align:center">
+          <div style="font-size:calc(9px*var(--fz));color:var(--muted);margin-bottom:2px">${l}</div>
+          <div style="font-size:calc(13px*var(--fz));font-weight:700">${v}%</div>
+        </div>`).join('')}
+    </div>
+    <div style="margin-top:8px;font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted)">${t('tabHumidity')}: <span style="color:${col};font-weight:700">${val}%</span></div>`;
+  panel.style.display=panel.style.display==='none'?'block':'none';
+}
+function showWindDetail(p10,p25,p50,p75,p90,val){
+  const panel=document.getElementById('windBalkDetail');
+  const content=document.getElementById('windBalkContent');
+  if(!panel||!content)return;
+  content.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:6px;font-family:var(--mono)">
+      ${[['P10',p10],['P25',p25],['P50',p50],['P75',p75],['P90',p90]].map(([l,v])=>`
+        <div style="background:var(--surface);border-radius:8px;padding:6px 8px;text-align:center">
+          <div style="font-size:calc(9px*var(--fz));color:var(--muted);margin-bottom:2px">${l}</div>
+          <div style="font-size:calc(13px*var(--fz));font-weight:700">${fmtWind(v)}</div>
+        </div>`).join('')}
+    </div>
+    <div style="margin-top:8px;font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted)">${t('windspeed')}: <span style="color:var(--muted);font-weight:700">${fmtWind(val)}</span></div>`;
+  panel.style.display=panel.style.display==='none'?'block':'none';
+}
+// Gladde curve (zoals Chart.js tension) — Catmull-Rom/Bézier met gewogen afstand
+function smoothPath(pts, t){
+  if(!pts.length) return '';
+  if(pts.length<2) return `M${pts[0].x},${pts[0].y}`;
+  t=t==null?0.35:t;
+  let d=`M${pts[0].x},${pts[0].y}`;
+  for(let i=0;i<pts.length-1;i++){
+    const p0=pts[i-1]||pts[i];
+    const p1=pts[i];
+    const p2=pts[i+1];
+    const p3=pts[i+2]||p2;
+    const d01=Math.hypot(p1.x-p0.x,p1.y-p0.y);
+    const d12=Math.hypot(p2.x-p1.x,p2.y-p1.y);
+    const d23=Math.hypot(p3.x-p2.x,p3.y-p2.y);
+    let s12a=d12/(d01+d12); if(!isFinite(s12a))s12a=0;
+    let s12b=d12/(d12+d23); if(!isFinite(s12b))s12b=0;
+    const fb=t*s12a, fa=t*s12b;
+    const c1x=p1.x+fb*(p2.x-p0.x), c1y=p1.y+fb*(p2.y-p0.y);
+    const c2x=p2.x-fa*(p3.x-p1.x), c2y=p2.y-fa*(p3.y-p1.y);
+    d+=` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
+
+function buildLineGrafiek(dagHours, getValue, kleur, label, unit, bronLabel, getGust){
+  if(!dagHours.length) return '';
+  const vals=dagHours.map(getValue);
+  const valid=vals.filter(v=>v!=null);
+  if(!valid.length) return '';
+
+  // Schaal inclusief gusts
+  const gustVals=getGust?dagHours.map(getGust).filter(v=>v!=null):[];
+  const allVals=[...valid,...gustVals];
+  const vmin=Math.min(...allVals), vmax=Math.max(...allVals);
+  const range=Math.max(vmax-vmin,1);
+  const pad=range*0.15;
+  const lo=vmin-pad, hi=vmax+pad, rng=hi-lo;
+  const W=280, H=70;
+  const x=(i)=>Math.round(i/(dagHours.length-1||1)*W);
+  const y=(v)=>Math.round(H-(v-lo)/rng*H);
+
+  const ptArr=dagHours.map((h,i)=>{
+    const v=getValue(h);
+    return v!=null?{x:x(i),y:y(v)}:null;
+  }).filter(Boolean);
+  const pathD=smoothPath(ptArr,0.35);
+
+  const firstFuture=dagHours.findIndex(h=>!h.isPast);
+  const splitX=firstFuture>0?x(firstFuture):0;
+  const grafId='grafiek_'+Math.random().toString(36).slice(2,7);
+  const tooltipId='tooltip_'+grafId;
+
+  // Klikbare stippen
+  const stippen=dagHours.map((h,i)=>{
+    const v=getValue(h);
+    if(v==null) return '';
+    const gust=getGust?getGust(h):null;
+    const gustStr=gust!=null?` stoten:${gust}${unit}`:'';
+    return`<circle cx="${x(i)}" cy="${y(v)}" r="5" fill="transparent" stroke="transparent"
+      onclick="showGrafiekTooltip('${tooltipId}','${h.time.slice(11,16)}',${v},'${unit}','${kleur}'${gust!=null?`,${gust}`:',null'})"
+      style="cursor:pointer"/>
+    <circle cx="${x(i)}" cy="${y(v)}" r="2.5" fill="${kleur}" opacity="${h.isPast?0.4:1}" pointer-events="none"/>`;
+  }).join('');
+
+  // Gust stippen (driehoekjes boven de lijn)
+  const gustStippen=getGust?dagHours.map((h,i)=>{
+    const g=getGust(h);
+    if(g==null) return '';
+    return`<circle cx="${x(i)}" cy="${y(g)}" r="3" fill="rgba(255,255,255,.15)" stroke="rgba(255,255,255,.6)" stroke-width="1.5" pointer-events="none"/>
+    <line x1="${x(i)}" y1="${y(g)}" x2="${x(i)}" y2="${y(getValue(h)??g)}" stroke="rgba(255,255,255,.2)" stroke-width="1" stroke-dasharray="2,2" pointer-events="none"/>`;
+  }).join(''):'';
+
+  return`<div style="padding:0 18px 10px;border-bottom:1px solid var(--border)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase">${label} per uur · ${bronLabel}</div>
+      ${getGust?`<div style="font-family:var(--mono);font-size:calc(9px*var(--fz));color:var(--muted)">○ stoten</div>`:''}
+    </div>
+    <svg id="${grafId}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;aspect-ratio:${W}/${H};display:block;overflow:visible">
+      ${firstFuture>0?`<rect x="0" y="0" width="${splitX}" height="${H}" fill="rgba(255,255,255,.02)"/>`:``}
+      <path d="${pathD}" fill="none" stroke="${kleur}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      ${gustStippen}
+      ${stippen}
+    </svg>
+    <div id="${tooltipId}" style="display:none;margin-top:4px;background:var(--surface2);border-radius:8px;padding:7px 12px;font-family:var(--mono);font-size:calc(12px*var(--fz))"></div>
+    <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:calc(9px*var(--fz));color:var(--muted);margin-top:2px">
+      <span>${dagHours[0]?.time.slice(11,16)}</span>
+      <span style="color:${kleur}">${Math.round(vmin)}–${Math.round(vmax)} ${unit}</span>
+      <span>${dagHours[dagHours.length-1]?.time.slice(11,16)}</span>
+    </div>
+  </div>`;
+}
+
+function showGrafiekTooltip(id,hhmm,val,unit,kleur,gust){
+  const el=document.getElementById(id);
+  if(!el)return;
+  if(el.dataset.hour===hhmm&&el.style.display!=='none'){el.style.display='none';return;}
+  el.dataset.hour=hhmm;
+  const gustStr=gust!=null&&gust!='null'?` <span style="color:var(--muted)">stoten: <span style="font-weight:700">${gust} ${unit}</span></span>`:'';
+  el.innerHTML=`<span style="color:var(--muted)">${hhmm} · </span><span style="color:${kleur};font-weight:700">${val} ${unit}</span>${gustStr}`;
+  el.style.display='block';
+}
+
+function toggleTempDetail(id){
+  const p=document.getElementById(id);
+  if(p) p.style.display=p.style.display==='none'?'block':'none';
+}
+
 function toggleDagBalkDetail(el,p10,p25,p75,p90,ifs){
   const panel=document.getElementById('dagBalkDetail');
   if(!panel)return;
   panel.style.display=panel.style.display==='none'?'block':'none';
 }
 
-function showBarDetail(el,hhmm,ifs,p10,p25,p50,p75,p90,kans){
+function showBarDetail(el,hhmm,ifs,p10,p25,p50,p75,p90,kans,bron){
   const panel=document.getElementById('barDetail');
   const content=document.getElementById('barDetailContent');
   if(!panel||!content)return;
@@ -1250,28 +2141,29 @@ function showBarDetail(el,hhmm,ifs,p10,p25,p50,p75,p90,kans){
     panel.style.display='none';
     return;
   }
+  const bronLabel=bron||'IFS';
   content.dataset.hour=hhmm;
   content.innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <span style="font-family:var(--mono);font-size:13px;font-weight:700">${hhmm}</span>
-      <span style="font-family:var(--mono);color:var(--muted);font-size:11px">ENS kans: <span style="color:var(--accent);font-weight:700">${kans}%</span></span>
+      <span style="font-family:var(--mono);font-size:calc(13px*var(--fz));font-weight:700">${hhmm}</span>
+      <span style="font-family:var(--mono);color:var(--muted);font-size:calc(11px*var(--fz))">ENS kans: <span style="color:var(--accent);font-weight:700">${kans}%</span></span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px">
       <div style="background:var(--surface);border-radius:8px;padding:7px 9px">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">IFS</div>
-        <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent)">${Number(ifs).toFixed(1)} mm</div>
+        <div style="font-family:var(--mono);font-size:calc(9px*var(--fz));color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">${bronLabel}</div>
+        <div style="font-family:var(--mono);font-size:calc(14px*var(--fz));font-weight:700;color:var(--accent)">${Number(ifs).toFixed(1)} mm</div>
       </div>
       <div style="background:var(--surface);border-radius:8px;padding:7px 9px">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">P50</div>
-        <div style="font-family:var(--mono);font-size:14px;font-weight:700">${p50} mm</div>
+        <div style="font-family:var(--mono);font-size:calc(9px*var(--fz));color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">P50</div>
+        <div style="font-family:var(--mono);font-size:calc(14px*var(--fz));font-weight:700">${p50} mm</div>
       </div>
       <div style="background:var(--surface);border-radius:8px;padding:7px 9px">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">P25–P75</div>
-        <div style="font-family:var(--mono);font-size:14px;font-weight:700">${p25}–${p75} mm</div>
+        <div style="font-family:var(--mono);font-size:calc(9px*var(--fz));color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">P25–P75</div>
+        <div style="font-family:var(--mono);font-size:calc(14px*var(--fz));font-weight:700">${p25}–${p75} mm</div>
       </div>
       <div style="background:var(--surface);border-radius:8px;padding:7px 9px">
-        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">P10–P90</div>
-        <div style="font-family:var(--mono);font-size:14px;font-weight:700">${p10}–${p90} mm</div>
+        <div style="font-family:var(--mono);font-size:calc(9px*var(--fz));color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">P10–P90</div>
+        <div style="font-family:var(--mono);font-size:calc(14px*var(--fz));font-weight:700">${p10}–${p90} mm</div>
       </div>
     </div>`;
   panel.style.display='block';
@@ -1286,6 +2178,7 @@ function toggleHourDetail(el,idx,date){
   el.onmouseout=panel.style.display!=='none'?null:()=>{el.style.background='';};
 }
 function closeDayPopup(){
+  S._openDayPopup=null;
   document.getElementById('dayOverlay').style.display='none';
   document.getElementById('dayPopup').style.display='none';
   document.body.style.overflow='';
@@ -1310,11 +2203,12 @@ function isHourDay(timeStr, lat){
 }
 
 let dTab='overzicht';
-function setTab(t,btn){
+async function setTab(t,btn){
   dTab=t;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   if(t==='overzicht') loadIfsIfNeeded();
+  if(t==='vocht') await loadVochtIfNeeded();
   renderDaily();
   updateDailyTitle();
 }
@@ -1336,79 +2230,81 @@ function updateDailyTitle(){
     }).filter(Boolean);
     const hasP50=p50days.length>0;
     const p50title=hasP50
-      ?`IFS HRES ${run} <span style="color:var(--amber);font-size:9px;cursor:pointer" onclick="showP50Popup(event)">~ ENS P50 voor ${p50days.length} dag${p50days.length>1?'en':''} ⓘ</span>`
+      ?`IFS HRES ${run} <span style="color:var(--amber);font-size:calc(9px*var(--fz));cursor:pointer" onclick="showP50Popup(event)">~ ENS P50 voor ${p50days.length} dag${p50days.length>1?'en':''} ⓘ</span>`
       :`IFS HRES ${run}`;
-    el.innerHTML=`7 dagen · <span style="color:var(--green)">${p50title}</span>`;
+    el.innerHTML=`${t('days7')} · <span style="color:var(--green)">${p50title}</span>`;
   } else if(dTab==='overzicht'){
-    el.innerHTML='7 dagen · ECMWF ENS 51 members <span style="color:var(--red);font-size:9px">IFS niet beschikbaar</span>';
+    el.innerHTML=`${t('days7')} · ${t('members')}`;
   } else {
-    el.innerHTML='7 dagen · ECMWF ENS 51 members';
+    el.innerHTML=`${t('days7')} · ${t('members')}`;
   }
 }
 
 function renderDaily(){
-  const DAYS=['Zo','Ma','Di','Wo','Do','Vr','Za'];
+  const DAYS=tDays();
   document.getElementById('dailyList').innerHTML=S.data.days.map(d=>{
     const nm=DAYS[new Date(d.date+'T12:00:00').getDay()];
     let midHtml='', rightHtml='';
 
     if(dTab==='overzicht'){
       const dayIdx=S.data.days.indexOf(d);
-      const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
+      const useHarm=d.useHarm;
+      const forceIfs=!useHarm&&dayIdx<=3;
       const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
-      const useTMin  =forceIfs||inRange(d.hresTempMin, d.tempMinP10, d.tempMinP90);
-      const useTMax  =forceIfs||inRange(d.hresTempMax, d.tempMaxP10, d.tempMaxP90);
-      const usePrecip=forceIfs||inRange(d.hresPrecip,  d.precipP10,  d.precipP90);
-      const useWind  =forceIfs||inRange(d.hresWindMax, d.windP10,    d.windP90);
-      const tMin  =useTMin  ?d.hresTempMin :d.tempMinP50;
-      const tMax  =useTMax  ?d.hresTempMax :d.tempMaxP50;
-      const precip=Number(usePrecip&&d.hresPrecip!=null?d.hresPrecip:d.precipMedian??0).toFixed(1);
-      const wind  =useWind  ?d.hresWindMax :d.windP50;
+      const useTMin  =useHarm?d.harmTempMin!=null:(forceIfs||inRange(d.hresTempMin, d.tempMinP10, d.tempMinP90));
+      const useTMax  =useHarm?d.harmTempMax!=null:(forceIfs||inRange(d.hresTempMax, d.tempMaxP10, d.tempMaxP90));
+      const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||inRange(d.hresPrecip,  d.precipP10,  d.precipP90));
+      const useWind  =useHarm?d.harmWindMax!=null:(forceIfs||inRange(d.hresWindMax, d.windP10,    d.windP90));
+      const tMin  =useHarm?(d.harmTempMin??d.hresTempMin??d.tempMinP50):(useTMin?d.hresTempMin:d.tempMinP50);
+      const tMax  =useHarm?(d.harmTempMax??d.hresTempMax??d.tempMaxP50):(useTMax?d.hresTempMax:d.tempMaxP50);
+      const precip=Number(useHarm?(d.harmPrecip??0):(usePrecip&&d.hresPrecip!=null?d.hresPrecip:d.precipMedian??0)).toFixed(1);
+      const wind  =useHarm?(d.harmWindMax??d.hresWindMax??d.windP50):(useWind?d.hresWindMax:d.windP50);
       const windDir=d.hresWindDir??d.windDir;
       const wmo   =d.hresWmo??d.wmo;
       const sun   =d.sunHours;
       d._p50flags={tMin:!useTMin,tMax:!useTMax,precip:!usePrecip,wind:!useWind};
-      const s='<sup style="font-size:9px;opacity:.55">~</sup>';
+      const s='<sup style="font-size:calc(9px*var(--fz));opacity:.55">~</sup>';
       midHtml=`<div style="display:grid;grid-template-columns:auto 1fr 28px 1fr auto 1fr auto 1fr auto 1fr auto;align-items:center;font-family:var(--mono);font-weight:700">
-          <span style="font-size:17px;color:var(--muted)">${nm}</span>
+          <span style="font-size:calc(17px*var(--fz));color:var(--muted)">${nm}</span>
           <span></span>
-          <span style="font-size:24px;line-height:1">${wi(wmo,1,24)}</span>
+          <span style="font-size:calc(24px*var(--fz));line-height:1">${wi(wmo,1,24)}</span>
           <span></span>
-          <span style="font-size:17px;display:flex;align-items:center;gap:6px">
-            <span style="color:var(--accent)">${tMin}°${!useTMin?s:''}</span>
-            <span style="color:var(--red)">${tMax}°${!useTMax?s:''}</span>
+          <span style="font-size:calc(17px*var(--fz));display:flex;align-items:center;gap:6px">
+            <span style="color:var(--accent)">${fmtTempShort(tMin)}${!useTMin?s:''}</span>
+            <span style="color:var(--red)">${fmtTempShort(tMax)}${!useTMax?s:''}</span>
           </span>
           <span></span>
-          <span style="font-size:17px;color:var(--muted);display:flex;align-items:center;gap:2px">${degToArrow(windDir)}<span>${wind}${!useWind?s:''} <span style="font-size:11px">km/u</span></span></span>
+          <span style="font-size:calc(15px*var(--fz));color:var(--muted);display:flex;align-items:center;gap:2px">${degToArrow(windDir)}<span>${fmtWind(wind)}${!useWind?s:''}</span></span>
           <span></span>
-          <span style="font-size:15px;color:var(--accent)">${precip}${!usePrecip?s:''} mm</span>
+          <span style="font-size:calc(17px*var(--fz));color:var(--accent)">${precip}${!usePrecip?s:''} mm</span>
           <span></span>
-          <span style="font-size:17px;color:var(--amber)">☀ ${sun??'—'}u</span>
+          <span style="font-size:calc(15px*var(--fz));color:var(--amber)">☀ ${sun??'—'}u</span>
         </div>`;
       rightHtml=``;
 
     }else if(dTab==='neerslag'){
       const dayIdx=S.data.days.indexOf(d);
-      const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
-      const usePrecip=forceIfs||( d.hresPrecip!=null&&d.precipP10!=null&&d.precipP90!=null&&d.hresPrecip>=d.precipP10&&d.hresPrecip<=d.precipP90);
-      const precipVal=(usePrecip?d.hresPrecip:d.precipMedian??0);
-      const s=usePrecip?'':'<sup style="font-size:9px;opacity:.55">~</sup>';
+      const useHarm=d.useHarm;
+      const forceIfs=!useHarm&&dayIdx<=3;
+      const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||(d.hresPrecip!=null&&d.precipP10!=null&&d.precipP90!=null&&d.hresPrecip>=d.precipP10&&d.hresPrecip<=d.precipP90));
+      const precipVal=useHarm?(d.harmPrecip??0):(usePrecip?d.hresPrecip:d.precipMedian??0);
+      const s=usePrecip?'':'<sup style="font-size:calc(9px*var(--fz));opacity:.55">~</sup>';
       const scale=Math.max(10, ...S.data.days.map(d=>d.precipP90??0));
       const p10x=Math.min(d.precipP10/scale*100,100);
       const p90x=Math.min(d.precipP90/scale*100,100);
       const p50x=Math.min(d.precipMedian/scale*100,100);
       const rangeW=Math.max(p90x-p10x,1);
       midHtml=`<div style="display:flex;align-items:center;gap:8px">
-          <span style="color:var(--accent);font-family:var(--mono);font-size:15px;font-weight:700;flex-shrink:0;width:40px;text-align:right;align-self:center">${d.pChance}%</span>
+          <span style="color:var(--accent);font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;flex-shrink:0;width:40px;text-align:right;align-self:center">${d.pChance}%</span>
           <div style="flex:1;min-width:0">
             <div style="position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
               <div style="position:absolute;left:${p10x}%;width:${rangeW}%;height:100%;background:rgba(96,165,250,.25);border-radius:3px"></div>
               <div style="position:absolute;left:calc(${p50x}% - 0.5px);top:0;width:1px;height:6px;background:rgba(96,165,250,.7)"></div>
               <div style="position:absolute;left:calc(${Math.min(precipVal/scale*100,100)}% - 2px);top:0;width:4px;height:6px;background:var(--accent);border-radius:2px"></div>
             </div>
-            <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;display:flex;justify-content:center;width:100%">${(d.precipP10===0&&d.precipP90===0)?'0 mm':`${d.precipP10} mm – ${d.precipP90} mm`}</div>
+            <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:4px;display:flex;justify-content:center;width:100%">${(d.precipP10===0&&d.precipP90===0)?'0 mm':`${d.precipP10} mm – ${d.precipP90} mm`}</div>
           </div>
-          <span style="color:var(--accent);font-family:var(--mono);font-size:15px;font-weight:700;flex-shrink:0;width:60px;text-align:right;white-space:nowrap;align-self:center">${precipVal.toFixed(1)}${s} <span style="font-size:10px;opacity:.7">mm</span></span>
+          <span style="color:var(--accent);font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;flex-shrink:0;width:60px;text-align:right;white-space:nowrap;align-self:center">${precipVal.toFixed(1)}${s} <span style="font-size:calc(13px*var(--fz));opacity:.7">mm</span></span>
         </div>`;
       rightHtml=``;
 
@@ -1422,15 +2318,16 @@ function renderDaily(){
       const minP10x=pos(d.tempMinP10),minP50x=pos(d.tempMinP50),minP90x=pos(d.tempMinP90);
       const maxP10x=pos(d.tempMaxP10),maxP50x=pos(d.tempMaxP50),maxP90x=pos(d.tempMaxP90);
       const dayIdx=S.data.days.indexOf(d);
-      const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
-      const useTMin=forceIfs||( d.hresTempMin!=null&&d.tempMinP10!=null&&d.tempMinP90!=null&&d.hresTempMin>=d.tempMinP10&&d.hresTempMin<=d.tempMinP90);
-      const useTMax=forceIfs||( d.hresTempMax!=null&&d.tempMaxP10!=null&&d.tempMaxP90!=null&&d.hresTempMax>=d.tempMaxP10&&d.hresTempMax<=d.tempMaxP90);
-      const tMin=useTMin?d.hresTempMin:d.tempMinP50;
-      const tMax=useTMax?d.hresTempMax:d.tempMaxP50;
+      const useHarm=d.useHarm;
+      const forceIfs=!useHarm&&dayIdx<=3;
+      const useTMin=useHarm?d.harmTempMin!=null:(forceIfs||(d.hresTempMin!=null&&d.tempMinP10!=null&&d.tempMinP90!=null&&d.hresTempMin>=d.tempMinP10&&d.hresTempMin<=d.tempMinP90));
+      const useTMax=useHarm?d.harmTempMax!=null:(forceIfs||(d.hresTempMax!=null&&d.tempMaxP10!=null&&d.tempMaxP90!=null&&d.hresTempMax>=d.tempMaxP10&&d.hresTempMax<=d.tempMaxP90));
+      const tMin=useHarm?(d.harmTempMin??d.hresTempMin??d.tempMinP50):(useTMin?d.hresTempMin:d.tempMinP50);
+      const tMax=useHarm?(d.harmTempMax??d.hresTempMax??d.tempMaxP50):(useTMax?d.hresTempMax:d.tempMaxP50);
       const tMinX=pos(tMin), tMaxX=pos(tMax);
-      const s='<sup style="font-size:9px;opacity:.55">~</sup>';
+      const s='<sup style="font-size:calc(9px*var(--fz));opacity:.55">~</sup>';
       midHtml=`<div class="day-mid-inner">
-          <span class="day-mid-left" style="color:var(--accent)">${tMin}°${!useTMin?s:''}<br><span style="font-size:9px;opacity:.4">${d.tempMinP10}–${d.tempMinP90}°</span></span>
+          <span class="day-mid-left" style="color:var(--accent)">${fmtTempShort(tMin)}${!useTMin?s:''}<br><span style="font-size:calc(10px*var(--fz));color:var(--muted)">${fmtTempShort(d.tempMinP10)}–${fmtTempShort(d.tempMinP90)}</span></span>
           <div style="flex:1;position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
             <div style="position:absolute;left:${minP10x}%;width:${Math.max(minP90x-minP10x,1)}%;height:100%;background:rgba(96,165,250,.3);border-radius:3px"></div>
             <div style="position:absolute;left:calc(${minP50x}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.7)"></div>
@@ -1440,16 +2337,18 @@ function renderDaily(){
             <div style="position:absolute;left:calc(${tMaxX}% - 2px);width:4px;height:100%;background:var(--red);border-radius:2px"></div>
           </div>
         </div>`;
-      rightHtml=`<span class="day-right-val" style="color:var(--red)">${tMax}°${!useTMax?s:''}</span>
-        <span class="day-right-sub">${d.tempMaxP10}–${d.tempMaxP90}°</span>`;
+      rightHtml=`<span class="day-right-val" style="color:var(--red)">${fmtTempShort(tMax)}${!useTMax?s:''}</span>
+        <span class="day-right-sub">${fmtTempShort(d.tempMaxP10)}–${fmtTempShort(d.tempMaxP90)}</span>`;
 
     }else if(dTab==='vocht'){
       const dayIdx=S.data.days.indexOf(d);
-      const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
-      const useRhMin=forceIfs||(d.hresRhMin!=null&&d.humidityP10!=null&&d.humidityP90!=null&&d.hresRhMin>=d.humidityP10&&d.hresRhMin<=d.humidityP90);
-      const useRhMax=forceIfs||(d.hresRhMax!=null&&d.humidityP10!=null&&d.humidityP90!=null&&d.hresRhMax>=d.humidityP10&&d.hresRhMax<=d.humidityP90);
-      const rhMin=useRhMin?(d.hresRhMin??d.humidityP10):d.humidityP10??0;
-      const rhMax=useRhMax?(d.hresRhMax??d.humidityP90):d.humidityP90??100;
+      const useHarm=d.useHarm;          // dag 0-1: HARMONIE
+      const forceIfs=!useHarm&&dayIdx<=3; // dag 2-3: altijd IFS
+      const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
+      const useRhMin=useHarm?d.harmRhMin!=null:(forceIfs?d.hresRhMin!=null:inRange(d.hresRhMin,d.humidityP10,d.humidityP90));
+      const useRhMax=useHarm?d.harmRhMax!=null:(forceIfs?d.hresRhMax!=null:inRange(d.hresRhMax,d.humidityP10,d.humidityP90));
+      const rhMin=useHarm?(d.harmRhMin??d.humidityMedian??0):(useRhMin?d.hresRhMin:d.humidityP10??0);
+      const rhMax=useHarm?(d.harmRhMax??d.humidityMedian??100):(useRhMax?d.hresRhMax:d.humidityP90??100);
       const p10=d.humidityP10??0, p50=d.humidityMedian??0, p90=d.humidityP90??100;
       const allP10=S.data.days.map(d=>d.humidityP10??0);
       const allP90=S.data.days.map(d=>d.humidityP90??100);
@@ -1459,10 +2358,10 @@ function renderDaily(){
       const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
       const p10x=pos(p10), p50x=pos(p50), p90x=pos(p90);
       const minX=pos(rhMin), maxX=pos(rhMax);
-      const sMin=useRhMin?'':'<sup style="font-size:9px;opacity:.55">~</sup>';
-      const sMax=useRhMax?'':'<sup style="font-size:9px;opacity:.55">~</sup>';
+      const sMin=useRhMin?'':'<sup style="font-size:calc(9px*var(--fz));opacity:.55">~</sup>';
+      const sMax=useRhMax?'':'<sup style="font-size:calc(9px*var(--fz));opacity:.55">~</sup>';
       midHtml=`<div class="day-mid-inner">
-          <span class="day-mid-left" style="color:var(--red)">${rhMin}%${sMin}<br><span style="font-size:9px;opacity:.4">${p10}–${p50}%</span></span>
+          <span class="day-mid-left" style="color:var(--red)">${rhMin}%${sMin}<br><span style="font-size:calc(10px*var(--fz));color:var(--muted)">${p10}–${p50}%</span></span>
           <div style="flex:1;position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
             <div style="position:absolute;left:${p10x}%;width:${Math.max(p50x-p10x,1)}%;height:100%;background:rgba(248,113,113,.28);border-radius:3px"></div>
             <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(248,113,113,.6)"></div>
@@ -1476,9 +2375,10 @@ function renderDaily(){
 
     }else if(dTab==='wind'){
       const dayIdx=S.data.days.indexOf(d);
-      const forceIfs=dayIdx<=2; // dag 1-3 altijd IFS
-      const useWind=forceIfs||(d.hresWindMax!=null&&d.windP10!=null&&d.windP90!=null&&d.hresWindMax>=d.windP10&&d.hresWindMax<=d.windP90);
-      const windVal=useWind?d.hresWindMax:d.windP50;
+      const useHarm=d.useHarm;
+      const forceIfs=!useHarm&&dayIdx<=3;
+      const useWind=useHarm?d.harmWindMax!=null:(forceIfs||(d.hresWindMax!=null&&d.windP10!=null&&d.windP90!=null&&d.hresWindMax>=d.windP10&&d.hresWindMax<=d.windP90));
+      const windVal=useHarm?(d.harmWindMax??d.hresWindMax??d.windP50):(useWind?d.hresWindMax:d.windP50);
       const windDir=d.hresWindDir??d.windDir;
       const p10=d.windP10, p50=d.windP50, p90=d.windP90;
       const allP10=S.data.days.map(d=>d.windP10);
@@ -1489,7 +2389,7 @@ function renderDaily(){
       const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
       const p10x=pos(p10),p50x=pos(p50),p90x=pos(p90),valX=pos(windVal);
       const rangeW=Math.max(p90x-p10x,1);
-      const s=useWind?'':'<sup style="font-size:9px;opacity:.55">~</sup>';
+      const s=useWind?'':'<sup style="font-size:calc(9px*var(--fz));opacity:.55">~</sup>';
       midHtml=`<div style="display:flex;align-items:center;gap:8px">
           <div style="flex:1;min-width:0">
             <div style="position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
@@ -1497,10 +2397,10 @@ function renderDaily(){
               <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(128,128,128,.7)"></div>
               <div style="position:absolute;left:calc(${valX}% - 2px);width:4px;height:100%;background:var(--muted);border-radius:2px"></div>
             </div>
-            <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;text-align:center">${p10}–${p90} km/u</div>
+            <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:4px;text-align:center">${fmtWind(p10)}–${fmtWind(p90)}</div>
           </div>
         </div>`;
-      rightHtml=`<span style="display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0">${degToArrow(windDir)}<span class="day-right-val">${windVal}${s} <span style="font-size:10px;opacity:.5">km/u</span></span></span>`;
+      rightHtml=`<span style="display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0">${degToArrow(windDir)}<span class="day-right-val">${fmtWind(windVal)}${s}</span></span>`;
 
     }else{ // zon
       function daylightHours(dateStr, lat){
@@ -1528,11 +2428,11 @@ function renderDaily(){
         <div>
           <div class="day-bar-wrap"><div class="day-bar-fill" style="left:0;width:${et0Pct}%;background:rgba(52,199,89,.7)"></div></div>
         </div>`;
-      rightHtml=`<span class="day-right-val" style="color:var(--amber)">${sh} <span style="font-size:10px;opacity:.6">u</span></span>
+      rightHtml=`<span class="day-right-val" style="color:var(--amber)">${sh} <span style="font-size:calc(10px*var(--fz));opacity:.6">u</span></span>
         <span class="day-right-sub" style="color:rgba(52,199,89,.9)">${et0??'—'} mm</span>`;
     }
 
-    return`<div class="day-row" ${(dTab==='overzicht'||dTab==='neerslag')?`onclick="openDayPopup('${d.date}','${dTab}')" style="cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''"`:''}>
+    return`<div class="day-row" ${(dTab==='overzicht'||dTab==='neerslag'||dTab==='temp'||dTab==='vocht'||dTab==='wind'||dTab==='zon')?`onclick="${dTab==='overzicht'?`openDagDetailPopup('${d.date}')`:`openDayPopup('${d.date}','${dTab}')`}" style="cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''"`:''}>
       ${dTab==='overzicht'?'':`<span class="day-name">${nm}</span>`}
       ${dTab==='overzicht'?'':`<span class="day-icon">${wi(d.wmo,1)}</span>`}
       <div class="day-mid">${midHtml}</div>
@@ -1543,7 +2443,7 @@ function renderDaily(){
 
 function renderSpread(){
   if(S.chart){S.chart.destroy();S.chart=null;}
-  const DAYS=['Zo','Ma','Di','Wo','Do','Vr','Za'],days=S.data.days;
+  const DAYS=tDays(),days=S.data.days;
   const labels=days.map(d=>DAYS[new Date(d.date+'T12:00:00').getDay()]);
   const dark=matchMedia('(prefers-color-scheme:dark)').matches;
   const tick=dark?'rgba(255,255,255,.38)':'rgba(0,0,0,.38)';
@@ -1580,9 +2480,418 @@ function renderRisk(){
     {title:'Dagspanning (P10–P90)',val:spread+' mm',sub:`${d0?.precipP10??0}–${d0?.precipP90??0} mm vandaag`,color:'#a78bfa'},  ].map(r=>`<div class="risk-card"><div class="risk-card-title">${r.title}</div><div class="risk-card-val" style="color:${r.color}">${r.val}</div><div class="risk-card-sub">${r.sub}</div></div>`).join('');
 }
 
-document.getElementById('locInput').addEventListener('keydown',e=>{if(e.key==='Enter')loadLocation();});
 showLoad();
+
+/* ══════════════════════════════════════════════════════════════════
+   INSTELLINGEN – initialisatie vóór run() zodat prefs geladen zijn
+   ══════════════════════════════════════════════════════════════════ */
+const PREF_KEY='weer_prefs_v2';
+let PREFS={lang:'nl',tempUnit:'C',windUnit:'kmh',presUnit:'hPa',theme:'dark',fontSize:'md',favs:[]};
+function loadPrefs(){try{const p=JSON.parse(localStorage.getItem(PREF_KEY));if(p)PREFS={...PREFS,...p};}catch{}}
+function savePrefs(){localStorage.setItem(PREF_KEY,JSON.stringify(PREFS));}
+loadPrefs();
+
+/* ── Taal-strings ──────────────────────────────────────────────── */
+const LANG={
+  nl:{settings:'Instellingen',theme:'Thema',dark:'Donker',light:'Licht',
+      lang:'Taal',units:'Eenheden',temp:'Temperatuur',wind:'Wind',pres:'Druk',
+      fontSize:'Tekstgrootte',small:'Klein',medium:'Normaal',large:'Groot',
+      favs:'Favoriete locaties',addFav:'Voeg huidige locatie toe',noFav:'Nog geen favorieten.',
+      close:'Sluiten',search:'Zoeken',gps:'Mijn locatie',cancel:'Annuleer',
+      searchPlaceholder:'Zoek een stad…',noResults:'Geen resultaten gevonden',
+      loading:'Laden (HARMONIE + ECMWF ENS)…',viewMore:'Bekijk meer ›',
+      shortTermDetail:'Detail korte termijn',
+      tabOverview:'Overzicht',tabPrecip:'Neerslag',tabTemp:'Temperatuur',tabHumidity:'Vochtigheid',tabWind:'Wind',tabSun:'Zon & verdamping',
+      hWind:'Wind',hRain24:'Neerslag 24u',hHumidity:'Vochtigheid',
+      relHumidity:'Rel. vochtigheid',feelsLike:'Gevoelstemperatuur',dewpoint:'Dauwpunt',gusts:'Windstoten',evap:'Verdamping ET₀',
+      measurement:'meting',sunHours:'Zonuren',windspeed:'Windsnelheid',windGust:'Windstoot',
+      minTemp:'Min temperatuur',maxTemp:'Max temperatuur',spread:'ENS P10–P90 spreiding',
+      days7:'7 dagen',members:'ECMWF ENS 51 members',perHour:'Per uur',precipPerHour:'Neerslag per uur',
+      daylight:'Daglengte',sunrise:'Zonsopkomst',sunset:'Zonsondergang',
+      noIfsHour:'Geen IFS uurdata beschikbaar.',dataLoading:'Data laden…',
+      dayNames:['Zo','Ma','Di','Wo','Do','Vr','Za'],
+      wmo:{0:'Helder',1:'Meest helder',2:'Gedeeltelijk bewolkt',3:'Bewolkt',45:'Mist',48:'Rijpmist',51:'Motregen (licht)',53:'Motregen',55:'Motregen (zwaar)',61:'Regen (licht)',63:'Regen',65:'Regen (zwaar)',71:'Sneeuw (licht)',73:'Sneeuw',75:'Sneeuw (zwaar)',80:'Buien (licht)',81:'Buien',82:'Hevige buien',95:'Onweer',96:'Onweer + hagel',99:'Zwaar onweer'},unknown:'Onbekend',
+      tempUnits:['°C','°F','K'],windUnits:['km/u','m/s','kn','Bft'],presUnits:['hPa','mbar','inHg']},
+  en:{settings:'Settings',theme:'Theme',dark:'Dark',light:'Light',
+      lang:'Language',units:'Units',temp:'Temperature',wind:'Wind',pres:'Pressure',
+      fontSize:'Text size',small:'Small',medium:'Normal',large:'Large',
+      favs:'Favourite locations',addFav:'Add current location',noFav:'No favourites yet.',
+      close:'Close',search:'Search',gps:'My location',cancel:'Cancel',
+      searchPlaceholder:'Search a city…',noResults:'No results found',
+      loading:'Loading (HARMONIE + ECMWF ENS)…',viewMore:'View more ›',
+      shortTermDetail:'Short-term detail',
+      tabOverview:'Overview',tabPrecip:'Precipitation',tabTemp:'Temperature',tabHumidity:'Humidity',tabWind:'Wind',tabSun:'Sun & evaporation',
+      hWind:'Wind',hRain24:'Precip. 24h',hHumidity:'Humidity',
+      relHumidity:'Rel. humidity',feelsLike:'Feels like',dewpoint:'Dew point',gusts:'Wind gusts',evap:'Evaporation ET₀',
+      measurement:'measured',sunHours:'Sun hours',windspeed:'Wind speed',windGust:'Wind gust',
+      minTemp:'Min temperature',maxTemp:'Max temperature',spread:'ENS P10–P90 spread',
+      days7:'7 days',members:'ECMWF ENS 51 members',perHour:'Per hour',precipPerHour:'Precipitation per hour',
+      daylight:'Daylight',sunrise:'Sunrise',sunset:'Sunset',
+      noIfsHour:'No IFS hourly data available.',dataLoading:'Loading data…',
+      dayNames:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+      wmo:{0:'Clear',1:'Mostly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Rime fog',51:'Drizzle (light)',53:'Drizzle',55:'Drizzle (heavy)',61:'Rain (light)',63:'Rain',65:'Rain (heavy)',71:'Snow (light)',73:'Snow',75:'Snow (heavy)',80:'Showers (light)',81:'Showers',82:'Heavy showers',95:'Thunderstorm',96:'Thunderstorm + hail',99:'Severe thunderstorm'},unknown:'Unknown',
+      tempUnits:['°C','°F','K'],windUnits:['km/h','m/s','kn','Bft'],presUnits:['hPa','mbar','inHg']},
+  de:{settings:'Einstellungen',theme:'Design',dark:'Dunkel',light:'Hell',
+      lang:'Sprache',units:'Einheiten',temp:'Temperatur',wind:'Wind',pres:'Druck',
+      fontSize:'Textgröße',small:'Klein',medium:'Normal',large:'Groß',
+      favs:'Favoriten',addFav:'Aktuellen Ort hinzufügen',noFav:'Noch keine Favoriten.',
+      close:'Schließen',search:'Suchen',gps:'Mein Standort',cancel:'Abbrechen',
+      searchPlaceholder:'Stadt suchen…',noResults:'Keine Ergebnisse',
+      loading:'Lädt (HARMONIE + ECMWF ENS)…',viewMore:'Mehr anzeigen ›',
+      shortTermDetail:'Kurzfristige Details',
+      tabOverview:'Übersicht',tabPrecip:'Niederschlag',tabTemp:'Temperatur',tabHumidity:'Feuchtigkeit',tabWind:'Wind',tabSun:'Sonne & Verdunstung',
+      hWind:'Wind',hRain24:'Niederschlag 24h',hHumidity:'Feuchtigkeit',
+      relHumidity:'Rel. Feuchtigkeit',feelsLike:'Gefühlt',dewpoint:'Taupunkt',gusts:'Windböen',evap:'Verdunstung ET₀',
+      measurement:'Messung',sunHours:'Sonnenstunden',windspeed:'Windgeschw.',windGust:'Windböe',
+      minTemp:'Min. Temperatur',maxTemp:'Max. Temperatur',spread:'ENS P10–P90 Streuung',
+      days7:'7 Tage',members:'ECMWF ENS 51 Member',perHour:'Pro Stunde',precipPerHour:'Niederschlag pro Stunde',
+      daylight:'Tageslänge',sunrise:'Sonnenaufgang',sunset:'Sonnenuntergang',
+      noIfsHour:'Keine IFS-Stundendaten verfügbar.',dataLoading:'Daten laden…',
+      dayNames:['So','Mo','Di','Mi','Do','Fr','Sa'],
+      wmo:{0:'Klar',1:'Meist klar',2:'Teilweise bewölkt',3:'Bewölkt',45:'Nebel',48:'Reifnebel',51:'Niesel (leicht)',53:'Niesel',55:'Niesel (stark)',61:'Regen (leicht)',63:'Regen',65:'Regen (stark)',71:'Schnee (leicht)',73:'Schnee',75:'Schnee (stark)',80:'Schauer (leicht)',81:'Schauer',82:'Starke Schauer',95:'Gewitter',96:'Gewitter + Hagel',99:'Schweres Gewitter'},unknown:'Unbekannt',
+      tempUnits:['°C','°F','K'],windUnits:['km/h','m/s','kn','Bft'],presUnits:['hPa','mbar','inHg']},
+  fr:{settings:'Paramètres',theme:'Thème',dark:'Sombre',light:'Clair',
+      lang:'Langue',units:'Unités',temp:'Température',wind:'Vent',pres:'Pression',
+      fontSize:'Taille du texte',small:'Petit',medium:'Normal',large:'Grand',
+      favs:'Favoris',addFav:'Ajouter ce lieu',noFav:'Pas encore de favoris.',
+      close:'Fermer',search:'Rechercher',gps:'Ma position',cancel:'Annuler',
+      searchPlaceholder:'Rechercher une ville…',noResults:'Aucun résultat',
+      loading:'Chargement (HARMONIE + ECMWF ENS)…',viewMore:'Voir plus ›',
+      shortTermDetail:'Détail court terme',
+      tabOverview:'Aperçu',tabPrecip:'Précipitations',tabTemp:'Température',tabHumidity:'Humidité',tabWind:'Vent',tabSun:'Soleil & évaporation',
+      hWind:'Vent',hRain24:'Précip. 24h',hHumidity:'Humidité',
+      relHumidity:'Humidité rel.',feelsLike:'Ressenti',dewpoint:'Point de rosée',gusts:'Rafales',evap:'Évaporation ET₀',
+      measurement:'mesure',sunHours:"Heures d'ensoleillement",windspeed:'Vitesse du vent',windGust:'Rafale',
+      minTemp:'Température min',maxTemp:'Température max',spread:'Dispersion ENS P10–P90',
+      days7:'7 jours',members:'ECMWF ENS 51 membres',perHour:'Par heure',precipPerHour:'Précipitations par heure',
+      daylight:'Durée du jour',sunrise:'Lever du soleil',sunset:'Coucher du soleil',
+      noIfsHour:'Pas de données horaires IFS.',dataLoading:'Chargement…',
+      dayNames:['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'],
+      wmo:{0:'Dégagé',1:'Plutôt dégagé',2:'Partiellement nuageux',3:'Couvert',45:'Brouillard',48:'Brouillard givrant',51:'Bruine (légère)',53:'Bruine',55:'Bruine (forte)',61:'Pluie (légère)',63:'Pluie',65:'Pluie (forte)',71:'Neige (légère)',73:'Neige',75:'Neige (forte)',80:'Averses (légères)',81:'Averses',82:'Fortes averses',95:'Orage',96:'Orage + grêle',99:'Orage violent'},unknown:'Inconnu',
+      tempUnits:['°C','°F','K'],windUnits:['km/h','m/s','kn','Bft'],presUnits:['hPa','mbar','inHg']},
+  es:{settings:'Configuración',theme:'Tema',dark:'Oscuro',light:'Claro',
+      lang:'Idioma',units:'Unidades',temp:'Temperatura',wind:'Viento',pres:'Presión',
+      fontSize:'Tamaño de texto',small:'Pequeño',medium:'Normal',large:'Grande',
+      favs:'Favoritos',addFav:'Añadir ubicación actual',noFav:'Aún no hay favoritos.',
+      close:'Cerrar',search:'Buscar',gps:'Mi ubicación',cancel:'Cancelar',
+      searchPlaceholder:'Buscar una ciudad…',noResults:'Sin resultados',
+      loading:'Cargando (HARMONIE + ECMWF ENS)…',viewMore:'Ver más ›',
+      shortTermDetail:'Detalle a corto plazo',
+      tabOverview:'Resumen',tabPrecip:'Precipitación',tabTemp:'Temperatura',tabHumidity:'Humedad',tabWind:'Viento',tabSun:'Sol y evaporación',
+      hWind:'Viento',hRain24:'Precip. 24h',hHumidity:'Humedad',
+      relHumidity:'Humedad rel.',feelsLike:'Sensación',dewpoint:'Punto de rocío',gusts:'Ráfagas',evap:'Evaporación ET₀',
+      measurement:'medición',sunHours:'Horas de sol',windspeed:'Velocidad del viento',windGust:'Ráfaga',
+      minTemp:'Temperatura mín',maxTemp:'Temperatura máx',spread:'Dispersión ENS P10–P90',
+      days7:'7 días',members:'ECMWF ENS 51 miembros',perHour:'Por hora',precipPerHour:'Precipitación por hora',
+      daylight:'Horas de luz',sunrise:'Amanecer',sunset:'Atardecer',
+      noIfsHour:'Sin datos horarios IFS.',dataLoading:'Cargando datos…',
+      dayNames:['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'],
+      wmo:{0:'Despejado',1:'Mayormente despejado',2:'Parcialmente nublado',3:'Nublado',45:'Niebla',48:'Niebla helada',51:'Llovizna (ligera)',53:'Llovizna',55:'Llovizna (fuerte)',61:'Lluvia (ligera)',63:'Lluvia',65:'Lluvia (fuerte)',71:'Nieve (ligera)',73:'Nieve',75:'Nieve (fuerte)',80:'Chubascos (ligeros)',81:'Chubascos',82:'Chubascos fuertes',95:'Tormenta',96:'Tormenta + granizo',99:'Tormenta severa'},unknown:'Desconocido',
+      tempUnits:['°C','°F','K'],windUnits:['km/h','m/s','kn','Bft'],presUnits:['hPa','mbar','inHg']},
+};
+function t(k){return(LANG[PREFS.lang]||LANG.nl)[k]||(LANG.nl[k]||k);}
+function tDays(){return(LANG[PREFS.lang]||LANG.nl).dayNames||LANG.nl.dayNames;}
+function tWmo(c){const w=(LANG[PREFS.lang]||LANG.nl).wmo;return w[c]||(LANG[PREFS.lang]||LANG.nl).unknown;}
+
+/* ── Apply theme + font size on load ──────────────────────────── */
+function applyPrefs(){
+  // Theme
+  if(PREFS.theme==='light'){
+    document.documentElement.style.setProperty('--bg','#e8eef7');
+    document.documentElement.style.setProperty('--bg2','#f0f4fa');
+    document.documentElement.style.setProperty('--surface','rgba(255,255,255,0.75)');
+    document.documentElement.style.setProperty('--surface2','rgba(255,255,255,0.9)');
+    document.documentElement.style.setProperty('--border','rgba(0,0,0,0.08)');
+    document.documentElement.style.setProperty('--border2','rgba(0,0,0,0.14)');
+    document.documentElement.style.setProperty('--text','#0f1923');
+    document.documentElement.style.setProperty('--muted','#6b7a8d');
+    document.documentElement.style.setProperty('--danger','#dc2626');
+    document.documentElement.style.setProperty('--green','#16a34a');
+    document.documentElement.style.setProperty('--amber','#d97706');
+    document.documentElement.style.setProperty('--red','#dc2626');
+    document.documentElement.style.setProperty('--blue','#2563eb');
+    document.documentElement.style.setProperty('--accent','#2563eb');
+    document.documentElement.style.setProperty('--accent2','#3b82f6');
+    document.body.style.background='#d6e4f5';
+    document.body.style.backgroundImage='radial-gradient(ellipse 120% 60% at 50% -20%,rgba(120,180,255,.35) 0%,transparent 55%)';
+  } else {
+    document.documentElement.style.setProperty('--bg','#0a0f1e');
+    document.documentElement.style.setProperty('--bg2','#111827');
+    document.documentElement.style.setProperty('--surface','rgba(255,255,255,0.055)');
+    document.documentElement.style.setProperty('--surface2','rgba(255,255,255,0.09)');
+    document.documentElement.style.setProperty('--border','rgba(255,255,255,0.10)');
+    document.documentElement.style.setProperty('--border2','rgba(255,255,255,0.18)');
+    document.documentElement.style.setProperty('--text','#f0f4f8');
+    document.documentElement.style.setProperty('--muted','#7a8799');
+    document.documentElement.style.setProperty('--danger','#f87171');
+    document.documentElement.style.setProperty('--green','#4af0a8');
+    document.documentElement.style.setProperty('--amber','#fbbf24');
+    document.documentElement.style.setProperty('--red','#f87171');
+    document.documentElement.style.setProperty('--blue','#60a5fa');
+    document.documentElement.style.setProperty('--accent','#60a5fa');
+    document.documentElement.style.setProperty('--accent2','#93c5fd');
+    document.body.style.background='';
+    document.body.style.backgroundImage='';
+  }
+  applyFontSize();
+  applyLanguage();
+  renderFavsStrip();
+  // Herrender alleen als data al beschikbaar is (niet bij eerste initialisatie)
+  if(typeof S !== 'undefined' && S.data){
+    try{ render(); }catch(e){ console.warn('render na applyPrefs:', e); }
+    try{ renderHourly(); }catch(e){}
+    try{ renderDaily(); }catch(e){}
+    // Open dag-popup verversen met nieuwe taal/eenheden
+    try{
+      if(S._openDayPopup){
+        const dp=document.getElementById('dayPopup');
+        if(dp && dp.style.display==='block'){
+          openDayPopup(S._openDayPopup.date, S._openDayPopup.tab);
+        }
+      }
+    }catch(e){}
+    // Open uur-detail verversen
+    try{
+      const hp=document.getElementById('hourlyPopup');
+      if(hp && hp.style.display==='block'){
+        if(typeof renderHD==='function') renderHD();
+        if(typeof renderMeteogram==='function') renderMeteogram();
+      }
+    }catch(e){}
+  }
+}
+// applyPrefs past thema + font toe maar rerenders nog niet (S.data is nog null)
+applyPrefs();
+// Nu pas run() starten, zodat alle PREFS al geladen zijn bij de eerste render
 run().catch(e=>showErr(e.message));
+
+/* ── Eenheden conversie ────────────────────────────────────────── */
+// Temperatuur: input altijd °C (integer of null)
+function fmtTemp(c){
+  if(c==null||c==='—')return'—';
+  const v=Number(c);
+  if(PREFS.tempUnit==='F')return Math.round(v*9/5+32)+'°F';
+  if(PREFS.tempUnit==='K')return Math.round(v+273.15)+' K';
+  return Math.round(v)+'°C';
+}
+function fmtTempShort(c){
+  // Gebruik ° zonder eenheidsletter voor compacte weergave
+  if(c==null||c==='—')return'—';
+  const v=Number(c);
+  if(PREFS.tempUnit==='F')return Math.round(v*9/5+32)+'°';
+  if(PREFS.tempUnit==='K')return Math.round(v+273.15)+'';
+  return Math.round(v)+'°';
+}
+function tempUnit(){
+  if(PREFS.tempUnit==='F')return '°F';
+  if(PREFS.tempUnit==='K')return 'K';
+  return '°C';
+}
+// Numerieke conversie (zonder eenheidslabel) voor grafieken/assen
+function convTempVal(c){
+  if(c==null)return null;
+  const v=Number(c);
+  if(PREFS.tempUnit==='F')return Math.round(v*9/5+32);
+  if(PREFS.tempUnit==='K')return Math.round(v+273.15);
+  return Math.round(v);
+}
+function convWindVal(kmh){
+  if(kmh==null)return null;
+  const v=Number(kmh);
+  if(PREFS.windUnit==='ms')return Math.round(v/3.6);
+  if(PREFS.windUnit==='kn')return Math.round(v*0.54);
+  if(PREFS.windUnit==='bft'){const bs=[0,1,6,12,20,29,39,50,62,75,89,103,118];const b=bs.findIndex(t=>v<t)-1;return b<0?12:Math.max(0,b);}
+  return Math.round(v);
+}
+
+// Wind: input altijd km/u (integer of null)
+function fmtWind(kmh){
+  if(kmh==null||kmh==='—')return'—';
+  const v=Number(kmh);
+  if(PREFS.windUnit==='ms')return Math.round(v/3.6)+' m/s';
+  if(PREFS.windUnit==='kn')return Math.round(v*0.5400)+' kn';
+  if(PREFS.windUnit==='bft'){
+    const bs=[0,1,6,12,20,29,39,50,62,75,89,103,118];
+    const b=bs.findIndex(t=>v<t)-1;
+    return 'Bft '+(b<0?12:Math.max(0,b));
+  }
+  return Math.round(v)+' km/u';
+}
+function windUnit(){
+  if(PREFS.windUnit==='ms')return 'm/s';
+  if(PREFS.windUnit==='kn')return 'kn';
+  if(PREFS.windUnit==='bft')return 'Bft';
+  return 'km/u';
+}
+// Druk: input altijd hPa
+function fmtPres(hpa){
+  if(hpa==null||hpa==='—')return'—';
+  const v=Number(hpa);
+  if(PREFS.presUnit==='mbar')return Math.round(v)+' mbar';
+  if(PREFS.presUnit==='inHg')return(v*0.02953).toFixed(2)+' inHg';
+  return Math.round(v)+' hPa';
+}
+
+/* ── Font size via CSS variabele ──────────────────────────────── */
+function applyFontSize(){
+  const scale={sm:0.85,md:1,lg:1.2}[PREFS.fontSize]||1;
+  document.documentElement.style.setProperty('--fz', scale);
+}
+
+/* ── Taal toepassen op statische UI ───────────────────────────── */
+function applyLanguage(){
+  const set=(id,txt)=>{const el=document.getElementById(id);if(el)el.textContent=txt;};
+  // Tabs
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(btn=>{
+    const tab=btn.getAttribute('data-tab');
+    const map={overzicht:t('tabOverview'),neerslag:'☔ '+t('tabPrecip'),temp:'🌡 '+t('tabTemp'),
+               vocht:'💧 '+t('tabHumidity'),wind:'💨 '+t('tabWind'),zon:'☀️ '+t('tabSun')};
+    if(map[tab])btn.textContent=map[tab];
+  });
+  // Statische teksten
+  set('hourlyPopupTitle', t('shortTermDetail'));
+  set('viewMoreBtn', t('viewMore'));
+  set('loadingText', t('loading'));
+  set('searchCancelBtn', t('cancel'));
+  // Document taal-attribuut
+  document.documentElement.lang=PREFS.lang;
+  // Zoek-placeholder
+  const inp=document.getElementById('locInput');
+  if(inp)inp.placeholder=t('searchPlaceholder');
+  // Daglijst-titel updaten (bevat dynamische delen)
+  if(typeof updateDailyTitle==='function' && S.data) updateDailyTitle();
+}
+
+/* ── Favorieten strip ─────────────────────────────────────────── */
+function renderFavsStrip(){
+  const strip=document.getElementById('favsStrip');
+  if(!strip)return;
+  const favs=PREFS.favs||[];
+  if(!favs.length){strip.style.display='none';return;}
+  strip.style.display='block';
+  strip.innerHTML=favs.map((f,i)=>{
+    const active=S.city&&S.city===f.name;
+    return`<button onclick="loadFav(${i})"
+      style="display:inline-block;margin-right:6px;margin-bottom:2px;padding:5px 14px;border-radius:20px;
+        border:1.5px solid ${active?'var(--accent)':'var(--border2)'};
+        background:${active?'rgba(96,165,250,.18)':'rgba(255,255,255,.06)'};
+        color:${active?'var(--accent)':'var(--muted)'};
+        font-family:var(--mono);font-size:calc(12px*var(--fz));cursor:pointer;white-space:nowrap;
+        transition:all .15s;-webkit-tap-highlight-color:transparent"
+      onmouseover="this.style.borderColor='var(--accent2)'" onmouseout="this.style.borderColor='${active?'var(--accent)':'var(--border2)'}'">
+      ${f.name.split(',')[0]}
+    </button>`;
+  }).join('');
+}
+function loadFav(i){
+  const f=PREFS.favs[i];
+  if(!f)return;
+  S.lat=f.lat;S.lon=f.lon;S.city=f.name;
+  document.getElementById('locInput').value=f.name;
+  showLoad();run().catch(e=>showErr(e.message));
+}
+
+/* ── Settings modal openen/sluiten ────────────────────────────── */
+function openSettings(){
+  buildSettingsModal();
+  const el=document.getElementById('settingsOverlay');
+  el.style.display='flex';
+  el.style.alignItems='flex-end';
+  el.style.justifyContent='center';
+  document.body.style.overflow='hidden';
+}
+function closeSettings(){
+  document.getElementById('settingsOverlay').style.display='none';
+  document.body.style.overflow='';
+}
+
+/* ── Settings modal bouwen ────────────────────────────────────── */
+function buildSettingsModal(){
+  const L=LANG[PREFS.lang]||LANG.nl;
+
+  /* helper: segmented control */
+  function seg(options,current,onclickFn){
+    return`<div style="display:flex;gap:4px;background:var(--surface2);border-radius:10px;padding:4px;flex-wrap:wrap">
+      ${options.map(([val,label])=>`<button onclick="${onclickFn}('${val}')" style="flex:1;min-width:0;padding:7px 8px;border-radius:7px;border:${current===val?'1px solid var(--border2)':'none'};background:${current===val?'var(--bg2)':'transparent'};color:${current===val?'var(--text)':'var(--muted)'};font-family:var(--mono);font-size:calc(12px*var(--fz));cursor:pointer;white-space:nowrap;font-weight:${current===val?'700':'400'}">${label}</button>`).join('')}
+    </div>`;
+  }
+
+  /* helpers for section headers and rows */
+  function sectionHead(label){
+    return`<div style="font-family:var(--mono);font-size:calc(10px*var(--fz));font-weight:700;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;padding:16px 0 6px">${label}</div>`;
+  }
+  function row(label,control){
+    return`<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-family:var(--sans);font-size:calc(14px*var(--fz));color:var(--text);flex-shrink:0">${label}</span>
+      <div style="flex:1;max-width:240px">${control}</div>
+    </div>`;
+  }
+
+  /* favorieten lijst */
+  const favs=PREFS.favs||[];
+  const favsHtml=favs.length
+    ?favs.map((f,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <button onclick="closeSettings();loadFav(${i})" style="flex:1;text-align:left;background:none;border:none;color:var(--accent);font-family:var(--mono);font-size:calc(13px*var(--fz));cursor:pointer;padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.name.split(',').slice(0,2).join(',')}</button>
+        <button onclick="deleteFav(${i})" style="background:none;border:none;color:var(--muted);font-size:calc(18px*var(--fz));cursor:pointer;line-height:1;flex-shrink:0">×</button>
+      </div>`).join('')
+    :`<div style="font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--muted);padding:10px 0">${L.noFav}</div>`;
+
+  const canAdd=S.lat&&S.lon&&S.city&&!favs.some(f=>f.name===S.city);
+
+  document.getElementById('settingsBody').innerHTML=`
+    ${sectionHead(L.theme)}
+    ${row(L.theme, seg([['dark',L.dark],['light',L.light]],PREFS.theme,'setPrefTheme'))}
+
+    ${sectionHead(L.lang)}
+    ${row(L.lang, seg([['nl','NL'],['en','EN'],['de','DE'],['fr','FR'],['es','ES']],PREFS.lang,'setPrefLang'))}
+
+    ${sectionHead(L.fontSize)}
+    ${row(L.fontSize, seg([['sm',L.small],['md',L.medium],['lg',L.large]],PREFS.fontSize,'setPrefFontSize'))}
+
+    ${sectionHead(L.units)}
+    ${row(L.temp, seg([['C','°C'],['F','°F'],['K','K']],PREFS.tempUnit,'setPrefTempUnit'))}
+    ${row(L.wind, seg([['kmh','km/u'],['ms','m/s'],['kn','kn'],['bft','Bft']],PREFS.windUnit,'setPrefWindUnit'))}
+    ${row(L.pres, seg([['hPa','hPa'],['mbar','mbar'],['inHg','inHg']],PREFS.presUnit,'setPrefPresUnit'))}
+
+    ${sectionHead(L.favs)}
+    ${favsHtml}
+    ${canAdd?`<button onclick="addCurrentFav()" style="margin-top:10px;width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border2);background:var(--surface);color:var(--accent);font-family:var(--sans);font-size:calc(13px*var(--fz));cursor:pointer">+ ${L.addFav}</button>`:''}
+  `;
+}
+
+/* ── Setter functies (aangeroepen vanuit inline onclick) ─────── */
+function setPrefTheme(v){PREFS.theme=v;savePrefs();applyPrefs();buildSettingsModal();}
+function setPrefLang(v){PREFS.lang=v;savePrefs();applyPrefs();buildSettingsModal();}
+function setPrefFontSize(v){PREFS.fontSize=v;savePrefs();applyPrefs();buildSettingsModal();}
+function setPrefTempUnit(v){PREFS.tempUnit=v;savePrefs();applyPrefs();buildSettingsModal();}
+function setPrefWindUnit(v){PREFS.windUnit=v;savePrefs();applyPrefs();buildSettingsModal();}
+function setPrefPresUnit(v){PREFS.presUnit=v;savePrefs();applyPrefs();buildSettingsModal();}
+
+function addCurrentFav(){
+  if(!S.lat||!S.lon||!S.city)return;
+  PREFS.favs=PREFS.favs||[];
+  if(!PREFS.favs.some(f=>f.name===S.city)){
+    PREFS.favs.push({name:S.city,lat:S.lat,lon:S.lon});
+    savePrefs();applyPrefs();buildSettingsModal();
+  }
+}
+function deleteFav(i){
+  PREFS.favs.splice(i,1);
+  savePrefs();applyPrefs();buildSettingsModal();
+}
 </script>
+
+<!-- ══ Settings overlay ═════════════════════════════════════════════ -->
+<div id="settingsOverlay" style="display:none;position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeSettings()">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:24px 24px 0 0;width:100%;max-width:600px;max-height:90dvh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)">
+    <!-- header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 12px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <span style="font-family:var(--sans);font-size:calc(17px*var(--fz));font-weight:700;color:var(--text)" id="settingsTitle">Instellingen</span>
+      <button onclick="closeSettings()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--muted);width:30px;height:30px;border-radius:50%;font-size:calc(16px*var(--fz));cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">✕</button>
+    </div>
+    <!-- body -->
+    <div id="settingsBody" style="overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 20px 24px;flex:1"></div>
+  </div>
+</div>
 </body>
 </html>
