@@ -849,9 +849,9 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
       tempMinP10:ensTMinP10, tempMinP50:ensTMinP50, tempMinP90:ensTMinP90,
       tMax, tMin, useTMax, useTMin,
       windP10:ensWindP10, windP50:ensWindP50, windP90:ensWindP90, windVal, windDir,
-      humidityP10:o.ha.length?Math.round(pct(o.ha,10)):null,
-      humidityMedian:o.ha.length?Math.round(pct(o.ha,50)):null,
-      humidityP90:o.ha.length?Math.round(pct(o.ha,90)):null,
+      humidityP10:o.ha.length?Math.round(pct(o.ha,10)):(ifs.hresRhMin??null),
+      humidityMedian:o.ha.length?Math.round(pct(o.ha,50)):(ifs.hresRhMin!=null&&ifs.hresRhMax!=null?Math.round((ifs.hresRhMin+ifs.hresRhMax)/2):null),
+      humidityP90:o.ha.length?Math.round(pct(o.ha,90)):(ifs.hresRhMax??null),
       sunHours, et0,
     };
   }).filter(Boolean);
