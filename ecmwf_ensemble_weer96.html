@@ -2248,9 +2248,12 @@ function getSunriseSunset(dateStr, lat){
 }
 function isHourDay(timeStr, lat){
   const date=timeStr.slice(0,10);
-  const hour=parseInt(timeStr.slice(11,13))+parseInt(timeStr.slice(14,16)||'0')/60;
+  const localHour=parseInt(timeStr.slice(11,13))+parseInt(timeStr.slice(14,16)||'0')/60;
+  // Tijden van Open-Meteo zijn lokale tijd; getSunriseSunset rekent in UTC
+  const utcOffsetH=(typeof S!=='undefined'&&S._utcOffset!=null)?S._utcOffset/3600:0;
+  const utcHour=((localHour-utcOffsetH)%24+24)%24;
   const {rise,set}=getSunriseSunset(date, lat);
-  return hour>=rise&&hour<set?1:0;
+  return utcHour>=rise&&utcHour<set?1:0;
 }
 
 let dTab='overzicht';
