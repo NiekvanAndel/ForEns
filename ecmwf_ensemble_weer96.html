@@ -1353,50 +1353,49 @@ async function renderVochtDayPopup(d){
   const rhMin=useHarm?(d.harmRhMin??d.humidityMedian??0):(useRhMin?d.hresRhMin:d.humidityP10??0);
   const rhMax=useHarm?(d.harmRhMax??d.humidityMedian??100):(useRhMax?d.hresRhMax:d.humidityP90??100);
   const bronLabel=useHarm?'HARMONIE':(forceIfs?'IFS':'IFS/ENS P50');
-  const scaleMin=Math.max(0,(d.humidityP10??rhMin)-5);
-  const scaleMax=Math.min(100,(d.humidityP90??rhMax)+5);
-  const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/(scaleMax-scaleMin)*100));
+  const p10=d.humidityP10??0, p50=d.humidityMedian??0, p90=d.humidityP90??100;
+  const scaleMin=Math.max(0,p10-5);
+  const scaleMax=Math.min(100,p90+5);
+  const scaleRng=Math.max(scaleMax-scaleMin,1);
+  const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
+  const p10x=pos(p10), p50x=pos(p50), p90x=pos(p90);
+  const minX=pos(rhMin), maxX=pos(rhMax);
+  const sMin=useRhMin?'':'<sup style="font-size:calc(8px*var(--fz));opacity:.55">~</sup>';
+  const sMax=useRhMax?'':'<sup style="font-size:calc(8px*var(--fz));opacity:.55">~</sup>';
   const dagBalk=`
     <div style="padding:14px 18px 10px">
       <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">${t('tabHumidity')} · ENS spreiding + ${bronLabel}</div>
-      <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--red);margin-bottom:4px">Min vochtigheid</div>
-      <div style="position:relative;height:calc(18px*var(--fz));margin-bottom:2px">
-        <span style="position:absolute;left:${pos(rhMin)}%;transform:translateX(-50%);font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--red);font-weight:700">${rhMin}%</span>
+      <!-- Gecombineerde balk: min (rood, links) + max (blauw, rechts) op dezelfde schaal -->
+      <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:calc(13px*var(--fz));font-weight:700;margin-bottom:4px">
+        <span style="color:var(--red)">${rhMin}%${sMin} <span style="font-size:calc(10px*var(--fz));font-weight:400;color:var(--muted)">min</span></span>
+        <span style="color:var(--accent)">${rhMax}%${sMax} <span style="font-size:calc(10px*var(--fz));font-weight:400;color:var(--muted)">max</span></span>
       </div>
-      <div onclick="toggleTempDetail('vochtMinDetail')" style="position:relative;height:calc(12px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;margin-bottom:calc(12px*var(--fz));cursor:pointer">
-        <div style="position:absolute;left:${pos(d.humidityP10??rhMin)}%;width:${Math.max(pos(d.humidityP90??rhMin)-pos(d.humidityP10??rhMin),1)}%;height:100%;background:rgba(248,113,113,.2);border-radius:4px"></div>
-        <div style="position:absolute;left:${pos(d.humidityP25??d.humidityP10??rhMin)}%;width:${Math.max(pos(d.humidityP75??d.humidityP90??rhMin)-pos(d.humidityP25??d.humidityP10??rhMin),1)}%;height:100%;background:rgba(248,113,113,.45);border-radius:4px"></div>
-        <div style="position:absolute;left:calc(${pos(d.humidityMedian??rhMin)}% - 0.5px);width:1px;height:100%;background:rgba(248,113,113,.7)"></div>
-        <div style="position:absolute;left:calc(${pos(rhMin)}% - 4px);top:50%;transform:translateY(-50%);width:8px;height:8px;background:var(--red);border-radius:50%"></div>
-      </div>
-      <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--accent);margin-bottom:4px">Max vochtigheid</div>
-      <div style="position:relative;height:calc(18px*var(--fz));margin-bottom:2px">
-        <span style="position:absolute;left:${pos(rhMax)}%;transform:translateX(-50%);font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--accent);font-weight:700">${rhMax}%</span>
-      </div>
-      <div onclick="toggleTempDetail('vochtMaxDetail')" style="position:relative;height:calc(12px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;margin-bottom:calc(12px*var(--fz));cursor:pointer">
-        <div style="position:absolute;left:${pos(d.humidityP10??rhMax)}%;width:${Math.max(pos(d.humidityP90??rhMax)-pos(d.humidityP10??rhMax),1)}%;height:100%;background:rgba(96,165,250,.2);border-radius:4px"></div>
-        <div style="position:absolute;left:${pos(d.humidityP25??d.humidityP10??rhMax)}%;width:${Math.max(pos(d.humidityP75??d.humidityP90??rhMax)-pos(d.humidityP25??d.humidityP10??rhMax),1)}%;height:100%;background:rgba(96,165,250,.45);border-radius:4px"></div>
-        <div style="position:absolute;left:calc(${pos(d.humidityMedian??rhMax)}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.7)"></div>
-        <div style="position:absolute;left:calc(${pos(rhMax)}% - 4px);top:50%;transform:translateY(-50%);width:8px;height:8px;background:var(--accent);border-radius:50%"></div>
+      <div onclick="toggleTempDetail('vochtDetail')" style="position:relative;height:calc(14px*var(--fz));background:rgba(128,128,128,.13);border-radius:4px;margin-bottom:6px;cursor:pointer">
+        <!-- P10–P50: rood (lagere vochtigheid spreiding) -->
+        <div style="position:absolute;left:${p10x}%;width:${Math.max(p50x-p10x,1)}%;height:100%;background:rgba(248,113,113,.28);border-radius:3px"></div>
+        <!-- P50–P90: blauw (hogere vochtigheid spreiding) -->
+        <div style="position:absolute;left:${p50x}%;width:${Math.max(p90x-p50x,1)}%;height:100%;background:rgba(96,165,250,.28);border-radius:3px"></div>
+        <!-- P50 middellijn -->
+        <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(128,128,128,.5)"></div>
+        <!-- Min marker (rood) -->
+        <div style="position:absolute;left:calc(${minX}% - 2px);width:4px;height:100%;background:var(--red);border-radius:2px"></div>
+        <!-- Max marker (blauw) -->
+        <div style="position:absolute;left:calc(${maxX}% - 2px);width:4px;height:100%;background:var(--accent);border-radius:2px"></div>
       </div>
       <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted)">
         <span>${Math.round(scaleMin)}%</span>
-        <span>${t('spread')}</span>
+        <span>P10: ${p10}% · P50: ${p50}% · P90: ${p90}%</span>
         <span>${Math.round(scaleMax)}%</span>
       </div>
-      <!-- Detail panels: verschijnen bij klikken op balk -->
-      <div id="vochtMinDetail" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;padding:10px 14px">
+      <div id="vochtDetail" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;padding:10px 14px">
         <div style="display:flex;gap:12px;font-family:var(--mono);font-size:calc(12px*var(--fz));flex-wrap:wrap">
-          <span style="color:var(--muted)">P50: <span style="color:var(--red);font-weight:700">${d.humidityMedian??'—'}%</span></span>
-          <span style="color:var(--muted)">P25–P75: <span style="color:var(--red)">${d.humidityP25??'—'}%–${d.humidityP75??'—'}%</span></span>
-          <span style="color:var(--muted)">P10–P90: <span style="color:var(--red)">${d.humidityP10??'—'}%–${d.humidityP90??'—'}%</span></span>
+          <span style="color:var(--muted)">P50: <span style="color:var(--text);font-weight:700">${p50}%</span></span>
+          <span style="color:var(--muted)">P25–P75: <span style="color:var(--text)">${d.humidityP25??'—'}%–${d.humidityP75??'—'}%</span></span>
+          <span style="color:var(--muted)">P10–P90: <span style="color:var(--text)">${p10}%–${p90}%</span></span>
         </div>
-      </div>
-      <div id="vochtMaxDetail" style="display:none;margin-top:10px;background:var(--surface2);border-radius:10px;padding:10px 14px">
-        <div style="display:flex;gap:12px;font-family:var(--mono);font-size:calc(12px*var(--fz));flex-wrap:wrap">
-          <span style="color:var(--muted)">P50: <span style="color:var(--accent);font-weight:700">${d.humidityMedian??'—'}%</span></span>
-          <span style="color:var(--muted)">P25–P75: <span style="color:var(--accent)">${d.humidityP25??'—'}%–${d.humidityP75??'—'}%</span></span>
-          <span style="color:var(--muted)">P10–P90: <span style="color:var(--accent)">${d.humidityP10??'—'}%–${d.humidityP90??'—'}%</span></span>
+        <div style="display:flex;gap:12px;font-family:var(--mono);font-size:calc(12px*var(--fz));flex-wrap:wrap;margin-top:6px">
+          <span style="color:var(--muted)">Min: <span style="color:var(--red);font-weight:700">${rhMin}%</span></span>
+          <span style="color:var(--muted)">Max: <span style="color:var(--accent);font-weight:700">${rhMax}%</span></span>
         </div>
       </div>
     </div>`;
@@ -1608,22 +1607,16 @@ async function renderTempDayPopup(d){
   const bronLabel=useHarm?'HARMONIE':(forceIfs?'IFS':'IFS/ENS P50');
   const s='<sup style="font-size:calc(8px*var(--fz));opacity:.55">~</sup>';
 
-  // Aparte schalen per balk voor betere zichtbaarheid
-  const minScale={lo:(d.tempMinP10??tMin)-2, hi:(d.tempMinP90??tMin)+2};
-  const maxScale={lo:(d.tempMaxP10??tMax)-2, hi:(d.tempMaxP90??tMax)+2};
-  minScale.rng=Math.max(minScale.hi-minScale.lo,1);
-  maxScale.rng=Math.max(maxScale.hi-maxScale.lo,1);
-  const posMin=v=>Math.max(0,Math.min(100,(v-minScale.lo)/minScale.rng*100));
-  const posMax=v=>Math.max(0,Math.min(100,(v-maxScale.lo)/maxScale.rng*100));
-  // Gecombineerde schaal voor labels
+  // Één gemeenschappelijke schaal voor beide balken zodat ze vergelijkbaar zijn
   const scaleMin=Math.min(d.tempMinP10??tMin,tMin)-2;
   const scaleMax=Math.max(d.tempMaxP90??tMax,tMax)+2;
   const scaleRng=Math.max(scaleMax-scaleMin,1);
   const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
+  const posMin=pos, posMax=pos;
 
-  const minP10x=posMin(d.tempMinP10??tMin), minP90x=posMin(d.tempMinP90??tMin);
-  const maxP10x=posMax(d.tempMaxP10??tMax), maxP90x=posMax(d.tempMaxP90??tMax);
-  const tMinX=posMin(tMin), tMaxX=posMax(tMax);
+  const minP10x=pos(d.tempMinP10??tMin), minP90x=pos(d.tempMinP90??tMin);
+  const maxP10x=pos(d.tempMaxP10??tMax), maxP90x=pos(d.tempMaxP90??tMax);
+  const tMinX=pos(tMin), tMaxX=pos(tMax);
 
   const dagBalk=`
     <div style="padding:14px 18px 10px">
@@ -1668,7 +1661,7 @@ async function renderTempDayPopup(d){
         <div style="display:flex;gap:12px;font-family:var(--mono);font-size:calc(12px*var(--fz));flex-wrap:wrap">
           <span style="color:var(--muted)">P50: <span style="color:var(--red);font-weight:700">${fmtTempShort(d.tempMaxP50)}</span></span>
           <span style="color:var(--muted)">P25–P75: <span style="color:var(--red)">${fmtTempShort(d.tempMaxP25)}–${fmtTempShort(d.tempMaxP75)}</span></span>
-          <span style="color:var(--muted)">P10–P90: <span style="color:var(--red)">${fmtTempShort(d.tempMinP10)}–${fmtTempShort(d.tempMaxP90)}</span></span>
+          <span style="color:var(--muted)">P10–P90: <span style="color:var(--red)">${fmtTempShort(d.tempMaxP10)}–${fmtTempShort(d.tempMaxP90)}</span></span>
         </div>
       </div>
     </div>`;
