@@ -56,7 +56,7 @@ body{
 .hour-label{font-family:var(--mono);font-size:calc(12px*var(--fz));color:var(--muted)}
 .hour-temp{font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700}
 .hour-icon{font-size:calc(20px*var(--fz))}
-.hour-precip{font-family:var(--mono);font-size:calc(12px*var(--fz));font-weight:700;min-height:16px}
+.hour-precip{font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;min-height:16px}
 .hour-mm{font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);min-height:14px}
 .detail{padding:14px 16px;border-top:1px solid var(--border)}
 .detail-label{font-family:var(--mono);font-size:calc(10px*var(--fz));font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
@@ -892,12 +892,13 @@ function render(){
 }
 
 function precipColor(mm){
-  // 0 mm = grijs, oplopend naar donkerblauw
-  if(!mm||mm<=0) return 'var(--muted)';
-  const t=Math.min(mm/5,1); // 5mm = vol blauw
-  const r=Math.round(128*(1-t)+Math.round(30*t));
-  const g=Math.round(135*(1-t)+Math.round(100*t));
-  const b=Math.round(153*(1-t)+Math.round(220*t));
+  // 0 mm = lichtblauw, oplopend naar diepblauw bij 5+ mm
+  const v=mm??0;
+  if(v<=0) return 'rgba(96,165,250,0.35)'; // licht accent-blauw voor droog
+  const t=Math.min(v/5,1); // 5 mm = vol diepblauw
+  const r=Math.round(96*(1-t)+20*t);
+  const g=Math.round(165*(1-t)+80*t);
+  const b=Math.round(250*(1-t)+220*t);
   return `rgb(${r},${g},${b})`;
 }
 
@@ -923,7 +924,7 @@ function renderHourly(){
       <span class="hour-label">${h.time.slice(11,16)}</span>
       <span class="hour-icon" style="${isPast?'filter:saturate(.3)':''}">${wi(h.wmo,h.isDay??1)}</span>
       <span class="hour-temp">${fmtTempShort(h.temp)}</span>
-      <span class="hour-precip" style="color:${precipCol};font-size:calc(11px*var(--fz))">${precipStr}</span>
+      <span class="hour-precip" style="color:${precipCol}">${precipStr}</span>
       <span class="hour-mm" style="color:var(--muted)">${fmtWind(h.wind)}</span>
       <span style="font-family:var(--mono);font-size:calc(12px*var(--fz));color:var(--muted);min-height:14px">${windDir!=null?`<span style="display:inline-block;transform:rotate(${(windDir+180)%360}deg)">↑</span>`:'·'}</span>
       <span style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:${sunMin>0?'var(--amber)':'var(--muted)'};min-height:13px">${sunMin>0?sunMin+'m':'·'}</span>
