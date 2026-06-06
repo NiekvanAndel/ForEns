@@ -3447,6 +3447,10 @@ function buildSettingsModal(){
       <div style="font-family:var(--sans);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:8px;line-height:1.5">${L.agroHint}</div>
     </div>
 
+    ${sectionHead(L.harmonieTitle)}
+    ${row(L.harmonieLabel, seg([['true',L.harmonieOn],['false',L.harmonieOff]],String(PREFS.useHarmonie),'setPrefUseHarmonie'))}
+    <div style="font-family:var(--sans);font-size:calc(11px*var(--fz));color:var(--muted);padding:4px 0 10px;line-height:1.5">${L.harmonieHint}</div>
+
     ${sectionHead(L.favs)}
     ${favsHtml}
     ${canAdd?`<button onclick="addCurrentFav()" style="margin-top:10px;width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border2);background:var(--surface);color:var(--accent);font-family:var(--sans);font-size:calc(13px*var(--fz));cursor:pointer">+ ${L.addFav}</button>`:''}
@@ -3463,6 +3467,7 @@ function setPrefFontSize(v){PREFS.fontSize=v;savePrefs();applyPrefs();buildSetti
 function setPrefTempUnit(v){PREFS.tempUnit=v;savePrefs();applyPrefs();buildSettingsModal();}
 function setPrefWindUnit(v){PREFS.windUnit=v;savePrefs();applyPrefs();buildSettingsModal();}
 function setPrefPresUnit(v){PREFS.presUnit=v;savePrefs();applyPrefs();buildSettingsModal();}
+function setPrefUseHarmonie(v){PREFS.useHarmonie=(v==='true');savePrefs();applyPrefs();buildSettingsModal();if(S.lat&&S.lon){showLoad();run();}}
 
 function addCurrentFav(){
   if(!S.lat||!S.lon||!S.city)return;
