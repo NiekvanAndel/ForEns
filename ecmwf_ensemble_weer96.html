@@ -2598,7 +2598,7 @@ function renderDaily(){
 
     return`<div class="day-row" ${(dTab==='overzicht'||dTab==='neerslag'||dTab==='temp'||dTab==='vocht'||dTab==='wind'||dTab==='zon')?`onclick="${dTab==='overzicht'?`openDagDetailPopup('${d.date}')`:`openDayPopup('${d.date}','${dTab}')`}" style="cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''"`:''}>
       ${dTab==='overzicht'?'':`<span class="day-name">${nm}</span>`}
-      ${dTab==='overzicht'?'':`<span class="day-icon">${wi(d.wmo,1)}</span>`}
+      ${dTab==='overzicht'?'':`<span class="day-icon">${wi(d.hresWmo??d.wmo,1,24)}</span>`}
       <div class="day-mid">${midHtml}</div>
       ${rightHtml?`<div class="day-right">${rightHtml}</div>`:''}
     </div>`;
@@ -2718,7 +2718,7 @@ function renderDaily(){
       const isOvz=dTab==='overzicht';
       return`<div class="day-row" style="opacity:0.85;cursor:default">
         ${isOvz?'':`<span class="day-name">${nm2}</span>`}
-        ${isOvz?'':`<span class="day-icon">${wi(d.wmo,1)}</span>`}
+        ${isOvz?'':`<span class="day-icon">${wi(d.wmo,1,24)}</span>`}
         <div class="day-mid">${midExt}</div>
         ${rightExt?`<div class="day-right">${rightExt}</div>`:''}
       </div>`;
