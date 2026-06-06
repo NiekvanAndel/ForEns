@@ -852,12 +852,13 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
     const ensPrecipP90=r1(pct(o.ps,90));
     const usePrec=ifs.hresPrecip!=null&&inRange(ifs.hresPrecip,ensPrecipP10,ensPrecipP90);
     const precipVal=usePrec?ifs.hresPrecip:ensPrecipP50;
+    const pChance=Math.round(pge(o.ps,.1));
     const wmo=ifs.hresWmo??o.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,o.wmos[0]??0);
     const sunHours=sunByDay[d]!=null?r1(sunByDay[d]/3600):null;
     const et0=et0ByDay[d]!=null?r1(et0ByDay[d]):null;
     const windDir=ifs.hresWindDir??windDirByDay[d]??null;
     return{date:d, wmo,
-      precipP10:ensPrecipP10, precipP50:ensPrecipP50, precipP90:ensPrecipP90, precipVal,
+      precipP10:ensPrecipP10, precipP50:ensPrecipP50, precipP90:ensPrecipP90, precipVal, pChance,
       tempMaxP10:ensTMaxP10, tempMaxP50:ensTMaxP50, tempMaxP90:ensTMaxP90,
       tempMinP10:ensTMinP10, tempMinP50:ensTMinP50, tempMinP90:ensTMinP90,
       tMax, tMin, useTMax, useTMin,
@@ -2633,12 +2634,19 @@ function renderDaily(){
         const scaleMaxN=Math.max(...S.data.extDays.map(x=>x.precipP90??0),5);
         const pos=v=>Math.max(0,Math.min(100,v/scaleMaxN*100));
         const p10x=pos(d.precipP10),p50x=pos(d.precipP50),p90x=pos(d.precipP90),valx=pos(d.precipVal);
-        midExt=`<div style="flex:1;position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
-          <div style="position:absolute;left:${p10x}%;width:${Math.max(p90x-p10x,1)}%;height:100%;background:rgba(96,165,250,.3);border-radius:3px"></div>
-          <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.7)"></div>
-          <div style="position:absolute;left:calc(${valx}% - 2px);width:4px;height:100%;background:var(--accent);border-radius:2px"></div>
+        midExt=`<div style="display:flex;align-items:center;gap:8px">
+          <span style="color:var(--accent);font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;flex-shrink:0;width:40px;text-align:right;align-self:center">${d.pChance}%</span>
+          <div style="flex:1;min-width:0">
+            <div style="position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
+              <div style="position:absolute;left:${p10x}%;width:${Math.max(p90x-p10x,1)}%;height:100%;background:rgba(96,165,250,.25);border-radius:3px"></div>
+              <div style="position:absolute;left:calc(${p50x}% - 0.5px);top:0;width:1px;height:6px;background:rgba(96,165,250,.7)"></div>
+              <div style="position:absolute;left:calc(${valx}% - 2px);top:0;width:4px;height:6px;background:var(--accent);border-radius:2px"></div>
+            </div>
+            <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:4px;display:flex;justify-content:center;width:100%">${(d.precipP10===0&&d.precipP90===0)?'0 mm':`${d.precipP10} mm – ${d.precipP90} mm`}</div>
+          </div>
+          <span style="color:var(--accent);font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;flex-shrink:0;width:60px;text-align:right;white-space:nowrap;align-self:center">${d.precipVal}${s} <span style="font-size:calc(13px*var(--fz));opacity:.7">mm</span></span>
         </div>`;
-        rightExt=`<span class="day-right-val" style="color:var(--accent)">${d.precipVal}${s} mm</span><span class="day-right-sub">${d.precipP10}–${d.precipP90} mm</span>`;
+        rightExt=``;
       }else if(dTab==='temp'){
         const allTMin=S.data.extDays.map(x=>x.tempMinP10??x.tMin);
         const allTMax=S.data.extDays.map(x=>x.tempMaxP90??x.tMax);
