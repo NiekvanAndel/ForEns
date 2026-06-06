@@ -294,6 +294,16 @@ function pge(arr,t){
   if(!v.length)return 0;
   return v.filter(x=>x>=t).length/v.length*100;
 }
+// Normale verdeling: P(X > drempel) via 1-Φ(z), Abramowitz & Stegun benadering
+function normalCDFUpper(mean,spread,threshold){
+  if(!spread||spread<=0) return mean>=threshold?1:0;
+  const z=(threshold-mean)/spread;
+  if(z<-6) return 1; if(z>6) return 0;
+  const t=1/(1+0.2316419*Math.abs(z));
+  const poly=t*(0.319381530+t*(-0.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));
+  const phi=Math.exp(-z*z/2)/Math.sqrt(2*Math.PI)*poly;
+  return Math.min(1,Math.max(0, z>=0?phi:1-phi));
+}
 
 async function geocode(name){
   const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=nl&format=json`);
@@ -337,7 +347,15 @@ function useGPS(){
   closeSearch();
   showLoad();
   navigator.geolocation.getCurrentPosition(
-    async p=>{S.lat=p.coords.latitude;S.lon=p.coords.longitude;S.city='Jouw locatie';
+    async p=>{
+      S.lat=p.coords.latitude;S.lon=p.coords.longitude;
+      // Reverse geocode via Nominatim
+      try{
+        const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${S.lat}&lon=${S.lon}&format=json&accept-language=${PREFS.lang||'nl'}`);
+        const j=await r.json();
+        const a=j.address||{};
+        S.city=a.city||a.town||a.village||a.hamlet||a.suburb||a.county||j.display_name?.split(',')[0]||'GPS';
+      }catch(e){S.city='GPS';}
       try{await run();}catch(e){showErr(e.message);}},
     ()=>showErr('Locatietoegang geweigerd'));
 }
@@ -409,6 +427,22 @@ async function run(){
       try{
         const r=await fetch(url);
         if(r.status===429&&i<retries){await new Promise(r=>setTimeout(r,600*(i+1)));continue;}
+        // Vang open-meteo JSON-body fouten op (HTTP 200 maar {"error":true,...})
+        if(r.ok){
+          const clone=r.clone();
+          try{
+            const j=await clone.json();
+            if(j?.error){
+              if(i<retries){await new Promise(r=>setTimeout(r,800*(i+1)));continue;}
+              throw new Error(`${name}: ${j.reason||'API-fout'}`);
+            }
+            // Geef een nep-response die al geparsed is
+            return {ok:true,_parsed:j,json:()=>Promise.resolve(j),clone:()=>({json:()=>Promise.resolve(j)})};
+          }catch(pe){
+            if(pe.message&&pe.message.includes(name)) throw pe;
+            return r; // kon niet als JSON parsen — geef originele response terug
+          }
+        }
         return r;
       }catch(e){
         if(i===retries)throw new Error(`${name}: ${e.message}`);
@@ -465,7 +499,8 @@ async function run(){
   if(PREFS.agroExact){ applyAgroStation(S._utcOffset).catch(e=>console.warn('AgroExact:',e.message)); }
 
   // ── Stap 2a: IFS dagelijks + Sun parallel (snel) → toon 7-daagse direct ──
-  const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&models=ecmwf_ifs025&forecast_days=16`;
+  const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&models=ecmwf_ifs025&forecast_days=7`;
+  S._ensFullLoaded=false; S._ensBase=base; // sla base op voor uitbreiding later
   const sunUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,winddirection_10m&forecast_days=16`;
   const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=16`;
   // Start ENS alvast (traag) maar wacht er niet op voor eerste render
@@ -664,14 +699,18 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
   // ── ENS dagelijkse aggregatie ──
   const today=nowHour.slice(0,10);
   const dayMap={}, dayOrder=[];
-  for(let i=0;i<edt.length;i++){
-    const d=edt[i];
-    if(d<today) continue; // vandaag wél meenemen
+  // Gebruik IFS-datums als primaire bron (altijd 14-16 dagen);
+  // ENS-data wordt per datum opgezocht — kan null zijn als ENS nog niet volledig geladen is.
+  const edtIndex=new Map(edt.map((d,i)=>[d,i]));
+  const dateSource=iJ?.daily?.time?.length?iJ.daily.time:(edt.length?edt:[]);
+  for(const d of dateSource){
+    if(d<today) continue;
+    const ei=edtIndex.has(d)?edtIndex.get(d):-1;
     dayMap[d]={date:d,
-      ps:PM2.map(m=>m[i]??0),
-      taMax:TMaxM2.map(m=>m[i]??-Infinity),
-      taMin:TMinM2.map(m=>m[i]??Infinity),
-      waMax:WM2.map(m=>m[i]??-Infinity),
+      ps:  ei>=0?PM2.map(m=>m[ei]??0):[],
+      taMax:ei>=0?TMaxM2.map(m=>m[ei]??-Infinity):[],
+      taMin:ei>=0?TMinM2.map(m=>m[ei]??Infinity):[],
+      waMax:ei>=0?WM2.map(m=>m[ei]??-Infinity):[],
       ha:[], wmos:[]};
     dayOrder.push(d);
   }
@@ -828,7 +867,7 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
       humidityP75:o.ha.length?Math.round(pct(o.ha,75)):(hresDays[d]?.hresRhMax??null),
       humidityP90:o.ha.length?Math.round(pct(o.ha,90)):(hresDays[d]?.hresRhMax??null),
       sunHours, et0, windDir,
-      wmo:wmoMode??hresDays[d]?.hresWmo??0, nMembers:PM2.length, ...(hresDays[d]||{}),
+      wmo:wmoMode??hresDays[d]?.hresWmo??0, nMembers:PM2.length, ensLoaded:o.ps.length>0, ...(hresDays[d]||{}),
       harmTempMax, harmTempMin, harmPrecip, harmWindMax, harmRhMin, harmRhMax,
       hresRhMin: hresRhByDay[d]?.min??null,
       hresRhMax: hresRhByDay[d]?.max??null,
@@ -1427,6 +1466,7 @@ async function renderVochtDayPopup(d){
   const useHarm=d.useHarm;
   const forceIfs=!useHarm&&dayIdx<=3;
   const useWideBand=dayIdx<7;
+  const hasEns=d.ensLoaded??false;
   const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
   const useRhMin=useHarm?d.harmRhMin!=null:(forceIfs?d.hresRhMin!=null:inRange(d.hresRhMin, useWideBand?d.humidityP10:d.humidityP25, useWideBand?d.humidityP90:d.humidityP75));
   const useRhMax=useHarm?d.harmRhMax!=null:(forceIfs?d.hresRhMax!=null:inRange(d.hresRhMax, useWideBand?d.humidityP10:d.humidityP25, useWideBand?d.humidityP90:d.humidityP75));
@@ -1521,8 +1561,9 @@ async function renderWindDayPopup(d){
   const useHarm=d.useHarm;
   const forceIfs=!useHarm&&dayIdx<=3;
   const useWideBand=dayIdx<7;
+  const hasEns=d.ensLoaded??false;
   const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
-  const useWind=useHarm?d.harmWindMax!=null:(forceIfs||inRange(d.hresWindMax, useWideBand?d.windP10:d.windP25, useWideBand?d.windP90:d.windP75));
+  const useWind=useHarm?d.harmWindMax!=null:(forceIfs||!hasEns||inRange(d.hresWindMax, useWideBand?d.windP10:d.windP25, useWideBand?d.windP90:d.windP75));
   const windVal=useHarm?(d.harmWindMax??d.windP50):(useWind?d.hresWindMax:d.windP50);
   const windDir=d.hresWindDir??d.windDir;
   const bronLabel=useHarm?'HARMONIE':(forceIfs?'IFS':'IFS/ENS P50');
@@ -1702,9 +1743,10 @@ async function renderTempDayPopup(d){
   const useHarm=d.useHarm;
   const forceIfs=!useHarm&&dayIdx<=3;
   const useWideBand=dayIdx<7;
+  const hasEns=d.ensLoaded??false;
   const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
-  const useTMin=useHarm?d.harmTempMin!=null:(forceIfs||inRange(d.hresTempMin, useWideBand?d.tempMinP10:d.tempMinP25, useWideBand?d.tempMinP90:d.tempMinP75));
-  const useTMax=useHarm?d.harmTempMax!=null:(forceIfs||inRange(d.hresTempMax, useWideBand?d.tempMaxP10:d.tempMaxP25, useWideBand?d.tempMaxP90:d.tempMaxP75));
+  const useTMin=useHarm?d.harmTempMin!=null:(forceIfs||!hasEns||inRange(d.hresTempMin, useWideBand?d.tempMinP10:d.tempMinP25, useWideBand?d.tempMinP90:d.tempMinP75));
+  const useTMax=useHarm?d.harmTempMax!=null:(forceIfs||!hasEns||inRange(d.hresTempMax, useWideBand?d.tempMaxP10:d.tempMaxP25, useWideBand?d.tempMaxP90:d.tempMaxP75));
   const tMin=useHarm?(d.harmTempMin??d.tempMinP50):(useTMin?d.hresTempMin:d.tempMinP50);
   const tMax=useHarm?(d.harmTempMax??d.tempMaxP50):(useTMax?d.hresTempMax:d.tempMaxP50);
   const bronLabel=useHarm?'HARMONIE':(forceIfs?'IFS':'IFS/ENS P50');
@@ -1882,7 +1924,7 @@ async function renderNeerslagDayPopup(d){
   const useHarm=d.useHarm; // dag 0-1: HARMONIE
   const forceIfs=!useHarm&&dayIdx<=3; // dag 2-3: altijd IFS
   // Gebruik dezelfde waarde als neerslag tab rij
-  const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||(d.hresPrecip!=null&&d.hresPrecip>=(useWideBand?d.precipP10:d.precipP25)&&d.hresPrecip<=(useWideBand?d.precipP90:d.precipP75)));
+  const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||!hasEns||(d.hresPrecip!=null&&(!hasEns||d.hresPrecip>=(useWideBand?d.precipP10:d.precipP25)&&d.hresPrecip<=(useWideBand?d.precipP90:d.precipP75))));
   const ifsVal=Number(useHarm?(d.harmPrecip??0):(usePrecip&&d.hresPrecip!=null?d.hresPrecip:d.precipMedian??0));
   const bronLabel=useHarm?'HARMONIE':(forceIfs?'IFS':'IFS/ENS P50');
 
@@ -2419,6 +2461,7 @@ function renderDaily(){
     const dayIdx=S.data.days.indexOf(d);
     const dayDateStr=`${parseInt(d.date.slice(8))}/${parseInt(d.date.slice(5,7))}`;
   const useWideBand=dayIdx<7;
+  const hasEns=d.ensLoaded??false;
     const nmCell=`<span style="display:flex;flex-direction:column;line-height:1.1;align-items:flex-start"><span>${nm}</span><span style="font-size:calc(10px*var(--fz));color:var(--muted);font-weight:400;margin-top:2px">${dayDateStr}</span></span>`;
     let midHtml='', rightHtml='';
 
@@ -2426,10 +2469,10 @@ function renderDaily(){
       const useHarm=d.useHarm;
       const forceIfs=!useHarm&&dayIdx<=3;
       const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
-      const useTMin  =useHarm?d.harmTempMin!=null:(forceIfs||inRange(d.hresTempMin, useWideBand?d.tempMinP10:d.tempMinP25, useWideBand?d.tempMinP90:d.tempMinP75));
-      const useTMax  =useHarm?d.harmTempMax!=null:(forceIfs||inRange(d.hresTempMax, useWideBand?d.tempMaxP10:d.tempMaxP25, useWideBand?d.tempMaxP90:d.tempMaxP75));
-      const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||inRange(d.hresPrecip, useWideBand?d.precipP10:d.precipP25, useWideBand?d.precipP90:d.precipP75));
-      const useWind  =useHarm?d.harmWindMax!=null:(forceIfs||inRange(d.hresWindMax, useWideBand?d.windP10:d.windP25, useWideBand?d.windP90:d.windP75));
+      const useTMin  =useHarm?d.harmTempMin!=null:(forceIfs||!hasEns||inRange(d.hresTempMin, useWideBand?d.tempMinP10:d.tempMinP25, useWideBand?d.tempMinP90:d.tempMinP75));
+      const useTMax  =useHarm?d.harmTempMax!=null:(forceIfs||!hasEns||inRange(d.hresTempMax, useWideBand?d.tempMaxP10:d.tempMaxP25, useWideBand?d.tempMaxP90:d.tempMaxP75));
+      const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||!hasEns||inRange(d.hresPrecip, useWideBand?d.precipP10:d.precipP25, useWideBand?d.precipP90:d.precipP75));
+      const useWind  =useHarm?d.harmWindMax!=null:(forceIfs||!hasEns||inRange(d.hresWindMax, useWideBand?d.windP10:d.windP25, useWideBand?d.windP90:d.windP75));
       const tMin  =useHarm?(d.harmTempMin??d.hresTempMin??d.tempMinP50):(useTMin?d.hresTempMin:d.tempMinP50);
       const tMax  =useHarm?(d.harmTempMax??d.hresTempMax??d.tempMaxP50):(useTMax?d.hresTempMax:d.tempMaxP50);
       const precip=Number(useHarm?(d.harmPrecip??0):(usePrecip&&d.hresPrecip!=null?d.hresPrecip:d.precipMedian??0)).toFixed(1);
@@ -2460,7 +2503,7 @@ function renderDaily(){
     }else if(dTab==='neerslag'){
       const useHarm=d.useHarm;
       const forceIfs=!useHarm&&dayIdx<=3;
-      const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||(d.hresPrecip!=null&&d.hresPrecip>=(useWideBand?d.precipP10:d.precipP25)&&d.hresPrecip<=(useWideBand?d.precipP90:d.precipP75)));
+      const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||!hasEns||(d.hresPrecip!=null&&(!hasEns||d.hresPrecip>=(useWideBand?d.precipP10:d.precipP25)&&d.hresPrecip<=(useWideBand?d.precipP90:d.precipP75))));
       const precipVal=useHarm?(d.harmPrecip??0):(usePrecip?d.hresPrecip:d.precipMedian??0);
       const s=usePrecip?'':'<sup style="font-size:calc(9px*var(--fz));opacity:.55">~</sup>';
       const scale=Math.max(10, ...S.data.days.map(day=>day.precipP90??0));
@@ -2549,6 +2592,7 @@ function renderDaily(){
       const useHarm=d.useHarm;
       const forceIfs=!useHarm&&dayIdx<=3;
   const useWideBand=dayIdx<7;
+  const hasEns=d.ensLoaded??false;
       const useWind=useHarm?d.harmWindMax!=null:(forceIfs||(d.hresWindMax!=null&&d.windP10!=null&&d.windP90!=null&&d.hresWindMax>=d.windP10&&d.hresWindMax<=d.windP90));
       const windVal=useHarm?(d.harmWindMax??d.hresWindMax??d.windP50):(useWind?d.hresWindMax:d.windP50);
       const windDir=d.hresWindDir??d.windDir;
@@ -2622,9 +2666,28 @@ function renderDaily(){
   document.getElementById('dailyList').innerHTML = first7Html + toggleRow + extSection;
 }
 
+async function loadEnsFullData(){
+  if(S._ensFullLoaded) return;
+  const base=S._ensBase||`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+  const url=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&models=ecmwf_ifs025&forecast_days=14`;
+  try{
+    const r=await fetch(url);
+    if(!r.ok) return;
+    S._eJ=await r.json();
+    S._ensFullLoaded=true;
+    S.data=processAll(S._oJ,S._hJ,S._eJ,S._sJ,S._ifsJ,null);
+    if(reapplyAgroStation()){ render(); renderHourly(); }
+    renderDaily();
+    updateDailyTitle();
+  }catch(e){ console.warn('ENS volledig laden mislukt:',e.message); }
+}
+
 function toggleExtDays(){
   S._extDaysOpen=!S._extDaysOpen;
   renderDaily();
+  if(S._extDaysOpen && !S._ensFullLoaded){
+    loadEnsFullData().catch(e=>console.warn(e));
+  }
 }
 
 function renderSpread(){
