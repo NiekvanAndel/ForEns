@@ -455,7 +455,7 @@ async function run(){
   if(PREFS.agroExact){ applyAgroStation(S._utcOffset).catch(e=>console.warn('AgroExact:',e.message)); }
 
   // ── Stap 2: ENS dagelijks + Sun + IFS dagelijks parallel op achtergrond ──
-  const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&hourly=relativehumidity_2m,weathercode,temperature_2m&models=ecmwf_ifs025&forecast_days=16`;
+  const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&hourly=relativehumidity_2m,weathercode&models=ecmwf_ifs025&forecast_days=16`;
   const sunUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,winddirection_10m&forecast_days=16`;
   const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=16`;
   try{
@@ -636,38 +636,8 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
   futureHours.forEach(h=>{
     h.pChance=null;
     h.precipP10=null; h.precipP25=null; h.precipP50=null; h.precipP75=null; h.precipP90=null;
-    h.tempP10=null; h.tempP50=null; h.tempP90=null;
   });
 
-  // ── ENS uurlijkse temperatuurspreiding P10/P50/P90 ──
-  if(eht.length){
-    // Verzamel alle temperature_2m member-kolommen uit ENS hourly
-    const pctile=(arr,p)=>{
-      const s=[...arr].sort((a,b)=>a-b);
-      const idx=(p/100)*(s.length-1);
-      const lo=Math.floor(idx),hi=Math.ceil(idx);
-      return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(idx-lo);
-    };
-    const ehTempMembers=Object.keys(eh).filter(k=>k.startsWith('temperature_2m_member')).map(k=>eh[k]);
-    if(ehTempMembers.length){
-      // Bouw een map van tijdstip → {p10,p50,p90}
-      const ensHourlyTemp={};
-      for(let i=0;i<eht.length;i++){
-        const vals=ehTempMembers.map(m=>m[i]).filter(v=>v!=null);
-        if(!vals.length) continue;
-        ensHourlyTemp[eht[i]]={
-          p10:Math.round(pctile(vals,10)),
-          p50:Math.round(pctile(vals,50)),
-          p90:Math.round(pctile(vals,90)),
-        };
-      }
-      // Voeg p10/p50/p90 toe aan futureHours entries
-      futureHours.forEach(h=>{
-        const ep=ensHourlyTemp[h.time];
-        if(ep){h.tempP10=ep.p10;h.tempP50=ep.p50;h.tempP90=ep.p90;}
-      });
-    }
-  }
 
   // ── ENS dagelijkse aggregatie ──
   const today=nowHour.slice(0,10);
@@ -852,21 +822,46 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
     };
   });
 
-  // ── ENS dag 8-14 (indicatief, alleen ENS P10/P50/P90) ──
+  // ── ENS dag 8-14 (IFS primair, ENS P10/P50/P90 als fallback) ──
   const extDays=dayOrder.slice(7,14).map(d=>{
     const o=dayMap[d];
     if(!o) return null;
-    return{date:d,
-      precipP10:r1(pct(o.ps,10)),precipP50:r1(pct(o.ps,50)),precipP90:r1(pct(o.ps,90)),
-      tempMaxP10:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),10)),
-      tempMaxP50:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),50)),
-      tempMaxP90:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),90)),
-      tempMinP10:Math.round(pct(o.taMin.filter(v=>v!==Infinity),10)),
-      tempMinP50:Math.round(pct(o.taMin.filter(v=>v!==Infinity),50)),
-      tempMinP90:Math.round(pct(o.taMin.filter(v=>v!==Infinity),90)),
-      windP50:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),50)),
-      wmo:o.wmos.length?o.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,o.wmos[0]):0,
-      sunHours:sunByDay[d]!=null?r1(sunByDay[d]/3600):null,
+    const ifs=hresDays[d]||{};
+    const ensTMaxP10=Math.round(pct(o.taMax.filter(v=>v!==-Infinity),10));
+    const ensTMaxP50=Math.round(pct(o.taMax.filter(v=>v!==-Infinity),50));
+    const ensTMaxP90=Math.round(pct(o.taMax.filter(v=>v!==-Infinity),90));
+    const ensTMinP10=Math.round(pct(o.taMin.filter(v=>v!==Infinity),10));
+    const ensTMinP50=Math.round(pct(o.taMin.filter(v=>v!==Infinity),50));
+    const ensTMinP90=Math.round(pct(o.taMin.filter(v=>v!==Infinity),90));
+    const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
+    const useTMax=ifs.hresTempMax!=null&&inRange(ifs.hresTempMax,ensTMaxP10,ensTMaxP90);
+    const useTMin=ifs.hresTempMin!=null&&inRange(ifs.hresTempMin,ensTMinP10,ensTMinP90);
+    const tMax=useTMax?ifs.hresTempMax:ensTMaxP50;
+    const tMin=useTMin?ifs.hresTempMin:ensTMinP50;
+    const ensWindP10=Math.round(pct(o.waMax.filter(v=>v!==-Infinity),10));
+    const ensWindP50=Math.round(pct(o.waMax.filter(v=>v!==-Infinity),50));
+    const ensWindP90=Math.round(pct(o.waMax.filter(v=>v!==-Infinity),90));
+    const useWind=ifs.hresWindMax!=null&&inRange(ifs.hresWindMax,ensWindP10,ensWindP90);
+    const windVal=useWind?ifs.hresWindMax:ensWindP50;
+    const ensPrecipP10=r1(pct(o.ps,10));
+    const ensPrecipP50=r1(pct(o.ps,50));
+    const ensPrecipP90=r1(pct(o.ps,90));
+    const usePrec=ifs.hresPrecip!=null&&inRange(ifs.hresPrecip,ensPrecipP10,ensPrecipP90);
+    const precipVal=usePrec?ifs.hresPrecip:ensPrecipP50;
+    const wmo=ifs.hresWmo??o.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,o.wmos[0]??0);
+    const sunHours=sunByDay[d]!=null?r1(sunByDay[d]/3600):null;
+    const et0=et0ByDay[d]!=null?r1(et0ByDay[d]):null;
+    const windDir=ifs.hresWindDir??windDirByDay[d]??null;
+    return{date:d, wmo,
+      precipP10:ensPrecipP10, precipP50:ensPrecipP50, precipP90:ensPrecipP90, precipVal,
+      tempMaxP10:ensTMaxP10, tempMaxP50:ensTMaxP50, tempMaxP90:ensTMaxP90,
+      tempMinP10:ensTMinP10, tempMinP50:ensTMinP50, tempMinP90:ensTMinP90,
+      tMax, tMin, useTMax, useTMin,
+      windP10:ensWindP10, windP50:ensWindP50, windP90:ensWindP90, windVal, windDir,
+      humidityP10:o.ha.length?Math.round(pct(o.ha,10)):null,
+      humidityMedian:o.ha.length?Math.round(pct(o.ha,50)):null,
+      humidityP90:o.ha.length?Math.round(pct(o.ha,90)):null,
+      sunHours, et0,
     };
   }).filter(Boolean);
 
@@ -1120,11 +1115,6 @@ function renderHD(){
         <div class="val-cell-val">${h.humidity??'—'}<span class="val-cell-unit"> %</span></div>
       </div>`;
 
-  const ensSpreadField=(isFuture&&h.tempP10!=null&&h.tempP90!=null)?`
-      <div class="${cellClass}">
-        <div class="val-cell-label">ENS spreiding</div>
-        <div class="val-cell-val" style="font-size:calc(12px*var(--fz))">${convTempVal(h.tempP10)}°<span class="val-cell-unit"> – </span>${convTempVal(h.tempP90)}°</div>
-      </div>`:'';
 
   const extraFields=isFuture?`
       <div class="${cellClass}">
@@ -1142,7 +1132,7 @@ function renderHD(){
       <div class="${cellClass}">
         <div class="val-cell-label">${t('evap')}</div>
         <div class="val-cell-val">${h.et0h??'—'}<span class="val-cell-unit"> mm</span></div>
-      </div>${ensSpreadField}`:'';
+      </div>`:'';
 
   el.innerHTML=`
     <div class="detail-label">${srcLabel}</div>
@@ -1161,10 +1151,6 @@ function renderMeteogram(){
   const labels=hours.map(h=>h.time.slice(11,16));
   const temps=hours.map(h=>convTempVal(h.temp));
   const precips=hours.map(h=>h.precip??0);
-  const hasEnsTemp=hours.some(h=>h.tempP10!=null);
-  const tempsP10=hasEnsTemp?hours.map(h=>h.tempP10!=null?convTempVal(h.tempP10):null):null;
-  const tempsP90=hasEnsTemp?hours.map(h=>h.tempP90!=null?convTempVal(h.tempP90):null):null;
-
   // Windpijlen rij
   document.getElementById('meteoWind').innerHTML=hours.map(h=>
     `<span style="flex:1;text-align:center;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0">
@@ -1192,34 +1178,6 @@ function renderMeteogram(){
           yAxisID:'yPrecip',
           order:3,
         },
-        ...(hasEnsTemp?[
-          {
-            type:'line',
-            label:'ENS P10',
-            data:tempsP10,
-            borderColor:'transparent',
-            backgroundColor:dark?'rgba(148,163,250,.18)':'rgba(99,102,241,.13)',
-            borderWidth:0,
-            pointRadius:0,
-            tension:.35,
-            yAxisID:'yTemp',
-            fill:'+1',
-            order:4,
-          },
-          {
-            type:'line',
-            label:'ENS P90',
-            data:tempsP90,
-            borderColor:'transparent',
-            backgroundColor:'transparent',
-            borderWidth:0,
-            pointRadius:0,
-            tension:.35,
-            yAxisID:'yTemp',
-            fill:false,
-            order:4,
-          },
-        ]:[]),
         {
           type:'line',
           label:'Temperatuur (°C)',
@@ -1240,7 +1198,6 @@ function renderMeteogram(){
       plugins:{
         legend:{display:false},
         tooltip:{callbacks:{label:c=>{
-          if(c.dataset.label==='ENS P10'||c.dataset.label==='ENS P90') return null;
           return c.dataset.label+': '+c.raw+(c.dataset.yAxisID==='yTemp'?'°':' mm');
         }}}
       },
@@ -1851,6 +1808,31 @@ async function renderTempDayPopup(d){
   const dagHours=[...obsHours,...forecastHours];
   const bronUurLabel=useHarm?(dayIdx===0?'OBS + HARMONIE-AROME':'HARMONIE-AROME'):'IFS';
 
+  // Lazy ENS uurlijkse P10/P50/P90 temperatuur (alleen niet-verleden uren)
+  const ensTempCacheKey=_dagCacheKey(d.date,'ensHourTemp');
+  if(!_dagUurCache[ensTempCacheKey]&&dayIdx<14){
+    const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+    try{
+      const ensDays=Math.min(dayIdx+2,16);
+      const r=await fetch(`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&hourly=temperature_2m&models=ecmwf_ifs025&forecast_days=${ensDays}`);
+      if(r.ok){
+        const j=await r.json();
+        const et=j.hourly?.time||[];
+        const members=Object.keys(j.hourly||{}).filter(k=>k.startsWith('temperature_2m_member')).map(k=>j.hourly[k]);
+        if(members.length){
+          const pctile=(arr,p)=>{const s=[...arr].sort((a,b)=>a-b);const idx=(p/100)*(s.length-1);const lo=Math.floor(idx),hi=Math.ceil(idx);return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(idx-lo);};
+          const map={};
+          et.forEach((t,i)=>{
+            const vals=members.map(m=>m[i]).filter(v=>v!=null);
+            if(vals.length) map[t]={p10:Math.round(pctile(vals,10)),p50:Math.round(pctile(vals,50)),p90:Math.round(pctile(vals,90))};
+          });
+          _dagUurCache[ensTempCacheKey]=map;
+        }
+      }
+    }catch(e){console.warn('ENS uur temp mislukt:',e.message);}
+  }
+  const ensHourTempMap=_dagUurCache[ensTempCacheKey]||{};
+
   let uurHtml='';
   if(dagHours.length){
     uurHtml=`<div style="border-top:1px solid var(--border)">
@@ -1859,6 +1841,7 @@ async function renderTempDayPopup(d){
         const hhmm=h.time.slice(11,16);
         const isd=isHourDay(h.time,S.lat);
         const temp=h.temp??null;
+        const ens=!h.isPast?ensHourTempMap[h.time]:null;
         return`<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto;align-items:center;padding:9px 18px;${i<dagHours.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
           <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${hhmm}</span>
           <span></span>
@@ -1866,6 +1849,7 @@ async function renderTempDayPopup(d){
           <span></span>
           <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:${h.isPast?'var(--muted)':'var(--amber)'}">
             ${temp!=null?fmtTempShort(temp):'—'}${h.isPast?'<span style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted)"> '+t('measurement')+'</span>':''}
+            ${ens?`<span style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-left:6px">${fmtTempShort(ens.p10)}–${fmtTempShort(ens.p90)}</span>`:''}
           </span>
         </div>`;
       }).join('')}
@@ -2615,37 +2599,138 @@ function renderDaily(){
     </div>`;
   }).join('');
 
-  // ── Dag 8-14 sectie (alleen bij tab 'overzicht') ──
-  if(dTab==='overzicht' && S.data.extDays && S.data.extDays.length){
+  // ── Dag 8-14 sectie (alle tabs) ──
+  if(S.data.extDays && S.data.extDays.length){
     const DAYS2=tDays();
     const ext=S.data.extDays;
+    const s='<sup style="font-size:calc(9px*var(--fz));opacity:.45">~</sup>';
     const extRows=ext.map(d=>{
       const nm2=DAYS2[new Date(d.date+'T12:00:00').getDay()];
-      const s='<sup style="font-size:calc(9px*var(--fz));opacity:.45">~</sup>';
-      const midExt=`<div style="display:grid;grid-template-columns:auto 1fr 28px 1fr auto 1fr auto 1fr auto 1fr auto;align-items:center;font-family:var(--mono);font-weight:700">
+      let midExt='', rightExt='';
+      if(dTab==='overzicht'){
+        midExt=`<div style="display:grid;grid-template-columns:auto 1fr 28px 1fr auto 1fr auto 1fr auto 1fr auto;align-items:center;font-family:var(--mono);font-weight:700">
           <span style="font-size:calc(17px*var(--fz));color:var(--muted)">${nm2}</span>
           <span></span>
           <span style="font-size:calc(24px*var(--fz));line-height:1;opacity:.6">${wi(d.wmo,1,24)}</span>
           <span></span>
           <span style="font-size:calc(17px*var(--fz));display:flex;align-items:center;gap:6px">
-            <span style="color:var(--accent)">${fmtTempShort(d.tempMinP50)}${s}</span>
-            <span style="color:var(--red)">${fmtTempShort(d.tempMaxP50)}${s}</span>
+            <span style="color:var(--accent)">${fmtTempShort(d.tMin)}${s}</span>
+            <span style="color:var(--red)">${fmtTempShort(d.tMax)}${s}</span>
           </span>
           <span></span>
-          <span style="font-size:calc(15px*var(--fz));color:var(--muted)">${fmtWind(d.windP50)}${s}</span>
+          <span style="font-size:calc(15px*var(--fz));color:var(--muted)">${fmtWind(d.windVal)}${s}</span>
           <span></span>
-          <span style="font-size:calc(17px*var(--fz));color:var(--accent)">${d.precipP50}${s} mm</span>
+          <span style="font-size:calc(17px*var(--fz));color:var(--accent)">${d.precipVal}${s} mm</span>
           <span></span>
           <span style="font-size:calc(15px*var(--fz));color:var(--amber)">☀ ${d.sunHours??'—'}u</span>
         </div>`;
-      return`<div class="day-row" style="opacity:0.65;cursor:default">
+      }else if(dTab==='neerslag'){
+        const scaleMaxN=Math.max(...S.data.extDays.map(x=>x.precipP90??0),5);
+        const pos=v=>Math.max(0,Math.min(100,v/scaleMaxN*100));
+        const p10x=pos(d.precipP10),p50x=pos(d.precipP50),p90x=pos(d.precipP90),valx=pos(d.precipVal);
+        midExt=`<div style="flex:1;position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
+          <div style="position:absolute;left:${p10x}%;width:${Math.max(p90x-p10x,1)}%;height:100%;background:rgba(96,165,250,.3);border-radius:3px"></div>
+          <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.7)"></div>
+          <div style="position:absolute;left:calc(${valx}% - 2px);width:4px;height:100%;background:var(--accent);border-radius:2px"></div>
+        </div>`;
+        rightExt=`<span class="day-right-val" style="color:var(--accent)">${d.precipVal}${s} mm</span><span class="day-right-sub">${d.precipP10}–${d.precipP90} mm</span>`;
+      }else if(dTab==='temp'){
+        const allTMin=S.data.extDays.map(x=>x.tempMinP10??x.tMin);
+        const allTMax=S.data.extDays.map(x=>x.tempMaxP90??x.tMax);
+        const scaleMin=Math.min(...allTMin)-2, scaleMax=Math.max(...allTMax)+2;
+        const scaleRng=Math.max(scaleMax-scaleMin,1);
+        const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
+        const minP10x=pos(d.tempMinP10),minP50x=pos(d.tempMinP50),minP90x=pos(d.tempMinP90),tMinX=pos(d.tMin);
+        const maxP10x=pos(d.tempMaxP10),maxP50x=pos(d.tempMaxP50),maxP90x=pos(d.tempMaxP90),tMaxX=pos(d.tMax);
+        midExt=`<div class="day-mid-inner">
+          <span class="day-mid-left" style="color:var(--accent)">${fmtTempShort(d.tMin)}${s}<br><span style="font-size:calc(10px*var(--fz));color:var(--muted)">${fmtTempShort(d.tempMinP10)}–${fmtTempShort(d.tempMinP90)}</span></span>
+          <div style="flex:1;position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
+            <div style="position:absolute;left:${minP10x}%;width:${Math.max(minP90x-minP10x,1)}%;height:100%;background:rgba(96,165,250,.3);border-radius:3px"></div>
+            <div style="position:absolute;left:calc(${minP50x}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.7)"></div>
+            <div style="position:absolute;left:calc(${tMinX}% - 2px);width:4px;height:100%;background:var(--accent);border-radius:2px"></div>
+            <div style="position:absolute;left:${maxP10x}%;width:${Math.max(maxP90x-maxP10x,1)}%;height:100%;background:rgba(255,69,58,.28);border-radius:3px"></div>
+            <div style="position:absolute;left:calc(${maxP50x}% - 0.5px);width:1px;height:100%;background:rgba(248,113,113,.7)"></div>
+            <div style="position:absolute;left:calc(${tMaxX}% - 2px);width:4px;height:100%;background:var(--red);border-radius:2px"></div>
+          </div>
+        </div>`;
+        rightExt=`<span class="day-right-val" style="color:var(--red)">${fmtTempShort(d.tMax)}${s}</span><span class="day-right-sub">${fmtTempShort(d.tempMaxP10)}–${fmtTempShort(d.tempMaxP90)}</span>`;
+      }else if(dTab==='vocht'){
+        const p10=d.humidityP10??0, p50=d.humidityMedian??50, p90=d.humidityP90??100;
+        const allP10=S.data.extDays.map(x=>x.humidityP10??0);
+        const allP90=S.data.extDays.map(x=>x.humidityP90??100);
+        const scaleMin=Math.max(0,Math.min(...allP10)-5), scaleMax=Math.min(100,Math.max(...allP90)+5);
+        const scaleRng=Math.max(scaleMax-scaleMin,1);
+        const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
+        const p10x=pos(p10),p50x=pos(p50),p90x=pos(p90);
+        midExt=`<div class="day-mid-inner">
+          <span class="day-mid-left" style="color:var(--red)">${p10}%${s}<br><span style="font-size:calc(10px*var(--fz));color:var(--muted)">${p10}–${p50}%</span></span>
+          <div style="flex:1;position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
+            <div style="position:absolute;left:${p10x}%;width:${Math.max(p50x-p10x,1)}%;height:100%;background:rgba(248,113,113,.28);border-radius:3px"></div>
+            <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(248,113,113,.6)"></div>
+            <div style="position:absolute;left:${p50x}%;width:${Math.max(p90x-p50x,1)}%;height:100%;background:rgba(96,165,250,.28);border-radius:3px"></div>
+            <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.6)"></div>
+          </div>
+        </div>`;
+        rightExt=`<span class="day-right-val" style="color:var(--accent)">${p90}%${s}</span><span class="day-right-sub">${p50}–${p90}%</span>`;
+      }else if(dTab==='wind'){
+        const p10=d.windP10, p50=d.windP50, p90=d.windP90, windVal=d.windVal;
+        const allP10=S.data.extDays.map(x=>x.windP10);
+        const allP90=S.data.extDays.map(x=>x.windP90);
+        const scaleMin=Math.max(0,Math.min(...allP10)-5), scaleMax=Math.max(...allP90)+5;
+        const scaleRng=Math.max(scaleMax-scaleMin,1);
+        const pos=v=>Math.max(0,Math.min(100,(v-scaleMin)/scaleRng*100));
+        const p10x=pos(p10),p50x=pos(p50),p90x=pos(p90),valX=pos(windVal);
+        const rangeW=Math.max(p90x-p10x,1);
+        midExt=`<div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
+              <div style="position:absolute;left:${p10x}%;width:${rangeW}%;height:100%;background:rgba(128,128,128,.25);border-radius:3px"></div>
+              <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(128,128,128,.7)"></div>
+              <div style="position:absolute;left:calc(${valX}% - 2px);width:4px;height:100%;background:var(--muted);border-radius:2px"></div>
+            </div>
+            <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:4px;text-align:center">${fmtWind(p10)}–${fmtWind(p90)}</div>
+          </div>
+        </div>`;
+        rightExt=`<span style="display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0">${degToArrow(d.windDir)}<span class="day-right-val">${fmtWind(windVal)}${s}</span></span>`;
+      }else{ // zon
+        function extDaylightHours(dateStr, lat){
+          const dd=new Date(dateStr+'T12:00:00');
+          const doy=Math.floor((dd-new Date(dd.getFullYear(),0,0))/(1000*60*60*24));
+          const phi=lat*Math.PI/180;
+          const delta=0.409*Math.sin(2*Math.PI/365*doy-1.39);
+          const cosH0=-Math.tan(phi)*Math.tan(delta);
+          if(cosH0<=-1)return 24;
+          if(cosH0>=1)return 0;
+          return 2*Math.acos(cosH0)*12/Math.PI;
+        }
+        const maxSun=r1(extDaylightHours(d.date, S.lat));
+        const sh=d.sunHours??0;
+        const pct=Math.min(sh/maxSun*100,100);
+        const et0=d.et0??null;
+        const allEt0=S.data.extDays.map(x=>x.et0??0);
+        const et0Max=Math.max(...allEt0,4)+1;
+        const et0Pct=et0!=null?Math.min(et0/et0Max*100,100):0;
+        midExt=`
+          <div style="margin-bottom:6px">
+            <div class="day-bar-wrap"><div class="day-bar-fill" style="left:0;width:${pct}%;background:var(--amber)"></div></div>
+          </div>
+          <div>
+            <div class="day-bar-wrap"><div class="day-bar-fill" style="left:0;width:${et0Pct}%;background:rgba(52,199,89,.7)"></div></div>
+          </div>`;
+        rightExt=`<span class="day-right-val" style="color:var(--amber)">${sh} <span style="font-size:calc(10px*var(--fz));opacity:.6">u</span></span>
+          <span class="day-right-sub" style="color:rgba(52,199,89,.9)">${et0??'—'} mm</span>`;
+      }
+      const isOvz=dTab==='overzicht';
+      return`<div class="day-row" style="opacity:0.85;cursor:default">
+        ${isOvz?'':`<span class="day-name">${nm2}</span>`}
+        ${isOvz?'':`<span class="day-icon">${wi(d.wmo,1)}</span>`}
         <div class="day-mid">${midExt}</div>
+        ${rightExt?`<div class="day-right">${rightExt}</div>`:''}
       </div>`;
     }).join('');
     const extHtml=`<div style="margin-top:8px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
-      <div style="padding:8px 16px 6px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:calc(13px*var(--fz));font-weight:600;color:var(--muted)">Dag 8–14 (ENS indicatie)</span>
-        <span style="font-size:calc(11px*var(--fz));color:var(--muted);opacity:.7">Indicatief · nauwkeurigheid neemt af na dag 7</span>
+      <div style="padding:8px 16px 6px;background:var(--surface2)">
+        <span style="font-size:calc(13px*var(--fz));font-weight:600;color:var(--muted)">Dag 8–14</span>
       </div>
       ${extRows}
     </div>`;
