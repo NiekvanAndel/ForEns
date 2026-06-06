@@ -1851,9 +1851,10 @@ async function renderTempDayPopup(d){
     </div>`;
   }
 
-  const tempVals=dagHours.map(h=>h.temp);
-  console.log('temp dagHours:', dagHours.length, 'temp vals:', tempVals.slice(0,5), 'eerste uur:', dagHours[0]?.time);
-  const tempGrafiek=buildLineGrafiek(dagHours,h=>convTempVal(h.temp),'var(--amber)',t('temp'),tempUnit(),bronUurLabel);
+  const ensBand=Object.keys(ensHourTempMap).length
+    ? h=>{const e=ensHourTempMap[h.time];return e&&!h.isPast?{lo:convTempVal(e.p10),hi:convTempVal(e.p90)}:null;}
+    : null;
+  const tempGrafiek=buildLineGrafiek(dagHours,h=>convTempVal(h.temp),'var(--amber)',t('temp'),tempUnit(),bronUurLabel,null,ensBand);
   document.getElementById('dayPopupBody').innerHTML=dagBalk+tempGrafiek+uurHtml;
 }
 
@@ -2195,15 +2196,16 @@ function smoothPath(pts, t){
   return d;
 }
 
-function buildLineGrafiek(dagHours, getValue, kleur, label, unit, bronLabel, getGust){
+function buildLineGrafiek(dagHours, getValue, kleur, label, unit, bronLabel, getGust, getBand){
   if(!dagHours.length) return '';
   const vals=dagHours.map(getValue);
   const valid=vals.filter(v=>v!=null);
   if(!valid.length) return '';
 
-  // Schaal inclusief gusts
+  // Schaal inclusief gusts en ENS band
   const gustVals=getGust?dagHours.map(getGust).filter(v=>v!=null):[];
-  const allVals=[...valid,...gustVals];
+  const bandVals=getBand?dagHours.flatMap(h=>{const b=getBand(h);return b?[b.lo,b.hi]:[];}):[];
+  const allVals=[...valid,...gustVals,...bandVals];
   const vmin=Math.min(...allVals), vmax=Math.max(...allVals);
   const range=Math.max(vmax-vmin,1);
   const pad=range*0.15;
@@ -2250,6 +2252,14 @@ function buildLineGrafiek(dagHours, getValue, kleur, label, unit, bronLabel, get
     </div>
     <svg id="${grafId}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;aspect-ratio:${W}/${H};display:block;overflow:visible">
       ${firstFuture>0?`<rect x="0" y="0" width="${splitX}" height="${H}" fill="rgba(255,255,255,.02)"/>`:``}
+      ${(()=>{
+        if(!getBand) return '';
+        const bpts=dagHours.map((h,i)=>{const b=getBand(h);return b?{i,lo:b.lo,hi:b.hi}:null;}).filter(Boolean);
+        if(bpts.length<2) return '';
+        const top=bpts.map(p=>`${x(p.i)},${y(p.hi)}`).join('L');
+        const bot=[...bpts].reverse().map(p=>`${x(p.i)},${y(p.lo)}`).join('L');
+        return`<path d="M${top}L${bot}Z" fill="${kleur}" opacity="0.15" pointer-events="none"/>`;
+      })()}
       <path d="${pathD}" fill="none" stroke="${kleur}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
       ${gustStippen}
       ${stippen}
