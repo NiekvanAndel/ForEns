@@ -455,7 +455,7 @@ async function run(){
   if(PREFS.agroExact){ applyAgroStation(S._utcOffset).catch(e=>console.warn('AgroExact:',e.message)); }
 
   // ── Stap 2: ENS dagelijks + Sun + IFS dagelijks parallel op achtergrond ──
-  const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&hourly=relativehumidity_2m,weathercode&models=ecmwf_ifs025&forecast_days=16`;
+  const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&models=ecmwf_ifs025&forecast_days=16`;
   const sunUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,winddirection_10m&forecast_days=16`;
   const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=16`;
   try{
@@ -653,15 +653,6 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
       ha:[], wmos:[]};
     dayOrder.push(d);
   }
-  // Uurlijkse humidity + weathercode (enkelvoudig, niet per member)
-  for(let i=0;i<eht.length;i++){
-    const d=eht[i].slice(0,10);
-    if(!dayMap[d])continue;
-    const o=dayMap[d];
-    const hVal=eh.relativehumidity_2m?.[i];
-    if(hVal!=null)o.ha.push(hVal);
-    if(eh.weathercode?.[i]!=null)o.wmos.push(eh.weathercode[i]);
-  }
   // ── Sunshine per dag (seconden→uren) uit reguliere forecast ──
   const sunByDay={}, et0ByDay={}, windDirByDay={};
   if(sJ?.hourly?.time){
@@ -809,13 +800,13 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
       windP75:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),75)),
       windP50:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),50)),
       windP90:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),90)),
-      humidityMedian:o.ha.length?Math.round(pct(o.ha,50)):null,
-      humidityP10:o.ha.length?Math.round(pct(o.ha,10)):null,
-      humidityP25:o.ha.length?Math.round(pct(o.ha,25)):null,
-      humidityP75:o.ha.length?Math.round(pct(o.ha,75)):null,
-      humidityP90:o.ha.length?Math.round(pct(o.ha,90)):null,
+      humidityMedian:o.ha.length?Math.round(pct(o.ha,50)):(hresDays[d]?.hresRhMin!=null&&hresDays[d]?.hresRhMax!=null?Math.round((hresDays[d].hresRhMin+hresDays[d].hresRhMax)/2):null),
+      humidityP10:o.ha.length?Math.round(pct(o.ha,10)):(hresDays[d]?.hresRhMin??null),
+      humidityP25:o.ha.length?Math.round(pct(o.ha,25)):(hresDays[d]?.hresRhMin??null),
+      humidityP75:o.ha.length?Math.round(pct(o.ha,75)):(hresDays[d]?.hresRhMax??null),
+      humidityP90:o.ha.length?Math.round(pct(o.ha,90)):(hresDays[d]?.hresRhMax??null),
       sunHours, et0, windDir,
-      wmo:wmoMode, nMembers:PM2.length, ...(hresDays[d]||{}),
+      wmo:wmoMode??hresDays[d]?.hresWmo??0, nMembers:PM2.length, ...(hresDays[d]||{}),
       harmTempMax, harmTempMin, harmPrecip, harmWindMax, harmRhMin, harmRhMax,
       hresRhMin: hresRhByDay[d]?.min??null,
       hresRhMax: hresRhByDay[d]?.max??null,
@@ -1628,20 +1619,11 @@ async function renderWindDayPopup(d){
 }
 
 async function renderZonDayPopup(d){
-  function daylightHours(dateStr,lat){
-    const dt=new Date(dateStr+'T12:00:00');
-    const doy=Math.floor((dt-new Date(dt.getFullYear(),0,0))/(864e5));
-    const phi=lat*Math.PI/180;
-    const delta=0.409*Math.sin(2*Math.PI/365*doy-1.39);
-    const cosH0=-Math.tan(phi)*Math.tan(delta);
-    if(cosH0<=-1)return 24; if(cosH0>=1)return 0;
-    return 2*Math.acos(cosH0)*12/Math.PI;
-  }
-  const maxSun=r1(daylightHours(d.date,S.lat));
+  const maxSun=r1(_daylightHours(d.date,S.lat));
   const sh=d.sunHours??0;
   const et0=d.et0??null;
   const sunPct=Math.min(sh/maxSun*100,100);
-  const allEt0=S.data.days.map(d=>d.et0??0);
+  const allEt0=S.data.days.map(day=>day.et0??0);
   const et0Max=Math.max(...allEt0,4)+1;
   const et0Pct=et0!=null?Math.min(et0/et0Max*100,100):0;
   const dagBalk=`
@@ -2399,6 +2381,17 @@ function updateDailyTitle(){
   }
 }
 
+function _daylightHours(dateStr, lat){
+  const d=new Date(dateStr+'T12:00:00');
+  const doy=Math.floor((d-new Date(d.getFullYear(),0,0))/(1000*60*60*24));
+  const phi=lat*Math.PI/180;
+  const delta=0.409*Math.sin(2*Math.PI/365*doy-1.39);
+  const cosH0=-Math.tan(phi)*Math.tan(delta);
+  if(cosH0<=-1)return 24;
+  if(cosH0>=1)return 0;
+  return 2*Math.acos(cosH0)*12/Math.PI;
+}
+
 function renderDaily(){
   const DAYS=tDays();
   document.getElementById('dailyList').innerHTML=S.data.days.map(d=>{
@@ -2448,7 +2441,7 @@ function renderDaily(){
       const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||(d.hresPrecip!=null&&d.precipP10!=null&&d.precipP90!=null&&d.hresPrecip>=d.precipP10&&d.hresPrecip<=d.precipP90));
       const precipVal=useHarm?(d.harmPrecip??0):(usePrecip?d.hresPrecip:d.precipMedian??0);
       const s=usePrecip?'':'<sup style="font-size:calc(9px*var(--fz));opacity:.55">~</sup>';
-      const scale=Math.max(10, ...S.data.days.map(d=>d.precipP90??0));
+      const scale=Math.max(10, ...S.data.days.map(day=>day.precipP90??0));
       const p10x=Math.min(d.precipP10/scale*100,100);
       const p90x=Math.min(d.precipP90/scale*100,100);
       const p50x=Math.min(d.precipMedian/scale*100,100);
@@ -2468,8 +2461,8 @@ function renderDaily(){
       rightHtml=``;
 
     }else if(dTab==='temp'){
-      const allMinP10=S.data.days.map(d=>d.tempMinP10);
-      const allMaxP90=S.data.days.map(d=>d.tempMaxP90);
+      const allMinP10=S.data.days.map(day=>day.tempMinP10);
+      const allMaxP90=S.data.days.map(day=>day.tempMaxP90);
       const scaleMin=Math.min(...allMinP10)-2;
       const scaleMax=Math.max(...allMaxP90)+2;
       const scaleRng=Math.max(scaleMax-scaleMin,1);
@@ -2509,8 +2502,8 @@ function renderDaily(){
       const rhMin=useHarm?(d.harmRhMin??d.humidityMedian??0):(useRhMin?d.hresRhMin:d.humidityP10??0);
       const rhMax=useHarm?(d.harmRhMax??d.humidityMedian??100):(useRhMax?d.hresRhMax:d.humidityP90??100);
       const p10=d.humidityP10??0, p50=d.humidityMedian??0, p90=d.humidityP90??100;
-      const allP10=S.data.days.map(d=>d.humidityP10??0);
-      const allP90=S.data.days.map(d=>d.humidityP90??100);
+      const allP10=S.data.days.map(day=>day.humidityP10??0);
+      const allP90=S.data.days.map(day=>day.humidityP90??100);
       const scaleMin=Math.max(0,Math.min(...allP10)-5);
       const scaleMax=Math.min(100,Math.max(...allP90)+5);
       const scaleRng=Math.max(scaleMax-scaleMin,1);
@@ -2540,8 +2533,8 @@ function renderDaily(){
       const windVal=useHarm?(d.harmWindMax??d.hresWindMax??d.windP50):(useWind?d.hresWindMax:d.windP50);
       const windDir=d.hresWindDir??d.windDir;
       const p10=d.windP10, p50=d.windP50, p90=d.windP90;
-      const allP10=S.data.days.map(d=>d.windP10);
-      const allP90=S.data.days.map(d=>d.windP90);
+      const allP10=S.data.days.map(day=>day.windP10);
+      const allP90=S.data.days.map(day=>day.windP90);
       const scaleMin=Math.max(0,Math.min(...allP10)-5);
       const scaleMax=Math.max(...allP90)+5;
       const scaleRng=Math.max(scaleMax-scaleMin,1);
@@ -2562,22 +2555,11 @@ function renderDaily(){
       rightHtml=`<span style="display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0">${degToArrow(windDir)}<span class="day-right-val">${fmtWind(windVal)}${s}</span></span>`;
 
     }else{ // zon
-      function daylightHours(dateStr, lat){
-        const d=new Date(dateStr+'T12:00:00');
-        const doy=Math.floor((d-new Date(d.getFullYear(),0,0))/(1000*60*60*24));
-        const phi=lat*Math.PI/180;
-        const delta=0.409*Math.sin(2*Math.PI/365*doy-1.39);
-        const cosH0=-Math.tan(phi)*Math.tan(delta);
-        if(cosH0<=-1)return 24;
-        if(cosH0>=1)return 0;
-        return 2*Math.acos(cosH0)*12/Math.PI;
-      }
-      const maxSun=r1(daylightHours(d.date, S.lat));
+      const maxSun=r1(_daylightHours(d.date, S.lat));
       const sh=d.sunHours??0;
       const pct=Math.min(sh/maxSun*100,100);
       const et0=d.et0??null;
-      // ET0 balk: schaal 0–8 mm/dag (typisch bereik NL)
-      const allEt0=S.data.days.map(d=>d.et0??0);
+      const allEt0=S.data.days.map(day=>day.et0??0);
       const et0Max=Math.max(...allEt0,4)+1;
       const et0Pct=et0!=null?Math.min(et0/et0Max*100,100):0;
       midHtml=`
@@ -2693,17 +2675,7 @@ function renderDaily(){
         </div>`;
         rightExt=`<span style="display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0">${degToArrow(d.windDir)}<span class="day-right-val">${fmtWind(windVal)}${s}</span></span>`;
       }else{ // zon
-        function extDaylightHours(dateStr, lat){
-          const dd=new Date(dateStr+'T12:00:00');
-          const doy=Math.floor((dd-new Date(dd.getFullYear(),0,0))/(1000*60*60*24));
-          const phi=lat*Math.PI/180;
-          const delta=0.409*Math.sin(2*Math.PI/365*doy-1.39);
-          const cosH0=-Math.tan(phi)*Math.tan(delta);
-          if(cosH0<=-1)return 24;
-          if(cosH0>=1)return 0;
-          return 2*Math.acos(cosH0)*12/Math.PI;
-        }
-        const maxSun=r1(extDaylightHours(d.date, S.lat));
+        const maxSun=r1(_daylightHours(d.date, S.lat));
         const sh=d.sunHours??0;
         const pct=Math.min(sh/maxSun*100,100);
         const et0=d.et0??null;
