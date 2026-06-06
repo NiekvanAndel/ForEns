@@ -285,7 +285,7 @@ let S={lat:51.6978,lon:5.3037,city:"'s-Hertogenbosch",hi:0,tab:'neerslag',chart:
 
 function pct(arr,p){
   const s=arr.filter(v=>v!=null&&!isNaN(v)).sort((a,b)=>a-b);
-  if(!s.length)return 0;
+  if(!s.length)return null;
   const i=(p/100)*(s.length-1),lo=Math.floor(i),hi=Math.ceil(i);
   return s[lo]+(s[hi]-s[lo])*(i-lo);
 }
@@ -2512,14 +2512,14 @@ function renderDaily(){
       const p50x=Math.min(d.precipMedian/scale*100,100);
       const rangeW=Math.max(p90x-p10x,1);
       midHtml=`<div style="display:flex;align-items:center;gap:8px">
-          <span style="color:var(--accent);font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;flex-shrink:0;width:40px;text-align:right;align-self:center">${d.pChance}%</span>
+          <span style="color:var(--accent);font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;flex-shrink:0;width:40px;text-align:right;align-self:center">${hasEns?d.pChance+'%':'—'}</span>
           <div style="flex:1;min-width:0">
             <div style="position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
               <div style="position:absolute;left:${p10x}%;width:${rangeW}%;height:100%;background:rgba(96,165,250,.25);border-radius:3px"></div>
               <div style="position:absolute;left:calc(${p50x}% - 0.5px);top:0;width:1px;height:6px;background:rgba(96,165,250,.7)"></div>
               <div style="position:absolute;left:calc(${Math.min(precipVal/scale*100,100)}% - 2px);top:0;width:4px;height:6px;background:var(--accent);border-radius:2px"></div>
             </div>
-            <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:4px;display:flex;justify-content:center;width:100%">${(d.precipP10===0&&d.precipP90===0)?'0 mm':`${d.precipP10} mm – ${d.precipP90} mm`}</div>
+            <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:4px;display:flex;justify-content:center;width:100%">${hasEns?((d.precipP10===0&&d.precipP90===0)?'0 mm':`${d.precipP10} mm – ${d.precipP90} mm`):'—'}</div>
           </div>
           <span style="color:var(--accent);font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;flex-shrink:0;width:60px;text-align:right;white-space:nowrap;align-self:center">${precipVal.toFixed(1)}${s} <span style="font-size:calc(13px*var(--fz));opacity:.7">mm</span></span>
         </div>`;
@@ -2536,14 +2536,15 @@ function renderDaily(){
       const maxP10x=pos(d.tempMaxP10),maxP50x=pos(d.tempMaxP50),maxP90x=pos(d.tempMaxP90);
       const useHarm=d.useHarm;
       const forceIfs=!useHarm&&dayIdx<=3;
-      const useTMin=useHarm?d.harmTempMin!=null:(forceIfs||(d.hresTempMin!=null&&d.tempMinP10!=null&&d.tempMinP90!=null&&d.hresTempMin>=d.tempMinP10&&d.hresTempMin<=d.tempMinP90));
-      const useTMax=useHarm?d.harmTempMax!=null:(forceIfs||(d.hresTempMax!=null&&d.tempMaxP10!=null&&d.tempMaxP90!=null&&d.hresTempMax>=d.tempMaxP10&&d.hresTempMax<=d.tempMaxP90));
+      const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
+      const useTMin=useHarm?d.harmTempMin!=null:(forceIfs||!hasEns||inRange(d.hresTempMin, useWideBand?d.tempMinP10:d.tempMinP25, useWideBand?d.tempMinP90:d.tempMinP75));
+      const useTMax=useHarm?d.harmTempMax!=null:(forceIfs||!hasEns||inRange(d.hresTempMax, useWideBand?d.tempMaxP10:d.tempMaxP25, useWideBand?d.tempMaxP90:d.tempMaxP75));
       const tMin=useHarm?(d.harmTempMin??d.hresTempMin??d.tempMinP50):(useTMin?d.hresTempMin:d.tempMinP50);
       const tMax=useHarm?(d.harmTempMax??d.hresTempMax??d.tempMaxP50):(useTMax?d.hresTempMax:d.tempMaxP50);
       const tMinX=pos(tMin), tMaxX=pos(tMax);
       const s='<sup style="font-size:calc(9px*var(--fz));opacity:.55">~</sup>';
       midHtml=`<div class="day-mid-inner">
-          <span class="day-mid-left" style="color:var(--accent)">${fmtTempShort(tMin)}${!useTMin?s:''}<br><span style="font-size:calc(10px*var(--fz));color:var(--muted)">${fmtTempShort(d.tempMinP10)}–${fmtTempShort(d.tempMinP90)}</span></span>
+          <span class="day-mid-left" style="color:var(--accent)">${fmtTempShort(tMin)}${!useTMin?s:''}<br><span style="font-size:calc(10px*var(--fz));color:var(--muted)">${hasEns?fmtTempShort(d.tempMinP10)+'–'+fmtTempShort(d.tempMinP90):'—'}</span></span>
           <div style="flex:1;position:relative;height:6px;background:rgba(128,128,128,.13);border-radius:3px">
             <div style="position:absolute;left:${minP10x}%;width:${Math.max(minP90x-minP10x,1)}%;height:100%;background:rgba(96,165,250,.3);border-radius:3px"></div>
             <div style="position:absolute;left:calc(${minP50x}% - 0.5px);width:1px;height:100%;background:rgba(96,165,250,.7)"></div>
@@ -2554,7 +2555,7 @@ function renderDaily(){
           </div>
         </div>`;
       rightHtml=`<span class="day-right-val" style="color:var(--red)">${fmtTempShort(tMax)}${!useTMax?s:''}</span>
-        <span class="day-right-sub">${fmtTempShort(d.tempMaxP10)}–${fmtTempShort(d.tempMaxP90)}</span>`;
+        <span class="day-right-sub">${hasEns?fmtTempShort(d.tempMaxP10)+'–'+fmtTempShort(d.tempMaxP90):'—'}</span>`;
 
     }else if(dTab==='vocht'){
       const useHarm=d.useHarm;          // dag 0-1: HARMONIE
@@ -2591,9 +2592,10 @@ function renderDaily(){
     }else if(dTab==='wind'){
       const useHarm=d.useHarm;
       const forceIfs=!useHarm&&dayIdx<=3;
+      const inRange=(val,lo,hi)=>val!=null&&lo!=null&&hi!=null&&val>=lo&&val<=hi;
   const useWideBand=dayIdx<7;
   const hasEns=d.ensLoaded??false;
-      const useWind=useHarm?d.harmWindMax!=null:(forceIfs||(d.hresWindMax!=null&&d.windP10!=null&&d.windP90!=null&&d.hresWindMax>=d.windP10&&d.hresWindMax<=d.windP90));
+      const useWind=useHarm?d.harmWindMax!=null:(forceIfs||!hasEns||inRange(d.hresWindMax, useWideBand?d.windP10:d.windP25, useWideBand?d.windP90:d.windP75));
       const windVal=useHarm?(d.harmWindMax??d.hresWindMax??d.windP50):(useWind?d.hresWindMax:d.windP50);
       const windDir=d.hresWindDir??d.windDir;
       const p10=d.windP10, p50=d.windP50, p90=d.windP90;
@@ -2613,7 +2615,7 @@ function renderDaily(){
               <div style="position:absolute;left:calc(${p50x}% - 0.5px);width:1px;height:100%;background:rgba(128,128,128,.7)"></div>
               <div style="position:absolute;left:calc(${valX}% - 2px);width:4px;height:100%;background:var(--muted);border-radius:2px"></div>
             </div>
-            <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:4px;text-align:center">${fmtWind(p10)}–${fmtWind(p90)}</div>
+            <div style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted);margin-top:4px;text-align:center">${hasEns?fmtWind(p10)+'–'+fmtWind(p90):'—'}</div>
           </div>
         </div>`;
       rightHtml=`<span style="display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0">${degToArrow(windDir)}<span class="day-right-val">${fmtWind(windVal)}${s}</span></span>`;
