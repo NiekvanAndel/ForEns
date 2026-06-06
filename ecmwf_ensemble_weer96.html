@@ -100,6 +100,7 @@ body{
   <div id="favsStrip" style="display:none;padding:6px 12px 8px 12px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:4px"></div>
 
   <div id="heroBlock" style="display:none">
+    <div id="harmonieBanner" style="display:none;margin-bottom:8px;padding:8px 14px;border-radius:10px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);font-family:var(--mono);font-size:calc(11px*var(--fz));color:rgba(251,191,36,.8);letter-spacing:.04em"></div>
     <div class="card" style="margin-bottom:12px">
       <!-- Rij 0: locatie + tijd -->
       <div style="padding:14px 16px 6px">
@@ -424,9 +425,24 @@ async function run(){
 
   const oR=await safeFetch(obsUrl,'Obs');
   if(!oR.ok)throw new Error(`Obs ${oR.status}`);
-  const hR=await safeFetch(harmUrl,'HARMONIE');
-  if(!hR.ok)throw new Error(`HARMONIE ${hR.status}`);
-  const [oJ,hJ]=await Promise.all([oR.json(),hR.json()]);
+
+  let hJ=null;
+  S.harmFailed=false;
+  S.harmDisabled=!PREFS.useHarmonie;
+  if(PREFS.useHarmonie){
+    try{
+      const hR=await safeFetch(harmUrl,'HARMONIE');
+      if(!hR.ok){S.harmFailed=true;}
+      else{
+        const hData=await hR.json();
+        // Detecteer of HARMONIE data beschikbaar is voor deze locatie
+        const temps=hData?.hourly?.temperature_2m||[];
+        if(temps.length>0&&temps.every(v=>v===null)){S.harmFailed=true;}
+        else{hJ=hData;}
+      }
+    }catch(e){S.harmFailed=true;console.warn('HARMONIE niet beschikbaar:',e.message);}
+  }
+  const oJ=await oR.json();
 
   S._utcOffset=oJ.utc_offset_seconds??0;
   S.data=processAll(oJ,hJ,null,null,null,null);
@@ -439,9 +455,9 @@ async function run(){
   if(PREFS.agroExact){ applyAgroStation(S._utcOffset).catch(e=>console.warn('AgroExact:',e.message)); }
 
   // ── Stap 2: ENS dagelijks + Sun + IFS dagelijks parallel op achtergrond ──
-  const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&hourly=relativehumidity_2m,weathercode&models=ecmwf_ifs025&forecast_days=7`;
-  const sunUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,winddirection_10m&forecast_days=7`;
-  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=7`;
+  const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&hourly=relativehumidity_2m,weathercode,temperature_2m&models=ecmwf_ifs025&forecast_days=16`;
+  const sunUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,winddirection_10m&forecast_days=16`;
+  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=16`;
   try{
     const [eR,sR,iR]=await Promise.all([safeFetch(ensUrl,'ENS'),safeFetch(sunUrl,'Sun'),safeFetch(hresUrl,'IFS')]);
     const eJ=eR?.ok?await eR.json():null;
@@ -463,9 +479,10 @@ async function run(){
 async function loadVochtIfNeeded(){
   if(S._vochtLoaded) return;
   const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
-  // HARMONIE uurlijks: temp + dauwpunt voor dag 0-1
+  // HARMONIE uurlijks: temp + dauwpunt voor dag 0-1 (alleen als HARMONIE beschikbaar is)
   const harmVochtUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=temperature_2m,dewpoint_2m&forecast_days=2&models=knmi_harmonie_arome_europe`;
   // IFS uurlijks: temp + dauwpunt voor dag 2-3 (al in ihJ als geladen, anders fetch)
+  if(PREFS.useHarmonie&&!S.harmFailed){
   try{
     const r=await fetch(harmVochtUrl);
     if(!r.ok) return;
@@ -491,6 +508,7 @@ async function loadVochtIfNeeded(){
     });
     S._vochtLoaded=true;
   }catch(e){console.warn('HARMONIE vocht laden mislukt:',e.message);}
+  } // end if PREFS.useHarmonie && !S.harmFailed
 
   // IFS uurlijks voor dag 2-3: gebruik hresRhByDay als ihJ al geladen
   // Anders: haal IFS uurlijks op
@@ -531,7 +549,7 @@ async function loadIfsIfNeeded(){
     try{ const r=await fetch(url); return r; }
     catch(e){ console.warn(name+' mislukt:',e.message); return null; }
   };
-  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=7`;
+  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=16`;
   try{
     const iR=await safeFetch(hresUrl,'IFS');
     const iJ=iR?.ok?await iR.json():null;
@@ -618,7 +636,38 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
   futureHours.forEach(h=>{
     h.pChance=null;
     h.precipP10=null; h.precipP25=null; h.precipP50=null; h.precipP75=null; h.precipP90=null;
+    h.tempP10=null; h.tempP50=null; h.tempP90=null;
   });
+
+  // ── ENS uurlijkse temperatuurspreiding P10/P50/P90 ──
+  if(eht.length){
+    // Verzamel alle temperature_2m member-kolommen uit ENS hourly
+    const pctile=(arr,p)=>{
+      const s=[...arr].sort((a,b)=>a-b);
+      const idx=(p/100)*(s.length-1);
+      const lo=Math.floor(idx),hi=Math.ceil(idx);
+      return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(idx-lo);
+    };
+    const ehTempMembers=Object.keys(eh).filter(k=>k.startsWith('temperature_2m_member')).map(k=>eh[k]);
+    if(ehTempMembers.length){
+      // Bouw een map van tijdstip → {p10,p50,p90}
+      const ensHourlyTemp={};
+      for(let i=0;i<eht.length;i++){
+        const vals=ehTempMembers.map(m=>m[i]).filter(v=>v!=null);
+        if(!vals.length) continue;
+        ensHourlyTemp[eht[i]]={
+          p10:Math.round(pctile(vals,10)),
+          p50:Math.round(pctile(vals,50)),
+          p90:Math.round(pctile(vals,90)),
+        };
+      }
+      // Voeg p10/p50/p90 toe aan futureHours entries
+      futureHours.forEach(h=>{
+        const ep=ensHourlyTemp[h.time];
+        if(ep){h.tempP10=ep.p10;h.tempP50=ep.p50;h.tempP90=ep.p90;}
+      });
+    }
+  }
 
   // ── ENS dagelijkse aggregatie ──
   const today=nowHour.slice(0,10);
@@ -757,7 +806,8 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
   const days=dayOrder.slice(0,7).map((d,dayIdx)=>{
     const o=dayMap[d];
     const harm=harmDays[d]||{};
-    const useHarm=dayIdx<=1; // vandaag + morgen: HARMONIE
+    const harmAvailable=hJ!=null&&PREFS.useHarmonie&&!S.harmFailed;
+    const useHarm=dayIdx<=1&&harmAvailable; // vandaag + morgen: HARMONIE (als beschikbaar)
     const wmoMode=o.wmos.length?o.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,o.wmos[0]):(harm.wmos?.length?harm.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,harm.wmos[0]):0);
     const sunHours=sunByDay[d]!=null ? r1(sunByDay[d]/3600) : null;
     const et0=et0ByDay[d]!=null ? r1(et0ByDay[d]) : null;
@@ -802,12 +852,31 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
     };
   });
 
+  // ── ENS dag 8-14 (indicatief, alleen ENS P10/P50/P90) ──
+  const extDays=dayOrder.slice(7,14).map(d=>{
+    const o=dayMap[d];
+    if(!o) return null;
+    return{date:d,
+      precipP10:r1(pct(o.ps,10)),precipP50:r1(pct(o.ps,50)),precipP90:r1(pct(o.ps,90)),
+      tempMaxP10:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),10)),
+      tempMaxP50:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),50)),
+      tempMaxP90:Math.round(pct(o.taMax.filter(v=>v!==-Infinity),90)),
+      tempMinP10:Math.round(pct(o.taMin.filter(v=>v!==Infinity),10)),
+      tempMinP50:Math.round(pct(o.taMin.filter(v=>v!==Infinity),50)),
+      tempMinP90:Math.round(pct(o.taMin.filter(v=>v!==Infinity),90)),
+      windP50:Math.round(pct(o.waMax.filter(v=>v!==-Infinity),50)),
+      wmo:o.wmos.length?o.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,o.wmos[0]):0,
+      sunHours:sunByDay[d]!=null?r1(sunByDay[d]/3600):null,
+    };
+  }).filter(Boolean);
+
   const curH = futureHours[0] || pastHours[pastHours.length-1];
   return{
     pastHours, futureHours,
     allHours: [...pastHours, ...futureHours],
     nowHour,
     days,
+    extDays,
     currentTemp: curH?.temp ?? 0,
     currentWmo: curH?.wmo ?? 0,
     nMembers: PM2.length,
@@ -819,6 +888,18 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
 function render(){
   const d=S.data;
   S.hi = d.pastHours.length;
+
+  // HARMONIE banner
+  const banner=document.getElementById('harmonieBanner');
+  if(banner){
+    const L=LANG[PREFS.lang]||LANG.nl;
+    if(PREFS.useHarmonie&&S.harmFailed){
+      banner.style.display='';
+      banner.textContent=L.harmonieFallback||'HARMONIE niet beschikbaar voor deze locatie — IFS gebruikt';
+    } else {
+      banner.style.display='none';
+    }
+  }
 
   // Locatie + tijd
   document.getElementById('cityName').textContent=S.city;
@@ -1039,6 +1120,12 @@ function renderHD(){
         <div class="val-cell-val">${h.humidity??'—'}<span class="val-cell-unit"> %</span></div>
       </div>`;
 
+  const ensSpreadField=(isFuture&&h.tempP10!=null&&h.tempP90!=null)?`
+      <div class="${cellClass}">
+        <div class="val-cell-label">ENS spreiding</div>
+        <div class="val-cell-val" style="font-size:calc(12px*var(--fz))">${convTempVal(h.tempP10)}°<span class="val-cell-unit"> – </span>${convTempVal(h.tempP90)}°</div>
+      </div>`:'';
+
   const extraFields=isFuture?`
       <div class="${cellClass}">
         <div class="val-cell-label">${t('feelsLike')}</div>
@@ -1055,7 +1142,7 @@ function renderHD(){
       <div class="${cellClass}">
         <div class="val-cell-label">${t('evap')}</div>
         <div class="val-cell-val">${h.et0h??'—'}<span class="val-cell-unit"> mm</span></div>
-      </div>`:'';
+      </div>${ensSpreadField}`:'';
 
   el.innerHTML=`
     <div class="detail-label">${srcLabel}</div>
@@ -1074,6 +1161,9 @@ function renderMeteogram(){
   const labels=hours.map(h=>h.time.slice(11,16));
   const temps=hours.map(h=>convTempVal(h.temp));
   const precips=hours.map(h=>h.precip??0);
+  const hasEnsTemp=hours.some(h=>h.tempP10!=null);
+  const tempsP10=hasEnsTemp?hours.map(h=>h.tempP10!=null?convTempVal(h.tempP10):null):null;
+  const tempsP90=hasEnsTemp?hours.map(h=>h.tempP90!=null?convTempVal(h.tempP90):null):null;
 
   // Windpijlen rij
   document.getElementById('meteoWind').innerHTML=hours.map(h=>
@@ -1100,8 +1190,36 @@ function renderMeteogram(){
           backgroundColor:'rgba(96,165,250,.5)',
           borderColor:'transparent',
           yAxisID:'yPrecip',
-          order:2,
+          order:3,
         },
+        ...(hasEnsTemp?[
+          {
+            type:'line',
+            label:'ENS P10',
+            data:tempsP10,
+            borderColor:'transparent',
+            backgroundColor:dark?'rgba(148,163,250,.18)':'rgba(99,102,241,.13)',
+            borderWidth:0,
+            pointRadius:0,
+            tension:.35,
+            yAxisID:'yTemp',
+            fill:'+1',
+            order:4,
+          },
+          {
+            type:'line',
+            label:'ENS P90',
+            data:tempsP90,
+            borderColor:'transparent',
+            backgroundColor:'transparent',
+            borderWidth:0,
+            pointRadius:0,
+            tension:.35,
+            yAxisID:'yTemp',
+            fill:false,
+            order:4,
+          },
+        ]:[]),
         {
           type:'line',
           label:'Temperatuur (°C)',
@@ -1121,7 +1239,10 @@ function renderMeteogram(){
       interaction:{mode:'index',intersect:false},
       plugins:{
         legend:{display:false},
-        tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.raw+(c.dataset.yAxisID==='yTemp'?'°':' mm')}}
+        tooltip:{callbacks:{label:c=>{
+          if(c.dataset.label==='ENS P10'||c.dataset.label==='ENS P90') return null;
+          return c.dataset.label+': '+c.raw+(c.dataset.yAxisID==='yTemp'?'°':' mm');
+        }}}
       },
       scales:{
         x:{
@@ -2493,6 +2614,43 @@ function renderDaily(){
       ${rightHtml?`<div class="day-right">${rightHtml}</div>`:''}
     </div>`;
   }).join('');
+
+  // ── Dag 8-14 sectie (alleen bij tab 'overzicht') ──
+  if(dTab==='overzicht' && S.data.extDays && S.data.extDays.length){
+    const DAYS2=tDays();
+    const ext=S.data.extDays;
+    const extRows=ext.map(d=>{
+      const nm2=DAYS2[new Date(d.date+'T12:00:00').getDay()];
+      const s='<sup style="font-size:calc(9px*var(--fz));opacity:.45">~</sup>';
+      const midExt=`<div style="display:grid;grid-template-columns:auto 1fr 28px 1fr auto 1fr auto 1fr auto 1fr auto;align-items:center;font-family:var(--mono);font-weight:700">
+          <span style="font-size:calc(17px*var(--fz));color:var(--muted)">${nm2}</span>
+          <span></span>
+          <span style="font-size:calc(24px*var(--fz));line-height:1;opacity:.6">${wi(d.wmo,1,24)}</span>
+          <span></span>
+          <span style="font-size:calc(17px*var(--fz));display:flex;align-items:center;gap:6px">
+            <span style="color:var(--accent)">${fmtTempShort(d.tempMinP50)}${s}</span>
+            <span style="color:var(--red)">${fmtTempShort(d.tempMaxP50)}${s}</span>
+          </span>
+          <span></span>
+          <span style="font-size:calc(15px*var(--fz));color:var(--muted)">${fmtWind(d.windP50)}${s}</span>
+          <span></span>
+          <span style="font-size:calc(17px*var(--fz));color:var(--accent)">${d.precipP50}${s} mm</span>
+          <span></span>
+          <span style="font-size:calc(15px*var(--fz));color:var(--amber)">☀ ${d.sunHours??'—'}u</span>
+        </div>`;
+      return`<div class="day-row" style="opacity:0.65;cursor:default">
+        <div class="day-mid">${midExt}</div>
+      </div>`;
+    }).join('');
+    const extHtml=`<div style="margin-top:8px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
+      <div style="padding:8px 16px 6px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:calc(13px*var(--fz));font-weight:600;color:var(--muted)">Dag 8–14 (ENS indicatie)</span>
+        <span style="font-size:calc(11px*var(--fz));color:var(--muted);opacity:.7">Indicatief · nauwkeurigheid neemt af na dag 7</span>
+      </div>
+      ${extRows}
+    </div>`;
+    document.getElementById('dailyList').innerHTML += extHtml;
+  }
 }
 
 function renderSpread(){
@@ -2540,7 +2698,7 @@ showLoad();
    INSTELLINGEN – initialisatie vóór run() zodat prefs geladen zijn
    ══════════════════════════════════════════════════════════════════ */
 const PREF_KEY='weer_prefs_v2';
-let PREFS={lang:'nl',tempUnit:'C',windUnit:'kmh',presUnit:'hPa',theme:'dark',fontSize:'md',favs:[],agroExact:false,agroToken:'',agroBase:''};
+let PREFS={lang:'nl',tempUnit:'C',windUnit:'kmh',presUnit:'hPa',theme:'dark',fontSize:'md',favs:[],agroExact:false,agroToken:'',agroBase:'',useHarmonie:true};
 function loadPrefs(){try{const p=JSON.parse(localStorage.getItem(PREF_KEY));if(p)PREFS={...PREFS,...p};}catch{}}
 function savePrefs(){localStorage.setItem(PREF_KEY,JSON.stringify(PREFS));}
 loadPrefs();
@@ -2560,6 +2718,7 @@ const LANG={
       relHumidity:'Rel. vochtigheid',feelsLike:'Gevoelstemperatuur',dewpoint:'Dauwpunt',gusts:'Windstoten',evap:'Verdamping ET₀',
       measurement:'meting',sunHours:'Zonuren',windspeed:'Windsnelheid',windGust:'Windstoot',
       agroTitle:'AgroExact stationdata',agroConnect:'Verbinden met AgroExact',agroDisconnect:'AgroExact loskoppelen',agroTokenPlaceholder:'API-token (zonder "Token ")',agroHint:'Voer je AgroExact API-token in. Bij verbinden zoekt de app het dichtstbijzijnde station; binnen 10 km worden de actuele meting en de afgelopen uren van dat station gebruikt i.p.v. Open-Meteo. (Vereist dat de API CORS-verzoeken vanuit de browser toestaat.)',
+      harmonieTitle:'Modelinstellingen',harmonieLabel:'Gebruik HARMONIE-AROME',harmonieHint:'HARMONIE-AROME levert hogere resolutie voor Nederland en omgeving. Niet beschikbaar voor locaties buiten het bereik.',harmonieFallback:'HARMONIE niet beschikbaar voor deze locatie — IFS gebruikt',harmonieOn:'Aan',harmonieOff:'Uit',
       minTemp:'Min temperatuur',maxTemp:'Max temperatuur',spread:'ENS P10–P90 spreiding',
       days7:'7 dagen',members:'ECMWF ENS 51 members',perHour:'Per uur',precipPerHour:'Neerslag per uur',
       daylight:'Daglengte',sunrise:'Zonsopkomst',sunset:'Zonsondergang',
@@ -2580,6 +2739,7 @@ const LANG={
       relHumidity:'Rel. humidity',feelsLike:'Feels like',dewpoint:'Dew point',gusts:'Wind gusts',evap:'Evaporation ET₀',
       measurement:'measured',sunHours:'Sun hours',windspeed:'Wind speed',windGust:'Wind gust',
       agroTitle:'AgroExact station data',agroConnect:'Connect to AgroExact',agroDisconnect:'Disconnect AgroExact',agroTokenPlaceholder:'API token (without "Token ")',agroHint:'Enter your AgroExact API token. On connect the app finds the nearest station; within 10 km its current measurement and recent hours replace Open-Meteo. (Requires the API to allow browser CORS requests.)',
+      harmonieTitle:'Model settings',harmonieLabel:'Use HARMONIE-AROME',harmonieHint:'HARMONIE-AROME provides higher resolution for the Netherlands and surroundings. Not available for locations outside its coverage.',harmonieFallback:'HARMONIE not available for this location — using IFS',harmonieOn:'On',harmonieOff:'Off',
       minTemp:'Min temperature',maxTemp:'Max temperature',spread:'ENS P10–P90 spread',
       days7:'7 days',members:'ECMWF ENS 51 members',perHour:'Per hour',precipPerHour:'Precipitation per hour',
       daylight:'Daylight',sunrise:'Sunrise',sunset:'Sunset',
@@ -2600,6 +2760,7 @@ const LANG={
       relHumidity:'Rel. Feuchtigkeit',feelsLike:'Gefühlt',dewpoint:'Taupunkt',gusts:'Windböen',evap:'Verdunstung ET₀',
       measurement:'Messung',sunHours:'Sonnenstunden',windspeed:'Windgeschw.',windGust:'Windböe',
       agroTitle:'AgroExact Stationsdaten',agroConnect:'Mit AgroExact verbinden',agroDisconnect:'AgroExact trennen',agroTokenPlaceholder:'API-Token (ohne "Token ")',agroHint:'Geben Sie Ihren AgroExact API-Token ein. Beim Verbinden wird die nächste Station gesucht; innerhalb 10 km ersetzen deren aktuelle Messung und letzte Stunden Open-Meteo. (Die API muss Browser-CORS erlauben.)',
+      harmonieTitle:'Modelleinstellungen',harmonieLabel:'HARMONIE-AROME verwenden',harmonieHint:'HARMONIE-AROME liefert höhere Auflösung für die Niederlande und Umgebung. Außerhalb des Gebiets nicht verfügbar.',harmonieFallback:'HARMONIE für diesen Ort nicht verfügbar — IFS wird verwendet',harmonieOn:'An',harmonieOff:'Aus',
       minTemp:'Min. Temperatur',maxTemp:'Max. Temperatur',spread:'ENS P10–P90 Streuung',
       days7:'7 Tage',members:'ECMWF ENS 51 Member',perHour:'Pro Stunde',precipPerHour:'Niederschlag pro Stunde',
       daylight:'Tageslänge',sunrise:'Sonnenaufgang',sunset:'Sonnenuntergang',
@@ -2620,6 +2781,7 @@ const LANG={
       relHumidity:'Humidité rel.',feelsLike:'Ressenti',dewpoint:'Point de rosée',gusts:'Rafales',evap:'Évaporation ET₀',
       measurement:'mesure',sunHours:"Heures d'ensoleillement",windspeed:'Vitesse du vent',windGust:'Rafale',
       agroTitle:'Données station AgroExact',agroConnect:'Connecter AgroExact',agroDisconnect:'Déconnecter AgroExact',agroTokenPlaceholder:'Jeton API (sans "Token ")',agroHint:'Entrez votre jeton API AgroExact. À la connexion, la station la plus proche est trouvée ; dans un rayon de 10 km, sa mesure actuelle et ses dernières heures remplacent Open-Meteo. (L API doit autoriser le CORS navigateur.)',
+      harmonieTitle:'Paramètres modèle',harmonieLabel:'Utiliser HARMONIE-AROME',harmonieHint:"HARMONIE-AROME offre une résolution plus fine pour les Pays-Bas et environs. Non disponible en dehors de la zone de couverture.",harmonieFallback:'HARMONIE non disponible pour ce lieu — IFS utilisé',harmonieOn:'Activé',harmonieOff:'Désactivé',
       minTemp:'Température min',maxTemp:'Température max',spread:'Dispersion ENS P10–P90',
       days7:'7 jours',members:'ECMWF ENS 51 membres',perHour:'Par heure',precipPerHour:'Précipitations par heure',
       daylight:'Durée du jour',sunrise:'Lever du soleil',sunset:'Coucher du soleil',
@@ -2640,6 +2802,7 @@ const LANG={
       relHumidity:'Humedad rel.',feelsLike:'Sensación',dewpoint:'Punto de rocío',gusts:'Ráfagas',evap:'Evaporación ET₀',
       measurement:'medición',sunHours:'Horas de sol',windspeed:'Velocidad del viento',windGust:'Ráfaga',
       agroTitle:'Datos de estación AgroExact',agroConnect:'Conectar con AgroExact',agroDisconnect:'Desconectar AgroExact',agroTokenPlaceholder:'Token API (sin "Token ")',agroHint:'Introduce tu token API de AgroExact. Al conectar se busca la estación más cercana; dentro de 10 km su medición actual y últimas horas reemplazan Open-Meteo. (La API debe permitir CORS desde el navegador.)',
+      harmonieTitle:'Configuración del modelo',harmonieLabel:'Usar HARMONIE-AROME',harmonieHint:'HARMONIE-AROME ofrece mayor resolución para los Países Bajos y alrededores. No disponible fuera de su área de cobertura.',harmonieFallback:'HARMONIE no disponible para esta ubicación — usando IFS',harmonieOn:'Activado',harmonieOff:'Desactivado',
       minTemp:'Temperatura mín',maxTemp:'Temperatura máx',spread:'Dispersión ENS P10–P90',
       days7:'7 días',members:'ECMWF ENS 51 miembros',perHour:'Por hora',precipPerHour:'Precipitación por hora',
       daylight:'Horas de luz',sunrise:'Amanecer',sunset:'Atardecer',
