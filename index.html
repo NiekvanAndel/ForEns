@@ -1072,7 +1072,7 @@ function renderHD(){
   const cellClass=isFuture?'val-cell future':'val-cell';
   const srcLabel=h.isPast
     ?`Meting · ${h.time.slice(11,16)}`
-    :`${S._dagDetailBron||'HARMONIE-AROME'} · ${h.time.slice(11,16)} · ${wd(h.wmo)}`;
+    :`${(S.harmDisabled||S.harmFailed)?'IFS':'HARMONIE-AROME'} · ${h.time.slice(11,16)} · ${wd(h.wmo)}`;
 
   const baseFields=`
       <div class="${cellClass}">
@@ -2662,7 +2662,7 @@ function renderRisk(){
   document.getElementById('riskGrid').innerHTML=[
     {title:'Max. neerslagkans (24u)',val:maxChance+'%',sub:`piek om ${peakChanceHour}`,color:'var(--accent)'},
     {title:'Kans op piekbui ≥ 10 mm',val:maxP10mm+'%',sub:`hoogste uur om ${peakHour}`,color:maxP10mm>=20?'var(--red)':'var(--amber)'},
-    {title:'Verwachte neerslag (P50)',val:totalP50+' mm',sub:'HARMONIE mediaan · 24u',color:'var(--green)'},
+    {title:'Verwachte neerslag (P50)',val:totalP50+' mm',sub:`${(S.harmDisabled||S.harmFailed)?'IFS':'HARMONIE'} mediaan · 24u`,color:'var(--green)'},
     {title:'Dagspanning (P10–P90)',val:spread+' mm',sub:`${d0?.precipP10??0}–${d0?.precipP90??0} mm vandaag`,color:'#a78bfa'},  ].map(r=>`<div class="risk-card"><div class="risk-card-title">${r.title}</div><div class="risk-card-val" style="color:${r.color}">${r.val}</div><div class="risk-card-sub">${r.sub}</div></div>`).join('');
 }
 
