@@ -131,6 +131,18 @@ body{
     </div>
   </div>
 
+  <!-- Uurstrip inline blok (tussen hero en 7-daagse) -->
+  <div id="hourlyStripBlock" class="card" style="display:none;margin-bottom:12px">
+    <div class="card-title" onclick="openHourlyPopup()" style="cursor:pointer;user-select:none">
+      <i class="ti ti-clock-hour-3"></i>
+      <span id="hourlyStripBlockTitle">Korte termijn uur voor uur</span>
+      <span style="margin-left:auto;font-size:calc(11px*var(--fz));color:var(--accent);font-weight:400;letter-spacing:0">Details ›</span>
+    </div>
+    <div class="hourly-outer">
+      <div class="hourly-scroll" id="hourlyStripInline"></div>
+    </div>
+  </div>
+
   <div id="mainContent" style="display:none">
 
     <div class="card">
@@ -295,6 +307,7 @@ function showLoad(){
   document.getElementById('loadingBlock').style.display='';
   document.getElementById('mainContent').style.display='none';
   document.getElementById('heroBlock').style.display='none';
+  document.getElementById('hourlyStripBlock').style.display='none';
   document.getElementById('errBlock').style.display='none';
 }
 function showErr(m){
@@ -918,6 +931,26 @@ function renderHourly(){
   });
 
   document.getElementById('hourlyStrip').innerHTML=html;
+
+  // Inline uurstrip blok (klik opent popup bij dat uur)
+  const inlineStrip=document.getElementById('hourlyStripInline');
+  const inlineBlock=document.getElementById('hourlyStripBlock');
+  if(inlineStrip&&inlineBlock){
+    inlineBlock.style.display='';
+    // Zelfde HTML maar onclick opent popup i.p.v. selHour
+    inlineStrip.innerHTML=html.replace(/onclick="selHour\((\d+)\)"/g,'onclick="openHourlyPopup($1)"');
+    // Scroll naar huidig uur
+    requestAnimationFrame(()=>{
+      const outer=inlineStrip.closest('.hourly-outer');
+      if(!outer)return;
+      const items=inlineStrip.querySelectorAll('.hour-item');
+      const nowItem=items[firstFutureIdx>=0?firstFutureIdx:0];
+      if(nowItem){
+        const target=nowItem.offsetLeft - outer.clientWidth*0.35;
+        outer.scrollLeft=Math.max(0,target);
+      }
+    });
+  }
 
   // Scroll so the first future hour is ~35% from left
   requestAnimationFrame(()=>{
@@ -2825,6 +2858,7 @@ function applyLanguage(){
   });
   // Statische teksten
   set('hourlyPopupTitle', t('shortTermDetail'));
+  set('hourlyStripBlockTitle', t('shortTermDetail'));
   set('viewMoreBtn', t('viewMore'));
   set('loadingText', t('loading'));
   set('searchCancelBtn', t('cancel'));
