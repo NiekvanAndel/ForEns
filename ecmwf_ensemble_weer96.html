@@ -428,8 +428,8 @@ async function run(){
   if(!hR.ok)throw new Error(`HARMONIE ${hR.status}`);
   const [oJ,hJ]=await Promise.all([oR.json(),hR.json()]);
 
-  S.data=processAll(oJ,hJ,null,null,null,null);
   S._utcOffset=oJ.utc_offset_seconds??0;
+  S.data=processAll(oJ,hJ,null,null,null,null);
   document.getElementById('loadingBlock').style.display='none';
   document.getElementById('heroBlock').style.display='';
   document.getElementById('mainContent').style.display='';
