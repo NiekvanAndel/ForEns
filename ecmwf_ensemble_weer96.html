@@ -1618,17 +1618,47 @@ async function renderWindDayPopup(d){
     forecastHoursW=_dagUurCache[cacheKey]||[];
   }
   const dagHoursW=[...obsHoursW,...forecastHoursW];
+
+  // Lazy ENS uurlijkse wind P10/P90
+  const ensWindCacheKey=_dagCacheKey(d.date,'ensHourWind');
+  if(!_dagUurCache[ensWindCacheKey]&&dayIdx<14){
+    const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+    try{
+      const r=await fetch(`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&hourly=windspeed_10m&models=ecmwf_ifs025&forecast_days=${Math.min(dayIdx+2,16)}`);
+      if(r.ok){
+        const j=await r.json();
+        const et=j.hourly?.time||[];
+        const members=Object.keys(j.hourly||{}).filter(k=>k.startsWith('windspeed_10m_member')).map(k=>j.hourly[k]);
+        if(members.length){
+          const pctile=(arr,p)=>{const s=[...arr].sort((a,b)=>a-b);const idx=(p/100)*(s.length-1);const lo=Math.floor(idx),hi=Math.ceil(idx);return lo===hi?s[lo]:s[lo]+(s[hi]-s[lo])*(idx-lo);};
+          const map={};
+          et.forEach((t,i)=>{
+            const vals=members.map(m=>m[i]).filter(v=>v!=null);
+            if(vals.length) map[t]={p10:Math.round(pctile(vals,10)),p50:Math.round(pctile(vals,50)),p90:Math.round(pctile(vals,90))};
+          });
+          _dagUurCache[ensWindCacheKey]=map;
+        }
+      }
+    }catch(e){console.warn('ENS uur wind mislukt:',e.message);}
+  }
+  const ensWindHourMap=_dagUurCache[ensWindCacheKey]||{};
+
   const uurHtml=dagHoursW.length?`<div style="border-top:1px solid var(--border)">
     <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px 4px">${t('perHour')} · ${useHarm?(dayIdx===0?'OBS + HARMONIE-AROME':'HARMONIE-AROME'):'IFS'}</div>
-    ${dagHoursW.map((h,i)=>`<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto 1fr auto;align-items:center;padding:9px 18px;${i<dagHoursW.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
+    ${dagHoursW.map((h,i)=>{
+      const ens=!h.isPast?ensWindHourMap[h.time]:null;
+      return`<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto 1fr auto;align-items:center;padding:9px 18px;${i<dagHoursW.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
       <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${h.time.slice(11,16)}</span>
       <span></span><span style="font-size:calc(20px*var(--fz))">${wi(h.wmo??0,isHourDay(h.time,S.lat),20)}</span><span></span>
-      <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:var(--muted);display:flex;align-items:center;gap:4px">${degToArrow(h.windDir??null)}<span>${fmtWind(h.wind)}</span></span>
+      <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:var(--muted);display:flex;align-items:center;gap:4px">${degToArrow(h.windDir??null)}<span>${fmtWind(h.wind)}</span>${ens?`<span style="font-size:calc(11px*var(--fz));color:var(--muted);opacity:.7;margin-left:4px">${fmtWind(ens.p10)}–${fmtWind(ens.p90)}</span>`:''}</span>
       <span></span>
       <span style="font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--muted)">${h.gusts!=null?fmtWind(h.gusts)+'↑':'—'}${h.isPast?'<span style="font-size:calc(11px*var(--fz));color:var(--muted)"> '+t('measurement')+'</span>':''}</span>
-    </div>`).join('')}
+    </div>`;}).join('')}
   </div>`:'';
-  const windGrafiek=buildLineGrafiek(dagHoursW,h=>convWindVal(h.wind),'var(--muted)',t('windspeed'),windUnit(),useHarm?(dayIdx===0?'OBS + HARMONIE-AROME':'HARMONIE-AROME'):'IFS',h=>h.gusts!=null?convWindVal(h.gusts):null);
+  const ensWindBand=Object.keys(ensWindHourMap).length
+    ? h=>{const e=ensWindHourMap[h.time];return e&&!h.isPast?{lo:convWindVal(e.p10),hi:convWindVal(e.p90)}:null;}
+    : null;
+  const windGrafiek=buildLineGrafiek(dagHoursW,h=>convWindVal(h.wind),'var(--muted)',t('windspeed'),windUnit(),useHarm?(dayIdx===0?'OBS + HARMONIE-AROME':'HARMONIE-AROME'):'IFS',h=>h.gusts!=null?convWindVal(h.gusts):null,ensWindBand);
   document.getElementById('dayPopupBody').innerHTML=dagBalk+windGrafiek+uurHtml;
 }
 
