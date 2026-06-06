@@ -454,23 +454,36 @@ async function run(){
   // ── AgroExact stationdata toepassen (indien ingeschakeld) ──
   if(PREFS.agroExact){ applyAgroStation(S._utcOffset).catch(e=>console.warn('AgroExact:',e.message)); }
 
-  // ── Stap 2: ENS dagelijks + Sun + IFS dagelijks parallel op achtergrond ──
+  // ── Stap 2a: IFS dagelijks + Sun parallel (snel) → toon 7-daagse direct ──
   const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&models=ecmwf_ifs025&forecast_days=16`;
   const sunUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,winddirection_10m&forecast_days=16`;
   const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=16`;
+  // Start ENS alvast (traag) maar wacht er niet op voor eerste render
+  const ensPromise=safeFetch(ensUrl,'ENS');
   try{
-    const [eR,sR,iR]=await Promise.all([safeFetch(ensUrl,'ENS'),safeFetch(sunUrl,'Sun'),safeFetch(hresUrl,'IFS')]);
-    const eJ=eR?.ok?await eR.json():null;
+    const [sR,iR]=await Promise.all([safeFetch(sunUrl,'Sun'),safeFetch(hresUrl,'IFS')]);
     const sJ=sR?.ok?await sR.json():null;
     const iJ=iR?.ok?await iR.json():null;
-    S._oJ=oJ;S._hJ=hJ;S._eJ=eJ;S._sJ=sJ;S._ifsJ=iJ;
+    S._oJ=oJ;S._hJ=hJ;S._sJ=sJ;S._ifsJ=iJ;
     if(iJ) S._ifsLoaded=true;
-    S.data=processAll(oJ,hJ,eJ,sJ,iJ,null);
+    S.data=processAll(oJ,hJ,null,sJ,iJ,null);
     if(reapplyAgroStation()){ render(); renderHourly(); }
     renderDaily();
     updateDailyTitle();
     updateAgroSettingsUI();
-  }catch(e){console.warn('Achtergrond laden mislukt:',e.message);}
+  }catch(e){console.warn('IFS/Sun laden mislukt:',e.message);}
+
+  // ── Stap 2b: ENS (traag, ensemble API) → update met spreiding zodra klaar ──
+  try{
+    const eR=await ensPromise;
+    const eJ=eR?.ok?await eR.json():null;
+    S._eJ=eJ;
+    S.data=processAll(oJ,hJ,eJ,S._sJ,S._ifsJ,null);
+    if(reapplyAgroStation()){ render(); renderHourly(); }
+    renderDaily();
+    updateDailyTitle();
+    updateAgroSettingsUI();
+  }catch(e){console.warn('ENS laden mislukt:',e.message);}
 
   // ── IFS uurlijks: alleen bij klikken neerslag popup ──
   S._oJ=S._oJ||oJ; S._hJ=S._hJ||hJ;
