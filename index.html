@@ -420,7 +420,7 @@ function pickLocation(lat,lon,name){
 
 async function run(){
   const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
-  const vars='temperature_2m,precipitation,windspeed_10m,winddirection_10m,weathercode,relativehumidity_2m,cloudcover,dewpoint_2m,apparent_temperature,surface_pressure,et0_fao_evapotranspiration,windgusts_10m';
+  const vars='temperature_2m,precipitation,windspeed_10m,winddirection_10m,weathercode,relativehumidity_2m,cloudcover,dewpoint_2m,apparent_temperature,surface_pressure,et0_fao_evapotranspiration,windgusts_10m,sunshine_duration,direct_normal_irradiance';
 
   const safeFetch=async(url,name,retries=2)=>{
     for(let i=0;i<=retries;i++){
@@ -453,37 +453,52 @@ async function run(){
 
   // ── Stap 1: OBS + HARMONIE (klein/snel) → toon hero direct ──
   const obsUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars}&current_weather=true&past_days=1&forecast_days=1`;
-  const harmUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars}&current_weather=true&forecast_days=2&models=knmi_harmonie_arome_europe`;
-  // Als HARMONIE uit is: standaard IFS uurlijks als vervanger (parallel opgehaald)
-  const ifsHourUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars}&current_weather=true&forecast_days=3`;
+  const harmUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars}&current_weather=true&forecast_days=2&models=knmi_harmonie_arome_netherlands`;
+  const harmUrlEurope=`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars}&current_weather=true&forecast_days=2&models=knmi_harmonie_arome_europe`;
+  // Als HARMONIE uit is of faalt: ECMWF IFS uurlijks als vervanger
+  const ifsHourUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars}&current_weather=true&forecast_days=3&models=ecmwf_ifs`;
 
+  // obs + HARMONIE-NL meteen parallel starten (niet wachten op obs)
   const oRPromise=safeFetch(obsUrl,'Obs');
-  // Start IFS-uur-fetch meteen parallel als HARMONIE uitstaat
-  const ifsHourPromise=(!PREFS.useHarmonie)?safeFetch(ifsHourUrl,'IFS-uur'):null;
 
-  const oR=await oRPromise;
-  if(!oR.ok)throw new Error(`Obs ${oR.status}`);
+  // Retry-loze fetch voor HARMONIE: bij geen output direct doorschakelen
+  const fastHarm=async(url,modelName)=>{
+    try{
+      const r=await fetch(url);
+      if(!r.ok) return null;
+      const hData=await r.json();
+      if(hData?.error) return null;
+      const temps=hData?.hourly?.temperature_2m||[];
+      if(temps.length>0&&temps.every(v=>v===null)) return null;
+      return hData;
+    }catch(e){console.warn('HARMONIE '+modelName+' niet beschikbaar:',e.message);return null;}
+  };
 
   let hJ=null;
   S.harmFailed=false;
   S.harmDisabled=!PREFS.useHarmonie;
+  S.harmModel='netherlands';
+  // Start HARMONIE-NL parallel aan obs
+  const harmNlPromise=PREFS.useHarmonie?fastHarm(harmUrl,'netherlands'):Promise.resolve(null);
+
+  const oR=await oRPromise;
+  if(!oR.ok)throw new Error(`Obs ${oR.status}`);
+
   if(PREFS.useHarmonie){
+    hJ=await harmNlPromise;
+    if(hJ){S.harmModel='netherlands';}
+    else{
+      // NL geen output → direct EU (zonder retry)
+      hJ=await fastHarm(harmUrlEurope,'europe');
+      if(hJ){S.harmModel='europe';console.info('HARMONIE: netherlands niet beschikbaar, europe gebruikt');}
+      else{S.harmFailed=true;S.harmModel=null;}
+    }
+  }
+  // Geen Harmonie-output → IFS uurlijks als vervanger
+  if(!hJ){
     try{
-      const hR=await safeFetch(harmUrl,'HARMONIE');
-      if(!hR.ok){S.harmFailed=true;}
-      else{
-        const hData=await hR.json();
-        // Detecteer of HARMONIE data beschikbaar is voor deze locatie
-        const temps=hData?.hourly?.temperature_2m||[];
-        if(temps.length>0&&temps.every(v=>v===null)){S.harmFailed=true;}
-        else{hJ=hData;}
-      }
-    }catch(e){S.harmFailed=true;console.warn('HARMONIE niet beschikbaar:',e.message);}
-  } else {
-    // HARMONIE uit: gebruik IFS uurlijks als hJ-vervanger
-    try{
-      const ifsHR=await ifsHourPromise;
-      if(ifsHR?.ok) hJ=await ifsHR.json();
+      const ifsR=await fetch(ifsHourUrl);
+      if(ifsR.ok){ const ifsJ=await ifsR.json(); if(!ifsJ?.error) hJ=ifsJ; }
     }catch(e){console.warn('IFS-uur fallback mislukt:',e.message);}
   }
   const oJ=await oR.json();
@@ -501,14 +516,15 @@ async function run(){
   // ── Stap 2a: IFS dagelijks + Sun parallel (snel) → toon 7-daagse direct ──
   const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?${base}&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max&models=ecmwf_ifs025&forecast_days=7`;
   S._ensFullLoaded=false; S._ensBase=base; // sla base op voor uitbreiding later
-  const sunUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,winddirection_10m&forecast_days=16`;
-  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=16`;
+  // Fase 2a: 1 call naar /v1/ecmwf met alle daily-velden incl. zon+ET0 (eerste 7 dagen)
+  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min,sunshine_duration,et0_fao_evapotranspiration&forecast_days=7`;
   // Start ENS alvast (traag) maar wacht er niet op voor eerste render
   const ensPromise=safeFetch(ensUrl,'ENS');
   try{
-    const [sR,iR]=await Promise.all([safeFetch(sunUrl,'Sun'),safeFetch(hresUrl,'IFS')]);
-    const sJ=sR?.ok?await sR.json():null;
-    const iJ=iR?.ok?await iR.json():null;
+    const iR=await safeFetch(hresUrl,'IFS');
+    let iJ=null;
+    if(iR?.ok){ try{iJ=await iR.json();}catch(e){console.warn('IFS parse mislukt:',e.message);} }
+    const sJ=iJ; // zon/ET0 zitten in iJ.daily
     S._oJ=oJ;S._hJ=hJ;S._sJ=sJ;S._ifsJ=iJ;
     if(iJ) S._ifsLoaded=true;
     S.data=processAll(oJ,hJ,null,sJ,iJ,null);
@@ -516,7 +532,7 @@ async function run(){
     renderDaily();
     updateDailyTitle();
     updateAgroSettingsUI();
-  }catch(e){console.warn('IFS/Sun laden mislukt:',e.message);}
+  }catch(e){console.warn('IFS/Sun verwerking mislukt:',e.message);}
 
   // ── Stap 2b: ENS (traag, ensemble API) → update met spreiding zodra klaar ──
   try{
@@ -538,7 +554,8 @@ async function loadVochtIfNeeded(){
   if(S._vochtLoaded) return;
   const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
   // HARMONIE uurlijks: temp + dauwpunt voor dag 0-1 (alleen als HARMONIE beschikbaar is)
-  const harmVochtUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=temperature_2m,dewpoint_2m&forecast_days=2&models=knmi_harmonie_arome_europe`;
+  const harmVochtModel=S.harmModel||'netherlands';
+  const harmVochtUrl=`https://api.open-meteo.com/v1/forecast?${base}&hourly=temperature_2m,dewpoint_2m&forecast_days=2&models=knmi_harmonie_arome_${harmVochtModel}`;
   // IFS uurlijks: temp + dauwpunt voor dag 2-3 (al in ihJ als geladen, anders fetch)
   if(PREFS.useHarmonie&&!S.harmFailed){
   try{
@@ -601,18 +618,20 @@ async function loadVochtIfNeeded(){
 
 async function loadIfsIfNeeded(){
   if(S._ifsLoaded||S._ifsLoading) return;
+  if(!S._oJ) return; // basisdata nog niet geladen; run() laadt IFS zelf
   S._ifsLoading=true;
   const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
   const safeFetch=async(url,name)=>{
     try{ const r=await fetch(url); return r; }
     catch(e){ console.warn(name+' mislukt:',e.message); return null; }
   };
-  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min&forecast_days=16`;
+  const hresUrl=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min,sunshine_duration,et0_fao_evapotranspiration&forecast_days=7`;
   try{
     const iR=await safeFetch(hresUrl,'IFS');
     const iJ=iR?.ok?await iR.json():null;
     if(iJ){
       S._ifsJ=iJ;
+      S._sJ=iJ; // zon/ET0 zitten in iJ.daily
       S.data=processAll(S._oJ,S._hJ,S._eJ,S._sJ,iJ,null);
       S._ifsLoaded=true;
       updateDailyTitle();
@@ -623,6 +642,7 @@ async function loadIfsIfNeeded(){
 }
 
 function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
+  if(!oJ){ console.warn('processAll: oJ ontbreekt, overslaan'); return S.data; }
   const iphJ=ihJ; // precipitation+weather_code zitten in ihJ
   // ── Determine "nowHour" robustly ──
   // current_weather.time is in the API's local timezone (same as timezone=auto).
@@ -671,7 +691,14 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
         humidity: hh.relativehumidity_2m?.[i]!=null ? Math.round(hh.relativehumidity_2m[i]) : null,
         wmo: hh.weathercode[i]??0,
         isDay: isHourDay(ht[i], S.lat),
-        sunMin: isHourDay(ht[i],S.lat)?Math.round((1-(hh.cloudcover?.[i]??100)/100)*60):0,
+        sunMin: (()=>{
+          const maxMin = sunMinutesInHour(ht[i], S.lat);
+          if(maxMin === 0) return 0; // nacht
+          const dni = hh.direct_normal_irradiance?.[i] ?? 0;
+          if(dni < 120) return 0; // DNI onder WMO-drempel: geen zonneschijn
+          const cc = hh.cloudcover?.[i] ?? 100;
+          return Math.round((1 - cc/100) * maxMin);
+        })(),
         windDir: hh.winddirection_10m?.[i]!=null?Math.round(hh.winddirection_10m[i]):null,
         isPast: false,
         pChance:null, p2mm:null, p10mm:null,
@@ -679,7 +706,7 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
     }
   }
 
-  // windDir en sunMin komen nu direct uit HARMONIE
+  // windDir uit HARMONIE; sunMin = cloudcover-methode met zonsopkomst/ondergang correctie + DNI > 120 W/m² check
 
   // ── ENS: dagelijkse members ──
   const ed=eJ?.daily||{}, edt=ed.time||[];
@@ -715,25 +742,15 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
     dayOrder.push(d);
   }
   // ── Sunshine per dag (seconden→uren) uit reguliere forecast ──
-  const sunByDay={}, et0ByDay={}, windDirByDay={};
-  if(sJ?.hourly?.time){
-    const st=sJ.hourly.time, sd=sJ.hourly.sunshine_duration||[], et=sJ.hourly.et0_fao_evapotranspiration||[], wd=sJ.hourly.winddirection_10m||[];
-    // Voor windrichting: vectorgemiddelde (sin/cos) om 359°→0° correct te behandelen
-    const wdSin={}, wdCos={}, wdCount={};
-    st.forEach((t,i)=>{
-      const day=t.slice(0,10);
-      sunByDay[day]=(sunByDay[day]||0)+(sd[i]||0);
-      et0ByDay[day]=(et0ByDay[day]||0)+(et[i]||0);
-      if(wd[i]!=null){
-        const rad=wd[i]*Math.PI/180;
-        wdSin[day]=(wdSin[day]||0)+Math.sin(rad);
-        wdCos[day]=(wdCos[day]||0)+Math.cos(rad);
-        wdCount[day]=(wdCount[day]||0)+1;
-      }
-    });
-    Object.keys(wdSin).forEach(day=>{
-      const deg=Math.atan2(wdSin[day]/wdCount[day], wdCos[day]/wdCount[day])*180/Math.PI;
-      windDirByDay[day]=Math.round((deg+360)%360);
+  // Zon/ET0 komen als dagwaarden uit sJ.daily (gecombineerde /v1/ecmwf call, of fallback)
+  const sunByDay={}, et0ByDay={};
+  if(sJ?.daily?.time){
+    const dt=sJ.daily.time;
+    const sd=sJ.daily.sunshine_duration||[];
+    const et=sJ.daily.et0_fao_evapotranspiration||[];
+    dt.forEach((day,i)=>{
+      if(sd[i]!=null) sunByDay[day]=sd[i];       // seconden
+      if(et[i]!=null) et0ByDay[day]=et[i];       // mm/dag
     });
   }
 
@@ -833,7 +850,7 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
     const wmoMode=o.wmos.length?o.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,o.wmos[0]):(harm.wmos?.length?harm.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,harm.wmos[0]):0);
     const sunHours=sunByDay[d]!=null ? r1(sunByDay[d]/3600) : null;
     const et0=et0ByDay[d]!=null ? r1(et0ByDay[d]) : null;
-    const windDir=windDirByDay[d]??null;
+    const windDir=hresDays[d]?.hresWindDir??null;
     // HARMONIE dag waarden
     const harmTempMax=harm.temps?.length?Math.round(Math.max(...harm.temps)):null;
     const harmTempMin=harm.temps?.length?Math.round(Math.min(...harm.temps)):null;
@@ -899,6 +916,9 @@ function render(){
     if(PREFS.useHarmonie&&S.harmFailed){
       banner.style.display='';
       banner.textContent=L.harmonieFallback||'HARMONIE niet beschikbaar voor deze locatie — IFS gebruikt';
+    } else if(PREFS.useHarmonie&&S.harmModel==='europe'){
+      banner.style.display='';
+      banner.textContent='HARMONIE Netherlands niet beschikbaar voor deze locatie — Europe (5.5 km) gebruikt';
     } else {
       banner.style.display='none';
     }
@@ -1111,7 +1131,7 @@ function renderHD(){
   const cellClass=isFuture?'val-cell future':'val-cell';
   const srcLabel=h.isPast
     ?`Meting · ${h.time.slice(11,16)}`
-    :`${(S.harmDisabled||S.harmFailed)?'IFS':'HARMONIE-AROME'} · ${h.time.slice(11,16)} · ${wd(h.wmo)}`;
+    :`${S._dagDetailBron||((S.harmDisabled||S.harmFailed)?'IFS':'HARMONIE-AROME')} · ${h.time.slice(11,16)} · ${wd(h.wmo)}`;
 
   const baseFields=`
       <div class="${cellClass}">
@@ -1310,7 +1330,7 @@ async function openDagDetailPopup(date){
   }
 
   // Vervang tijdelijk allHours + futureHours met dag data
-  S._dagDetailBron=useHarm?'HARMONIE-AROME':dayIdx<=3?'IFS':'IFS';
+  S._dagDetailBron=useHarm?(S.harmModel==='europe'?'HARMONIE-AROME EU':'HARMONIE-AROME'):'IFS';
   S.data.allHours=dagHours;
   S.data.futureHours=dagHours;
   S.hi=0;
@@ -1345,9 +1365,10 @@ async function openHourlyPopup(absIdx){
     const lat=S.lat, lon=S.lon;
     const base=`latitude=${lat}&longitude=${lon}&timezone=auto`;
     const detailVars='apparent_temperature,windgusts_10m,et0_fao_evapotranspiration,pressure_msl';
-    const vars='temperature_2m,precipitation,windspeed_10m,winddirection_10m,weathercode,relativehumidity_2m,cloudcover,dewpoint_2m,apparent_temperature,surface_pressure,et0_fao_evapotranspiration,windgusts_10m';
+    const vars='temperature_2m,precipitation,windspeed_10m,winddirection_10m,weathercode,relativehumidity_2m,cloudcover,dewpoint_2m,apparent_temperature,surface_pressure,et0_fao_evapotranspiration,windgusts_10m,sunshine_duration,direct_normal_irradiance';
     try {
-      const r=await fetch(`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars},${detailVars}&current_weather=true&forecast_days=2&models=knmi_harmonie_arome_europe`);
+      const harmDetailModel=S.harmModel||'netherlands';
+      const r=await fetch(`https://api.open-meteo.com/v1/forecast?${base}&hourly=${vars},${detailVars}&current_weather=true&forecast_days=2&models=knmi_harmonie_arome_${harmDetailModel}`);
       if(r.ok){
         const hJ=await r.json();
         // Update futureHours met detail variabelen
@@ -1460,6 +1481,11 @@ async function openDayPopup(date, tab='overzicht'){
 // Cache voor lazy uurdata per dag
 const _dagUurCache={};
 function _dagCacheKey(date,type){return date+'_'+type;}
+// True als de popup voor (date,tab) nog steeds de actieve is — voorkomt dat een
+// trage fetch van een eerder geopende popup een latere popup overschrijft.
+function _popupStillOpen(date,tab){
+  return S._openDayPopup&&S._openDayPopup.date===date&&S._openDayPopup.tab===tab;
+}
 async function renderVochtDayPopup(d){
   console.log('renderVochtDayPopup:', d?.date, 'harmRhMin:', d?.harmRhMin, 'hresRhMin:', d?.hresRhMin);
   const dayIdx=S.data.days.indexOf(d);
@@ -1553,6 +1579,7 @@ async function renderVochtDayPopup(d){
     </div>`).join('')}
   </div>`:'';
   const vochtGrafiek=buildLineGrafiek(dagHoursV,h=>h.humidity,'var(--accent)',t('tabHumidity'),'%',useHarm?'HARMONIE-AROME':'IFS');
+  if(!_popupStillOpen(d.date,'vocht')) return;
   document.getElementById('dayPopupBody').innerHTML=dagBalk+vochtGrafiek+uurHtml;
 }
 
@@ -1664,6 +1691,7 @@ async function renderWindDayPopup(d){
     ? h=>{const e=ensWindHourMap[h.time];return e&&!h.isPast?{lo:convWindVal(e.p10),hi:convWindVal(e.p90)}:null;}
     : null;
   const windGrafiek=buildLineGrafiek(dagHoursW,h=>convWindVal(h.wind),'var(--muted)',t('windspeed'),windUnit(),useHarm?(dayIdx===0?'OBS + HARMONIE-AROME':'HARMONIE-AROME'):'IFS',h=>h.gusts!=null?convWindVal(h.gusts):null,ensWindBand);
+  if(!_popupStillOpen(d.date,'wind')) return;
   document.getElementById('dayPopupBody').innerHTML=dagBalk+windGrafiek+uurHtml;
 }
 
@@ -1709,7 +1737,7 @@ async function renderZonDayPopup(d){
     if(!_dagUurCache[cacheKey]){
       const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
       try{
-        const r=await fetch(`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,weathercode&forecast_days=7`);
+        const r=await fetch(`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,weathercode&forecast_days=7&models=ecmwf_ifs`);
         if(r.ok){
           const j=await r.json();
           _dagUurCache[cacheKey]=(j.hourly?.time||[])
@@ -1735,6 +1763,7 @@ async function renderZonDayPopup(d){
       </span>
     </div>`).join('')}
   </div>`:'';
+  if(!_popupStillOpen(d.date,'zon')) return;
   document.getElementById('dayPopupBody').innerHTML=dagBalk+uurHtml;
 }
 
@@ -1893,6 +1922,7 @@ async function renderTempDayPopup(d){
     ? h=>{const e=ensHourTempMap[h.time];return e&&!h.isPast?{lo:convTempVal(e.p10),hi:convTempVal(e.p90)}:null;}
     : null;
   const tempGrafiek=buildLineGrafiek(dagHours,h=>convTempVal(h.temp),'var(--amber)',t('temp'),tempUnit(),bronUurLabel,null,ensBand);
+  if(!_popupStillOpen(d.date,'temp')) return;
   document.getElementById('dayPopupBody').innerHTML=dagBalk+tempGrafiek+uurHtml;
 }
 
@@ -1923,6 +1953,8 @@ async function renderNeerslagDayPopup(d){
   const dayIdx=S.data.days.indexOf(d);
   const useHarm=d.useHarm; // dag 0-1: HARMONIE
   const forceIfs=!useHarm&&dayIdx<=3; // dag 2-3: altijd IFS
+  const hasEns=d.ensLoaded??false;
+  const useWideBand=dayIdx<7;
   // Gebruik dezelfde waarde als neerslag tab rij
   const usePrecip=useHarm?d.harmPrecip!=null:(forceIfs||!hasEns||(d.hresPrecip!=null&&(!hasEns||d.hresPrecip>=(useWideBand?d.precipP10:d.precipP25)&&d.hresPrecip<=(useWideBand?d.precipP90:d.precipP75))));
   const ifsVal=Number(useHarm?(d.harmPrecip??0):(usePrecip&&d.hresPrecip!=null?d.hresPrecip:d.precipMedian??0));
@@ -2127,6 +2159,7 @@ async function renderNeerslagDayPopup(d){
     uurHtml=`<div style="padding:1rem 18px;font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--muted)">${t('noIfsHour')}</div>`;
   }
 
+  if(!_popupStillOpen(d.date,'neerslag')) return;
   document.getElementById('dayPopupBody').innerHTML=dagBalk+grafiekHtml+uurHtml;
 }
 
@@ -2380,6 +2413,22 @@ function closeDayPopup(){
   document.getElementById('dayOverlay').style.display='none';
   document.getElementById('dayPopup').style.display='none';
   document.body.style.overflow='';
+}
+
+// Berekent hoeveel minuten de zon boven de horizon is in een gegeven uur (0-60)
+// timeStr: lokale tijd "YYYY-MM-DDTHH:MM", lat: breedtegraad
+function sunMinutesInHour(timeStr, lat){
+  const date = timeStr.slice(0,10);
+  const localHour = parseInt(timeStr.slice(11,13));
+  const utcOffsetH = (typeof S!=='undefined'&&S._utcOffset!=null)?S._utcOffset/3600:0;
+  const utcHourStart = ((localHour - utcOffsetH) % 24 + 24) % 24;
+  const utcHourEnd = utcHourStart + 1;
+  const {rise, set} = getSunriseSunset(date, lat);
+  // Overlap van [utcHourStart, utcHourEnd] met [rise, set]
+  const overlapStart = Math.max(utcHourStart, rise);
+  const overlapEnd = Math.min(utcHourEnd, set);
+  const overlapH = Math.max(0, overlapEnd - overlapStart);
+  return Math.round(overlapH * 60); // in minuten (0-60)
 }
 
 function getSunriseSunset(dateStr, lat){
@@ -2649,9 +2698,13 @@ function renderDaily(){
   };
 
   const first7Html = S.data.days.slice(0,7).map(mapRow).join('');
-  const hasExt = S.data.days.length > 7;
+  // Dag 8+ zijn altijd via lazy-load bereikbaar (IFS 16d / ENS 14d)
+  const hasExt = true;
   const isOpen = S._extDaysOpen;
-  const ext7Html = hasExt ? S.data.days.slice(7).map(mapRow).join('') : '';
+  const extLoaded = S.data.days.length > 7;
+  const ext7Html = extLoaded
+    ? S.data.days.slice(7).map(mapRow).join('')
+    : `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:18px 16px;font-family:var(--mono);font-size:calc(12px*var(--fz));color:var(--muted)"><span class="spinner"></span> ${t('dataLoading')}</div>`;
 
   const toggleRow = hasExt ? `<div id="extDaysToggle"
       onclick="toggleExtDays()"
@@ -2666,6 +2719,21 @@ function renderDaily(){
     : '';
 
   document.getElementById('dailyList').innerHTML = first7Html + toggleRow + extSection;
+}
+
+async function loadIfsSunFull(){
+  if(S._ifsSunFullLoaded) return;
+  S._ifsSunFullLoaded=true; // direct zetten om dubbele calls te voorkomen
+  const base=S._ensBase||`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
+  const hresUrl16=`https://api.open-meteo.com/v1/ecmwf?${base}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,winddirection_10m_dominant,weather_code,dewpoint_2m_max,dewpoint_2m_min,sunshine_duration,et0_fao_evapotranspiration&forecast_days=16`;
+  try{
+    const iR=await fetch(hresUrl16);
+    if(iR.ok){ const j=await iR.json(); if(!j?.error){ S._ifsJ=j; S._sJ=j; } }
+    S.data=processAll(S._oJ,S._hJ,S._eJ,S._sJ,S._ifsJ,null);
+    if(reapplyAgroStation()){ render(); renderHourly(); }
+    renderDaily();
+    updateDailyTitle();
+  }catch(e){ S._ifsSunFullLoaded=false; console.warn('IFS/Sun 16d laden mislukt:',e.message); }
 }
 
 async function loadEnsFullData(){
@@ -2687,8 +2755,9 @@ async function loadEnsFullData(){
 function toggleExtDays(){
   S._extDaysOpen=!S._extDaysOpen;
   renderDaily();
-  if(S._extDaysOpen && !S._ensFullLoaded){
-    loadEnsFullData().catch(e=>console.warn(e));
+  if(S._extDaysOpen){
+    if(!S._ensFullLoaded) loadEnsFullData().catch(e=>console.warn(e));
+    if(!S._ifsSunFullLoaded) loadIfsSunFull().catch(e=>console.warn(e));
   }
 }
 
