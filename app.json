@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "ExactCast AI",
+    "slug": "exactcast-ai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "exactcast",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": ["ios"],
+    "ios": {
+      "bundleIdentifier": "com.agroexact.exactcast",
+      "supportsTablet": false,
+      "requireFullScreen": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.agroexact.exactcast"]
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ExactCast gebruikt je locatie om het weer en de radar voor de plek waar je bent te tonen.",
+        "BGTaskSchedulerPermittedIdentifiers": ["com.agroexact.exactcast.refresh"],
+        "UIBackgroundModes": ["fetch", "processing"]
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-localization",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "26.0",
+            "useFrameworks": "static"
+          }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ExactCast gebruikt je locatie om het weer en de radar voor de plek waar je bent te tonen."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "enableBackgroundRemoteNotifications": false
+        }
+      ],
+      "expo-background-task",
+      "@bacons/apple-targets"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "appGroup": "group.com.agroexact.exactcast",
+      "backgroundTaskId": "com.agroexact.exactcast.refresh"
+    }
+  }
+}
