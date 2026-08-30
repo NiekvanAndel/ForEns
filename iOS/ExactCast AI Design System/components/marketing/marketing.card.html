@@ -1,0 +1,30 @@
+<!-- @dsCard group="Components" viewport="700x420" name="Marketing" subtitle="Trust bar, plans, specs, testimonial, CTA band, phone mock" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<style>body{margin:0;background:var(--cream);font-family:var(--font-core);color:var(--ink);font-size:var(--fs-body);line-height:var(--lh-body)}
+#root{padding:18px 20px}</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+const { TrustBar, PlanCard, SpecCard, Testimonial, CtaBand, PhoneMock, Button, MeasurementRow } = window.ExactCastAIDesignSystem_6b62ae;
+function Demo(){return <div style={{display:'grid',gap:18}}>
+  <TrustBar style={{margin:0,maxWidth:'none'}} items={[{value:'1.240 stations',label:'in Nederland en Duitsland'},{value:'elke 5 minuten',label:'nieuwe nowcast'},{value:'2 uur vooruit',label:'per 5 minuten'},{value:'Gratis te proberen',label:'geen station nodig'}]}/>
+  <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16,paddingTop:14}}>
+    <PlanCard name="Gratis" amount="€0" per="altijd" features={['1 locatie','Nowcast 1 uur']}/>
+    <PlanCard best name="Plus" amount="€3,99" per="per maand" features={['5 locaties','Nowcast 2 uur','Push bij regen']}/>
+    <PlanCard name="Familie" amount="€6,99" per="per maand" features={['15 locaties','5 gebruikers','Push bij regen']}/>
+  </div>
+  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 236px',gap:16,alignItems:'start'}}>
+    <SpecCard title="Vernieuwingsinterval" value="elke 5 minuten">Nieuwe radarbeelden gecombineerd met de laatste stationsmeting.</SpecCard>
+    <Testimonial meta="Enschede · balkontuin" quote="Ik weet nu of ik de was buiten kan laten hangen. Dat klinkt klein, maar ik kijk elke dag." who="Marloes de Wit" result="Vaker droge was" todo="te bevestigen"/>
+    <PhoneMock title="Nowcast"><div style={{display:'grid',gap:6}}>
+      <MeasurementRow compact status="red" name="Thuis" meta="regen in 20 min" advice="18 mm"/>
+      <MeasurementRow compact status="green" name="Volkspark" meta="droog" advice="0 mm"/>
+    </div></PhoneMock>
+  </div>
+  <CtaBand title="Zie de bui aankomen, niet op het vliegveld gemeten" body="Gratis te proberen. Geen eigen weerstation nodig." bullets={['Nu voor iOS','2 uur vooruit, per 5 minuten','Gebouwd op 1.240 echte meetpunten']}>
+    <Button variant="white">Download in de App Store</Button></CtaBand>
+</div>;}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>

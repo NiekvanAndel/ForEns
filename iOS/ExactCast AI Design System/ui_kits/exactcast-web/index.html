@@ -1,0 +1,36 @@
+<!-- @dsCard group="ExactCast Web" viewport="1280x760" name="Marketing site" subtitle="Home, Netwerk and Prijzen — click the nav" -->
+<!-- @startingPoint section="Web" subtitle="ExactCast marketing site, three pages" viewport="1280x900" -->
+<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><title>ExactCast AI — regen op jouw adres</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>html,body{margin:0;background:var(--cream);font-family:var(--font-core);color:var(--ink);font-size:var(--fs-body);line-height:var(--lh-body);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+*{box-sizing:border-box}h1,h2,h3,h4{font-family:var(--font-core)}button{font-family:var(--font-core)}
+a{color:var(--green-dark);text-decoration:none}a:hover{color:var(--ink-heading)}
+#site{position:relative}</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel" src="HeroSection.jsx"></script>
+<script type="text/babel" src="HomePage.jsx"></script>
+<script type="text/babel" src="PricingPage.jsx"></script>
+<script type="text/babel" src="NetworkPage.jsx"></script>
+<script type="text/babel">
+const { SiteHeader, SiteFooter } = window.ExactCastAIDesignSystem_6b62ae;
+const LINKS=['Nowcast','Het netwerk','Prijzen','Kennis'];
+function App(){
+  const [page,setPage]=React.useState('Nowcast');
+  const nav=k=>setPage(k==='home'?'Nowcast':k==='Netwerk'?'Het netwerk':k);
+  React.useEffect(()=>{window.scrollTo(0,0);},[page]);
+  return <div id="site">
+    <SiteHeader links={LINKS} active={page} phone="073 782 03 40" cta="Download de app" onNav={nav}/>
+    {page==='Prijzen'?<PricingPage onNav={nav}/>:page==='Het netwerk'?<NetworkPage/>:<HomePage onNav={nav}/>}
+    <SiteFooter copyright="© ExactCast AI — onderdeel van AgroExact" legal={['Algemene voorwaarden','Privacy Statement']}
+      columns={[
+        {title:'Download de app',body:'Nu voor iOS. Android volgt.'},
+        {title:'Product',links:['Nowcast','Het netwerk','Prijzen','Zekerheid uitgelegd']},
+        {title:'Support',links:['Veelgestelde vragen','Handleiding','Contact']},
+        {title:'Contact',body:'Helftheuvelweg 11, 5222 AV \u2019s-Hertogenbosch · info@exactcast.ai · +31 73 782 03 40'}]}/>
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>

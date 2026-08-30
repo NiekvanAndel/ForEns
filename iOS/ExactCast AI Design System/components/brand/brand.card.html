@@ -1,0 +1,24 @@
+<!-- @dsCard group="Components" viewport="700x200" name="Brand" subtitle="Wordmark placeholder and the Lucide Icon wrapper" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<style>body{margin:0;background:var(--cream);font-family:var(--font-core);color:var(--ink);font-size:var(--fs-body);line-height:var(--lh-body)}#root{padding:18px 20px}</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+const { Wordmark, Icon } = window.ExactCastAIDesignSystem_6b62ae;
+function Demo(){return <div style={{display:'grid',gap:16}}>
+  <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap'}}>
+    <Wordmark size={24}/>
+    <Wordmark pill size={20}/>
+    <span style={{background:'var(--navy)',borderRadius:12,padding:'12px 18px'}}><Wordmark tone="light" size={20}/></span>
+  </div>
+  <div style={{display:'flex',gap:20,flexWrap:'wrap',color:'var(--ink-heading)'}}>
+    {['house','cloud-sun','chart-line','broadcast','plant','cloud-rain','drop','wind','bell','map-pin','gear','arrows-clockwise'].map(n=>
+      <div key={n} style={{textAlign:'center',width:62}}><Icon name={n} size={26}/>
+        <div style={{fontSize:10.5,color:'var(--muted)',marginTop:4}}>{n}</div></div>)}
+  </div>
+  <div style={{fontSize:13,color:'var(--muted)'}}>No logo file exists in this system — the wordmark is a typographic placeholder, accented in the cool precipitation blue rather than green. Icons are Phosphor (iOS-style); set="lucide" is kept for the marketing site.</div>
+</div>;}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>

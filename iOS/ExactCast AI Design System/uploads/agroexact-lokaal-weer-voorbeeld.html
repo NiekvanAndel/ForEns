@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lokaal weer — AgroExact (voorbeeld)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Designtokens — uitgelezen uit de live site agroexact.com
+   ============================================================ */
+:root{
+  --cream:#F4EEE3;          /* body-achtergrond */
+  --cream-2:#FBF8F3;        /* afwisselende sectie */
+  --ink:#1F3354;            /* basistekstkleur */
+  --ink-heading:#0C2547;    /* koppen */
+  --muted:#4F6885;          /* AANGEPAST: was #6D849E = 3,36:1 contrast, nu 4,9:1 (WCAG AA) */
+  --muted-orig:#6D849E;
+  --green:#7BB570;
+  --green-dark:#5C9452;
+  --navy:#0A1936;
+  --navy-2:#091C3D;
+  --shadow-card:0 18px 50px -24px rgba(9,28,61,.28);
+  --radius-card:16px;
+  --max:1280px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;background:var(--cream);color:var(--ink);
+  font-family:Figtree,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 32px}
+section{padding:112px 0;scroll-margin-top:100px}
+.alt{background:var(--cream-2)}
+h1,h2,h3{color:var(--ink-heading);font-weight:600;margin:0}
+h1{font-size:40px;line-height:1.3;color:#fff}
+h2{font-size:32px;line-height:1.25}
+h3{font-size:20px;line-height:1.35}
+p{margin:0 0 16px}
+.lead{font-size:17px;line-height:1.625;color:var(--muted)}
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--green-dark);margin-bottom:12px}
+.sub{font-size:20px;font-weight:600;color:var(--green-dark);margin-bottom:16px}
+.center{text-align:center}
+.card{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-card);padding:24px}
+a{color:inherit}
+
+/* knoppen — exact de vorm van de live site */
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:9999px;padding:16px 28px;
+  font-weight:600;font-size:16px;text-decoration:none;border:0;cursor:pointer;transition:.18s;line-height:1;white-space:nowrap}
+.btn-primary{background:linear-gradient(135deg,var(--green),var(--green-dark));color:#fff}
+.btn-primary:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.btn-ghost{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.35)}
+.btn-ghost:hover{border-color:rgba(255,255,255,.7)}
+.btn-ghost-dark{background:transparent;color:var(--ink-heading);border:1.5px solid rgba(12,37,71,.2)}
+.btn-ghost-dark:hover{border-color:rgba(12,37,71,.45)}
+.btn-sm{padding:12px 24px}
+.link-arrow{display:inline-flex;align-items:center;gap:8px;font-weight:600;color:var(--ink-heading);text-decoration:none}
+.link-arrow svg{transition:.18s}
+.link-arrow:hover svg{transform:translateX(4px)}
+
+/* header */
+header{position:fixed;inset:0 0 auto 0;height:80px;z-index:60;
+  background:rgba(10,25,54,.71);backdrop-filter:blur(10px)}
+.hdr{max-width:var(--max);margin:0 auto;padding:0 32px;height:80px;display:flex;align-items:center;gap:24px}
+.logo-pill{background:#fff;border-radius:9999px;padding:8px 18px;display:flex;align-items:center}
+.logo-pill img{height:24px;display:block}
+nav.main{display:flex;gap:20px;margin-left:auto;align-items:center}
+nav.main a{color:#fff;font-size:15.5px;text-decoration:none;opacity:.92;white-space:nowrap}
+nav.main a:hover{opacity:1}
+.hdr-contact{display:flex;align-items:center;gap:6px;color:#fff;text-decoration:none;font-weight:600;font-size:15px;opacity:.92;white-space:nowrap}
+.hdr-contact:hover{opacity:1}
+.lang{color:#fff;opacity:.9;font-size:14px;display:flex;align-items:center;gap:4px}
+
+/* hero */
+.hero{background:linear-gradient(160deg,#0A1936,#0A1F3D 55%,#091C3D);
+  border-radius:0 0 40px 40px;padding:168px 0 96px;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(200deg,rgba(255,255,255,.05) 0 42%,transparent 42%);pointer-events:none}
+.hero .wrap{position:relative;z-index:2;display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+.hero p{color:rgba(226,235,245,.9);font-size:17px;line-height:1.625;max-width:36em}
+.hero .accent{color:var(--green)}
+.hero-cta{display:flex;gap:14px;flex-wrap:wrap;margin-top:32px}
+
+/* telefoonmock met beregeningsadvies */
+.phones{display:flex;justify-content:center;align-items:flex-end;gap:18px}
+.phone{width:236px;background:#0d1b2e;border-radius:30px;padding:9px;box-shadow:0 30px 70px -30px rgba(0,0,0,.75)}
+.phone.small{width:196px;opacity:.9;transform:translateY(22px)}
+.screen{background:#fff;border-radius:23px;overflow:hidden}
+.scr-top{background:#0C2547;color:#fff;padding:10px 14px;font-size:11px;display:flex;justify-content:space-between;align-items:center}
+.scr-body{padding:12px 12px 16px}
+.scr-h{font-size:12px;font-weight:700;color:var(--ink-heading);margin:2px 0 10px}
+.plot{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:11px;margin-bottom:8px;background:#F6F8FA}
+.dot{width:12px;height:12px;border-radius:50%;flex:0 0 12px}
+.dot.r{background:#D9534F}.dot.o{background:#E9A13B}.dot.g{background:#5C9452}
+.plot .nm{font-size:11px;font-weight:600;color:var(--ink-heading);line-height:1.25}
+.plot .mt{font-size:10px;color:var(--muted)}
+.plot .adv{margin-left:auto;font-size:11px;font-weight:700}
+.adv.r{color:#D9534F}.adv.o{color:#C8801F}.adv.g{color:#5C9452}
+.scr-note{font-size:9.5px;color:var(--muted);margin-top:10px;line-height:1.4}
+
+/* vertrouwensbalk */
+.trust{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-card);
+  margin:-44px auto 0;position:relative;z-index:5;max-width:1180px;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:22px 12px}
+.trust div{text-align:center;font-size:14px;color:var(--muted);padding:0 10px;
+  border-right:1px solid rgba(12,37,71,.08);line-height:1.4}
+.trust div:last-child{border-right:0}
+.trust b{color:var(--ink-heading);display:block;font-size:15px}
+.trust a{color:var(--green-dark);text-decoration:none;font-weight:600}
+
+/* vergelijkingstabel */
+.cmp{width:100%;border-collapse:separate;border-spacing:0;background:#fff;
+  border-radius:var(--radius-card);box-shadow:var(--shadow-card);overflow:hidden;margin-top:36px}
+.cmp th,.cmp td{padding:16px 18px;text-align:left;font-size:15px;border-bottom:1px solid rgba(12,37,71,.07)}
+.cmp thead th{background:#0C2547;color:#fff;font-weight:600;font-size:14px}
+.cmp thead th:last-child{background:linear-gradient(135deg,var(--green),var(--green-dark))}
+.cmp tbody td{color:var(--muted)}
+.cmp tbody th{font-weight:600;color:var(--ink-heading);width:34%}
+.cmp td:last-child{color:var(--ink-heading);font-weight:600;background:rgba(123,181,112,.07)}
+.cmp tr:last-child th,.cmp tr:last-child td{border-bottom:0}
+.no{color:#B4C0CE}
+
+/* lagen */
+.layers{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:44px}
+.layer{position:relative;padding-top:34px}
+.layer .num{position:absolute;top:0;left:0;width:34px;height:34px;border-radius:50%;
+  background:linear-gradient(135deg,var(--green),var(--green-dark));color:#fff;font-weight:700;
+  display:flex;align-items:center;justify-content:center;font-size:15px}
+.layer h3{margin:14px 0 8px}
+.layer p{font-size:15px;line-height:1.6;color:var(--muted);margin:0}
+.note{background:#fff;border-left:4px solid var(--green);border-radius:12px;
+  box-shadow:var(--shadow-card);padding:22px 24px;margin-top:36px}
+.note h3{font-size:17px;margin-bottom:8px}
+.note p{font-size:15px;color:var(--muted);margin:0;line-height:1.6}
+
+/* kleurcodes */
+.codes{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:36px}
+.code{border-radius:var(--radius-card);padding:22px;background:#fff;box-shadow:var(--shadow-card);border-top:5px solid}
+.code.r{border-color:#D9534F}.code.o{border-color:#E9A13B}.code.g{border-color:#5C9452}
+.code b{display:block;margin-bottom:6px;color:var(--ink-heading)}
+.code p{font-size:15px;color:var(--muted);margin:0;line-height:1.6}
+
+/* ============ locatiecheck ============ */
+.loc{display:grid;grid-template-columns:.9fr 1.1fr;gap:36px;margin-top:40px;align-items:start}
+.loc-panel{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-card);padding:28px}
+.pc-form{display:flex;gap:10px;margin:18px 0 6px}
+.pc-form input{flex:1;padding:14px 16px;border:1.5px solid rgba(12,37,71,.15);border-radius:10px;
+  font-family:inherit;font-size:16px;color:var(--ink-heading)}
+.pc-form input:focus{outline:0;border-color:var(--green);box-shadow:0 0 0 3px rgba(123,181,112,.2)}
+.pc-hint{font-size:13px;color:var(--muted);margin:0}
+.loc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:24px}
+.stat{background:var(--cream-2);border-radius:12px;padding:16px 14px;text-align:center}
+.stat b{display:block;font-size:27px;font-weight:700;color:var(--green-dark);line-height:1.15}
+.stat span{font-size:12.5px;color:var(--muted);line-height:1.35;display:block;margin-top:4px}
+.loc-msg{margin-top:20px;font-size:15px;color:var(--ink-heading);line-height:1.6}
+.gate{margin-top:22px;padding:20px;border-radius:12px;background:var(--cream-2);
+  border:1px dashed rgba(92,148,82,.45)}
+.gate h4{margin:0 0 6px;font-size:15.5px;color:var(--ink-heading)}
+.gate p{font-size:13.5px;color:var(--muted);margin:0 0 14px;line-height:1.55}
+.gate .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.gate input{width:100%;padding:10px 12px;border:1.5px solid rgba(12,37,71,.15);border-radius:9px;
+  font-family:inherit;font-size:14.5px}
+.map{position:relative;aspect-ratio:4/3;border-radius:var(--radius-card);overflow:hidden;
+  box-shadow:var(--shadow-card);background:
+    linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px) 0 0/100% 44px,
+    linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px) 0 0/44px 100%,
+    linear-gradient(150deg,#CFE0C2,#DCE9D2 60%,#D4E4C8)}
+.map .water{position:absolute;background:#BFD6E4;opacity:.85}
+.map .road{position:absolute;background:rgba(255,255,255,.75)}
+.pin{position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;
+  border:3px solid var(--green-dark);transform:translate(-50%,-50%);box-shadow:0 2px 6px rgba(0,0,0,.22)}
+.pin.me{width:23px;height:23px;background:var(--ink-heading);border-color:#fff;z-index:3}
+.pin.me::after{content:"";position:absolute;inset:-9px;border-radius:50%;
+  border:2px solid rgba(12,37,71,.35);animation:puls 2.4s infinite}
+@keyframes puls{0%{transform:scale(.8);opacity:1}100%{transform:scale(1.9);opacity:0}}
+.map-legend{position:absolute;left:14px;bottom:14px;background:rgba(255,255,255,.94);
+  border-radius:10px;padding:9px 13px;font-size:12.5px;color:var(--ink-heading);
+  box-shadow:0 4px 14px rgba(0,0,0,.13);display:flex;gap:14px;align-items:center}
+.map-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;
+  border:2.5px solid var(--green-dark);background:#fff;margin-right:5px;vertical-align:-1px}
+.map-legend i.me{background:var(--ink-heading);border-color:#fff;box-shadow:0 0 0 1px var(--ink-heading)}
+.map-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  color:var(--muted);font-size:15px;text-align:center;padding:30px;background:rgba(255,255,255,.55)}
+
+/* ============ besparingstool ============ */
+.calc{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:40px;align-items:start}
+.calc-in{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-card);padding:28px}
+.fld{margin-bottom:18px}
+.fld label{display:block;font-size:14px;font-weight:600;color:var(--ink-heading);margin-bottom:6px}
+.fld .hint{font-size:12.5px;color:var(--muted);font-weight:400;display:block;margin-top:3px}
+.fld input,.fld select{width:100%;padding:11px 13px;border:1.5px solid rgba(12,37,71,.15);
+  border-radius:10px;font-family:inherit;font-size:15px;color:var(--ink-heading);background:#fff}
+.fld input:focus,.fld select:focus{outline:0;border-color:var(--green);box-shadow:0 0 0 3px rgba(123,181,112,.2)}
+.fld-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.calc-out{background:linear-gradient(160deg,#0A1936,#0A1F3D 55%,#091C3D);border-radius:var(--radius-card);
+  padding:30px;color:#fff;position:sticky;top:100px}
+.calc-out .ctx{font-size:14px;color:rgba(226,235,245,.75);margin-bottom:22px;line-height:1.5}
+.res{display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+  padding:13px 0;border-bottom:1px solid rgba(255,255,255,.11)}
+.res span{font-size:14.5px;color:rgba(226,235,245,.82)}
+.res b{font-size:17px;font-weight:700;white-space:nowrap}
+.res.hi b{font-size:22px;color:var(--green)}
+.res:last-of-type{border-bottom:0}
+.bars{margin:22px 0 6px}
+.bar-lbl{display:flex;justify-content:space-between;font-size:12.5px;color:rgba(226,235,245,.75);margin-bottom:5px}
+.bar{height:14px;border-radius:7px;background:rgba(255,255,255,.13);overflow:hidden;margin-bottom:14px}
+.bar i{display:block;height:100%;border-radius:7px}
+.bar i.save{background:linear-gradient(90deg,var(--green),var(--green-dark))}
+.bar i.cost{background:rgba(255,255,255,.42)}
+.disclaimer{font-size:12.5px;color:rgba(226,235,245,.6);line-height:1.55;margin-top:18px}
+.warnbox{background:rgba(233,161,59,.13);border:1px solid rgba(233,161,59,.4);border-radius:12px;
+  padding:18px 20px;margin-bottom:20px}
+.warnbox b{display:block;color:#F4C87B;margin-bottom:8px;font-size:15.5px;line-height:1.4}
+.warnbox p{font-size:14px;color:rgba(226,235,245,.85);margin:0;line-height:1.6}
+details.assump{margin-top:18px}
+details.assump summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--green);list-style:none}
+details.assump summary::-webkit-details-marker{display:none}
+details.assump summary::before{content:"▸ ";display:inline-block;transition:.2s}
+details.assump[open] summary::before{transform:rotate(90deg)}
+details.assump ul{margin:12px 0 0;padding-left:18px;font-size:13px;color:rgba(226,235,245,.72);line-height:1.75}
+.calc-cta{margin-top:22px;display:flex;gap:12px;flex-wrap:wrap}
+
+/* opbrengst */
+.gains{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:40px}
+.gain h3{font-size:18px;margin-bottom:10px}
+.gain p{font-size:15px;color:var(--muted);line-height:1.6;margin:0}
+
+/* bewijs */
+.proof{display:grid;grid-template-columns:.85fr 1.15fr;gap:48px;align-items:center}
+.proof img{width:100%;border-radius:var(--radius-card);display:block}
+.cases{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:44px}
+.case .meta{font-size:12.5px;color:var(--green-dark);font-weight:600;margin-bottom:10px;line-height:1.5}
+.case q{display:block;font-size:15.5px;color:var(--ink-heading);line-height:1.6;font-style:italic}
+.case .who{margin-top:14px;font-size:14px;font-weight:600;color:var(--ink-heading)}
+.case .res-line{margin-top:12px;padding-top:12px;border-top:1px solid rgba(12,37,71,.09);
+  font-size:14px;color:var(--muted)}
+.case .res-line b{color:var(--green-dark)}
+.todo{display:inline-block;background:rgba(233,161,59,.16);color:#8A5A11;border-radius:6px;
+  padding:1px 7px;font-size:11.5px;font-weight:700;letter-spacing:.02em}
+
+/* praktisch */
+.qa{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-top:40px}
+.qa .card h3{font-size:17px;margin-bottom:8px}
+.qa .card p{font-size:15px;color:var(--muted);line-height:1.6;margin-bottom:12px}
+
+/* partners */
+.partners{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin-top:36px}
+.partners div{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-card);
+  height:96px;display:flex;align-items:center;justify-content:center;padding:18px}
+.partners img{max-width:100%;max-height:44px;object-fit:contain}
+
+/* slot */
+.demo{background:linear-gradient(135deg,#6FA85F,#4F8446);border-radius:28px;padding:56px;
+  display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;color:#fff}
+.demo h2{color:#fff}
+.demo p{color:rgba(255,255,255,.9);font-size:17px;line-height:1.6}
+.demo .btn-primary{background:#fff;color:var(--green-dark)}
+.demo ul{margin:0;padding-left:20px;color:rgba(255,255,255,.92);font-size:15.5px;line-height:1.9}
+
+/* footer */
+footer{background:#0C2547;color:#fff;padding:64px 0 28px;margin-top:0}
+.fgrid{display:grid;grid-template-columns:1.2fr 1fr 1fr 1.2fr;gap:36px}
+footer h4{color:var(--green);font-size:15px;margin:0 0 16px;font-weight:600}
+footer a,footer p{color:rgba(226,235,245,.8);text-decoration:none;font-size:14.5px;line-height:2}
+footer a:hover{color:#fff}
+footer ul{list-style:none;margin:0;padding:0}
+.fbot{border-top:1px solid rgba(255,255,255,.12);margin-top:40px;padding-top:20px;
+  font-size:13px;color:rgba(226,235,245,.55);display:flex;gap:22px;flex-wrap:wrap}
+
+/* notitie-labels voor Sven */
+.chg{position:relative;padding-top:8px}
+.chg::before{content:attr(data-chg);position:absolute;top:-14px;left:0;background:#0C2547;color:#fff;
+  font-size:10.5px;font-weight:700;letter-spacing:.05em;padding:3px 9px;border-radius:5px;
+  text-transform:uppercase;z-index:3}
+
+@media (max-width:1240px){ nav.main{gap:15px} nav.main a{font-size:14.5px} .hdr-contact span,.hdr-contact{font-size:14px} }
+@media (max-width:1000px){
+  section{padding:72px 0}
+  h1{font-size:31px}h2{font-size:25px}
+  .wrap{padding:0 20px}
+  nav.main{display:none}
+  .hero{padding:132px 0 64px}
+  .hero .wrap,.calc,.proof,.demo,.loc{grid-template-columns:1fr}
+  .gate .row{grid-template-columns:1fr}
+  .trust{grid-template-columns:1fr 1fr;margin-top:-20px}
+  .trust div:nth-child(2n){border-right:0}
+  .layers,.codes,.gains,.cases,.qa{grid-template-columns:1fr}
+  .partners{grid-template-columns:repeat(3,1fr)}
+  .fgrid{grid-template-columns:1fr 1fr}
+  .calc-out{position:static}
+  .cmp thead{display:none}
+  .cmp tbody th{display:block;width:auto;border-bottom:0;padding-bottom:4px}
+  .cmp tbody td{display:block;padding-top:4px;padding-bottom:4px}
+  .cmp tbody td::before{content:attr(data-l) ": ";font-weight:600;color:var(--ink-heading)}
+  .cmp tbody tr{display:block;border-bottom:1px solid rgba(12,37,71,.09);padding:10px 0}
+  .demo{padding:36px 26px}
+  .phones{transform:scale(.86);transform-origin:top center}
+}
+
+/* ---- subpagina's ---- */
+.subhero{background:linear-gradient(160deg,#0A1936,#0A1F3D 55%,#091C3D);
+  border-radius:0 0 40px 40px;padding:152px 0 76px;position:relative;overflow:hidden}
+.subhero::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(200deg,rgba(255,255,255,.05) 0 42%,transparent 42%);pointer-events:none}
+.subhero .wrap{position:relative;z-index:2;max-width:1280px}
+.subhero h1{max-width:16em}
+.subhero p{color:rgba(226,235,245,.9);font-size:18px;line-height:1.6;max-width:40em;margin-top:18px}
+.crumb{font-size:13.5px;color:rgba(226,235,245,.62);margin-bottom:18px}
+.crumb a{color:rgba(226,235,245,.62);text-decoration:none}
+.crumb a:hover{color:#fff}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+.two img{width:100%;border-radius:var(--radius-card);display:block;box-shadow:var(--shadow-card)}
+.specs{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-top:28px}
+.spec{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-card);padding:20px 22px}
+.spec b{display:block;color:var(--ink-heading);font-size:16px;margin-bottom:4px}
+.spec .val{font-size:13.5px;color:var(--green-dark);font-weight:600;margin-bottom:8px}
+.spec p{font-size:14.5px;color:var(--muted);margin:0;line-height:1.6}
+.prod{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-top:36px}
+.prod .card{display:flex;flex-direction:column}
+.prod h3{margin-bottom:6px}
+.prod .price{font-size:20px;font-weight:700;color:var(--green-dark);margin:14px 0 4px}
+.prod .price small{display:block;font-size:13px;font-weight:500;color:var(--muted);margin-top:3px}
+.prod ul{margin:12px 0 0;padding-left:18px;font-size:14.5px;color:var(--muted);line-height:1.8}
+.prod .when{margin-top:14px;padding-top:14px;border-top:1px solid rgba(12,37,71,.09);
+  font-size:14.5px;color:var(--ink-heading);line-height:1.55}
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:36px}
+.plan{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-card);padding:26px;position:relative}
+.plan.best{outline:2px solid var(--green)}
+.plan .tag{position:absolute;top:-12px;left:26px;background:linear-gradient(135deg,var(--green),var(--green-dark));
+  color:#fff;font-size:12px;font-weight:700;padding:4px 12px;border-radius:9999px}
+.plan h3{font-size:19px}
+.plan .amt{font-size:34px;font-weight:700;color:var(--ink-heading);margin:10px 0 2px;line-height:1}
+.plan .per{font-size:13.5px;color:var(--muted);margin-bottom:16px}
+.plan ul{list-style:none;margin:0;padding:0;font-size:15px;color:var(--muted);line-height:2}
+.plan ul li::before{content:"✓ ";color:var(--green-dark);font-weight:700}
+details.faq{background:#fff;border-radius:12px;box-shadow:var(--shadow-card);margin-bottom:12px;padding:0}
+details.faq summary{cursor:pointer;list-style:none;padding:18px 22px;font-weight:600;
+  color:var(--ink-heading);font-size:16.5px;display:flex;justify-content:space-between;gap:16px;align-items:center}
+details.faq summary::-webkit-details-marker{display:none}
+details.faq summary::after{content:"+";font-size:22px;color:var(--green-dark);font-weight:400;line-height:1}
+details.faq[open] summary::after{content:"–"}
+details.faq .ans{padding:0 22px 20px;font-size:15.5px;color:var(--muted);line-height:1.7}
+details.faq .ans p{margin:0 0 10px}
+details.faq .ans p:last-child{margin:0}
+.bos{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-top:36px}
+.bos .card{display:flex;flex-direction:column}
+.bos .logo{height:42px;display:flex;align-items:center;margin-bottom:16px}
+.bos .logo img{max-height:38px;max-width:170px;object-fit:contain}
+.bos h3{font-size:18px;margin-bottom:8px}
+.bos p{font-size:14.5px;color:var(--muted);line-height:1.65;margin-bottom:12px}
+.bos ul{margin:0 0 14px;padding-left:18px;font-size:14.5px;color:var(--ink-heading);line-height:1.75}
+.bos .foot{margin-top:auto;padding-top:14px;border-top:1px solid rgba(12,37,71,.09);font-size:13.5px;color:var(--muted)}
+.kpa{margin-top:32px;background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-card);padding:28px}
+.kpa-bar{height:22px;border-radius:11px;overflow:hidden;display:flex;margin:18px 0 10px}
+.kpa-bar i{flex:1}
+.kpa-bar i.g{background:#5C9452}.kpa-bar i.o{background:#E9A13B}.kpa-bar i.r{background:#D9534F}
+.kpa-scale{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted)}
+.kpa-legend{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:20px}
+.kpa-legend div{font-size:14.5px;color:var(--muted);line-height:1.6}
+.kpa-legend b{display:block;color:var(--ink-heading);margin-bottom:3px}
+.honest{background:#fff;border-left:4px solid var(--green);border-radius:12px;
+  box-shadow:var(--shadow-card);padding:22px 24px;margin-top:32px}
+.honest h3{font-size:17px;margin-bottom:8px}
+.honest p{font-size:15px;color:var(--muted);margin:0 0 10px;line-height:1.65}
+.honest p:last-child{margin:0}
+.mini{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:32px;align-items:start}
+.mini-in{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-card);padding:26px}
+.cta-band{background:#fff;border-radius:var(--radius-card);box-shadow:var(--shadow-card);
+  padding:34px 38px;display:flex;gap:28px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.cta-band h3{font-size:22px;margin-bottom:6px}
+.cta-band p{font-size:15.5px;color:var(--muted);margin:0;max-width:44em}
+@media (max-width:1000px){
+  .subhero{padding:118px 0 56px}
+  .two,.specs,.prod,.plans,.bos,.kpa-legend,.mini{grid-template-columns:1fr}
+  .cta-band{flex-direction:column;align-items:flex-start}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="hdr">
+    <a class="logo-pill" href="agroexact-home-voorbeeld.html"><img src="https://agroexact.com/images/Agroexact-logo-Donkerblauw-1.png" alt="AgroExact"></a>
+    <nav class="main">
+      <a style="opacity:1;border-bottom:2px solid var(--green);padding-bottom:3px" href="agroexact-lokaal-weer-voorbeeld.html">Lokaal weer</a>
+      <a href="agroexact-optimaal-beregenen-voorbeeld.html">Optimaal beregenen</a>
+      <a href="agroexact-gewasbescherming-voorbeeld.html">Gewasbescherming</a>
+      <a href="agroexact-home-voorbeeld.html#dekking">Dekking</a>
+      <a href="agroexact-home-voorbeeld.html#besparing">Prijzen</a>
+      <a href="#">Kennis</a>
+      <a href="#">Inloggen</a>
+    </nav>
+    <!-- NIEUW: telefoon in de header -->
+    <a class="hdr-contact" href="tel:+31737820340" title="Bel ons">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      073 782 03 40
+    </a>
+    <span class="lang">🇳🇱 ▾</span>
+    <a class="btn btn-primary btn-sm" href="agroexact-home-voorbeeld.html#besparing">Bekijk de prijzen</a>
+  </div>
+</header>
+
+<div class="subhero">
+  <div class="wrap">
+    <div class="crumb"><a href="agroexact-home-voorbeeld.html">Home</a> › <a href="#">Oplossingen</a> › Lokaal weer</div>
+    <h1 class="chg" data-chg="Herschreven">Weet wat er op <span style="color:var(--green)">jouw perceel</span> is gevallen, niet op het vliegveld</h1>
+    <p>Een weerstation of regenmeter op je eigen grond, plus de metingen van meer dan 1.000 collega-telers om je heen. Elke 10 minuten ververst, in één app.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="agroexact-home-voorbeeld.html#dekking">Kijk wie er bij jou in de buurt meet
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+      <a class="btn btn-ghost" href="#prijzen">Wat kost het?</a>
+    </div>
+  </div>
+</div>
+
+<!-- waarvoor gebruik je het -->
+<section>
+  <div class="wrap">
+    <div style="max-width:760px" class="chg" data-chg="Nieuw — van specificaties naar toepassing">
+      <div class="eyebrow">Waarvoor gebruik je het</div>
+      <h2>Drie beslissingen die je er 's ochtends mee neemt</h2>
+      <p class="lead" style="margin-top:14px">De huidige pagina somt op wát er gemeten wordt. Interessanter is wat je met die metingen doet.</p>
+    </div>
+    <div class="gains">
+      <div class="card gain">
+        <h3>Kan ik het land op?</h3>
+        <p>Je ziet per perceel hoeveel er vannacht is gevallen en hoe lang het geregend heeft. Op de percelen waar niets viel, kun je door — zonder er eerst heen te rijden.</p>
+      </div>
+      <div class="card gain">
+        <h3>Mag ik spuiten?</h3>
+        <p>Windsnelheid, windstoten en luchtvochtigheid op 2 meter, op je eigen grond. Je ziet of je binnen het spuitraam zit voordat je de tank vult, niet erna.</p>
+      </div>
+      <div class="card gain">
+        <h3>Waar begin ik vandaag?</h3>
+        <p>Ligt er op de ene hoek 18 mm en op de andere 2 mm, dan bepaalt dat je volgorde. Vooral in de oogst scheelt dat werkbare uren.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- de twee meetpunten -->
+<section class="alt">
+  <div class="wrap">
+    <div style="max-width:760px">
+      <div class="eyebrow">Je eigen meetpunt</div>
+      <h2>Een regenmeter of een compleet weerstation</h2>
+      <p class="lead" style="margin-top:14px">Bij elk abonnement hoort een eigen meetpunt op je grond. Je kiest of dat alleen neerslag meet, of alles.</p>
+    </div>
+
+    <div class="prod">
+      <div class="card">
+        <h3>RainExact regenmeter</h3>
+        <div class="sub" style="font-size:16px;margin-bottom:4px">Inbegrepen bij elk abonnement</div>
+        <div class="price">€0 extra <small>Geen aanschafkosten, geen jaarbedrag bovenop je abonnement</small></div>
+        <ul>
+          <li>Hoeveelheid neerslag, per 10 minuten</li>
+          <li>Duur van de neerslag</li>
+          <li>Leegt zichzelf automatisch</li>
+          <li>Batterij gaat jaren mee</li>
+        </ul>
+        <div class="when"><b>Kies deze als</b> je vooral wilt weten hoeveel er op jouw percelen is gevallen, en je voor wind en temperatuur genoeg hebt aan de stations om je heen.</div>
+      </div>
+
+      <div class="card">
+        <h3>AtmoExact weerstation</h3>
+        <div class="sub" style="font-size:16px;margin-bottom:4px">Alles op één paal van 2 meter</div>
+        <div class="price">€199 per jaar extra <small>Geen aanschafkosten — dit komt bovenop je abonnement</small></div>
+        <ul>
+          <li>Luchttemperatuur op 1,5 m (WMO-meethoogte)</li>
+          <li>Luchtvochtigheid op 1,5 m</li>
+          <li>Windsnelheid en windstoten op 2 m</li>
+          <li>Windrichting op 2 m</li>
+          <li>Neerslag: hoeveelheid en duur</li>
+        </ul>
+        <div class="when"><b>Kies deze als</b> je spuitbeslissingen op eigen metingen wilt baseren, of als het dichtstbijzijnde station uit het netwerk meer dan een paar kilometer weg staat.</div>
+      </div>
+    </div>
+
+    <!-- eerlijk over wat de RainExact niet meet -->
+    <div class="honest chg" data-chg="Nieuw — de asterisk uitgeschreven">
+      <h3>Wat de RainExact níét zelf meet</h3>
+      <p>Op de huidige pagina staan bij de RainExact ook temperatuur, luchtvochtigheid en wind vermeld, met een sterretje. Dat sterretje verdient een hele zin: <b>die waarden komen niet van jouw paal, maar uit de omliggende stations van het netwerk.</b> Je regenmeter meet alleen neerslag.</p>
+      <p>Voor temperatuur en luchtvochtigheid is dat meestal prima — die variëren over een paar kilometer nauwelijks. Voor wind ligt het anders: een bosrand of een schuur maakt op jouw kavel echt verschil. Wil je op wind sturen bij het spuiten, kies dan de AtmoExact.</p>
+    </div>
+  </div>
+</section>
+
+<!-- netwerk -->
+<section>
+  <div class="wrap">
+    <div class="two">
+      <div>
+        <div class="eyebrow">Het netwerk</div>
+        <h2>Je eigen meetpunt is er één van meer dan duizend</h2>
+        <p class="lead" style="margin-top:14px">Naast je eigen paal zie je in de app alle andere meetpunten in je omgeving. Heb je percelen op afstand liggen, dan koppel je die aan het dichtstbijzijnde station uit het netwerk — daar hoef je zelf niets voor te plaatsen.</p>
+        <p class="lead">Hoe dichter een meetpunt bij je perceel staat, hoe beter de neerslag klopt. Daarom loont het om te kijken hoe dicht het netwerk bij jou al is.</p>
+        <a class="link-arrow" href="agroexact-home-voorbeeld.html#dekking">Kijk wie er bij jou in de buurt meet
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+      </div>
+      <img src="https://agroexact.com/images/rijden.jpg" alt="Akkerbouwer rijdt over het perceel bij zonsopgang">
+    </div>
+  </div>
+</section>
+
+<!-- prijzen -->
+<section class="alt" id="prijzen">
+  <div class="wrap">
+    <div style="max-width:760px">
+      <div class="eyebrow">Wat het kost</div>
+      <h2>Abonnementen</h2>
+      <p class="lead" style="margin-top:14px">Alle bedragen per jaar en exclusief btw. Een eigen RainExact zit er altijd bij.</p>
+    </div>
+
+    <div class="plans">
+      <div class="plan">
+        <h3>Basis</h3>
+        <div class="amt">€259</div>
+        <div class="per">per jaar</div>
+        <ul><li>5 meetpunten</li><li>3 medewerkers</li><li>RainExact inbegrepen</li><li>Onderhoud inbegrepen</li></ul>
+      </div>
+      <div class="plan best">
+        <span class="tag">Meest gekozen</span>
+        <h3>Standaard</h3>
+        <div class="amt">€319</div>
+        <div class="per">per jaar</div>
+        <ul><li>8 meetpunten</li><li>5 medewerkers</li><li>RainExact inbegrepen</li><li>Onderhoud inbegrepen</li></ul>
+      </div>
+      <div class="plan">
+        <h3>Pro</h3>
+        <div class="amt">€419</div>
+        <div class="per">per jaar</div>
+        <ul><li>15 meetpunten</li><li>10 medewerkers</li><li>RainExact inbegrepen</li><li>Onderhoud inbegrepen</li></ul>
+      </div>
+    </div>
+
+    <div class="note chg" data-chg="Nieuw — het begrip uitgelegd">
+      <h3>Wat is een "meetpunt" en wat is een "medewerker"?</h3>
+      <p><b>Meetpunt:</b> één locatie waarvan je in de app de gegevens volgt. Dat kan je eigen sensor zijn, of een station uit het netwerk dat je aan een van je percelen koppelt. Je kunt ze op elk moment verslepen naar een ander perceel.<br>
+      <b>Medewerker:</b> iedereen die met een eigen inlog meekijkt. Werk je met je zoon en een vaste medewerker, dan zijn dat drie accounts.</p>
+    </div>
+
+    <div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap">
+      <a class="btn btn-primary" href="#">Stel je pakket samen
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+      <a class="btn btn-ghost-dark" href="#">Alle prijzen en sensoren</a>
+    </div>
+  </div>
+</section>
+
+<!-- praktijk -->
+<section>
+  <div class="wrap">
+    <div style="max-width:760px"><h2>In de praktijk</h2></div>
+    <div class="cases" style="grid-template-columns:1fr 1fr">
+      <div class="card case">
+        <div class="meta">95 ha · zavel · Flevoland · pootaardappelen, uien <span class="todo">te bevestigen</span></div>
+        <q>Als het 's avonds regent, kijk ik op de app en ik weet meteen: bij díé percelen hoef ik morgenvroeg niet te gaan kijken of we het land op kunnen.</q>
+        <div class="who">Johannes Straver</div>
+        <div class="res-line"><b>Resultaat:</b> <span class="todo">cijfer ophalen</span></div>
+      </div>
+      <div class="card case">
+        <div class="meta">? ha · ? · ? <span class="todo">gegevens ophalen</span></div>
+        <q>Het weer op afstand weten levert heel veel gemak op. Geen informatie meer op basis van je gevoel, maar op basis van feiten.</q>
+        <div class="who">Kees Koekoek</div>
+        <div class="res-line"><b>Resultaat:</b> <span class="todo">cijfer ophalen</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- faq -->
+<section class="alt">
+  <div class="wrap">
+    <div style="max-width:760px;margin-bottom:32px" class="chg" data-chg="Nieuw op deze pagina">
+      <h2>Vragen over het weerstation</h2>
+    </div>
+    <details class="faq"><summary>Wie plaatst het station?</summary><div class="ans"><p>Dat doe je zelf. Bij elk product hoort een installatievideo. Een RainExact staat binnen een half uur; een AtmoExact duurt wat langer omdat de paal stevig moet staan.</p></div></details>
+    <details class="faq"><summary>Werkt het ook waar het mobiele bereik slecht is?</summary><div class="ans"><p>De sensoren gebruiken NB-IoT en LTE-M. Die netwerken dragen veel verder dan gewoon 4G en werken tot diep in percelen waar je telefoon het laat afweten. <span class="todo">bevestigen</span></p><p>Twijfel je over een specifieke locatie, bel dan even: 073 782 03 40.</p></div></details>
+    <details class="faq"><summary>Zitten de datakosten in het abonnement?</summary><div class="ans"><p>Ja. Je hebt geen simkaart of providerabonnement nodig. <span class="todo">bevestigen</span></p></div></details>
+    <details class="faq"><summary>Hoe lang gaat de batterij mee?</summary><div class="ans"><p>Meerdere jaren. De batterijstatus zie je in de app, zodat je niet voor verrassingen komt te staan.</p></div></details>
+    <details class="faq"><summary>Kan ik een meetpunt naar een ander perceel verplaatsen?</summary><div class="ans"><p>Ja, dat doe je zelf in de app. Handig als je bouwplan per jaar verschuift.</p></div></details>
+    <details class="faq"><summary>Wat gebeurt er met mijn meetdata?</summary><div class="ans"><p>Die is van jou. We delen jouw meetgegevens niet herleidbaar met derden. Koppel je aan een BOS-systeem, dan bepaal je zelf welke gegevens daarheen gaan. <span class="todo">tekst afstemmen op privacystatement</span></p></div></details>
+    <div style="margin-top:24px"><a class="link-arrow" href="#">Alle veelgestelde vragen
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a></div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="cta-band">
+      <div>
+        <h3>Benieuwd wat het op jouw bedrijf oplevert?</h3>
+        <p>Reken het door met je eigen hectares en beregeningsbeurten, of kijk eerst wie er bij jou in de buurt al meet. Voor allebei hoef je niets in te vullen behalve je eigen cijfers.</p>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <a class="btn btn-primary" href="agroexact-home-voorbeeld.html#besparing">Reken het door
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+        <a class="btn btn-ghost-dark" href="agroexact-home-voorbeeld.html#dekking">Wie meet er bij jou?</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="fgrid">
+      <div>
+        <h4>Download de app</h4>
+        <p>Beschikbaar voor iOS en Android.</p>
+        <p style="margin-top:12px">🇬🇧 English · 🇩🇪 Deutsch · 🇫🇷 Français · 🇵🇱 Polski · 🇪🇸 Español</p>
+      </div>
+      <div>
+        <h4>Oplossingen</h4>
+        <ul>
+          <li><a href="agroexact-lokaal-weer-voorbeeld.html">Lokaal weer</a></li>
+          <li><a href="agroexact-optimaal-beregenen-voorbeeld.html">Optimaal beregenen</a></li>
+          <li><a href="agroexact-gewasbescherming-voorbeeld.html">Gewasbescherming</a></li>
+          <li><a href="agroexact-home-voorbeeld.html#besparing">Prijzen</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Support</h4>
+        <ul>
+          <li><a href="#">Handleidingen</a></li>
+          <li><a href="#">Veelgestelde vragen</a></li>
+          <li><a href="#">Kennisbank</a></li>
+          <li><a href="#">Inloggen in de app</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Contact</h4>
+        <p>Helftheuvelweg 11, 5222 AV 's-Hertogenbosch<br>Villafloraweg 1, 5928 SZ Venlo</p>
+        <p><a href="mailto:info@agroexact.com">info@agroexact.com</a><br><a href="tel:+31737820340">+31 73 782 03 40</a> · WhatsApp</p>
+      </div>
+    </div>
+    <div class="fbot">
+      <span>© AgroExact</span><a href="#">Algemene voorwaarden</a><a href="#">Privacy Statement</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

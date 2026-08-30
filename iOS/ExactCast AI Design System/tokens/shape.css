@@ -1,0 +1,22 @@
+:root{
+  --radius-field:10px;
+  --radius-tile:12px;
+  --radius-card:16px;      /* web cards */
+  --radius-app-card:24px;  /* iOS metric cards round harder */
+  --radius-band:28px;
+  --radius-hero:0 0 40px 40px; /* @kind radius */
+  --radius-phone:30px;
+  --radius-screen:23px;
+  --radius-pill:9999px;
+
+  --shadow-card:0 18px 50px -24px rgba(9,28,61,.28);
+  --shadow-float:0 4px 14px rgba(0,0,0,.13);
+  --shadow-phone:0 30px 70px -30px rgba(0,0,0,.75);
+  --shadow-pin:0 2px 6px rgba(0,0,0,.22);
+
+  --blur-header:blur(10px); /* @kind other */
+  --border-width-ghost:1.5px;
+  --border-width-field:1.5px;
+  --accent-bar:4px;   /* left border on a note */
+  --accent-top:5px;   /* top border on a status card */
+}

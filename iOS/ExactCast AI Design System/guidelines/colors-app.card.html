@@ -1,0 +1,120 @@
+<!-- @dsCard group="Colors" viewport="700x430" name="iOS app palette" subtitle="Reading tones plus the liquid-glass tab bar; accent follows the iOS appearance setting" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>body{margin:0;background:var(--cream);font-family:var(--font-core);color:var(--ink);font-size:var(--fs-body);line-height:var(--lh-body);padding:16px 18px}
+.hd{font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--green-dark);margin:0 0 10px}
+.stage{position:relative;border-radius:16px;overflow:hidden;padding:14px 12px 12px;display:flex;align-items:flex-end;min-height:112px}
+.cap{position:absolute;left:12px;top:10px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.7}
+code{font-size:12px}</style></head><body>
+<div style="display:grid;gap:16px">
+  <div>
+    <div class="hd">Reading colours</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+<div style="background:#0C2547;color:#fff;border-radius:12px;padding:10px;height:82px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">Value</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--app-value</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#0C2547</span></div><div style="background:#4E80C4;color:#fff;border-radius:12px;padding:10px;height:82px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">Cool (min)</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--app-value-cool</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#4E80C4</span></div><div style="background:#D9871F;color:#fff;border-radius:12px;padding:10px;height:82px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">Warm (max)</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--app-value-warm</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#D9871F</span></div><div style="background:#4F6885;color:#fff;border-radius:12px;padding:10px;height:82px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">Empty</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--muted (en-dash)</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#4F6885</span></div>
+    </div>
+  </div>
+  <div>
+    <div class="hd">Interactive accent — appearance-linked</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+<div style="background:#2A628E;color:#fff;border-radius:12px;padding:10px;height:82px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">Light appearance</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--app-accent</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#2A628E</span></div>
+<div style="background:#5FA3CE;color:#fff;border-radius:12px;padding:10px;height:82px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">Dark appearance</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--app-accent-dark</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#5FA3CE</span></div>
+<div style="background:#3D5372;color:#fff;border-radius:12px;padding:10px;height:82px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">Idle label</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--app-tab-idle</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#3D5372</span></div>
+    </div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.55;margin-top:10px;max-width:640px">
+Read it as <code>var(--app-accent-current)</code>, never as a hex. That variable resolves through
+<code>prefers-color-scheme</code> — so it tracks the iOS appearance setting — and a screen can pin it with
+<code>[data-appearance="light"|"dark"]</code> when the user overrides the OS inside the app.
+    </div>
+  </div>
+  <div>
+    <div class="hd">Tab bar — liquid glass in each appearance</div>
+    <div style="display:grid;gap:12px">
+<div class="stage" style="background:
+  linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px) 0 0/100% 34px,
+  linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px) 0 0/34px 100%,
+  linear-gradient(150deg,var(--map-land-1),var(--map-land-2) 60%,var(--map-land-3))">
+  <span class="cap" style="color:var(--ink-heading)">Light · over the radar map</span>
+  <div style="flex:1"><div style="display:flex;align-items:center;gap:2px;border-radius:9999px;padding:8px 10px;
+    background:var(--glass-tint);
+    -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-edge);
+    box-shadow:var(--glass-shadow), inset 0 1px 0 var(--glass-hairline)">
+    <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/house.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/house.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Overzicht</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-accent);
+background:var(--glass-capsule);box-shadow:0 2px 8px -4px rgba(9,28,61,.35);">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/fill/cloud-sun-fill.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/fill/cloud-sun-fill.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:600">Actueel</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/chart-line.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/chart-line.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Historisch</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/broadcast.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/broadcast.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Radar</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/plant.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/plant.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Bodem</span></span>
+  </div></div></div>
+<div class="stage" style="background:var(--gradient-dark)">
+  <span class="cap" style="color:#fff">Dark Mode</span>
+  <div style="flex:1"><div style="display:flex;align-items:center;gap:2px;border-radius:9999px;padding:8px 10px;
+    background:var(--glass-tint-dark);
+    -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-edge-dark);
+    box-shadow:var(--glass-shadow), inset 0 1px 0 var(--glass-hairline-dark)">
+    <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle-dark);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/house.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/house.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Overzicht</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-accent-dark);
+background:var(--glass-capsule-dark);box-shadow:0 2px 8px -4px rgba(9,28,61,.35);">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/fill/cloud-sun-fill.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/fill/cloud-sun-fill.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:600">Actueel</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle-dark);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/chart-line.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/chart-line.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Historisch</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle-dark);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/broadcast.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/broadcast.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Radar</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle-dark);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/plant.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/plant.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Bodem</span></span>
+  </div></div></div>
+<div class="stage" style="background:var(--cream-2)">
+  <span class="cap" style="color:var(--ink-heading)">Reduce Transparency · no blur</span>
+  <div style="flex:1"><div style="display:flex;align-items:center;gap:2px;border-radius:9999px;padding:8px 10px;
+    background:var(--glass-tint-opaque);
+    
+    border:1px solid var(--glass-edge);
+    box-shadow:var(--glass-shadow)">
+    <span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/house.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/house.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Overzicht</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-accent);
+background:var(--cream-2);">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/fill/cloud-sun-fill.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/fill/cloud-sun-fill.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:600">Actueel</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/chart-line.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/chart-line.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Historisch</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/broadcast.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/broadcast.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Radar</span></span><span style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px 6px;border-radius:9999px;color:var(--app-tab-idle);
+">
+<span style="width:24px;height:24px;background:currentColor;-webkit-mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/plant.svg);mask-image:url(https://unpkg.com/@phosphor-icons/core@2.1.1/assets/regular/plant.svg);-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-size:contain;mask-size:contain"></span>
+<span style="font-size:12px;font-weight:500">Bodem</span></span>
+  </div></div></div>
+    </div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.55;margin-top:12px;max-width:640px">
+The bar is a <b style="color:var(--ink-heading)">material, not a colour</b>: <code>blur(24px) saturate(180%)</code> behind a
+58% white tint, a 1px inner top highlight and a soft outer shadow — the cream page and the radar map read through it and
+content scrolls underneath. Dark Mode swaps the tint, not the shape; Reduce Transparency drops the blur for a 94%-opaque fill.
+    </div>
+  </div>
+</div></body></html>

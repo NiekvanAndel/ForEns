@@ -1,0 +1,177 @@
+<!-- @dsCard group="ExactCast iOS" viewport="430x860" name="iOS app" subtitle="Nowcast, Radar, Verwachting + Instellingen — swipe or tap a location pill" -->
+<!-- @startingPoint section="App" subtitle="ExactCast iOS app — nowcast, radar, forecast, settings" viewport="430x860" -->
+<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8"><title>ExactCast AI — iOS</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>html,body{margin:0;background:var(--cream);font-family:var(--font-core);color:var(--ink);font-size:var(--fs-body);line-height:var(--lh-body);-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+#root{max-width:430px;margin:0 auto;min-height:100vh;position:relative;overflow-x:hidden}
+button{font-family:var(--font-core)}
+input[type=range]{-webkit-appearance:none;height:22px;background:transparent;width:100%}
+input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:rgba(12,37,71,.12)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:var(--shadow-float);border:2px solid var(--accent);margin-top:-9px}
+a{color:var(--accent-dark)}a:hover{color:var(--ink-heading)}
+::-webkit-scrollbar{width:0;height:0}
+.fs-A{font-size:16px}.fs-Aplus{font-size:17.5px}.fs-Aplusplus{font-size:19px}</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel" src="AppChrome.jsx"></script>
+<script type="text/babel" src="NowcastScreen.jsx"></script>
+<script type="text/babel" src="RadarScreen.jsx"></script>
+<script type="text/babel" src="ForecastScreen.jsx"></script>
+<script type="text/babel" src="SettingsScreen.jsx"></script>
+<script type="text/babel">
+const { TabBar, Icon, Card } = window.ExactCastAIDesignSystem_6b62ae;
+
+/* ---------- fake data ----------
+   station:true means the location is backed by an AgroExact station — that is the ONLY
+   thing that turns a title green. Plain addresses (Pro-version locations) stay navy. */
+const SEED=[
+  {name:"'s-Hertogenbosch",station:true,source:'AgroExact-station Zuiderspoor · 1,2 km',stations:6,confidence:82,
+   time:'22:00',temp:18,hi:22,lo:18,cond:'cloudy',wind:{speed:19,deg:20},precip24:1.5,humidity:91,
+   model:'ECMWF ENS · 51 members',alertMm:'4,2',
+   alert:{kind:'Regen op weg',icon:'cloud-rain',severity:'heavy',headline:'Regen in 20 minuten',
+     sub:'4,2 mm verwacht, ongeveer 35 minuten lang. Daarna droog tot morgenochtend.',
+     bars:[6,10,42,78,64,30,12,6]},
+   hourly:[['cloudy',1,0.0,24,20,0],['drizzle',1,0.6,23,20,0],['drizzle',1,0.6,23,25,0],['rain',0,1.4,26,30,0],
+     ['rain',-1,0.8,25,30,0],['cloudy',-2,0.2,21,35,0],['cloudy',-2,0.0,18,40,0],['partly-cloudy',-1,0.0,16,45,12],['clear',1,0.0,15,50,48]],
+   daily:[['Za','29/8','cloudy',16,22],['Zo','30/8','rain',15,20],['Ma','31/8','partly-cloudy',14,21],['Di','1/9','clear',13,24],
+     ['Wo','2/9','clear',14,26],['Do','3/9','partly-cloudy',15,25],['Vr','4/9','cloudy',15,22],['Za','5/9','rain',14,19],
+     ['Zo','6/9','rain',13,18],['Ma','7/9','cloudy',13,19],['Di','8/9','partly-cloudy',12,20],['Wo','9/9','clear',12,22],
+     ['Do','10/9','clear',13,23],['Vr','11/9','partly-cloudy',13,21]]},
+
+  {name:'Westkapelle',station:false,source:'Adres · geen station in de buurt',stations:0,confidence:64,
+   time:'22:00',temp:17,hi:19,lo:15,cond:'wind',wind:{speed:47,deg:245},precip24:0.0,humidity:84,
+   model:'ECMWF ENS · 51 members',alertMm:'0,0',
+   alert:{kind:'Harde wind',icon:'wind',severity:'light',headline:'Windstoten tot 78 km/u',
+     sub:'Vanaf 23:00 zuidwest 7, in stoten 9. Geen neerslag verwacht — dit gaat om de wind.',
+     bars:[30,44,62,80,86,74,58,40]},
+   hourly:[['wind',1,0.0,52,245,0],['wind',1,0.0,58,245,0],['wind',0,0.0,61,250,0],['wind',0,0.0,57,250,0],
+     ['cloudy',-1,0.0,49,255,0],['cloudy',-1,0.0,44,255,0],['cloudy',-2,0.0,40,260,0],['partly-cloudy',-1,0.0,37,260,18],['clear',1,0.0,34,265,52]],
+   daily:[['Za','29/8','wind',15,19],['Zo','30/8','wind',14,18],['Ma','31/8','cloudy',14,19],['Di','1/9','partly-cloudy',13,20],
+     ['Wo','2/9','clear',13,22],['Do','3/9','clear',14,23],['Vr','4/9','partly-cloudy',14,21],['Za','5/9','cloudy',13,19],
+     ['Zo','6/9','rain',12,17],['Ma','7/9','cloudy',12,18],['Di','8/9','partly-cloudy',12,19],['Wo','9/9','clear',11,21],
+     ['Do','10/9','clear',12,22],['Vr','11/9','cloudy',12,20]]},
+
+  {name:'Maastricht',station:false,source:'Adres · station op 11,4 km',stations:1,confidence:71,
+   time:'22:00',temp:16,hi:21,lo:14,cond:'night',wind:{speed:8,deg:120},precip24:0.0,humidity:76,
+   model:'ECMWF ENS · 51 members',alertMm:'0,0',
+   alert:null,   /* nothing significant coming — the hero is simply absent */
+   hourly:[['night',0,0.0,8,120,0],['night',-1,0.0,7,120,0],['night',-1,0.0,7,125,0],['night',-2,0.0,6,125,0],
+     ['night',-2,0.0,6,130,0],['night',-2,0.0,5,130,0],['night',-2,0.0,5,135,0],['partly-cloudy',-1,0.0,7,140,22],['clear',2,0.0,9,145,55]],
+   daily:[['Za','29/8','clear',14,21],['Zo','30/8','clear',13,22],['Ma','31/8','partly-cloudy',14,23],['Di','1/9','clear',14,25],
+     ['Wo','2/9','clear',15,27],['Do','3/9','partly-cloudy',16,26],['Vr','4/9','cloudy',15,23],['Za','5/9','rain',14,20],
+     ['Zo','6/9','cloudy',13,19],['Ma','7/9','partly-cloudy',13,20],['Di','8/9','clear',12,22],['Wo','9/9','clear',13,24],
+     ['Do','10/9','partly-cloudy',13,23],['Vr','11/9','cloudy',13,21]]}
+].map(l=>({...l,
+  hourly:l.hourly.map((h,i)=>({t:['23:00','00:00','01:00','02:00','03:00','04:00','05:00','06:00','07:00'][i],
+    cond:h[0],temp:l.temp+h[1],mm:h[2],wind:h[3],deg:h[4],sun:h[5]})),
+  daily:l.daily.map(d=>({day:d[0],date:d[1],cond:d[2],lo:d[3],hi:d[4]})),
+  range:{lo:Math.min(...l.daily.map(d=>d[3])),hi:Math.max(...l.daily.map(d=>d[4]))}}));
+
+const SUGGESTIONS=[
+  {name:'Enschede',station:true,source:'AgroExact-station Zuiderspoor · 1,2 km'},
+  {name:'Ootmarsum',station:true,source:'AgroExact-station De Es · 2,4 km'},
+  {name:'Zwolle',station:false,source:'Adres · station op 6,8 km'},
+  {name:'Texel De Koog',station:false,source:'Adres · geen station in de buurt'}];
+
+const TABS=[{icon:'house',label:'Nowcast'},{icon:'broadcast',label:'Radar'},{icon:'calendar-blank',label:'Verwachting'}];
+const TITLES=['Nowcast','Radar','Verwachting'];
+
+function SearchSheet({query,onQuery,onAdd}){
+  const list=SUGGESTIONS.filter(s=>s.name.toLowerCase().includes(query.toLowerCase()));
+  return <div style={{padding:'0 16px 130px',display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:'12px'}}>
+    <Card radius="var(--radius-app-card)" pad="0" style={{overflow:'hidden'}}>
+      {list.length?list.map((s,i)=><button key={s.name} onClick={()=>onAdd(s)} style={{width:'100%',border:0,background:'none',
+        cursor:'pointer',textAlign:'left',display:'flex',alignItems:'center',gap:'12px',padding:'14px 16px',
+        borderBottom:i===list.length-1?0:'1px solid var(--hairline-soft)'}}>
+        <span style={{color:s.station?'var(--agro-bright)':'var(--muted)'}}><Icon name={s.station?'broadcast':'map-pin'} size={19}/></span>
+        <span>
+          <span style={{display:'block',fontSize:'var(--fs-body-sm)',fontWeight:600,color:s.station?'var(--agro-ink)':'var(--ink-heading)'}}>{s.name}</span>
+          <span style={{display:'block',fontSize:'var(--fs-caption)',color:'var(--muted)'}}>{s.source}</span></span>
+        <span style={{marginLeft:'auto',color:'var(--accent-dark)'}}><Icon name="plus" size={18}/></span>
+      </button>):<div style={{padding:'20px 16px',fontSize:'var(--fs-body-sm)',color:'var(--muted)'}}>Geen plaats gevonden voor "{query}".</div>}
+    </Card>
+    <div style={{fontSize:'var(--fs-caption)',color:'var(--muted)',lineHeight:1.5,padding:'0 6px'}}>
+      Een locatie met een <b style={{color:'var(--agro-ink)'}}>AgroExact-station</b> in de buurt krijgt een nowcast die met echte
+      metingen is bijgesteld. Zonder station gebruiken we alleen het radarbeeld — dat zeggen we er dan ook bij.</div>
+  </div>;
+}
+
+function App(){
+  const [tab,setTab]=React.useState(0);
+  const [loc,setLoc]=React.useState(0);
+  const [page,setPage]=React.useState('main');   /* main | settings */
+  const [searching,setSearching]=React.useState(false);
+  const [query,setQuery]=React.useState('');
+  const [locations,setLocations]=React.useState(SEED);
+  const [cfg,setCfg]=React.useState({lang:'NL',fontSize:'A',theme:'Auto',agro:true,shortModel:'Nowcast',
+    model:'ECMWF',spread:true,windUnit:'km/u',notifyRain:true,notifyWind:true,notifyFrost:false,quiet:true});
+  const set=(k,v)=>setCfg(c=>({...c,[k]:v}));
+
+  /* swipe left / right switches saved location */
+  const drag=React.useRef(null);
+  const [dx,setDx]=React.useState(0);
+  const onStart=e=>{drag.current={x:e.touches[0].clientX,y:e.touches[0].clientY,lock:null};};
+  const onMove=e=>{const d=drag.current;if(!d)return;
+    const mx=e.touches[0].clientX-d.x,my=e.touches[0].clientY-d.y;
+    if(!d.lock) d.lock=Math.abs(mx)>Math.abs(my)+6?'x':'y';
+    if(d.lock==='x'){setDx(Math.max(-90,Math.min(90,mx)));}};
+  const onEnd=()=>{const d=drag.current;drag.current=null;
+    if(d&&d.lock==='x'&&Math.abs(dx)>52){
+      setLoc(i=>dx<0?Math.min(locations.length-1,i+1):Math.max(0,i-1));}
+    setDx(0);};
+
+  React.useEffect(()=>{window.scrollTo(0,0);},[tab,page,loc]);
+  React.useEffect(()=>{if(loc>locations.length-1)setLoc(Math.max(0,locations.length-1));},[locations.length]);
+
+  const L=locations[Math.min(loc,locations.length-1)];
+  const reorder=(i,dir)=>setLocations(a=>{const b=[...a],j=i+dir;if(j<0||j>=b.length)return a;
+    [b[i],b[j]]=[b[j],b[i]];if(loc===i)setLoc(j);else if(loc===j)setLoc(i);return b;});
+  const remove=i=>setLocations(a=>a.length>1?a.filter((_,k)=>k!==i):a);
+  const add=s=>{setLocations(a=>a.some(x=>x.name===s.name)?a:[...a,{...SEED[2],...s,alert:null}]);
+    setSearching(false);setQuery('');setPage('main');};
+
+  const screens=[<NowcastScreen loc={L} onOpenRadar={()=>setTab(1)} onOpenForecast={()=>setTab(2)}/>,
+    <RadarScreen loc={L}/>,<ForecastScreen loc={L}/>];
+
+  return <div className={'fs-'+(cfg.fontSize==='A'?'A':cfg.fontSize==='A+'?'Aplus':'Aplusplus')}
+    data-appearance={cfg.theme==='Licht'?'light':cfg.theme==='Donker'?'dark':undefined}>
+    <StatusBar/>
+    <div style={{position:'relative',padding:'10px 20px 14px',textAlign:'center'}}>
+      <h1 style={{margin:0,fontSize:'var(--fs-h1-app)',fontWeight:700,color:'var(--ink-heading)',letterSpacing:'-.01em'}}>
+        {page==='settings'?'Instellingen':searching?'Locatie zoeken':TITLES[tab]}</h1>
+      {page==='settings'?<button onClick={()=>setPage('main')} style={{position:'absolute',left:'16px',top:'10px',border:0,
+        background:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:'3px',fontFamily:'var(--font-core)',
+        fontSize:'var(--fs-body)',fontWeight:600,color:'var(--accent-dark)'}}><Icon name="caret-left" size={17}/>Terug</button>:null}
+    </div>
+
+    {page==='settings'?null:
+      <LocationBar locations={locations} active={loc} onPick={setLoc} onSettings={()=>setPage('settings')}
+        onSearch={()=>setSearching(true)} query={query} onQuery={setQuery} searching={searching}
+        onCloseSearch={()=>{setSearching(false);setQuery('');}}/>}
+
+    {page==='settings'
+      ? <SettingsScreen state={cfg} set={set} locations={locations} onReorder={reorder} onRemove={remove}
+          onAddLocation={()=>{setPage('main');setSearching(true);}}/>
+      : searching
+        ? <SearchSheet query={query} onQuery={setQuery} onAdd={add}/>
+        : <div onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
+            style={{transform:'translateX('+dx*.35+'px)',transition:dx?'none':'transform .22s ease'}}>
+            {screens[tab]}
+            <div style={{display:'flex',justifyContent:'center',gap:'6px',padding:'2px 0 10px'}}>
+              {locations.map((_,i)=><i key={i} style={{width:i===loc?'18px':'6px',height:'6px',borderRadius:'3px',
+                background:i===loc?'var(--accent)':'rgba(12,37,71,.18)',transition:'var(--dur-fast)'}}/>)}
+            </div>
+          </div>}
+
+    {page==='settings'||searching?null:
+      <div style={{position:'fixed',left:0,right:0,bottom:0,display:'flex',justifyContent:'center',padding:'0 16px 22px',pointerEvents:'none'}}>
+        <div style={{width:'100%',maxWidth:'398px',pointerEvents:'auto'}}>
+          <TabBar items={TABS} active={tab} onChange={setTab}/></div>
+      </div>}
+  </div>;
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script></body></html>

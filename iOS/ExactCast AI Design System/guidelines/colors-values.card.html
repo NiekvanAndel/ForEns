@@ -1,0 +1,44 @@
+<!-- @dsCard group="Colors" viewport="700x280" name="Reading colours (high / low)" subtitle="The quantity picks the hue: warm for high, cool for low, one colour per measurand" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>body{margin:0;background:var(--cream);font-family:var(--font-core);color:var(--ink);font-size:var(--fs-body);line-height:var(--lh-body);padding:16px 18px}
+.hd{font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-dark);margin:0 0 10px}
+.card{background:#fff;border-radius:16px;box-shadow:var(--shadow-card);padding:14px 16px}
+.r{display:flex;align-items:center;gap:14px;font-weight:700;font-size:17px;padding:6px 0}
+.r span{white-space:nowrap}.u{font-size:12px;font-weight:600;color:var(--muted)}</style></head><body>
+<div style="display:grid;gap:14px">
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+    <div style="background:#D0524E;color:#fff;border-radius:12px;padding:10px;height:84px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">High / max</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--val-high</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#D0524E</span></div><div style="background:#2E7BC4;color:#fff;border-radius:12px;padding:10px;height:84px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">Low / min</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--val-low</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#2E7BC4</span></div><div style="background:#D9871F;color:#fff;border-radius:12px;padding:10px;height:84px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">Temperature</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--val-temp</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#D9871F</span></div><div style="background:#1C93C4;color:#fff;border-radius:12px;padding:10px;height:84px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">Precipitation</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--val-precip</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#1C93C4</span></div><div style="background:#9FB3C6;color:#fff;border-radius:12px;padding:10px;height:84px;display:flex;flex-direction:column;justify-content:flex-end;box-shadow:var(--shadow-card)">
+  <b style="font-size:12.5px">0 mm</b><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">--val-precip-zero</span><span style="font-size:11px;font-family:ui-monospace,monospace;opacity:.85">#9FB3C6</span></div>
+  </div>
+  <div style="display:grid;grid-template-columns:.85fr 1.15fr;gap:12px">
+    <div class="card">
+      <div class="hd">Headline reading</div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="display:grid;gap:2px">
+          <span style="color:var(--val-high);font-weight:700;font-size:19px">▲ 22°</span>
+          <span style="color:var(--val-low);font-weight:700;font-size:19px">▼ 18°</span></div>
+        <div style="font-size:52px;font-weight:800;color:var(--app-value);line-height:1">18°</div>
+      </div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:8px">Now is near-black navy; the day's high and low take the warm/cool pair.</div>
+    </div>
+    <div class="card">
+      <div class="hd">One colour per measurand</div>
+      <div class="r"><span style="color:var(--muted);font-weight:600;width:56px">23:00</span>
+        <span style="color:var(--val-temp)">19°</span><span style="color:var(--val-precip-zero)">0,0 <i class="u">mm</i></span>
+        <span style="color:var(--val-wind)">24 <i class="u">km/u</i></span><span style="color:var(--val-sun)">0 <i class="u">m</i></span></div>
+      <div class="r"><span style="color:var(--muted);font-weight:600;width:56px">00:00</span>
+        <span style="color:var(--val-temp)">19°</span><span style="color:var(--val-precip)">0,6 <i class="u">mm</i></span>
+        <span style="color:var(--val-wind)">23 <i class="u">km/u</i></span><span style="color:var(--val-sun)">0 <i class="u">m</i></span></div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:6px">A zero drops to <code>--val-precip-zero</code> so the real numbers carry the eye down the column.</div>
+    </div>
+  </div>
+  <div style="font-size:13px;color:var(--muted);line-height:1.55;max-width:660px">
+    Never colour a reading by its card or its row — colour it by <b style="color:var(--ink-heading)">what it measures</b>. Temperature is
+    always <code>--val-temp</code>, millimetres always <code>--val-precip</code>, and the ▲/▼ pair is the only place red and blue
+    mean "high" and "low" rather than a rain intensity.
+  </div>
+</div></body></html>

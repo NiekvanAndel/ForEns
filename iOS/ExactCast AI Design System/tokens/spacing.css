@@ -1,0 +1,19 @@
+:root{
+  --space-1:4px;  --space-2:8px;  --space-3:12px; --space-4:14px;
+  --space-5:16px; --space-6:18px; --space-7:20px; --space-8:24px;
+  --space-9:28px; --space-10:32px; --space-11:36px; --space-12:40px;
+  --space-13:44px; --space-14:48px; --space-15:56px;
+
+  --section-y:112px;
+  --section-y-mobile:72px;
+  --max-width:1280px;
+  --gutter:32px;
+  --gutter-mobile:20px;
+  --header-h:80px;
+
+  --card-pad:24px;
+  --panel-pad:28px;
+  --btn-pad:16px 28px;
+  --btn-pad-sm:12px 24px;
+  --field-pad:14px 16px;
+}

@@ -1,0 +1,38 @@
+<!-- @dsCard group="Colors" viewport="700x250" name="AgroExact green (contextual)" subtitle="Green names a station, never the weather" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>body{margin:0;background:var(--cream);font-family:var(--font-core);color:var(--ink);font-size:var(--fs-body);line-height:var(--lh-body);padding:16px 18px}
+.sw{border-radius:12px;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;height:88px;box-shadow:var(--shadow-card)}
+.sw b{font-size:13px;font-weight:700;display:block}.sw span{font-size:11.5px;font-family:ui-monospace,monospace;opacity:.85}
+.card{background:#fff;border-radius:14px;box-shadow:var(--shadow-card);padding:14px 16px}
+.ok,.no{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:8px}
+.ok{color:var(--agro-ink)}.no{color:var(--status-red)}</style></head><body>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+  <div class="sw" style="background:#7BB570;color:var(--ink-heading)"><b>Agro bright</b><span>--agro-bright</span><span>#7BB570</span></div>
+  <div class="sw" style="background:#5C9452;color:#fff"><b>Agro</b><span>--agro</span><span>#5C9452</span></div>
+  <div class="sw" style="background:#457A3D;color:#fff"><b>Agro ink</b><span>--agro-ink · 4.7:1</span><span>#457A3D</span></div>
+  <div class="sw" style="background:var(--agro-tint);color:var(--ink-heading);box-shadow:var(--shadow-card),inset 0 0 0 1px rgba(92,148,82,.28)"><b>Agro tint</b><span>--agro-tint</span><span>14%</span></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+  <div class="card"><span class="ok">✓ green belongs here</span>
+    <div style="font-size:19px;font-weight:700;color:var(--agro-ink)">Zuiderspoor</div>
+    <div style="font-size:12.5px;color:var(--muted);margin-top:2px">AgroExact-station · 1,2 km</div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <span style="background:var(--agro-tint);color:var(--agro-ink);font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:9999px">Eigen station</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)">
+        <i style="width:11px;height:11px;border-radius:50%;background:#fff;border:3px solid var(--agro-bright)"></i>meetpunt op de kaart</span>
+    </div>
+  </div>
+  <div class="card"><span class="no">✕ green never here</span>
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <span style="font-size:30px;font-weight:700;color:var(--val-precip)">1,6</span>
+      <span style="font-size:14px;color:var(--muted)">mm neerslag</span></div>
+    <div style="font-size:12.5px;color:var(--status-light-ink);margin-top:6px">Lichte regen binnen 40 min</div>
+    <div style="font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.5">
+      Forecast words, readings, radar and app chrome stay <b style="color:var(--accent-dark)">blue</b>.</div>
+  </div>
+</div>
+<div style="margin-top:12px;font-size:13px;color:var(--muted);line-height:1.55;max-width:640px">
+  <b style="color:var(--ink-heading)">The rule:</b> green means AgroExact <i>hardware</i> — a station-backed location title, a station
+  name, a map pin, the "connect with AgroExact" integration. Everything about weather is blue. Green is never the default
+  heading colour, never a button, never a status.
+</div></body></html>

@@ -1,0 +1,27 @@
+<!-- @dsCard group="Colors" viewport="700x240" name="Precipitation scale" subtitle="Cream dry → fresh light blue → deep blue heavy; never colour alone" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../styles.css">
+<style>body{margin:0;background:var(--cream);font-family:var(--font-core);color:var(--ink);font-size:var(--fs-body);line-height:var(--lh-body);padding:16px 18px}
+.sw{border-radius:12px;display:flex;flex-direction:column;justify-content:flex-end;padding:10px;height:92px;box-shadow:var(--shadow-card)}
+.sw b{font-size:13px;font-weight:700;display:block}.sw span{font-size:11.5px;font-family:ui-monospace,monospace;opacity:.85}
+.row{background:#fff;border-radius:10px;padding:10px 12px;box-shadow:var(--shadow-card);font-size:13px;display:flex;align-items:center;gap:8px}
+.dot{width:11px;height:11px;border-radius:50%;flex:0 0 11px}</style></head><body>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+  <div class="sw" style="background:var(--status-dry);color:var(--ink-heading);box-shadow:var(--shadow-card),inset 0 0 0 1px var(--status-dry-edge)"><b>Droog</b><span>--status-dry</span><span>#F4EEE3</span></div>
+  <div class="sw" style="background:var(--status-light);color:var(--ink-heading)"><b>Lichte regen</b><span>--status-light</span><span>#5FD0F2</span></div>
+  <div class="sw" style="background:var(--status-heavy);color:#fff"><b>Zware regen</b><span>--status-heavy</span><span>#12557E</span></div>
+</div>
+<div style="height:22px;border-radius:11px;overflow:hidden;display:flex;margin-top:12px;box-shadow:inset 0 0 0 1px var(--status-dry-edge)">
+  <i style="flex:1;background:var(--status-dry)"></i><i style="flex:1;background:var(--status-light)"></i><i style="flex:1;background:var(--status-heavy)"></i></div>
+<div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);margin-top:8px">
+  <span>0 mm</span><span>0,1–2 mm/u</span><span>&gt; 2 mm/u</span></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px">
+  <div class="row"><span class="dot" style="background:var(--status-dry);box-shadow:inset 0 0 0 1.5px var(--status-dry-edge)"></span><span style="color:var(--status-dry-ink)">Droog</span></div>
+  <div class="row"><span class="dot" style="background:var(--status-light)"></span><span style="color:var(--status-light-ink)">Lichte regen · #0E7CA6</span></div>
+  <div class="row"><span class="dot" style="background:var(--status-heavy)"></span><span style="color:var(--status-heavy-ink)">Zware regen · #12557E</span></div>
+</div>
+<div style="margin-top:14px;font-size:13px;color:var(--muted);line-height:1.55;max-width:640px">
+  Status here is rainfall, so it reads as <b style="color:var(--ink-heading)">one ramp, not a traffic light</b>: cream for dry,
+  light blue for light or still-uncertain rain, dark blue for heavy. Fills are for shapes; text always uses the
+  <code>-ink</code> variants so it stays legible on white, and the cream step carries a hairline. Colour never carries
+  meaning alone — always pair it with a word. The old <code>red/amber/green</code> keys still work and map onto this ramp.
+</div></body></html>

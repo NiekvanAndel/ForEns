@@ -1,0 +1,10 @@
+:root{
+  --dur-fast:.18s; /* @kind other */   /* buttons, links, hovers — the house transition */
+  --dur-base:.2s; /* @kind other */    /* disclosure arrows */
+  --dur-pulse:2.4s; /* @kind other */  /* map "you are here" ping */
+  --ease-default:ease; /* @kind other */
+  --lift-hover:translateY(-1px); /* @kind other */
+  --brighten-hover:brightness(1.06); /* @kind other */
+}
+@keyframes ec-pulse{0%{transform:scale(.8);opacity:1}100%{transform:scale(1.9);opacity:0}}
+@keyframes ec-fade-up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}

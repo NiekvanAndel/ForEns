@@ -1,0 +1,182 @@
+:root{
+  /* --- surfaces --- */
+  --cream:#F4EEE3;            /* page background */
+  --cream-2:#FBF8F3;          /* alternating section / inset tile */
+  --white:#FFFFFF;            /* every card */
+
+  /* --- ink --- */
+  --ink:#1F3354;              /* body copy */
+  --ink-heading:#0C2547;      /* headings, card titles, strong values */
+  --muted:#4F6885;            /* secondary copy — contrast-corrected to 4.9:1 */
+  --muted-legacy:#6D849E;     /* DEPRECATED: 3.36:1, fails AA. Never use. */
+  --ink-disabled:#B4C0CE;     /* empty cells, "not included" marks */
+
+  /* ================= THE COLOUR RULE =================
+     Blue = weather. Green = AgroExact hardware.
+     Everything about the forecast, the readings, the radar and the app's own chrome is
+     blue. Green is allowed — but only when the thing named IS an AgroExact station: a
+     station-backed location title, a station name, the AgroExact integration. A weather
+     word never goes green; a station name never goes blue.
+     ================================================== */
+
+  /* --- brand accent: fresh sky blue --- */
+  --sky:#3FC1EF;              /* the fresh one — fills, charts, selected states, tints */
+  --sky-soft:#8FDCF5;         /* light chart fill, hover wash on dark */
+  --sky-wash:#E8F7FD;         /* tinted surface / selected row */
+  --accent:#1C93C4;           /* accent surfaces that carry white text */
+  --accent-dark:#0E6B93;      /* dark stop + accent text on cream/white (5.3:1) */
+  --accent-band:#2AA6D6;      /* light stop of the CTA band gradient */
+  --accent-band-dark:#0F6E96; /* dark stop of the CTA band gradient */
+  --accent-tint:rgba(63,193,239,.12);
+  --accent-focus-ring:rgba(63,193,239,.3);
+
+  /* --- AgroExact green: contextual, never default ---
+     Use ONLY for station-linked names and the AgroExact integration. */
+  --agro:#5C9452;
+  --agro-bright:#7BB570;      /* station pin, station chip fill */
+  --agro-ink:#457A3D;         /* station name on white — 4.7:1 */
+  --agro-tint:rgba(123,181,112,.14);
+  --agro-gradient:linear-gradient(135deg,var(--agro-bright),var(--agro));
+
+  /* DEPRECATED aliases — old --green-* names resolve to the blue accent, because in old
+     markup they meant "the accent", not "a station". Do not use them in new work. */
+  --green:var(--accent);
+  --green-dark:var(--accent-dark);
+  --green-band:var(--accent-band);
+  --green-band-dark:var(--accent-band-dark);
+  --green-tint:var(--accent-tint);
+  --green-focus-ring:var(--accent-focus-ring);
+
+  /* --- navy --- */
+  --navy:#0A1936;             /* hero gradient start */
+  --navy-mid:#0A1F3D;         /* hero gradient middle stop */
+  --navy-2:#091C3D;           /* hero gradient end */
+  --navy-panel:#0C2547;       /* footer, app screen chrome */
+  --navy-scrim:rgba(10,25,54,.71);  /* fixed header over content */
+
+  /* --- copy on navy --- */
+  --on-navy:#FFFFFF;
+  --on-navy-body:rgba(226,235,245,.9);
+  --on-navy-soft:rgba(226,235,245,.82);
+  --on-navy-muted:rgba(226,235,245,.75);
+  --on-navy-faint:rgba(226,235,245,.6);
+  --on-navy-crumb:rgba(226,235,245,.62);
+
+  /* --- status triplet --- */
+  /* --- precipitation scale ---
+     Status is rainfall, so it reads as one ramp instead of a traffic light:
+     cream = dry, light blue = light/uncertain rain, dark blue = heavy rain. */
+  --status-dry:#F4EEE3;
+  --status-dry-ink:#4F6885;      /* "droog" text, legible on white */
+  --status-dry-edge:rgba(12,37,71,.18); /* cream needs a hairline on white */
+  --status-light:#5FD0F2;        /* fresh, not navy — light or still-uncertain rain */
+  --status-light-ink:#0E7CA6;    /* light-rain text on white — 4.6:1 */
+  --status-heavy:#12557E;
+  --status-heavy-ink:#12557E;
+
+  /* DEPRECATED aliases — old traffic-light names now resolve onto the rain ramp. */
+  --status-red:var(--status-heavy);
+  --status-amber:var(--status-light);
+  --status-green:var(--status-dry);
+  --status-amber-text:var(--status-light-ink);
+  --status-amber-ink:#1F4D75;
+  --status-amber-tint:rgba(127,182,228,.18);
+  --warn-bg:rgba(233,161,59,.13);
+  --warn-border:rgba(233,161,59,.4);
+  --warn-title:#F4C87B;        /* amber title on navy */
+
+  /* --- iOS app --- */
+  --app-bg:var(--cream);
+  --app-card:var(--white);
+  --app-value:var(--ink-heading);   /* the headline reading — near-black navy */
+
+  /* --- reading colours: the quantity decides the hue, not the card ---
+     high/max is warm red, low/min is cool blue, and each measurand keeps one colour
+     everywhere it appears so a column of numbers stays scannable. */
+  --val-high:#D0524E;          /* ▲ maximum / high */
+  --val-low:#2E7BC4;           /* ▼ minimum / low */
+  --val-temp:#D9871F;          /* temperature values in lists */
+  --val-precip:#1C93C4;        /* mm — same blue family as the accent */
+  --val-precip-zero:#9FB3C6;   /* 0 mm, dimmed so real numbers pop */
+  --val-wind:var(--ink-heading);
+  --val-sun:#D9871F;           /* sunshine / evaporation */
+  --app-value-cool:var(--val-low);   /* legacy names */
+  --app-value-warm:var(--val-temp);
+  /* tab bar = liquid glass. It is a MATERIAL, not a colour: a translucent tint over
+     a heavy backdrop blur + saturation, so the cream page and the radar map show through.
+     Light is the default; the dark set is for iOS Dark Mode / Reduce Transparency. */
+  --glass-tint:rgba(255,255,255,.58);
+  --glass-tint-opaque:rgba(252,250,246,.94);   /* iOS "Reduce Transparency" fallback */
+  --glass-blur:blur(24px) saturate(180%); /* @kind other */
+  --glass-hairline:rgba(255,255,255,.55);      /* inner top highlight */
+  --glass-edge:rgba(12,37,71,.08);             /* outer hairline */
+  --glass-shadow:0 12px 34px -14px rgba(9,28,61,.34);
+  --glass-capsule:rgba(255,255,255,.92);       /* selected item capsule */
+  --app-tab-idle:#3D5372;                      /* idle icon + label on light glass */
+  /* Interactive accent. Deep enough to pass on white; it is appearance-linked, so read it
+     through --app-accent-current (set by the [data-appearance] scope below), never hard-coded. */
+  --app-accent:#2A628E;                        /* Light appearance — 5.6:1 on the glass capsule */
+
+  --glass-tint-dark:rgba(28,33,45,.52);
+  --glass-tint-dark-opaque:rgba(18,24,36,.94);
+  --glass-hairline-dark:rgba(255,255,255,.14);
+  --glass-edge-dark:rgba(0,0,0,.35);
+  --glass-capsule-dark:rgba(255,255,255,.16);
+  --app-tab-idle-dark:rgba(255,255,255,.78);
+  --app-accent-dark:#5FA3CE;                    /* Dark appearance — same hue, lifted for dark glass */
+
+  /* Appearance-linked value. Follows the iOS system setting; a screen may pin it with
+     [data-appearance="light"|"dark"] when the user overrides the OS inside the app. */
+  --app-accent-current:var(--app-accent);
+  --app-tab-idle-current:var(--app-tab-idle);
+
+  /* --- hairlines --- */
+  --hairline:rgba(12,37,71,.09);
+  --hairline-soft:rgba(12,37,71,.07);
+  --border-field:rgba(12,37,71,.15);
+  --border-ghost:rgba(12,37,71,.2);
+  --border-ghost-hover:rgba(12,37,71,.45);
+  --border-on-navy:rgba(255,255,255,.35);
+  --border-on-navy-hover:rgba(255,255,255,.7);
+  --rule-on-navy:rgba(255,255,255,.12);
+  --track-on-navy:rgba(255,255,255,.13);
+  --fill-on-navy:rgba(255,255,255,.42);
+
+  /* --- map / geography --- */
+  --map-land-1:#CFE0C2;
+  --map-land-2:#DCE9D2;
+  --map-land-3:#D4E4C8;
+  --map-water:#BFD6E4;
+
+  /* --- semantic aliases --- */
+  --surface-page:var(--cream);
+  --surface-alt:var(--cream-2);
+  --surface-card:var(--white);
+  --surface-dark:var(--navy-panel);
+  --text-body:var(--ink);
+  --text-heading:var(--ink-heading);
+  --text-muted:var(--muted);
+  --text-accent:var(--accent-dark);
+  --text-station:var(--agro-ink);   /* a title that names an AgroExact station */
+  --accent-current:var(--accent-dark);  /* appearance-linked accent for app UI */
+  --gradient-primary:linear-gradient(135deg,var(--accent),var(--accent-dark));
+  --gradient-dark:linear-gradient(160deg,var(--navy),var(--navy-mid) 55%,var(--navy-2));
+  --gradient-band:linear-gradient(135deg,var(--accent-band),var(--accent-band-dark));
+  --gradient-sheen:linear-gradient(200deg,rgba(255,255,255,.05) 0 42%,transparent 42%); /* @kind color */
+}
+
+@media (prefers-color-scheme:dark){
+  :root{
+    --app-accent-current:var(--app-accent-dark);
+    --app-tab-idle-current:var(--app-tab-idle-dark);
+    --accent-current:var(--app-accent-dark);
+  }
+}
+[data-appearance="light"]{
+  --app-accent-current:var(--app-accent);
+  --app-tab-idle-current:var(--app-tab-idle);
+}
+[data-appearance="dark"]{
+  --app-accent-current:var(--app-accent-dark);
+  --app-tab-idle-current:var(--app-tab-idle-dark);
+}

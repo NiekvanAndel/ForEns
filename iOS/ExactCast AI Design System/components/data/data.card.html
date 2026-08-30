@@ -1,0 +1,42 @@
+<!-- @dsCard group="Components" viewport="700x400" name="Data display" subtitle="Metric cards, rows, meters, comparison table" -->
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<style>body{margin:0;background:var(--cream);font-family:var(--font-core);color:var(--ink);font-size:var(--fs-body);line-height:var(--lh-body)}
+#root{padding:18px 20px}</style></head><body><div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+const { MetricCard, StatTile, StatusDot, MeasurementRow, ResultRow, MeterBar, ScaleBar, ComparisonTable, Card } = window.ExactCastAIDesignSystem_6b62ae;
+function Demo(){return <div style={{display:'grid',gap:16}}>
+  <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
+    <MetricCard label="Neerslag nu" value="1,6" unit="mm" footnote="10 min"/>
+    <MetricCard label="Min. temp" value="15,6" unit="°C" footnote="Vandaag" tone="cool"/>
+    <MetricCard label="Max. temp" value="23,1" unit="°C" footnote="Vandaag" tone="warm"/>
+    <MetricCard label="Bodemtemp" value="–" footnote="Current"/>
+  </div>
+  <div style={{display:'grid',gridTemplateColumns:'1.1fr .9fr',gap:16,alignItems:'start'}}>
+    <Card><div style={{display:'grid',gap:8}}>
+      <MeasurementRow status="red" name="Thuis" meta="Zwolle · 1,2 km" advice="Regen in 20 min"/>
+      <MeasurementRow status="amber" name="Volkspark" meta="2,8 km" advice="Twijfel"/>
+      <MeasurementRow status="green" name="Camping De Es" meta="9,1 km" advice="Droog"/>
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginTop:14}}>
+      <StatTile value="1.240" label="stations"/><StatTile value="5 min" label="verversing"/><StatTile value="2 uur" label="nowcast"/>
+    </div></Card>
+    <div style={{background:'var(--gradient-dark)',borderRadius:'var(--radius-card)',padding:22}}>
+      <ResultRow label="Verwachte neerslag" value="4,2 mm"/>
+      <ResultRow label="Start" value="20:41"/>
+      <ResultRow label="Zekerheid" value="82%" highlight last/>
+      <MeterBar leftLabel="Zekerheid" rightLabel="82%" pct={82} style={{marginTop:16}}/>
+      <MeterBar leftLabel="Modelspreiding" rightLabel="18%" pct={18} tone="cost" style={{marginTop:10}}/>
+    </div>
+  </div>
+  <ComparisonTable columns={['Gratis weerapp','Landelijke radar','ExactCast AI']}
+    rows={[{label:'Bron',cells:['Model op 10 km','Radar op 1 km','Radar + station naast je deur']},
+           {label:'Vooruit',cells:['3 uur','1 uur','2 uur, per 5 min']},
+           {label:'Eigen meting',cells:['—','—','Ja']}]}/>
+  <Card><ScaleBar scale={['0%','50%','100%']} legend={[{title:'Groen',body:'Zeker genoeg om op te plannen.'},{title:'Amber',body:'Kan nog kantelen.'},{title:'Rood',body:'Te onzeker — kijk opnieuw.'}]}/></Card>
+</div>;}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>
