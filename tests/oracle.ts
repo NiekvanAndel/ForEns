@@ -56,6 +56,32 @@ function extractFunction(src: string, name: string): string {
   return src.slice(start, i);
 }
 
+/** Extract a `const name = { ... };` whose value spans multiple lines, by matching
+ *  braces (or brackets) from the opening one. */
+function extractObjectConst(src: string, name: string): string {
+  const re = new RegExp(`const\\s+${name}\\s*=\\s*[[{]`, 'g');
+  const m = re.exec(src);
+  if (!m) throw new Error(`oracle: const ${name} not found in index.html`);
+  const open = re.lastIndex - 1;
+  const openCh = src[open] as string;
+  const closeCh = openCh === '{' ? '}' : ']';
+  let depth = 1;
+  let i = open + 1;
+  let inStr: string | null = null;
+  while (i < src.length && depth > 0) {
+    const c = src[i] as string;
+    const prev = src[i - 1];
+    if (inStr) {
+      if (c === inStr && prev !== '\\') inStr = null;
+    } else if (c === '"' || c === "'" || c === '`') inStr = c;
+    else if (c === openCh) depth++;
+    else if (c === closeCh) depth--;
+    i++;
+  }
+  if (depth !== 0) throw new Error(`oracle: unbalanced braces extracting const ${name}`);
+  return src.slice(m.index, i) + ';';
+}
+
 /** Extract the whole `const ...;` statement that declares `name`.
  *  index.html declares several constants per statement (`const A=1, B=2;`), so this
  *  returns the full statement and callers must dedupe before concatenating. */
@@ -76,6 +102,8 @@ export interface OracleOptions {
   /** Freezes `new Date()` so the IFS run label is deterministic.
    *  Calls with arguments still behave normally, which the solar maths relies on. */
   nowMs?: number;
+  /** Multi-line object constants the extracted functions close over, e.g. `LANG`. */
+  objectConsts?: readonly string[];
 }
 
 /** A Date whose no-argument constructor is pinned, leaving every other form intact. */
@@ -118,6 +146,7 @@ export function loadOracle<const N extends readonly string[]>(
     }
   }
   parts.push(...consts);
+  for (const c of opts.objectConsts ?? []) parts.push(extractObjectConst(SOURCE, c));
   for (const n of names) parts.push(extractFunction(SOURCE, n));
   parts.push(`({ ${names.join(', ')} })`);
 
