@@ -1,22 +1,29 @@
 /**
  * Forecast layers.
  *
- * The design's ForecastScreen has a five-way layer switcher, but in the mock it is
+ * The design's ForecastScreen has a six-way layer switcher, but in the mock it is
  * decorative: `DayRow` renders identically whichever layer is selected. This module
  * makes it real by describing, per layer, what a day row actually shows — the value,
  * the bar, and the ensemble spread behind it.
  *
+ * Values come from `resolveDayValues`, which applies the web app's rule for deciding
+ * *which model speaks* for a day: HARMONIE for days 0–1, IFS unconditionally on days
+ * 2–3, and from day 4 the deterministic run only when it falls inside the ensemble
+ * band — otherwise the ensemble median, flagged so the UI can mark it `~`.
+ *
  * It is pure so the arithmetic is testable without a renderer, and so the same
- * description can drive the widget later.
+ * description can drive the widget.
  *
  * Values stay in canonical units (°C, mm, km/h, hours, %); conversion to the user's
  * preference happens at render, once.
  */
 import type { Day } from './types';
+import { resolveDayValues, type DayValues } from './dayValues';
 
-export type LayerKey = 'temp' | 'precip' | 'wind' | 'sun' | 'humidity';
+export type LayerKey = 'overview' | 'temp' | 'precip' | 'wind' | 'sun' | 'humidity';
 
 export const LAYERS: ReadonlyArray<{ key: LayerKey; icon: string; labelKey: string }> = [
+  { key: 'overview', icon: 'info', labelKey: 'tabOverview' },
   { key: 'temp', icon: 'thermometer-simple', labelKey: 'tabTemp' },
   { key: 'precip', icon: 'drop', labelKey: 'tabPrecip' },
   { key: 'wind', icon: 'wind', labelKey: 'tabWind' },
@@ -40,16 +47,13 @@ export interface LayerRow {
   spread: Range | null;
   /** A short qualifier, e.g. a precipitation probability. */
   note: string | null;
+  /** False when the ensemble median stood in for an out-of-band deterministic run.
+   *  The UI marks these `~`, as the web app does. */
+  primaryDirect: boolean;
+  secondaryDirect: boolean;
+  /** Everything the overview row needs, resolved once. */
+  values: DayValues;
 }
-
-/** Which quantity a layer's colour should follow (design rule 2). */
-export const LAYER_TONE: Record<LayerKey, 'temp' | 'precip' | 'wind' | 'sun' | 'neutral'> = {
-  temp: 'temp',
-  precip: 'precip',
-  wind: 'wind',
-  sun: 'sun',
-  humidity: 'neutral',
-};
 
 const num = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? v : null;
@@ -64,26 +68,49 @@ function ens(d: Day, value: unknown): number | null {
   return d.ensLoaded ? num(value) : null;
 }
 
-/** Deterministic values are preferred over ensemble percentiles where both exist:
- *  IFS is the sharper forecast, and the ensemble is there to express uncertainty. */
-function dayHigh(d: Day): number | null {
-  return num(d.hresTempMax) ?? ens(d, d.tempHi);
-}
-function dayLow(d: Day): number | null {
-  return num(d.hresTempMin) ?? ens(d, d.tempLo);
-}
-
-export function layerRow(day: Day, layer: LayerKey, showSpread = true): LayerRow {
+export function layerRow(
+  day: Day,
+  layer: LayerKey,
+  showSpread = true,
+  dayIndex = 0
+): LayerRow {
+  const values = resolveDayValues(day, { dayIndex });
   const spread = <T extends Range>(r: T | null): Range | null =>
     showSpread && day.ensLoaded ? r : null;
 
+  const base = {
+    values,
+    primaryDirect: true,
+    secondaryDirect: true,
+  };
+
   switch (layer) {
-    case 'temp': {
-      const lo = dayLow(day);
-      const hi = dayHigh(day);
+    // The overview row shows every measurand at once, so it has no single bar.
+    // `LayerDayRow` renders it as its own layout rather than through band/spread.
+    case 'overview':
       return {
+        ...base,
+        primary: values.tempMax.value,
+        secondary: values.tempMin.value,
+        primaryDirect: values.tempMax.direct,
+        secondaryDirect: values.tempMin.direct,
+        band:
+          values.tempMin.value != null && values.tempMax.value != null
+            ? { lo: values.tempMin.value, hi: values.tempMax.value }
+            : null,
+        spread: null,
+        note: null,
+      };
+
+    case 'temp': {
+      const lo = values.tempMin.value;
+      const hi = values.tempMax.value;
+      return {
+        ...base,
         primary: hi,
         secondary: lo,
+        primaryDirect: values.tempMax.direct,
+        secondaryDirect: values.tempMin.direct,
         band: lo != null && hi != null ? { lo, hi } : null,
         spread: spread(
           ens(day, day.tempMinP10) != null && ens(day, day.tempMaxP90) != null
@@ -95,14 +122,14 @@ export function layerRow(day: Day, layer: LayerKey, showSpread = true): LayerRow
     }
 
     case 'precip': {
-      // The median is the honest headline: a mean is dragged upward by a few wet
-      // members and would promise rain the ensemble does not agree on.
-      const median = ens(day, day.precipMedian) ?? num(day.hresPrecip);
+      const value = values.precip.value;
       const chance = ens(day, day.pChance);
       return {
-        primary: median,
+        ...base,
+        primary: value,
         secondary: null,
-        band: median != null ? { lo: 0, hi: median } : null,
+        primaryDirect: values.precip.direct,
+        band: value != null ? { lo: 0, hi: value } : null,
         spread: spread(
           ens(day, day.precipP10) != null && ens(day, day.precipP90) != null
             ? { lo: day.precipP10, hi: day.precipP90 }
@@ -113,11 +140,13 @@ export function layerRow(day: Day, layer: LayerKey, showSpread = true): LayerRow
     }
 
     case 'wind': {
-      const median = ens(day, day.windP50) ?? num(day.hresWindMax);
+      const value = values.wind.value;
       return {
-        primary: median,
+        ...base,
+        primary: value,
         secondary: num(day.hresWindMax),
-        band: median != null ? { lo: 0, hi: median } : null,
+        primaryDirect: values.wind.direct,
+        band: value != null ? { lo: 0, hi: value } : null,
         spread: spread(
           ens(day, day.windP10) != null && ens(day, day.windP90) != null
             ? { lo: day.windP10, hi: day.windP90 }
@@ -128,11 +157,11 @@ export function layerRow(day: Day, layer: LayerKey, showSpread = true): LayerRow
     }
 
     case 'sun': {
-      const hours = num(day.sunHours);
-      const et0 = num(day.et0);
+      const hours = values.sunHours;
       return {
+        ...base,
         primary: hours,
-        secondary: et0,
+        secondary: values.et0,
         band: hours != null ? { lo: 0, hi: hours } : null,
         // Sunshine comes from a deterministic run, not the ensemble, so there is no
         // spread to draw here however the preference is set.
@@ -142,12 +171,14 @@ export function layerRow(day: Day, layer: LayerKey, showSpread = true): LayerRow
     }
 
     case 'humidity': {
-      const lo = ens(day, day.humidityP10) ?? num(day.hresRhMin) ?? num(day.harmRhMin);
-      const hi = ens(day, day.humidityP90) ?? num(day.hresRhMax) ?? num(day.harmRhMax);
-      const median = ens(day, day.humidityMedian) ?? (lo != null && hi != null ? (lo + hi) / 2 : null);
+      const lo = values.humidityMin.value;
+      const hi = values.humidityMax.value;
       return {
-        primary: median,
+        ...base,
+        primary: ens(day, day.humidityMedian) ?? (lo != null && hi != null ? (lo + hi) / 2 : null),
         secondary: null,
+        primaryDirect: values.humidityMax.direct,
+        secondaryDirect: values.humidityMin.direct,
         band: lo != null && hi != null ? { lo, hi } : null,
         spread: null,
         note: lo != null && hi != null ? `${Math.round(lo)}–${Math.round(hi)}%` : null,
@@ -167,14 +198,14 @@ export function layerScale(days: readonly Day[], layer: LayerKey, showSpread = t
   let lo = Infinity;
   let hi = -Infinity;
 
-  for (const d of days) {
-    const row = layerRow(d, layer, showSpread);
+  days.forEach((d, i) => {
+    const row = layerRow(d, layer, showSpread, i);
     for (const r of [row.band, row.spread]) {
       if (!r) continue;
       if (Number.isFinite(r.lo)) lo = Math.min(lo, r.lo);
       if (Number.isFinite(r.hi)) hi = Math.max(hi, r.hi);
     }
-  }
+  });
 
   if (!Number.isFinite(lo) || !Number.isFinite(hi)) {
     // Nothing to scale against yet; a unit range keeps every downstream division safe.
@@ -197,3 +228,6 @@ export function bandGeometry(band: Range | null, scale: Range): { left: number; 
   const right = Math.min(1, Math.max(0, (band.hi - scale.lo) / span));
   return { left, width: Math.max(0.01, right - left) };
 }
+
+export { resolveDayValues };
+export type { DayValues };

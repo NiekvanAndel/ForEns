@@ -23,6 +23,9 @@ function day(over: Partial<Day> = {}): Day {
     sunHours: 6.5, et0: 3.2, windDir: 220,
     sunModel: 'ecmwf', sunOpacity: 0.15, sunOpacityDerived: false, sun6Hourly: null,
     dayIcon: 3, wmo: 3, nMembers: 51, ensLoaded: true,
+    // Deterministic values, inside the ensemble band. index.html uses IFS
+    // unconditionally on days 0–3, so a fixture without these shows nothing there.
+    hresTempMax: 22, hresTempMin: 11, hresPrecip: 2, hresWindMax: 20,
     harmTempMax: null, harmTempMin: null, harmPrecip: null, harmWindMax: null,
     harmRhMin: null, harmRhMax: null, hresRhMin: null, hresRhMax: null,
     ...over,
@@ -33,8 +36,23 @@ describe('layerRow', () => {
   it('gives every layer a different reading of the same day', () => {
     const d = day();
     const primaries = LAYERS.map((l) => layerRow(d, l.key).primary);
-    // Temperature 22, precipitation 2, wind 20, sun 6.5, humidity 70.
-    expect(primaries).toEqual([22, 2, 20, 6.5, 70]);
+    // Overview and temperature both lead with the maximum, then precipitation,
+    // wind, sunshine and humidity.
+    expect(primaries).toEqual([22, 22, 2, 20, 6.5, 70]);
+  });
+
+  it('flags a value the ensemble median stood in for', () => {
+    // An IFS maximum far outside the band, on a day past the forceIfs window.
+    const d = day({ hresTempMax: 99, tempMaxP50: 22 });
+    const r = layerRow(d, 'temp', true, 9);
+    expect(r.primary).toBe(22);
+    expect(r.primaryDirect).toBe(false);
+  });
+
+  it('keeps the deterministic value when it agrees with the ensemble', () => {
+    const r = layerRow(day(), 'temp', true, 9);
+    expect(r.primary).toBe(22);
+    expect(r.primaryDirect).toBe(true);
   });
 
   it('prefers the deterministic temperature over the ensemble bounds', () => {
@@ -93,11 +111,10 @@ describe('layerRow', () => {
       hresRhMin: null, hresRhMax: null, harmRhMin: null, harmRhMax: null,
     } as unknown as Partial<Day>);
     expect(layerRow(loading, 'temp').primary).toBeNull();
-    expect(layerRow(loading, 'precip').primary).toBeNull();
+    expect(layerRow(loading, 'precip').primary).toBe(0);
     expect(layerRow(loading, 'wind').primary).toBeNull();
-    expect(layerRow(loading, 'humidity').band).toBeNull();
     // Once it has loaded, a genuine zero is a genuine zero.
-    const dry = day({ ensLoaded: true, precipMedian: 0, pChance: 0 });
+    const dry = day({ ensLoaded: true, precipMedian: 0, pChance: 0, hresPrecip: 0 });
     expect(layerRow(dry, 'precip').primary).toBe(0);
     expect(layerRow(dry, 'precip').note).toBe('0%');
   });
@@ -116,18 +133,23 @@ describe('layerRow', () => {
       sunHours: null, et0: null, humidityMedian: null, humidityP10: null,
       humidityP90: null, hresRhMin: null, hresRhMax: null, harmRhMin: null, harmRhMax: null,
     } as unknown as Partial<Day>);
-    for (const l of LAYERS) {
-      const r = layerRow(empty, l.key);
-      expect(r.primary, l.key).toBeNull();
-      expect(r.band, l.key).toBeNull();
+    for (const l of ['overview', 'temp', 'wind', 'sun'] as const) {
+      const r = layerRow(empty, l);
+      expect(r.primary, l).toBeNull();
+      expect(r.band, l).toBeNull();
     }
+    // Two layers do not go blank, because index.html does not let them: precipitation
+    // falls back to 0 mm rather than to nothing, and humidity to the full 0-100% range.
+    // Ported faithfully rather than tidied.
+    expect(layerRow(empty, 'precip').primary).toBe(0);
+    expect(layerRow(empty, 'humidity').band).toEqual({ lo: 0, hi: 100 });
   });
 });
 
 describe('layerScale', () => {
   const days = [
-    day({ precipMedian: 1, precipP90: 3, tempLo: 10, tempHi: 15, hresTempMin: 10, hresTempMax: 15 }),
-    day({ precipMedian: 8, precipP90: 20, tempLo: 18, tempHi: 28, hresTempMin: 18, hresTempMax: 28 }),
+    day({ precipMedian: 1, hresPrecip: 1, precipP90: 3, tempLo: 10, tempHi: 15, hresTempMin: 10, hresTempMax: 15 }),
+    day({ precipMedian: 8, hresPrecip: 8, precipP90: 20, tempLo: 18, tempHi: 28, hresTempMin: 18, hresTempMax: 28 }),
   ];
 
   it('spans all days so the column is comparable', () => {
