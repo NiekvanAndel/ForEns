@@ -13,7 +13,7 @@ import {
 import { processAll } from '../core/model/process';
 import { deriveAlert, type WeatherAlert } from '../core/model/alert';
 import {
-  loadStage1, loadStage2, loadEnsemble, loadExtended, type HarmonieState,
+  loadStage1, loadStage2, loadEnsemble, loadExtended, loadIfsHourly, type HarmonieState,
 } from '../core/sources/openMeteo';
 import { activeProvider, type NowcastProfile } from '../core/radar';
 import type { ForecastModel, WeatherResponse } from '../core/model/types';
@@ -25,6 +25,8 @@ interface Sources {
   hourly: WeatherResponse | null;
   ensemble: WeatherResponse | null;
   ifs: WeatherResponse | null;
+  /** The IFS hourly series behind the day sheets and the per-day humidity extremes. */
+  ifsHourly: WeatherResponse | null;
   icons: WeatherResponse | null;
   iconsExt: WeatherResponse | null;
   offsetSec: number;
@@ -33,7 +35,7 @@ interface Sources {
 
 const EMPTY: Sources = {
   observations: null, hourly: null, ensemble: null, ifs: null,
-  icons: null, iconsExt: null, offsetSec: 0,
+  ifsHourly: null, icons: null, iconsExt: null, offsetSec: 0,
   harmonie: { model: null, failed: false, disabled: true },
 };
 
@@ -111,9 +113,14 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
       if (!live()) return;
       setSources((p) => ({ ...p, ifs: s2.ifs, icons: s2.icons }));
 
-      const ens = await loadEnsemble(coords, 7, { signal });
+      // The ensemble and the IFS hourly series are both slow and neither gates the
+      // day list, so they run together after it is already on screen.
+      const [ens, ifsHourly] = await Promise.all([
+        loadEnsemble(coords, 7, { signal }),
+        loadIfsHourly(coords, 7, { signal }),
+      ]);
       if (!live()) return;
-      setSources((p) => ({ ...p, ensemble: ens }));
+      setSources((p) => ({ ...p, ensemble: ens, ifsHourly: ifsHourly ?? p.ifsHourly }));
     })().catch((e) => {
       if (!live()) return;
       setPhase('error');
@@ -130,9 +137,10 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     const ctrl = abortRef.current;
     const signal = ctrl?.signal;
     (async () => {
-      const [ext, ens] = await Promise.all([
+      const [ext, ens, ifsHourly] = await Promise.all([
         loadExtended(coords, { signal }),
         loadEnsemble(coords, 14, { signal }),
+        loadIfsHourly(coords, 16, { signal }),
       ]);
       if (signal?.aborted) return;
       setSources((p) => ({
@@ -140,6 +148,7 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
         ifs: ext.ifs ?? p.ifs,
         iconsExt: ext.icons ?? p.iconsExt,
         ensemble: ens ?? p.ensemble,
+        ifsHourly: ifsHourly ?? p.ifsHourly,
       }));
     })().catch(() => setExtendedLoaded(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,9 +162,13 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
         sources.observations,
         sources.hourly,
         sources.ensemble,
-        sources.ifs, // sunshine and ET0 arrive inside the IFS response
+        sources.ifs, // sunshine and ET0 arrive inside the IFS daily response
         sources.ifs,
-        sources.ifs,
+        // The hourly series: precipitation and weather codes per hour, and the
+        // temperature/dew-point pair the per-day humidity extremes come from. Until
+        // it lands the daily response stands in, which carries neither, so those
+        // fields simply stay empty rather than being wrong.
+        sources.ifsHourly,
         {
           lat: location.lat,
           lon: location.lon,

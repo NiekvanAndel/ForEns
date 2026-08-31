@@ -286,12 +286,24 @@ export function processAll(
     });
   }
 
-  // ── IFS hourly precipitation, grouped by day. ──
+  // ── IFS hourly, grouped by day. ──
+  // The whole hour, not only its millimetres: the day sheets read temperature, wind,
+  // humidity and sunshine from here for every day beyond HARMONIE's range. The web
+  // app fetched each of those separately, per popup.
   const hresHoursByDay: Record<string, HresHour[]> = {};
   if (iphJ?.hourly?.time) {
-    const pt = iphJ.hourly.time;
-    const pp = iphJ.hourly.precipitation ?? [];
-    const pw = iphJ.hourly.weather_code ?? iphJ.hourly.weathercode ?? [];
+    const ph = iphJ.hourly;
+    const pt = ph.time ?? [];
+    const pp = ph.precipitation ?? [];
+    const pw = ph.weather_code ?? ph.weathercode ?? [];
+    const ptemp = ph.temperature_2m ?? [];
+    const pdew = ph.dewpoint_2m ?? [];
+    const prh = ph.relativehumidity_2m ?? [];
+    const pwind = ph.windspeed_10m ?? [];
+    const pdir = ph.winddirection_10m ?? [];
+    const pgust = ph.wind_gusts_10m ?? ph.windgusts_10m ?? [];
+    const psun = ph.sunshine_duration ?? [];
+    const pet0 = ph.et0_fao_evapotranspiration ?? [];
     pt.forEach((t, i) => {
       const hourNum = parseInt(t.slice(11, 13), 10);
       // The first 90 hours are genuinely hourly; beyond that the model is
@@ -299,12 +311,23 @@ export function processAll(
       const isReal = i < 90 || hourNum % 3 === 0;
       if (!isReal) return;
       const day = t.slice(0, 10);
+      const sunSec = at(psun, i);
       (hresHoursByDay[day] ??= []).push({
         time: t,
         hour: hourNum,
         precip: pp[i] != null ? round1(pp[i] as number) : 0,
         wmo: (pw[i] ?? 0) as number,
         is3h: i >= 90,
+        temp: roundOrNull(at(ptemp, i)),
+        dewpoint: roundOrNull(at(pdew, i)),
+        // Relative humidity is not in every IFS response; derive it from the dew
+        // point when it is absent, exactly as the web app's humidity popup did.
+        humidity: roundOrNull(at(prh, i)) ?? magnusRH(at(ptemp, i), at(pdew, i)),
+        wind: roundOrNull(at(pwind, i)),
+        windDir: roundOrNull(at(pdir, i)),
+        gusts: roundOrNull(at(pgust, i)),
+        sunMin: sunSec != null ? Math.round(sunSec / 60) : null,
+        et0h: at(pet0, i) != null ? round1(at(pet0, i) as number) : null,
       });
     });
   }

@@ -38,6 +38,18 @@ const IFS_DAILY_VARS = [
 const ENS_DAILY_VARS =
   'precipitation_sum,temperature_2m_max,temperature_2m_min,windspeed_10m_max';
 
+/** Everything the day sheets read hour by hour beyond HARMONIE's 48-hour range.
+ *
+ *  The web app fetched a different subset of these per popup — precipitation for
+ *  one, temperature and dew point for another, wind and gusts for a third — which
+ *  is five round trips for one day and five chances for the popups to disagree
+ *  about the same hour. One call carries all of it. */
+const IFS_HOURLY_VARS = [
+  'temperature_2m', 'dewpoint_2m', 'precipitation', 'weather_code',
+  'windspeed_10m', 'winddirection_10m', 'wind_gusts_10m',
+  'sunshine_duration', 'et0_fao_evapotranspiration', 'relativehumidity_2m',
+].join(',');
+
 export interface Coords {
   lat: number;
   lon: number;
@@ -59,6 +71,8 @@ export const urls = {
     `&daily=${IFS_DAILY_VARS}&forecast_days=${days}`,
   ifsIcons: (c: Coords, days: number) =>
     `${FORECAST}?${base(c)}&hourly=weather_code&models=ecmwf_ifs&forecast_days=${days}`,
+  ifsHourlyDetail: (c: Coords, days: number) =>
+    `${ECMWF}?${base(c)}&models=ecmwf_ifs&hourly=${IFS_HOURLY_VARS}&forecast_days=${days}`,
   ensemble: (c: Coords, days: number) =>
     `${ENSEMBLE}?${base(c)}&daily=${ENS_DAILY_VARS}&models=ecmwf_ifs025&forecast_days=${days}`,
 };
@@ -158,6 +172,21 @@ export async function loadStage2(c: Coords, opts: FetchOptions = {}): Promise<St
     tryFetchJson<WeatherResponse>(urls.ifsIcons(c, 7), 'IFS-icons', opts),
   ]);
   return { ifs, icons };
+}
+
+/**
+ * The IFS hourly series for days 2 onward.
+ *
+ * Separate from `loadStage2` because the day list does not need it — it is what the
+ * day sheets and the per-day humidity extremes read — so it must not sit in front of
+ * the first render of the forecast.
+ */
+export function loadIfsHourly(
+  c: Coords,
+  days: number,
+  opts: FetchOptions = {}
+): Promise<WeatherResponse | null> {
+  return tryFetchJson<WeatherResponse>(urls.ifsHourlyDetail(c, days), 'IFS-hourly-detail', opts);
 }
 
 /** Stage 3: the 51-member ensemble. Slow, so it never blocks the first render. */

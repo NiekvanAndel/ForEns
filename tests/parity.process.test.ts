@@ -60,9 +60,28 @@ function run(
     ecmwfHourlyExt: withIcons ? (f.ecmwfHourlyExt as any) : null,
     now: new Date(NOW_MS),
   };
-  const actual = processAll(oJ as any, hJ as any, f.eJ as any, f.sJ as any, f.iJ as any, f.ihJ as any, ctx);
+  const full = processAll(oJ as any, hJ as any, f.eJ as any, f.sJ as any, f.iJ as any, f.ihJ as any, ctx);
 
-  return { expected, actual };
+  return { expected, actual: comparable(full), full };
+}
+
+/**
+ * The port's `hresHoursByDay` carries the whole IFS hour — temperature, wind,
+ * humidity, sunshine — where the web app's carried only millimetres and a weather
+ * code, because the web app re-fetched the rest per popup instead. That is an
+ * addition, not a divergence, so it is projected away before comparing rather than
+ * weakening the comparison to a subset match. `keeps the whole IFS hour` below
+ * asserts the extension is actually populated.
+ */
+function comparable(m: ReturnType<typeof processAll>): ReturnType<typeof processAll> {
+  if (!m) return m;
+  const hresHoursByDay = Object.fromEntries(
+    Object.entries(m.hresHoursByDay).map(([date, hours]) => [
+      date,
+      hours.map(({ time, hour, precip, wmo, is3h }) => ({ time, hour, precip, wmo, is3h })),
+    ])
+  );
+  return { ...m, hresHoursByDay } as ReturnType<typeof processAll>;
 }
 
 describe('processAll', () => {
@@ -146,6 +165,21 @@ describe('processAll', () => {
       });
       expect(actual, `seed ${seed}`).toEqual(expected);
     }
+  });
+
+  it('keeps the whole IFS hour, not only its millimetres', () => {
+    // The web app fetched temperature, wind, humidity and sunshine separately in
+    // each day popup, so its hresHoursByDay had none of them. The port reads one
+    // call, which is what lets every section of a day sheet show the same hours.
+    const f = buildFixtures(1313);
+    const { full } = run(f);
+    const hours = Object.values(full!.hresHoursByDay).flat();
+    expect(hours.length).toBeGreaterThan(0);
+    for (const field of ['temp', 'wind', 'windDir', 'gusts', 'humidity', 'sunMin', 'et0h'] as const) {
+      expect(hours.some((h) => h[field] != null), field).toBe(true);
+    }
+    // Humidity is derived from the dew point where the response omits it.
+    expect(hours.some((h) => h.humidity != null && h.humidity >= 0 && h.humidity <= 100)).toBe(true);
   });
 
   it('switches IFS hourly precipitation to three-hourly after 90 hours', () => {

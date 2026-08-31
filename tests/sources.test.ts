@@ -115,6 +115,22 @@ describe('url construction', () => {
       expect(u).toContain('shortwave_radiation');
     }
   });
+  it('asks one IFS hourly call for everything the day sheets read', () => {
+    // The web app made a separate fetch per popup — precipitation for one, dew
+    // point for another, gusts for a third — which is how its popups came to
+    // disagree about the same hour.
+    const u = urls.ifsHourlyDetail(c, 7);
+    for (const field of [
+      'temperature_2m', 'dewpoint_2m', 'precipitation', 'weather_code',
+      'windspeed_10m', 'winddirection_10m', 'wind_gusts_10m',
+      'sunshine_duration', 'et0_fao_evapotranspiration',
+    ]) {
+      expect(u, field).toContain(field);
+    }
+    expect(u).toContain('models=ecmwf_ifs');
+    expect(urls.ifsHourlyDetail(c, 16)).toContain('forecast_days=16');
+  });
+
   it('asks the ensemble endpoint for the requested horizon', () => {
     expect(urls.ensemble(c, 14)).toContain('forecast_days=14');
     expect(urls.ensemble(c, 14)).toContain('ecmwf_ifs025');

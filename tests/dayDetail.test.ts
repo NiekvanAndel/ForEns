@@ -17,7 +17,10 @@ const hour = (time: string, over: Partial<Hour> = {}): Hour => ({
 });
 
 const hres = (time: string, over: Partial<HresHour> = {}): HresHour => ({
-  time, hour: parseInt(time.slice(11, 13), 10), precip: 0.4, wmo: 61, is3h: false, ...over,
+  time, hour: parseInt(time.slice(11, 13), 10), precip: 0.4, wmo: 61, is3h: false,
+  temp: 17, dewpoint: 11, humidity: 68, wind: 14, windDir: 210, gusts: 22,
+  sunMin: 25, et0h: 0.2,
+  ...over,
 });
 
 const day = (over: Partial<Day> = {}): Day => ({

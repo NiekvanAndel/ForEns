@@ -16,6 +16,7 @@ export interface HourlyBlock {
   windspeed_10m?: NumArray;
   winddirection_10m?: NumArray;
   windgusts_10m?: NumArray;
+  wind_gusts_10m?: NumArray;
   weathercode?: NumArray;
   weather_code?: NumArray;
   relativehumidity_2m?: NumArray;
@@ -95,6 +96,16 @@ export interface HresHour {
   wmo: number;
   /** True once the series drops from hourly to three-hourly resolution. */
   is3h: boolean;
+  /** The rest of the hour, for the day sheets. Null where the IFS hourly call has
+   *  not landed or does not carry the field. */
+  temp: number | null;
+  dewpoint: number | null;
+  humidity: number | null;
+  wind: number | null;
+  windDir: number | null;
+  gusts: number | null;
+  sunMin: number | null;
+  et0h: number | null;
 }
 
 /** A processed forecast day: ensemble spread plus deterministic and model values. */

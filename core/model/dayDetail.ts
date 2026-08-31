@@ -11,7 +11,9 @@
  *    whole calendar day rather than starting at "now".
  *  - Day 2 onward uses the ECMWF IFS hourly series, which is three-hourly beyond
  *    90 hours — flagged per hour so a chart can draw those as sparser samples
- *    rather than implying detail that is not there.
+ *    rather than implying detail that is not there. That series carries the whole
+ *    hour, not only its millimetres, so every section of the sheet reads the same
+ *    hours; the web app fetched a different subset per popup.
  */
 import type { ForecastModel, Day, Hour } from './types';
 import type { DayEnsemble } from '../sources/ensembleHourly';
@@ -99,8 +101,14 @@ export function buildDayDetail(
         hour: h.hour,
         precip: h.precip,
         wmo: h.wmo,
-        temp: null, wind: null, gusts: null, windDir: null,
-        humidity: null, dewpoint: null, sunMin: null, et0h: null,
+        temp: h.temp,
+        wind: h.wind,
+        gusts: h.gusts,
+        windDir: h.windDir,
+        humidity: h.humidity,
+        dewpoint: h.dewpoint,
+        sunMin: h.sunMin,
+        et0h: h.et0h,
         isPast: false,
         is3h: h.is3h,
       }));

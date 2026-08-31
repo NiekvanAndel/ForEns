@@ -159,6 +159,14 @@ export function buildFixtures(seed: number, opts: FixtureOptions = {}) {
       weather_code: ihTimes.map(() => maybe(rand, [0, 3, 61, 80][Math.floor(rand() * 4)] as number, gaps)),
       temperature_2m: ihTimes.map(() => maybe(rand, rand() * 20 + 2, gaps)),
       dewpoint_2m: ihTimes.map(() => maybe(rand, rand() * 12, gaps)),
+      // The rest of the hour, which the port reads and the web app re-fetched per
+      // popup. Present here so the projection in parity.process is exercised on
+      // real values rather than on a block of nulls.
+      windspeed_10m: ihTimes.map(() => maybe(rand, rand() * 40, gaps)),
+      winddirection_10m: ihTimes.map(() => maybe(rand, rand() * 360, gaps)),
+      wind_gusts_10m: ihTimes.map(() => maybe(rand, rand() * 60, gaps)),
+      sunshine_duration: ihTimes.map(() => maybe(rand, rand() * 3600, gaps)),
+      et0_fao_evapotranspiration: ihTimes.map(() => maybe(rand, rand() * 0.4, gaps)),
     },
     utc_offset_seconds: 7200,
   };
