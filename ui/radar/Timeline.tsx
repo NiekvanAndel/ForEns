@@ -9,7 +9,7 @@
  */
 import { useEffect } from 'react';
 import { View, Pressable } from 'react-native';
-import Slider from '@react-native-community/slider';
+import { Scrubber } from './Scrubber';
 import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
@@ -68,33 +68,14 @@ export function Timeline({ frames, index, playing, onIndexChange, onTogglePlay }
           </Text>
         </View>
 
-        <View>
-          <Slider
-            value={index}
-            minimumValue={0}
-            maximumValue={last}
-            step={1}
-            onValueChange={onIndexChange}
-            minimumTrackTintColor={palette.accent}
-            maximumTrackTintColor={palette.hairline}
-            thumbTintColor={palette.accent}
-            accessibilityLabel="Tijdlijn"
-            disabled={frames.length < 2}
-          />
-          {/* Where observation ends and nowcast begins. */}
-          {nowFraction != null ? (
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                left: `${nowFraction * 100}%`,
-                top: 8, bottom: 8, width: 2, borderRadius: 1,
-                backgroundColor: palette.muted,
-                opacity: 0.5,
-              }}
-            />
-          ) : null}
-        </View>
+        <Scrubber
+          value={index}
+          steps={frames.length}
+          onChange={onIndexChange}
+          markerFraction={nowFraction}
+          disabled={frames.length < 2}
+          accessibilityLabel="Tijdlijn"
+        />
       </View>
     </View>
   );
