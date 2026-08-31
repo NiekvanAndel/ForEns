@@ -11,6 +11,10 @@
  * the layer switcher, because six renderers that each re-derived the same day is
  * exactly why they drifted apart.
  *
+ * The sheet opens on the section you came from: tapping a day under 'Wind' opens the
+ * wind reading, not precipitation. Every section carries the chart, the day's
+ * figures, and the hour-by-hour list the web app printed in each popup.
+ *
  * The order is deliberate: the sentence a reader can act on comes first, the
  * meteogram second, and the per-measurand detail below that.
  */
@@ -23,10 +27,12 @@ import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
 import { Meteogram } from '../charts/Meteogram';
+import { HourlyList } from './HourlyList';
+import { OverviewDayRow } from './OverviewDayRow';
 import { SpreadChart } from '../charts/SpreadChart';
 import { usePrefs } from '../../state/prefs';
 import { buildDayDetail, precipNarrative, spreadLabel } from '../../core/model/dayDetail';
-import { LAYERS, layerRow, type LayerKey } from '../../core/model/layers';
+import { LAYERS, layerRow, resolveDayValues, type LayerKey } from '../../core/model/layers';
 import type { DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day, ForecastModel } from '../../core/model/types';
 import {
@@ -39,21 +45,24 @@ export interface DaySheetProps {
   model: ForecastModel | null;
   ensemble?: DayEnsemble;
   ensembleLoading?: boolean;
+  /** Section the sheet opens on — the tab the day was tapped under. */
+  initialLayer?: LayerKey;
   onClose: () => void;
 }
 
 export function DaySheet({
-  visible, day, model, ensemble, ensembleLoading, onClose,
+  visible, day, model, ensemble, ensembleLoading, initialLayer = 'overview', onClose,
 }: DaySheetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const insets = useSafeAreaInsets();
-  const [layer, setLayer] = useState<LayerKey>('precip');
+  const [layer, setLayer] = useState<LayerKey>(initialLayer);
 
-  // Every sheet opens on the same section, rather than inheriting the last one.
+  // Open on the section the day was tapped under, rather than inheriting whichever
+  // section the previous sheet was left on.
   useEffect(() => {
-    if (visible) setLayer('precip');
-  }, [visible, day?.date]);
+    if (visible) setLayer(initialLayer);
+  }, [visible, day?.date, initialLayer]);
 
   const detail = useMemo(
     () => (model && day ? buildDayDetail(model, day, ensemble) : null),
@@ -172,9 +181,8 @@ export function DaySheet({
             <SectionTabs active={layer} onChange={setLayer} />
             <Rule soft style={{ marginBottom: space[3] }} />
             <LayerSection layer={layer} day={day} detail={detail} />
+            <HourlyList layer={layer} hours={detail.hours} sourceLabel={detail.sourceLabel} />
           </Card>
-
-          <SummaryGrid day={day} />
         </ScrollView>
       </View>
     </Modal>
@@ -234,6 +242,16 @@ function LayerSection({
   const row = layerRow(day, layer, prefs.showSpread);
 
   switch (layer) {
+    // The overview repeats the list row, then everything the day is made of — the
+    // same figures the per-measurand sections show one at a time.
+    case 'overview':
+      return (
+        <>
+          <OverviewDayRow day={day} dayIndex={detail.dayIndex} />
+          <SummaryCells day={day} dayIndex={detail.dayIndex} />
+        </>
+      );
+
     case 'precip':
       return (
         <>
@@ -394,71 +412,71 @@ function StatRow({ items }: { items: { label: string; value: string }[] }) {
   );
 }
 
-/** The whole day at a glance, for a reader who does not want the charts. */
-function SummaryGrid({ day }: { day: Day }) {
+/** The whole day at a glance, for a reader who does not want the charts.
+ *  Values come from `resolveDayValues`, so the cells agree with the list row above
+ *  them — including which model each figure came from. */
+function SummaryCells({ day, dayIndex }: { day: Day; dayIndex: number }) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
+  const v = resolveDayValues(day, { dayIndex });
 
   const cells: { label: string; value: string; color?: string }[] = [
     {
       label: t('maxTemp', prefs.lang),
-      value: `${convTemp(day.hresTempMax ?? day.tempHi, prefs.tempUnit) ?? '—'}${tempUnitLabel(prefs.tempUnit)}`,
+      value: `${convTemp(v.tempMax.value, prefs.tempUnit) ?? '—'}${tempUnitLabel(prefs.tempUnit)}`,
       color: palette.valHigh,
     },
     {
       label: t('minTemp', prefs.lang),
-      value: `${convTemp(day.hresTempMin ?? day.tempLo, prefs.tempUnit) ?? '—'}${tempUnitLabel(prefs.tempUnit)}`,
+      value: `${convTemp(v.tempMin.value, prefs.tempUnit) ?? '—'}${tempUnitLabel(prefs.tempUnit)}`,
       color: palette.valLow,
     },
     {
       label: t('tabPrecip', prefs.lang),
-      value: `${fmtMm(day.precipMedian)} mm`,
-      color: day.precipMedian > 0 ? palette.valPrecip : palette.valPrecipZero,
+      value: v.precip.value != null ? `${fmtMm(v.precip.value)} mm` : '—',
+      color: v.precip.value ? palette.valPrecip : palette.valPrecipZero,
     },
     {
       label: t('tabWind', prefs.lang),
-      value: `${convWind(day.windP50, prefs.windUnit) ?? '—'} ${windUnitLabel(prefs.windUnit)}`,
+      value: `${convWind(v.wind.value, prefs.windUnit) ?? '—'} ${windUnitLabel(prefs.windUnit)}`,
     },
     {
       label: t('sunHours', prefs.lang),
-      value: day.sunHours != null ? `${day.sunHours.toFixed(1).replace('.', ',')} u` : '—',
+      value: v.sunHours != null ? `${v.sunHours.toFixed(1).replace('.', ',')} u` : '—',
       color: palette.valSun,
     },
     {
       label: t('evap', prefs.lang),
-      value: day.et0 != null ? `${fmtMm(day.et0)} mm` : '—',
+      value: v.et0 != null ? `${fmtMm(v.et0)} mm` : '—',
     },
   ];
 
   return (
-    <Card>
-      <CardHeader icon="info" label={t('tabOverview', prefs.lang)} />
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {cells.map((c, i) => (
-          <View
-            key={c.label}
-            style={{
-              width: '33.33%',
-              paddingVertical: space[3],
-              alignItems: 'center',
-              borderTopWidth: i >= 3 ? 1 : 0,
-              borderTopColor: palette.hairlineSoft,
-            }}
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: space[2] }}>
+      {cells.map((c, i) => (
+        <View
+          key={c.label}
+          style={{
+            width: '33.33%',
+            paddingVertical: space[3],
+            alignItems: 'center',
+            borderTopWidth: 1,
+            borderTopColor: palette.hairlineSoft,
+          }}
+        >
+          <Text variant="caption" color={palette.muted}>
+            {c.label}
+          </Text>
+          <Text
+            variant="stat"
+            color={c.color ?? palette.inkHeading}
+            tabular
+            style={{ marginTop: 4, fontSize: 18 }}
           >
-            <Text variant="caption" color={palette.muted}>
-              {c.label}
-            </Text>
-            <Text
-              variant="stat"
-              color={c.color ?? palette.inkHeading}
-              tabular
-              style={{ marginTop: 4, fontSize: 18 }}
-            >
-              {c.value}
-            </Text>
-          </View>
-        ))}
-      </View>
-    </Card>
+            {c.value}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }

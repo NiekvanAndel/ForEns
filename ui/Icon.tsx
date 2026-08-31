@@ -13,6 +13,7 @@ import {
   Moon, MoonStars, Pause, Play, PlugsConnected, Plus, Ruler, Sun, TextAa,
   ThermometerSimple, Translate, Trash, Wind,
   type IconProps as PhosphorProps,
+  NavigationArrow,
 } from 'phosphor-react-native';
 import type { ComponentType } from 'react';
 
@@ -41,6 +42,7 @@ const ICONS = {
   'magnifying-glass': MagnifyingGlass,
   minus: Minus,
   moon: Moon,
+  'navigation-arrow': NavigationArrow,
   'moon-stars': MoonStars,
   pause: Pause,
   play: Play,

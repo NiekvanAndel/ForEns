@@ -3,7 +3,12 @@
  *
  * Follows the design's "Detail korte termijn" card: 74pt cells carrying time,
  * condition, temperature, millimetres, a precipitation bar, wind, and sunshine
- * minutes. The current hour is washed in `--sky-wash`.
+ * minutes.
+ *
+ * The strip runs through the whole day, past hours included, and opens centred on
+ * the current hour — so "what has it been doing?" is a swipe left rather than a
+ * different screen. Past cells are dimmed rather than removed: the shape of the
+ * morning is what makes the afternoon readable.
  */
 import { ScrollView, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,35 +16,58 @@ import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
+import { currentHourDecor, plainDecor } from './currentHour';
+import { useCenterOnIndex } from './useCenterOnIndex';
 import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, fmtMm } from '../../core/i18n';
 import type { Hour } from '../../core/model/types';
 
 const BAR_HEIGHT = 34;
+const CELL_WIDTH = 74;
+const CELL_GAP = 6;
+/** How much a past hour is faded. Enough to recede, not so much it cannot be read. */
+const PAST_OPACITY = 0.45;
 
-export function HourStrip({ hours }: { hours: Hour[] }) {
-  const { palette } = useTheme();
+export interface HourStripProps {
+  hours: Hour[];
+  /** Index of the current hour within `hours`. Cells before it read as past. */
+  nowIndex?: number;
+}
+
+export function HourStrip({ hours, nowIndex = 0 }: HourStripProps) {
+  const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
   // Scale the bars against the wettest hour shown, floored at 1 mm so a drizzle
   // does not render as a downpour just because nothing else is falling.
   const maxMm = Math.max(...hours.map((h) => h.precip ?? 0), 1);
+  const decor = currentHourDecor(palette, appearance);
+
+  const { ref, onLayout } = useCenterOnIndex(nowIndex, CELL_WIDTH, CELL_GAP);
 
   return (
     <ScrollView
+      ref={ref}
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: 6, paddingBottom: 4 }}
+      onLayout={onLayout}
+      contentContainerStyle={{ gap: CELL_GAP, paddingBottom: 4 }}
     >
       {hours.map((h, i) => {
         const mm = h.precip ?? 0;
+        const past = i < nowIndex;
+        const now = i === nowIndex;
         return (
           <View
             key={h.time}
-            style={{
-              width: 74, alignItems: 'center',
-              borderRadius: radius.card, paddingVertical: space[3], paddingHorizontal: 6,
-              backgroundColor: i === 0 ? palette.skyWash : 'transparent',
-            }}
+            style={[
+              {
+                width: CELL_WIDTH, alignItems: 'center',
+                borderRadius: radius.card,
+                paddingVertical: space[3], paddingHorizontal: 6,
+                opacity: past ? PAST_OPACITY : 1,
+              },
+              now ? decor : plainDecor,
+            ]}
           >
             <Text variant="caption" weight="semibold" color={palette.muted} tabular>
               {h.time.slice(11, 16)}

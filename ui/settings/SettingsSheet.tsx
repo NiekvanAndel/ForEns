@@ -1,5 +1,10 @@
 /**
- * Instellingen.
+ * Instellingen, as a sheet over whichever page you were on.
+ *
+ * Settings moved out of the bottom bar and into the top row, so it is no longer a
+ * page you navigate to and have to navigate back from — it covers the page, and
+ * dismisses to exactly where you were. The bottom bar now carries only the three
+ * places you actually move between.
  *
  * Follows the design's SettingsScreen, with two additions the web app has and the
  * design's settings omits: temperature and pressure units. Dropping working
@@ -13,13 +18,13 @@
  * See DEFERRED.md.
  */
 import { useCallback } from 'react';
-import { ScrollView, View, Pressable } from 'react-native';
+import { Modal, ScrollView, View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { radius, space, useTheme } from '../../theme';
-import { Text } from '../../ui/Text';
-import { Icon } from '../../ui/Icon';
-import { Group, Row, Segmented, Toggle } from '../../ui/settings/Controls';
+import { Text } from '../Text';
+import { Icon } from '../Icon';
+import { Group, Row, Segmented, Toggle } from './Controls';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { t, ta, LANG_CODES } from '../../core/i18n';
@@ -27,10 +32,14 @@ import type { LangCode } from '../../core/i18n';
 import type { ThemeMode } from '../../core/prefs';
 import type { FontSizePref, PresUnit, TempUnit, WindUnit } from '../../core/i18n/units';
 
-const TAB_BAR_CLEARANCE = 110;
 const APP_VERSION = '0.1';
 
-export default function SettingsScreen() {
+export interface SettingsSheetProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const {
@@ -54,19 +63,37 @@ export default function SettingsScreen() {
   );
 
   return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
     <View style={{ flex: 1, backgroundColor: palette.appBg }}>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: space[5],
-          paddingTop: insets.top + space[4],
-          paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
+          paddingTop: space[5],
+          paddingBottom: insets.bottom + space[10],
           gap: space[6],
         }}
         showsVerticalScrollIndicator={false}
       >
-        <Text variant="screenTitle" color={palette.inkHeading}>
-          {t('settings', prefs.lang)}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+          <Text variant="screenTitle" color={palette.inkHeading} style={{ flex: 1 }}>
+            {t('settings', prefs.lang)}
+          </Text>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={ta('done', prefs.lang)}
+            hitSlop={10}
+          >
+            <Text variant="body" weight="semibold" color={palette.accentDark}>
+              {ta('done', prefs.lang)}
+            </Text>
+          </Pressable>
+        </View>
 
         <Group label={ta('display', prefs.lang)}>
           <Row icon="translate" label={t('lang', prefs.lang)} hint={ta('langHint', prefs.lang)} stacked>
@@ -214,6 +241,7 @@ export default function SettingsScreen() {
         </Text>
       </ScrollView>
     </View>
+    </Modal>
   );
 }
 

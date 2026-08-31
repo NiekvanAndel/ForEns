@@ -12,14 +12,13 @@ import { space, useTheme } from '../../theme';
 import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
-import { LocationBar } from '../../ui/LocationBar';
+import { ScreenFrame } from '../../ui/ScreenFrame';
 import { RadarMap } from '../../ui/radar/RadarMap';
 import { Timeline } from '../../ui/radar/Timeline';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useStations, stationsNear } from '../../state/stations';
 import { activeProvider, frameLabel, type RadarFrame } from '../../core/radar';
-import { searchPlaces, SEARCH_DEBOUNCE_MS, type Place } from '../../core/sources/geocoding';
 import { fmtMm, ta } from '../../core/i18n';
 
 const TAB_BAR_CLEARANCE = 110;
@@ -28,7 +27,7 @@ const STATION_PIN_RADIUS_KM = 60;
 
 export default function RadarScreen() {
   const { palette } = useTheme();
-  const { prefs, location, addLocation } = usePrefs();
+  const { prefs, location } = usePrefs();
   const { nowcast } = useForecast();
   const insets = useSafeAreaInsets();
   const { stations } = useStations(location.lat, location.lon);
@@ -37,8 +36,6 @@ export default function RadarScreen() {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [results, setResults] = useState<Place[]>([]);
-  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -61,25 +58,6 @@ export default function RadarScreen() {
     };
   }, []);
 
-  const onSearch = useCallback(
-    (query: string) => {
-      if (!query.trim()) {
-        setResults([]);
-        setSearching(false);
-        return;
-      }
-      setSearching(true);
-      const id = setTimeout(() => {
-        searchPlaces(query, prefs.lang)
-          .then(setResults)
-          .catch(() => setResults([]))
-          .finally(() => setSearching(false));
-      }, SEARCH_DEBOUNCE_MS);
-      return () => clearTimeout(id);
-    },
-    [prefs.lang]
-  );
-
   const pins = useMemo(
     () => stationsNear(stations, location.lat, location.lon, STATION_PIN_RADIUS_KM),
     [stations, location.lat, location.lon]
@@ -91,14 +69,7 @@ export default function RadarScreen() {
     : `${ta('dryAt', prefs.lang)} ${location.name}`;
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.appBg, paddingTop: insets.top }}>
-      <LocationBar
-        onSearch={onSearch}
-        results={results}
-        searching={searching}
-        onPick={(p) => addLocation({ name: p.name, lat: p.lat, lon: p.lon, sub: p.sub })}
-      />
-
+    <ScreenFrame>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: space[5],
@@ -171,6 +142,6 @@ export default function RadarScreen() {
           </Text>
         </View>
       </ScrollView>
-    </View>
+    </ScreenFrame>
   );
 }

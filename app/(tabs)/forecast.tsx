@@ -7,24 +7,25 @@
  * Days 8–14 stay collapsed until asked for, because fetching them means a 16-day
  * deterministic run and a 14-day ensemble — the two slowest calls the app makes.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space, useTheme } from '../../theme';
 import { Card, CardHeader, Rule } from '../../ui/Card';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
-import { LocationBar } from '../../ui/LocationBar';
+import { ScreenFrame } from '../../ui/ScreenFrame';
 import { HourStrip } from '../../ui/forecast/HourStrip';
 import { LayerSwitcher } from '../../ui/forecast/LayerSwitcher';
 import { LayerDayRow } from '../../ui/forecast/LayerDayRow';
+import { OverviewDayRow } from '../../ui/forecast/OverviewDayRow';
 import { DaySheet } from '../../ui/forecast/DaySheet';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { layerScale, type LayerKey } from '../../core/model/layers';
+import { hourWindow } from '../../core/model/hourWindow';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
-import { searchPlaces, SEARCH_DEBOUNCE_MS, type Place } from '../../core/sources/geocoding';
 import { t, ta } from '../../core/i18n';
 
 const TAB_BAR_CLEARANCE = 110;
@@ -33,11 +34,11 @@ const COLLAPSED_DAYS = 7;
 
 export default function ForecastScreen() {
   const { palette } = useTheme();
-  const { prefs, location, addLocation } = usePrefs();
+  const { prefs, location } = usePrefs();
   const { model, harmonie, phase, extendedLoaded, loadExtendedDays } = useForecast();
   const insets = useSafeAreaInsets();
 
-  const [layer, setLayer] = useState<LayerKey>('precip');
+  const [layer, setLayer] = useState<LayerKey>('overview');
   const [expanded, setExpanded] = useState(false);
   const [sheetDay, setSheetDay] = useState<Day | null>(null);
   const [dayEnsemble, setDayEnsemble] = useState<DayEnsemble | undefined>();
@@ -45,27 +46,6 @@ export default function ForecastScreen() {
   // Kept across renders so reopening a sheet is instant, and cleared when the
   // location changes, since the same date elsewhere is a different forecast.
   const ensembleCache = useRef(new DayEnsembleCache());
-  const [results, setResults] = useState<Place[]>([]);
-  const [searching, setSearching] = useState(false);
-
-  const onSearch = useCallback(
-    (query: string) => {
-      if (!query.trim()) {
-        setResults([]);
-        setSearching(false);
-        return;
-      }
-      setSearching(true);
-      setTimeout(() => {
-        searchPlaces(query, prefs.lang)
-          .then(setResults)
-          .catch(() => setResults([]))
-          .finally(() => setSearching(false));
-      }, SEARCH_DEBOUNCE_MS);
-    },
-    [prefs.lang]
-  );
-
   useEffect(() => {
     ensembleCache.current.clear();
   }, [location.lat, location.lon]);
@@ -89,6 +69,12 @@ export default function ForecastScreen() {
       .finally(() => { if (alive) setEnsembleLoading(false); });
     return () => { alive = false; };
   }, [sheetDay, location.lat, location.lon]);
+
+  // The strip runs from this morning into tomorrow, opening on the current hour.
+  const strip = useMemo(
+    () => (model ? hourWindow(model, { ahead: 24 }) : { hours: [], nowIndex: -1 }),
+    [model]
+  );
 
   const days = useMemo(
     () => (model ? (expanded ? model.days : model.days.slice(0, COLLAPSED_DAYS)) : []),
@@ -115,14 +101,7 @@ export default function ForecastScreen() {
     : 'ECMWF IFS';
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.appBg, paddingTop: insets.top }}>
-      <LocationBar
-        onSearch={onSearch}
-        results={results}
-        searching={searching}
-        onPick={(p) => addLocation({ name: p.name, lat: p.lat, lon: p.lon, sub: p.sub })}
-      />
-
+    <ScreenFrame>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: space[5],
@@ -147,7 +126,7 @@ export default function ForecastScreen() {
           <>
             <Card>
               <CardHeader icon="clock" label={t('shortTermDetail', prefs.lang)} />
-              <HourStrip hours={model.futureHours.slice(0, 24)} />
+              <HourStrip hours={strip.hours} nowIndex={strip.nowIndex} />
             </Card>
 
             <Card>
@@ -158,16 +137,27 @@ export default function ForecastScreen() {
               <LayerSwitcher active={layer} onChange={setLayer} />
 
               <View style={{ gap: 2 }}>
-                {days.map((d) => (
-                  <LayerDayRow
-                    key={d.date}
-                    day={d}
-                    layer={layer}
-                    scale={scale}
-                    showSpread={prefs.showSpread}
-                    onPress={() => setSheetDay(d)}
-                  />
-                ))}
+                {days.map((d, i) =>
+                  // The overview tab is the web app's `overzicht`: every measurand at
+                  // once, so it has no single bar to draw and its own row instead.
+                  layer === 'overview' ? (
+                    <OverviewDayRow
+                      key={d.date}
+                      day={d}
+                      dayIndex={i}
+                      onPress={() => setSheetDay(d)}
+                    />
+                  ) : (
+                    <LayerDayRow
+                      key={d.date}
+                      day={d}
+                      layer={layer}
+                      scale={scale}
+                      showSpread={prefs.showSpread}
+                      onPress={() => setSheetDay(d)}
+                    />
+                  )
+                )}
               </View>
 
               <Rule soft style={{ marginTop: space[3] }} />
@@ -228,9 +218,10 @@ export default function ForecastScreen() {
         model={model}
         ensemble={dayEnsemble}
         ensembleLoading={ensembleLoading}
+        initialLayer={layer}
         onClose={() => setSheetDay(null)}
       />
-    </View>
+    </ScreenFrame>
   );
 }
 

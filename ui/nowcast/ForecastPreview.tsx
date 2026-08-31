@@ -1,167 +1,162 @@
 /**
- * The forecast preview card: an hourly strip and the first four days.
+ * The forecast card on 'Nu': an hourly strip and the daily overview.
  *
- * The day bar spans that day's min to max temperature, positioned inside the range
- * of all days shown — so a cold day sits left and a warm one right, and the bars are
- * comparable down the column rather than each filling its own row.
+ * The daily list is the web app's `overzicht` tab, not a temperature-only summary —
+ * icon, minimum, maximum, wind, precipitation and sunshine on one line, seven days
+ * with the second week a tap away. That is what the home page is for: everything
+ * about a day at a glance, with 'Verwachting' for reading one measurand closely.
+ *
+ * The strip carries past hours too and opens on the current one, so the morning is
+ * a swipe left rather than a different screen.
  */
-import { View, Pressable, ScrollView } from 'react-native';
+import { View, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { radius, space, useTheme } from '../../theme';
 import { Card, CardHeader, Rule } from '../Card';
 import { Text } from '../Text';
+import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
+import { OverviewDayRow } from '../forecast/OverviewDayRow';
+import { currentHourDecor, plainDecor } from '../forecast/currentHour';
+import { useCenterOnIndex } from '../forecast/useCenterOnIndex';
 import { usePrefs } from '../../state/prefs';
-import { convTemp, fmtMm, dayNames, ta } from '../../core/i18n';
+import { convTemp, fmtMm, t, ta } from '../../core/i18n';
+import { hourWindow } from '../../core/model/hourWindow';
 import type { Day, ForecastModel } from '../../core/model/types';
 
-export function ForecastPreview({
-  model, onOpen,
-}: { model: ForecastModel; onOpen: () => void }) {
-  const { palette } = useTheme();
-  const { prefs } = usePrefs();
-  const hours = model.futureHours.slice(0, 12);
-  const days = model.days.slice(0, 4);
-  const maxMm = Math.max(...hours.map((h) => h.precip ?? 0), 1);
+/** Days shown before the second week is asked for — the web app's split. */
+const COLLAPSED_DAYS = 7;
+const CELL_WIDTH = 62;
+const CELL_GAP = 6;
+const PAST_OPACITY = 0.45;
 
-  // One shared temperature range, so the bars can be read against each other.
-  const lows = days.map((d) => d.hresTempMin ?? d.tempLo).filter((v): v is number => v != null);
-  const highs = days.map((d) => d.hresTempMax ?? d.tempHi).filter((v): v is number => v != null);
-  const range = {
-    lo: lows.length ? Math.min(...lows) : 0,
-    hi: highs.length ? Math.max(...highs) : 1,
-  };
+export interface ForecastPreviewProps {
+  model: ForecastModel;
+  onOpen: () => void;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  /** True while the 14-day fetch is still in flight. */
+  extendedLoading?: boolean;
+  onOpenDay?: (day: Day) => void;
+}
+
+export function ForecastPreview({
+  model, onOpen, expanded, onToggleExpanded, extendedLoading, onOpenDay,
+}: ForecastPreviewProps) {
+  const { palette, appearance } = useTheme();
+  const { prefs } = usePrefs();
+  const { hours, nowIndex } = hourWindow(model, { ahead: 12, behind: 6 });
+  const days = expanded ? model.days : model.days.slice(0, COLLAPSED_DAYS);
+  const maxMm = Math.max(...hours.map((h) => h.precip ?? 0), 1);
+  const decor = currentHourDecor(palette, appearance);
+  const { ref, onLayout } = useCenterOnIndex(nowIndex, CELL_WIDTH, CELL_GAP);
 
   return (
     <Card>
-      <CardHeader icon="clock" label={ta('tabForecast', prefs.lang)} action={ta('details', prefs.lang)} onAction={onOpen} />
-      <Pressable onPress={onOpen} accessibilityRole="button">
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 6, paddingBottom: 4 }}
-        >
-          {hours.map((h, i) => {
-            const mm = h.precip ?? 0;
-            return (
-              <View
-                key={h.time}
-                style={{
-                  width: 62, alignItems: 'center', borderRadius: radius.tile + 2,
+      <CardHeader
+        icon="clock"
+        label={ta('tabForecast', prefs.lang)}
+        action={ta('details', prefs.lang)}
+        onAction={onOpen}
+      />
+
+      <ScrollView
+        ref={ref}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onLayout={onLayout}
+        contentContainerStyle={{ gap: CELL_GAP, paddingBottom: 4 }}
+      >
+        {hours.map((h, i) => {
+          const mm = h.precip ?? 0;
+          return (
+            <View
+              key={h.time}
+              style={[
+                {
+                  width: CELL_WIDTH, alignItems: 'center', borderRadius: radius.tile + 2,
                   paddingVertical: 10, paddingHorizontal: 4,
-                  backgroundColor: i === 0 ? palette.skyWash : 'transparent',
-                }}
-              >
-                <Text variant="caption" weight="semibold" color={palette.muted} tabular>
-                  {h.time.slice(11, 16)}
-                </Text>
-                <View style={{ marginVertical: 7 }}>
-                  <WeatherIcon wmo={h.wmo} isDay={h.isDay} size={22} />
-                </View>
-                <Text variant="bodySm" weight="bold" color={palette.valTemp} tabular>
-                  {convTemp(h.temp, prefs.tempUnit) ?? '—'}°
-                </Text>
-                <View style={{ height: 30, justifyContent: 'flex-end', marginTop: 6 }}>
-                  {mm > 0 ? (
-                    <LinearGradient
-                      colors={[palette.sky, palette.accent]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 0, y: 1 }}
-                      style={{ width: 16, height: Math.max(3, (mm / maxMm) * 30), borderRadius: 3 }}
-                    />
-                  ) : (
-                    <View
-                      style={{
-                        width: 16, height: 3, borderRadius: 3,
-                        backgroundColor: palette.hairline,
-                      }}
-                    />
-                  )}
-                </View>
-                <Text
-                  variant="caption"
-                  weight="bold"
-                  tabular
-                  color={mm > 0 ? palette.valPrecip : palette.valPrecipZero}
-                  style={{ fontSize: 11, marginTop: 5 }}
-                >
-                  {fmtMm(mm)}
-                </Text>
+                  opacity: i < nowIndex ? PAST_OPACITY : 1,
+                },
+                i === nowIndex ? decor : plainDecor,
+              ]}
+            >
+              <Text variant="caption" weight="semibold" color={palette.muted} tabular>
+                {h.time.slice(11, 16)}
+              </Text>
+              <View style={{ marginVertical: 7 }}>
+                <WeatherIcon wmo={h.wmo} isDay={h.isDay} size={22} />
               </View>
-            );
-          })}
-        </ScrollView>
-      </Pressable>
+              <Text variant="bodySm" weight="bold" color={palette.valTemp} tabular>
+                {convTemp(h.temp, prefs.tempUnit) ?? '—'}°
+              </Text>
+              <View style={{ height: 30, justifyContent: 'flex-end', marginTop: 6 }}>
+                {mm > 0 ? (
+                  <LinearGradient
+                    colors={[palette.sky, palette.accent]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={{ width: 16, height: Math.max(3, (mm / maxMm) * 30), borderRadius: 3 }}
+                  />
+                ) : (
+                  <View
+                    style={{
+                      width: 16, height: 3, borderRadius: 3,
+                      backgroundColor: palette.hairline,
+                    }}
+                  />
+                )}
+              </View>
+              <Text
+                variant="caption"
+                weight="bold"
+                tabular
+                color={mm > 0 ? palette.valPrecip : palette.valPrecipZero}
+                style={{ fontSize: 11, marginTop: 5 }}
+              >
+                {fmtMm(mm)}
+              </Text>
+            </View>
+          );
+        })}
+      </ScrollView>
 
       <Rule style={{ marginTop: space[3] }} />
-      <View style={{ paddingTop: space[3], gap: 2 }}>
-        {days.map((d) => (
-          <DayRow key={d.date} day={d} range={range} lang={prefs.lang} />
+      <View style={{ paddingTop: space[2] }}>
+        {days.map((d, i) => (
+          <OverviewDayRow
+            key={d.date}
+            day={d}
+            dayIndex={i}
+            onPress={onOpenDay ? () => onOpenDay(d) : undefined}
+          />
         ))}
       </View>
-    </Card>
-  );
-}
 
-export function DayRow({
-  day, range, lang, onPress,
-}: {
-  day: Day;
-  range: { lo: number; hi: number };
-  lang: Parameters<typeof dayNames>[0];
-  onPress?: () => void;
-}) {
-  const { palette } = useTheme();
-  const { prefs } = usePrefs();
-  const lo = day.hresTempMin ?? day.tempLo;
-  const hi = day.hresTempMax ?? day.tempHi;
-  const span = range.hi - range.lo || 1;
-  const left = lo != null ? ((lo - range.lo) / span) * 100 : 0;
-  const width = lo != null && hi != null ? ((hi - lo) / span) * 100 : 0;
-
-  const date = new Date(day.date + 'T12:00:00Z');
-  const names = dayNames(lang);
-
-  const body = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, paddingHorizontal: 2 }}>
-      <View style={{ width: 44 }}>
-        <Text variant="label" weight="bold" color={palette.inkHeading}>
-          {names[date.getUTCDay()]}
-        </Text>
-        <Text variant="caption" color={palette.muted} style={{ fontSize: 11 }} tabular>
-          {date.getUTCDate()}/{date.getUTCMonth() + 1}
-        </Text>
-      </View>
-      <WeatherIcon wmo={day.dayIcon ?? day.wmo} isDay={1} size={19} />
-      <Text variant="label" weight="bold" color={palette.valLow} tabular align="right" style={{ width: 30 }}>
-        {convTemp(lo, prefs.tempUnit) ?? '—'}°
-      </Text>
-      <View
+      <Rule soft />
+      <Pressable
+        onPress={onToggleExpanded}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
         style={{
-          flex: 1, height: 6, borderRadius: 3, backgroundColor: palette.hairline,
-          overflow: 'hidden',
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+          gap: 6, paddingTop: space[3],
         }}
       >
-        <LinearGradient
-          colors={[palette.valLow, palette.valTemp]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{
-            position: 'absolute', top: 0, bottom: 0,
-            left: `${left}%`, width: `${Math.max(2, width)}%`, borderRadius: 3,
-          }}
-        />
-      </View>
-      <Text variant="label" weight="bold" color={palette.valHigh} tabular style={{ width: 30 }}>
-        {convTemp(hi, prefs.tempUnit) ?? '—'}°
-      </Text>
-    </View>
-  );
-
-  if (!onPress) return body;
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button">
-      {body}
-    </Pressable>
+        <Text variant="label" weight="semibold" color={palette.accentDark}>
+          {expanded ? t('viewLess', prefs.lang) : t('viewMoreDays', prefs.lang)}
+        </Text>
+        {expanded && extendedLoading ? (
+          <ActivityIndicator size="small" color={palette.accentDark} />
+        ) : (
+          <Icon
+            name={expanded ? 'arrow-up' : 'arrow-down'}
+            size={13}
+            color={palette.accentDark}
+            weight="bold"
+          />
+        )}
+      </Pressable>
+    </Card>
   );
 }
