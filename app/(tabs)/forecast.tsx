@@ -15,7 +15,6 @@ import { Card, CardHeader, Rule } from '../../ui/Card';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
 import { ScreenFrame } from '../../ui/ScreenFrame';
-import { HourStrip } from '../../ui/forecast/HourStrip';
 import { LayerSwitcher } from '../../ui/forecast/LayerSwitcher';
 import { LayerDayRow } from '../../ui/forecast/LayerDayRow';
 import { OverviewDayRow } from '../../ui/forecast/OverviewDayRow';
@@ -24,7 +23,6 @@ import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { type LayerKey } from '../../core/model/layers';
 import { beamScale, et0Scale } from '../../core/model/beam';
-import { hourWindow } from '../../core/model/hourWindow';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
 import { t, ta } from '../../core/i18n';
@@ -36,7 +34,7 @@ const COLLAPSED_DAYS = 7;
 export default function ForecastScreen() {
   const { palette } = useTheme();
   const { prefs, location } = usePrefs();
-  const { model, harmonie, phase, extendedLoaded, loadExtendedDays } = useForecast();
+  const { model, phase, extendedLoaded, loadExtendedDays } = useForecast();
   const insets = useSafeAreaInsets();
 
   const [layer, setLayer] = useState<LayerKey>('overview');
@@ -71,12 +69,6 @@ export default function ForecastScreen() {
     return () => { alive = false; };
   }, [sheetDay, location.lat, location.lon]);
 
-  // The strip runs from this morning into tomorrow, opening on the current hour.
-  const strip = useMemo(
-    () => (model ? hourWindow(model, { ahead: 24 }) : { hours: [], nowIndex: -1 }),
-    [model]
-  );
-
   const days = useMemo(
     () => (model ? (expanded ? model.days : model.days.slice(0, COLLAPSED_DAYS)) : []),
     [model, expanded]
@@ -94,9 +86,6 @@ export default function ForecastScreen() {
 
   const modelLabel = model?.hresRunLabel
     ? `ECMWF ${model.hresRunLabel}`
-    : 'ECMWF IFS';
-  const shortTermSource = harmonie.model
-    ? `HARMONIE-AROME ${harmonie.model === 'netherlands' ? 'NL' : 'EU'}`
     : 'ECMWF IFS';
 
   return (
@@ -123,11 +112,6 @@ export default function ForecastScreen() {
           </Card>
         ) : (
           <>
-            <Card>
-              <CardHeader icon="clock" label={t('shortTermDetail', prefs.lang)} />
-              <HourStrip hours={strip.hours} nowIndex={strip.nowIndex} />
-            </Card>
-
             <Card>
               <CardHeader
                 icon="calendar-blank"
@@ -190,24 +174,6 @@ export default function ForecastScreen() {
               </Text>
             </Card>
 
-            <Card>
-              <CardHeader icon="info" label={ta('source', prefs.lang)} />
-              <View style={{ gap: 10 }}>
-                <SourceRow
-                  label={ta('shortTerm', prefs.lang)}
-                  value={
-                    ta('nowcastRadar', prefs.lang) +
-                    (location.stationId ? ta('withStation', prefs.lang) : '')
-                  }
-                />
-                <SourceRow label={ta('midTerm', prefs.lang)} value={shortTermSource} />
-                <SourceRow
-                  label={ta('longTerm', prefs.lang)}
-                  value={`${modelLabel}${model.nMembers > 1 ? ` · ${model.nMembers} leden` : ''}`}
-                  last
-                />
-              </View>
-            </Card>
           </>
         )}
       </ScrollView>
@@ -222,33 +188,5 @@ export default function ForecastScreen() {
         onClose={() => setSheetDay(null)}
       />
     </ScreenFrame>
-  );
-}
-
-function SourceRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
-  const { palette } = useTheme();
-  return (
-    <View
-      style={{
-        flexDirection: 'row', justifyContent: 'space-between',
-        gap: space[4], alignItems: 'baseline',
-        paddingBottom: last ? 0 : space[2],
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: palette.hairlineSoft,
-      }}
-    >
-      <Text variant="label" weight="regular" color={palette.muted} style={{ flexShrink: 1 }}>
-        {label}
-      </Text>
-      <Text
-        variant="label"
-        weight="bold"
-        color={palette.inkHeading}
-        align="right"
-        style={{ flexShrink: 1 }}
-      >
-        {value}
-      </Text>
-    </View>
   );
 }

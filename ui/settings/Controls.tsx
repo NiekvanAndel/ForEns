@@ -208,12 +208,15 @@ export function NavRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={value ? `${label}, ${value}` : label}
-      style={{
+      // A row that opens something has to acknowledge the tap before the sheet
+      // arrives, or the first press reads as having missed.
+      style={({ pressed }) => ({
         flexDirection: 'row', alignItems: 'center', gap: space[3],
         paddingVertical: space[4], paddingHorizontal: space[5],
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: palette.hairlineSoft,
-      }}
+        backgroundColor: pressed ? palette.pressedRow : 'transparent',
+      })}
     >
       {icon ? <Icon name={icon} size={19} color={palette.accentDark} /> : null}
       <Text variant="body" color={palette.inkHeading} style={{ flex: 1 }}>
@@ -226,5 +229,65 @@ export function NavRow({
       ) : null}
       <Icon name="caret-right" size={14} color={palette.inkDisabled} weight="bold" />
     </Pressable>
+  );
+}
+
+export interface Choice<T> {
+  value: T;
+  label: string;
+  /** A line under the label, for a choice whose name does not explain it. */
+  hint?: string;
+}
+
+/**
+ * A list of options with a tick against the current one.
+ *
+ * iOS's own answer to a setting with more than two or three values: the choices get
+ * a page, and the row that opened it carries the current one. A segmented control
+ * would fit them all on the index, which is exactly the crowding this replaces —
+ * four wind units and five languages in a row of pills is a row nobody can read.
+ */
+export function ChoiceList<T extends string>({
+  value, options, onChange,
+}: {
+  value: T;
+  options: readonly Choice<T>[];
+  onChange: (value: T) => void;
+}) {
+  const { palette } = useTheme();
+  return (
+    <Card pad={0}>
+      {options.map((o, i) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            onPress={() => onChange(o.value)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={o.label}
+            style={({ pressed }) => ({
+              flexDirection: 'row', alignItems: 'center', gap: space[3],
+              paddingVertical: space[4], paddingHorizontal: space[5],
+              borderBottomWidth: i === options.length - 1 ? 0 : 1,
+              borderBottomColor: palette.hairlineSoft,
+              backgroundColor: pressed ? palette.pressedRow : 'transparent',
+            })}
+          >
+            <View style={{ flex: 1 }}>
+              <Text variant="body" color={palette.inkHeading}>
+                {o.label}
+              </Text>
+              {o.hint ? (
+                <Text variant="caption" color={palette.muted} style={{ marginTop: 2 }}>
+                  {o.hint}
+                </Text>
+              ) : null}
+            </View>
+            {on ? <Icon name="check" size={17} color={palette.accentDark} weight="bold" /> : null}
+          </Pressable>
+        );
+      })}
+    </Card>
   );
 }

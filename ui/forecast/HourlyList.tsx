@@ -13,10 +13,11 @@
  * Three-hourly samples beyond the deterministic run's hourly window are marked, so
  * a gap in the model is visible rather than implied.
  *
- * On precipitation the row also carries the hour's ensemble, once it has loaded: the
- * p10–p90 range the members allow, and the share of them that are wet at all. That
- * pair is what the web app's precipitation popup prints beside every hour, and it is
- * the difference between "1 mm" and "1 mm, but a third of the members say nothing".
+ * Precipitation, temperature and wind rows also carry the hour's ensemble, once it
+ * has loaded: the p10–p90 range the members allow, and for precipitation the share
+ * of them that are wet at all. That is the difference between "1 mm" and "1 mm, but
+ * a third of the members say nothing" — and, on an afternoon a front might reach
+ * early, between "18°" and "18°, give or take four".
  */
 import { View } from 'react-native';
 import { space, useTheme } from '../../theme';
@@ -40,8 +41,11 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
   const { prefs } = usePrefs();
   if (!hours.length) return null;
 
-  // Only precipitation has a per-hour ensemble behind it, and only once it lands.
-  const withEns = layer === 'precip' && hours.some((h) => h.ens);
+  // Three of the measurands have a per-hour ensemble behind them, and only once it
+  // lands. The others read from a deterministic run alone.
+  const ensField: EnsField | null =
+    layer === 'precip' ? 'precip' : layer === 'temp' ? 'temp' : layer === 'wind' ? 'wind' : null;
+  const withEns = ensField != null && hours.some((h) => hourSpread(h, ensField) != null);
 
   return (
     <View style={{ marginTop: space[4] }}>
@@ -76,7 +80,7 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
             <HourValue layer={layer} hour={h} />
           </View>
 
-          {withEns ? <EnsembleColumns hour={h} /> : null}
+          {withEns && ensField ? <EnsembleColumns hour={h} field={ensField} /> : null}
 
           {h.isPast ? (
             <Text variant="caption" color={palette.muted} style={{ fontSize: 10 }}>
@@ -93,11 +97,33 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
   );
 }
 
-/** What the 51 members say about this hour: the range they span, and how many of
- *  them are wet. Held to fixed widths so the column reads down. */
-function EnsembleColumns({ hour }: { hour: DetailHour }) {
+type EnsField = 'precip' | 'temp' | 'wind';
+
+/** The members' p10–p90 for one field in one hour, in canonical units. */
+function hourSpread(h: DetailHour, field: EnsField): { lo: number; hi: number } | null {
+  const e = h.ens;
+  if (!e) return null;
+  if (field === 'precip') return { lo: e.precipP10, hi: e.precipP90 };
+  const s = field === 'temp' ? e.temp : e.wind;
+  return s ? { lo: s.p10, hi: s.p90 } : null;
+}
+
+/** What the 51 members say about this hour: the range they span, and — for
+ *  precipitation, where "does it rain at all" is a separate question from "how
+ *  much" — how many of them are wet. Held to fixed widths so the column reads down. */
+function EnsembleColumns({ hour, field }: { hour: DetailHour; field: EnsField }) {
   const { palette } = useTheme();
-  const e = hour.ens;
+  const { prefs } = usePrefs();
+  const spread = hourSpread(hour, field);
+
+  const range = !spread
+    ? ''
+    : field === 'precip'
+      ? `(${fmtMm(spread.lo)}–${fmtMm(spread.hi)})`
+      : field === 'temp'
+        ? `(${convTemp(spread.lo, prefs.tempUnit)}–${convTemp(spread.hi, prefs.tempUnit)}°)`
+        : `(${convWind(spread.lo, prefs.windUnit)}–${convWind(spread.hi, prefs.windUnit)})`;
+
   return (
     <>
       <Text
@@ -105,20 +131,24 @@ function EnsembleColumns({ hour }: { hour: DetailHour }) {
         color={palette.muted}
         tabular
         align="right"
-        style={{ width: 74, fontSize: 11 }}
+        style={{ width: 78, fontSize: 11 }}
       >
-        {e ? `(${fmtMm(e.precipP10)}–${fmtMm(e.precipP90)})` : ''}
+        {range}
       </Text>
-      <Text
-        variant="caption"
-        weight="bold"
-        color={e && e.pChance >= 40 ? palette.valPrecip : palette.muted}
-        tabular
-        align="right"
-        style={{ width: 34, fontSize: 12 }}
-      >
-        {e ? `${Math.round(e.pChance)}%` : ''}
-      </Text>
+      {/* Only precipitation has a probability worth a column: a temperature is
+          always "happening", so the range is the whole of its uncertainty. */}
+      {field === 'precip' ? (
+        <Text
+          variant="caption"
+          weight="bold"
+          color={hour.ens && hour.ens.pChance >= 40 ? palette.valPrecip : palette.muted}
+          tabular
+          align="right"
+          style={{ width: 34, fontSize: 12 }}
+        >
+          {hour.ens ? `${Math.round(hour.ens.pChance)}%` : ''}
+        </Text>
+      ) : null}
     </>
   );
 }

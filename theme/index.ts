@@ -66,12 +66,23 @@ const dark = {
  *  Deliberately not an intersection of the two literal-typed objects: light and dark
  *  give the same key different literal values, which reduces the intersection to
  *  `never` and makes every lookup an error. */
-export type Palette = { [K in keyof typeof colors | keyof typeof dark]: string };
+/** The wash a pressable row takes while it is held. Not a design token: the system
+ *  specifies hover for the web build and says nothing about touch, so it is defined
+ *  once here rather than guessed at each call site. */
+const pressedRow = {
+  light: 'rgba(12,37,71,.055)',
+  dark: 'rgba(255,255,255,.06)',
+} as const;
+
+export type Palette = {
+  [K in keyof typeof colors | keyof typeof dark]: string;
+} & { pressedRow: string };
 
 export const palettes = { light: colors, dark } as const;
 
 export function paletteFor(appearance: Appearance): Palette {
-  return (appearance === 'dark' ? dark : colors) as Palette;
+  const base = appearance === 'dark' ? dark : colors;
+  return { ...base, pressedRow: pressedRow[appearance] } as Palette;
 }
 
 export interface ThemeValue {
@@ -82,7 +93,7 @@ export interface ThemeValue {
 /** Defaults to light so a component rendered outside the provider — a screenshot
  *  harness, a test — still paints a complete palette rather than undefined colours. */
 export const ThemeContext = createContext<ThemeValue>({
-  palette: colors as Palette,
+  palette: paletteFor('light'),
   appearance: 'light',
 });
 

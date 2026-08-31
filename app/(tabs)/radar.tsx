@@ -16,6 +16,7 @@ import { ScreenFrame } from '../../ui/ScreenFrame';
 import { RadarMap } from '../../ui/radar/RadarMap';
 import { Timeline } from '../../ui/radar/Timeline';
 import { FullScreenRadar } from '../../ui/radar/FullScreenRadar';
+import { NowcastPanel } from '../../ui/radar/NowcastPanel';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useStations, stationsNear } from '../../state/stations';
@@ -24,6 +25,10 @@ import { mapChrome } from '../../ui/radar/mapStyle';
 import { fmtMm, ta } from '../../core/i18n';
 
 const TAB_BAR_CLEARANCE = 110;
+/** The map takes as much of the page as it can. Taller than wide, because a shower
+ *  track is usually read north-to-south here, and because the panel beneath it is
+ *  short. */
+const MAP_ASPECT = 0.62;
 /** Station pins are drawn for this radius around the location. */
 const STATION_PIN_RADIUS_KM = 60;
 
@@ -40,6 +45,7 @@ export default function RadarScreen() {
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
   const [fullScreen, setFullScreen] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(320);
 
   useEffect(() => {
     let alive = true;
@@ -73,8 +79,9 @@ export default function RadarScreen() {
     : `${ta('dryAt', prefs.lang)} ${location.name}`;
 
   return (
-    <ScreenFrame>
+    <ScreenFrame compactTitle>
       <ScrollView
+        onLayout={(e) => setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 4))}
         contentContainerStyle={{
           paddingHorizontal: space[5],
           paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
@@ -90,7 +97,7 @@ export default function RadarScreen() {
             activeIndex={index}
             stations={pins}
             timeLabel={frames.length ? frameLabel(frames[index]) : '—'}
-            style={{ aspectRatio: 3 / 4 }}
+            style={{ aspectRatio: MAP_ASPECT }}
           />
           <Pressable
             onPress={() => setFullScreen(true)}
@@ -110,6 +117,15 @@ export default function RadarScreen() {
             <Icon name="arrows-out" size={17} color={chrome.ink} weight="bold" />
           </Pressable>
         </View>
+
+        <Card pad={0}>
+          <NowcastPanel
+            profile={nowcast}
+            offsetMin={frames[index] ? Math.round((frames[index]!.timeMs - Date.now()) / 60_000) : 0}
+            width={panelWidth}
+            compact
+          />
+        </Card>
 
         <Card>
           {loading ? (

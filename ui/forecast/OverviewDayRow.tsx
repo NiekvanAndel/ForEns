@@ -13,7 +13,7 @@
  * Used by both 'Nu' and the 'Verwachting' overview tab, so the two cannot disagree.
  */
 import { View, Pressable } from 'react-native';
-import { useTheme } from '../../theme';
+import { radius, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
@@ -103,7 +103,16 @@ export function OverviewDayRow({ day, dayIndex, onPress }: OverviewDayRowProps) 
 
   if (!onPress) return body;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button">
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      // The row opens a sheet, so it acknowledges the tap rather than looking inert
+      // for the moment before the sheet arrives.
+      style={({ pressed }) => ({
+        borderRadius: radius.tile,
+        backgroundColor: pressed ? palette.pressedRow : 'transparent',
+      })}
+    >
       {body}
     </Pressable>
   );

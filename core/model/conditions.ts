@@ -92,6 +92,39 @@ export function symbolIsMulticolor(code: number): boolean {
   return code !== 3 && code !== 45 && code !== 48;
 }
 
+/**
+ * Which accent an SF Symbol's second layer wants, so a palette rendering can keep
+ * the cloud one consistent grey while sun stays yellow and rain stays blue.
+ *
+ * SF Symbols' weather glyphs are layered cloud-first: layer one is the cloud (or,
+ * for `sun.max`, the sun itself), layer two the thing falling out of it or the sun
+ * behind it. Multicolour renders layer one white, which is right on navy and
+ * invisible on cream — hence the palette path in light mode.
+ */
+export type SymbolAccent = 'sun' | 'precip' | 'snow' | 'storm' | 'none';
+
+export function symbolAccent(code: number): SymbolAccent {
+  const key = wmoCondition(code);
+  switch (key) {
+    case 'clear':
+    case 'mostly-clear':
+    case 'partly-cloudy':
+      return 'sun';
+    case 'cloudy':
+    case 'fog':
+      return 'none';
+    case 'snow':
+    case 'heavy-snow':
+    case 'snow-showers':
+      return 'snow';
+    case 'thunderstorm':
+    case 'thunderstorm-hail':
+      return 'storm';
+    default:
+      return 'precip';
+  }
+}
+
 /** A stable identifier for a condition, kept for tests and analytics. */
 export type ConditionKey =
   | 'clear' | 'mostly-clear' | 'partly-cloudy' | 'cloudy' | 'fog'

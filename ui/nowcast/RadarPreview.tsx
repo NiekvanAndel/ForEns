@@ -30,9 +30,10 @@ import { ta } from '../../core/i18n';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 
 /** How much of the map the preview shows, in degrees. The card became square, which
- *  doubled its height — at the old span that pulled the view out far enough to be a
- *  map of the North Sea rather than of where you are. */
-const PREVIEW_SPAN_DEG = 1.1;
+ *  a preview of the weather heading toward you, not of your street: a shower an hour
+ *  away has to be on screen for the card to be worth having. Wide enough to hold the
+ *  country and its coast. */
+const PREVIEW_SPAN_DEG = 3.0;
 
 /** How long each frame is held while the loop plays. Slow enough to read a shower's
  *  direction, fast enough that the whole hour passes in a few seconds. */

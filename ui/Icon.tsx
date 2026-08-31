@@ -8,7 +8,7 @@
  */
 import {
   ArrowDown, ArrowUp, ArrowsClockwise, ArrowsOut, Broadcast, CalendarBlank, CaretRight,
-  CaretLeft, ChartLine, CircleHalf, Clock, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun,
+  CaretLeft, ChartLine, Check, CircleHalf, Clock, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun,
   CloudSnow, Crosshair, DotsSixVertical, Drop, DropHalf, GearSix, Info, MagnifyingGlass, Minus,
   Moon, MoonStars, Pause, Play, PlugsConnected, Plus, Ruler, Sun, TextAa,
   ThermometerSimple, Translate, Trash, Wind, X,
@@ -24,6 +24,7 @@ const ICONS = {
   'arrows-out': ArrowsOut,
   broadcast: Broadcast,
   'calendar-blank': CalendarBlank,
+  check: Check,
   'caret-left': CaretLeft,
   'caret-right': CaretRight,
   'chart-line': ChartLine,

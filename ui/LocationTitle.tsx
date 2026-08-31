@@ -12,7 +12,13 @@ import { space, useTheme } from '../theme';
 import { Text } from './Text';
 import { usePrefs } from '../state/prefs';
 
-export function LocationTitle() {
+export interface LocationTitleProps {
+  /** Trades height for the page's own content — the radar page is mostly map, and
+   *  a full-size title there costs a visible band of it. */
+  compact?: boolean;
+}
+
+export function LocationTitle({ compact }: LocationTitleProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const active = prefs.locations[prefs.activeLocation] ?? prefs.locations[0];
@@ -21,7 +27,13 @@ export function LocationTitle() {
   const sub = active.stationName ?? active.sub;
 
   return (
-    <View style={{ paddingHorizontal: space[5], paddingBottom: space[3], gap: 1 }}>
+    <View
+      style={{
+        paddingHorizontal: space[5],
+        paddingBottom: compact ? space[2] : space[3],
+        gap: compact ? 0 : 1,
+      }}
+    >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
         {active.stationId ? (
           <View
@@ -29,7 +41,7 @@ export function LocationTitle() {
           />
         ) : null}
         <Text
-          variant="screenTitle"
+          variant={compact ? 'locationName' : 'screenTitle'}
           color={active.stationId ? palette.agroInk : palette.inkHeading}
           numberOfLines={1}
           style={{ flexShrink: 1 }}
@@ -37,7 +49,7 @@ export function LocationTitle() {
           {active.name}
         </Text>
       </View>
-      {sub ? (
+      {sub && !compact ? (
         <Text variant="caption" color={palette.muted} numberOfLines={1}>
           {sub}
         </Text>

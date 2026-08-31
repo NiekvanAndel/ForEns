@@ -18,7 +18,9 @@ import { LocationTitle } from './LocationTitle';
 import { usePlaceSearch } from './usePlaceSearch';
 import { usePrefs } from '../state/prefs';
 
-export function ScreenFrame({ children }: { children: ReactNode }) {
+export function ScreenFrame({
+  children, compactTitle,
+}: { children: ReactNode; compactTitle?: boolean }) {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const { prefs, addLocation } = usePrefs();
@@ -34,7 +36,7 @@ export function ScreenFrame({ children }: { children: ReactNode }) {
       />
 
       <LocationPager>
-        <LocationTitle />
+        <LocationTitle compact={compactTitle} />
         {children}
       </LocationPager>
     </View>

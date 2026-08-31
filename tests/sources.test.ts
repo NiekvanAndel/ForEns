@@ -6,6 +6,7 @@
  * rules, and the AgroExact folding the web app never actually executed.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { parseDayEnsemble } from '../core/sources/ensembleHourly';
 import { fetchJson, tryFetchJson, SourceError } from '../core/sources/http';
 import { loadHourly, loadStage1, urls } from '../core/sources/openMeteo';
 import {
@@ -254,5 +255,60 @@ describe('searchPlaces', () => {
     const f = mockFetch(() => ({ body: [] }));
     expect(await searchPlaces('   ', 'nl', { fetchImpl: f })).toEqual([]);
     expect((f as any).mock.calls).toHaveLength(0);
+  });
+});
+
+describe('parseDayEnsemble', () => {
+  const times = ['2026-06-15T00:00', '2026-06-15T01:00'];
+
+  it('reads members for precipitation, temperature and wind from one response', () => {
+    const out = parseDayEnsemble({
+      hourly: {
+        time: times,
+        precipitation_member01: [0, 2],
+        precipitation_member02: [0, 4],
+        temperature_2m_member01: [12, 14],
+        temperature_2m_member02: [16, 18],
+        windspeed_10m_member01: [10, 20],
+        windspeed_10m_member02: [30, 40],
+      },
+    });
+    expect(out[times[1]!]!.precipP50).toBeCloseTo(3, 5);
+    expect(out[times[0]!]!.temp!.p50).toBeCloseTo(14, 5);
+    expect(out[times[0]!]!.wind!.p50).toBeCloseTo(20, 5);
+  });
+
+  it('treats a missing precipitation member as dry but a missing temperature as unknown', () => {
+    // A gap in a rain series means no rain; the same gap in a temperature series
+    // would drag the whole spread toward freezing if it were counted as zero.
+    const out = parseDayEnsemble({
+      hourly: {
+        time: [times[0]!],
+        precipitation_member01: [null],
+        precipitation_member02: [4],
+        temperature_2m_member01: [null],
+        temperature_2m_member02: [20],
+      },
+    });
+    // The dry member is counted, so the median sits between 0 and 4 rather than at 4.
+    expect(out[times[0]!]!.precipP50).toBeCloseTo(2, 5);
+    // The absent temperature member is dropped, so the one real value stands alone.
+    expect(out[times[0]!]!.temp!.p50).toBe(20);
+  });
+
+  it('leaves a field absent rather than inventing a flat spread', () => {
+    const out = parseDayEnsemble({
+      hourly: { time: [times[0]!], precipitation_member01: [1] },
+    });
+    expect(out[times[0]!]!.temp).toBeUndefined();
+    expect(out[times[0]!]!.wind).toBeUndefined();
+  });
+
+  it('falls back to the deterministic series when no member columns are present', () => {
+    const out = parseDayEnsemble({
+      hourly: { time: [times[0]!], precipitation: [3], temperature_2m: [17] },
+    });
+    expect(out[times[0]!]!.precipP50).toBe(3);
+    expect(out[times[0]!]!.temp!.p50).toBe(17);
   });
 });

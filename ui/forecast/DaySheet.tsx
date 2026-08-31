@@ -340,6 +340,16 @@ function LayerSection({
             unit="°"
             series={{
               values: hours.map((h) => convTemp(h.temp, prefs.tempUnit)),
+              band: prefs.showSpread
+                ? hours.map((h) =>
+                    h.ens?.temp
+                      ? {
+                          lo: convTemp(h.ens.temp.p10, prefs.tempUnit) ?? 0,
+                          hi: convTemp(h.ens.temp.p90, prefs.tempUnit) ?? 0,
+                        }
+                      : null
+                  )
+                : undefined,
             }}
           />
           <StatRow
@@ -381,6 +391,16 @@ function LayerSection({
             series={{
               values: hours.map((h) => convWind(h.wind, prefs.windUnit)),
               secondary: hours.map((h) => convWind(h.gusts, prefs.windUnit)),
+              band: prefs.showSpread
+                ? hours.map((h) =>
+                    h.ens?.wind
+                      ? {
+                          lo: convWind(h.ens.wind.p10, prefs.windUnit) ?? 0,
+                          hi: convWind(h.ens.wind.p90, prefs.windUnit) ?? 0,
+                        }
+                      : null
+                  )
+                : undefined,
             }}
           />
           <StatRow

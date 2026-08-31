@@ -13,9 +13,14 @@
  * Colour follows the quantity, not the layer's position in the switcher — design
  * rule 2 — so temperature is always `--val-temp`, millimetres always `--val-precip`,
  * and so on regardless of which tab you arrived from.
+ *
+ * The value columns are sized per layer rather than to one width that fits the
+ * widest of them. "24 km/u" and "88%" do not need the same room, and a column wide
+ * enough for the first left the beam — the part actually being read — short on every
+ * other tab. Layers with nothing on the left get no left column at all.
  */
 import { View, Pressable } from 'react-native';
-import { space, useTheme } from '../../theme';
+import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
@@ -28,6 +33,17 @@ import type { Day } from '../../core/model/types';
 
 const TRACK_HEIGHT = 7;
 const MARKER_WIDTH = 4;
+
+/** Room each layer's own numbers need, so the beam keeps the rest. Measured against
+ *  the widest realistic reading: "-12°" for temperature, "24,8 mm", "112 km/u". */
+const COLUMNS: Record<LayerKey, { lead: number; trail: number }> = {
+  overview: { lead: 0, trail: 0 },
+  temp: { lead: 38, trail: 44 },
+  precip: { lead: 34, trail: 62 },
+  wind: { lead: 0, trail: 78 },
+  sun: { lead: 0, trail: 56 },
+  humidity: { lead: 36, trail: 42 },
+};
 
 export interface LayerDayRowProps {
   day: Day;
@@ -48,11 +64,12 @@ export function LayerDayRow({ day, dayIndex, layer, scale, et0Max = 5, onPress }
   const date = new Date(day.date + 'T12:00:00Z');
   const names = dayNames(prefs.lang);
   const hasEns = day.ensLoaded ?? false;
+  const cols = COLUMNS[layer];
 
   const body = (
     <View
       style={{
-        flexDirection: 'row', alignItems: 'center', gap: 10,
+        flexDirection: 'row', alignItems: 'center', gap: 8,
         paddingVertical: 8, paddingHorizontal: 2,
       }}
     >
@@ -67,7 +84,9 @@ export function LayerDayRow({ day, dayIndex, layer, scale, et0Max = 5, onPress }
 
       <WeatherIcon wmo={values.wmo ?? day.wmo} isDay={1} size={20} />
 
-      <LeadingValue day={day} layer={layer} dayIndex={dayIndex} />
+      {cols.lead > 0 ? (
+        <LeadingValue day={day} layer={layer} dayIndex={dayIndex} width={cols.lead} />
+      ) : null}
 
       <View style={{ flex: 1, gap: 4 }}>
         {layer === 'sun' ? (
@@ -78,13 +97,22 @@ export function LayerDayRow({ day, dayIndex, layer, scale, et0Max = 5, onPress }
         <SpreadCaption day={day} layer={layer} hasEns={hasEns} />
       </View>
 
-      <TrailingValue day={day} layer={layer} dayIndex={dayIndex} />
+      <TrailingValue day={day} layer={layer} dayIndex={dayIndex} width={cols.trail} />
     </View>
   );
 
   if (!onPress) return body;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button">
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      // The row opens a sheet, so it acknowledges the tap rather than looking inert
+      // for the moment before the sheet arrives.
+      style={({ pressed }) => ({
+        borderRadius: radius.tile,
+        backgroundColor: pressed ? palette.pressedRow : 'transparent',
+      })}
+    >
       {body}
     </Pressable>
   );
@@ -244,11 +272,12 @@ function withAlpha(color: string, alpha: number): string {
 }
 
 /** The value shown left of the beam, where the layer has a low end. */
-function LeadingValue({ day, layer, dayIndex }: { day: Day; layer: LayerKey; dayIndex: number }) {
+function LeadingValue({
+  day, layer, dayIndex, width,
+}: { day: Day; layer: LayerKey; dayIndex: number; width: number }) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const v = resolveDayValues(day, { dayIndex });
-  const width = 40;
 
   if (layer === 'temp') {
     return (
@@ -290,12 +319,13 @@ function LeadingValue({ day, layer, dayIndex }: { day: Day; layer: LayerKey; day
 }
 
 /** The layer's headline number, right of the beam. */
-function TrailingValue({ day, layer, dayIndex }: { day: Day; layer: LayerKey; dayIndex: number }) {
+function TrailingValue({
+  day, layer, dayIndex, width,
+}: { day: Day; layer: LayerKey; dayIndex: number; width: number }) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const v = resolveDayValues(day, { dayIndex });
   const row = layerRow(day, layer, false, dayIndex);
-  const width = 66;
 
   switch (layer) {
     case 'temp':
