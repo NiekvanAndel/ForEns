@@ -7,7 +7,7 @@
  * Days 8–14 stay collapsed until asked for, because fetching them means a 16-day
  * deterministic run and a 14-day ensemble — the two slowest calls the app makes.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space, useTheme } from '../../theme';
@@ -18,9 +18,12 @@ import { LocationBar } from '../../ui/LocationBar';
 import { HourStrip } from '../../ui/forecast/HourStrip';
 import { LayerSwitcher } from '../../ui/forecast/LayerSwitcher';
 import { LayerDayRow } from '../../ui/forecast/LayerDayRow';
+import { DaySheet } from '../../ui/forecast/DaySheet';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { layerScale, type LayerKey } from '../../core/model/layers';
+import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
+import type { Day } from '../../core/model/types';
 import { searchPlaces, SEARCH_DEBOUNCE_MS, type Place } from '../../core/sources/geocoding';
 import { t, ta } from '../../core/i18n';
 
@@ -36,6 +39,12 @@ export default function ForecastScreen() {
 
   const [layer, setLayer] = useState<LayerKey>('precip');
   const [expanded, setExpanded] = useState(false);
+  const [sheetDay, setSheetDay] = useState<Day | null>(null);
+  const [dayEnsemble, setDayEnsemble] = useState<DayEnsemble | undefined>();
+  const [ensembleLoading, setEnsembleLoading] = useState(false);
+  // Kept across renders so reopening a sheet is instant, and cleared when the
+  // location changes, since the same date elsewhere is a different forecast.
+  const ensembleCache = useRef(new DayEnsembleCache());
   const [results, setResults] = useState<Place[]>([]);
   const [searching, setSearching] = useState(false);
 
@@ -56,6 +65,30 @@ export default function ForecastScreen() {
     },
     [prefs.lang]
   );
+
+  useEffect(() => {
+    ensembleCache.current.clear();
+  }, [location.lat, location.lon]);
+
+  // The 51-member hourly series is far too large to hold for every day, so it is
+  // fetched when a sheet opens and only for that date.
+  useEffect(() => {
+    if (!sheetDay) return;
+    const cached = ensembleCache.current.get(location.lat, location.lon, sheetDay.date);
+    if (cached) {
+      setDayEnsemble(cached);
+      return;
+    }
+    let alive = true;
+    setDayEnsemble(undefined);
+    setEnsembleLoading(true);
+    ensembleCache.current
+      .load(location.lat, location.lon, sheetDay.date)
+      .then((e) => { if (alive) setDayEnsemble(e); })
+      .catch(() => { /* the sheet still renders, just without per-hour spread */ })
+      .finally(() => { if (alive) setEnsembleLoading(false); });
+    return () => { alive = false; };
+  }, [sheetDay, location.lat, location.lon]);
 
   const days = useMemo(
     () => (model ? (expanded ? model.days : model.days.slice(0, COLLAPSED_DAYS)) : []),
@@ -132,6 +165,7 @@ export default function ForecastScreen() {
                     layer={layer}
                     scale={scale}
                     showSpread={prefs.showSpread}
+                    onPress={() => setSheetDay(d)}
                   />
                 ))}
               </View>
@@ -187,6 +221,15 @@ export default function ForecastScreen() {
           </>
         )}
       </ScrollView>
+
+      <DaySheet
+        visible={sheetDay != null}
+        day={sheetDay}
+        model={model}
+        ensemble={dayEnsemble}
+        ensembleLoading={ensembleLoading}
+        onClose={() => setSheetDay(null)}
+      />
     </View>
   );
 }
