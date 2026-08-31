@@ -9,6 +9,7 @@ import type { RadarProvider } from './types';
 import { RainViewerProvider } from './rainviewer';
 
 export * from './types';
+export * from './labels';
 export { RainViewerProvider, buildProfile } from './rainviewer';
 
 const providers = new Map<string, RadarProvider>();
