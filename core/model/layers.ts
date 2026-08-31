@@ -6,6 +6,9 @@
  * makes it real by describing, per layer, what a day row actually shows — the value,
  * the bar, and the ensemble spread behind it.
  *
+ * The row's *geometry* is `core/model/beam`; this module supplies the numbers a
+ * section or a stat cell reads.
+ *
  * Values come from `resolveDayValues`, which applies the web app's rule for deciding
  * *which model speaks* for a day: HARMONIE for days 0–1, IFS unconditionally on days
  * 2–3, and from day 4 the deterministic run only when it falls inside the ensemble
@@ -187,47 +190,9 @@ export function layerRow(
   }
 }
 
-/**
- * The shared scale a layer's bars are drawn against.
- *
- * One scale across all visible days is what makes the column comparable: a wet day
- * should look wetter than a dry one, which it cannot if every bar fills its own row.
- * Spread whiskers are included so a wide ensemble is not clipped.
- */
-export function layerScale(days: readonly Day[], layer: LayerKey, showSpread = true): Range {
-  let lo = Infinity;
-  let hi = -Infinity;
-
-  days.forEach((d, i) => {
-    const row = layerRow(d, layer, showSpread, i);
-    for (const r of [row.band, row.spread]) {
-      if (!r) continue;
-      if (Number.isFinite(r.lo)) lo = Math.min(lo, r.lo);
-      if (Number.isFinite(r.hi)) hi = Math.max(hi, r.hi);
-    }
-  });
-
-  if (!Number.isFinite(lo) || !Number.isFinite(hi)) {
-    // Nothing to scale against yet; a unit range keeps every downstream division safe.
-    return { lo: 0, hi: 1 };
-  }
-
-  // Quantity layers read against zero; temperature and humidity read against their
-  // own range, because a 4-degree day and a 6-degree day must look different.
-  if (layer === 'precip' || layer === 'wind' || layer === 'sun') lo = 0;
-
-  if (hi <= lo) hi = lo + 1;
-  return { lo, hi };
-}
-
-/** Position and width of a band within a scale, as fractions of the track (0–1). */
-export function bandGeometry(band: Range | null, scale: Range): { left: number; width: number } | null {
-  if (!band) return null;
-  const span = scale.hi - scale.lo || 1;
-  const left = Math.min(1, Math.max(0, (band.lo - scale.lo) / span));
-  const right = Math.min(1, Math.max(0, (band.hi - scale.lo) / span));
-  return { left, width: Math.max(0.01, right - left) };
-}
+// The shared scale and band geometry that used to live here are now in
+// `core/model/beam`, which draws the web app's real figure — member band, median,
+// and a marker at the reported value — rather than a single filled bar.
 
 export { resolveDayValues };
 export type { DayValues };

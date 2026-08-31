@@ -10,33 +10,18 @@
  * always mounted a single overlay, is what showed the difference. Correctness beats
  * the optimisation — MapKit's own tile cache makes replay smooth after one pass.
  *
- * Two zoom limits, not one. `maximumNativeZ` is the deepest level the provider
- * actually has tiles for; `maximumZ` is the deepest level the overlay is drawn at.
- * Setting only `maximumZ` to the provider's limit makes MapKit stop drawing past it
- * and show "Zoom Level Not Supported" instead of upscaling, which is what the radar
- * was doing. Past the native limit the tiles are stretched — blurrier, but radar
- * pixels are 1 km wide anyway, so there is no detail being withheld.
+ * Zoom limits and pin rendering are explained in ./mapStyle, which the preview on
+ * 'Nu' shares.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { View, Pressable } from 'react-native';
 import MapView, { Marker, UrlTile, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
-import { PulsePin, StationPin } from './PulsePin';
+import { MAX_DISPLAY_Z, mapChrome, maxZoomFor } from './mapStyle';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import type { AgroStation } from '../../core/sources/agroexact';
-
-/** How far the overlay is drawn. Beyond `provider.maxZoom` MapKit upscales the
- *  provider's deepest tiles rather than dropping the layer. */
-const MAX_DISPLAY_Z = 19;
-
-/** How long the pin keeps re-snapshotting after mount. A marker rendered from a
- *  React child is captured once when `tracksViewChanges` goes false; capture it
- *  too early — before the child has laid out — and the annotation stays empty,
- *  which is why the location dot vanished. Two seconds covers layout and one turn
- *  of the pulse, then tracking stops so panning is not re-rasterising every pin. */
-const PIN_SETTLE_MS = 2000;
 
 export interface RadarMapProps {
   lat: number;
@@ -70,18 +55,10 @@ export function RadarMap({
     mapRef.current?.animateToRegion(region.current, 400);
   }, [lat, lon]);
 
-  // Re-snapshot the pins briefly after mount, then freeze them.
-  const [pinTracking, setPinTracking] = useState(true);
-  useEffect(() => {
-    const id = setTimeout(() => setPinTracking(false), PIN_SETTLE_MS);
-    return () => clearTimeout(id);
-  }, []);
-
-  // Chrome floats on the map, so it takes its colours from the map's appearance
-  // rather than from the page beneath it.
-  const dark = appearance === 'dark';
-  const chromeBg = dark ? 'rgba(20,32,52,.90)' : 'rgba(255,255,255,.94)';
-  const chromeInk = dark ? '#F2F7FC' : '#0C2547';
+  const chrome = mapChrome(palette, appearance);
+  const chromeBg = chrome.bg;
+  const chromeInk = chrome.ink;
+  const dark = chrome.dark;
 
   const active = frames[activeIndex] ?? frames[frames.length - 1];
 
@@ -117,6 +94,7 @@ export function RadarMap({
         toolbarEnabled={false}
         showsCompass={false}
         userInterfaceStyle={appearance}
+        maxZoomLevel={maxZoomFor(provider.maxZoom)}
       >
         {active ? (
           <UrlTile
@@ -131,25 +109,19 @@ export function RadarMap({
 
         <Marker
           coordinate={{ latitude: lat, longitude: lon }}
-          anchor={{ x: 0.5, y: 0.5 }}
-          tracksViewChanges={pinTracking}
+          pinColor={chrome.here}
           zIndex={2}
-          accessibilityLabel="Jouw locatie"
-        >
-          <PulsePin animated={pinTracking} />
-        </Marker>
+          title="Jouw locatie"
+        />
 
         {stations.map((s) => (
           <Marker
             key={s.id}
             coordinate={{ latitude: s.lat, longitude: s.lon }}
-            anchor={{ x: 0.5, y: 0.5 }}
             title={s.name}
-            tracksViewChanges={pinTracking}
+            pinColor={palette.agroBright}
             zIndex={2}
-          >
-            <StationPin />
-          </Marker>
+          />
         ))}
       </MapView>
 
@@ -189,12 +161,7 @@ export function RadarMap({
           shadowFloat,
         ]}
       >
-        <LegendRow
-          color={dark ? palette.skySoft : '#0C2547'}
-          ring="#fff"
-          label="Jouw locatie"
-          textColor={chromeInk}
-        />
+        <LegendRow color={chrome.here} ring="#fff" label="Jouw locatie" textColor={chromeInk} />
         {stations.length ? (
           <LegendRow
             color="#fff"

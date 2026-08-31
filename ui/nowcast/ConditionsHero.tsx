@@ -50,19 +50,14 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
   return (
     <Card pad={0}>
       <View style={{ paddingHorizontal: space[7], paddingTop: 18, paddingBottom: space[5] }}>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <Text
-            variant="locationName"
-            color={station ? palette.agroInk : palette.inkHeading}
-          >
-            {location.name}
-          </Text>
-          <Text variant="label" weight="regular" color={palette.muted}>
+        {/* No location name: the page already carries it above, and repeating it
+            here cost the card a line without telling the reader anything. What is
+            left is what the card alone knows — when these readings are from, and
+            which model or station they came from. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text variant="label" weight="semibold" color={palette.muted} tabular>
             {timeLabel}
           </Text>
-        </View>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
           {station ? (
             <View
               style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.agroBright }}

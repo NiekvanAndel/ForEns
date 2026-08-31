@@ -7,7 +7,7 @@
  * comparable, and that a half-loaded ensemble degrades rather than crashes.
  */
 import { describe, it, expect } from 'vitest';
-import { layerRow, layerScale, bandGeometry, LAYERS, type LayerKey } from '../core/model/layers';
+import { layerRow, LAYERS } from '../core/model/layers';
 import type { Day } from '../core/model/types';
 
 function day(over: Partial<Day> = {}): Day {
@@ -143,63 +143,5 @@ describe('layerRow', () => {
     // Ported faithfully rather than tidied.
     expect(layerRow(empty, 'precip').primary).toBe(0);
     expect(layerRow(empty, 'humidity').band).toEqual({ lo: 0, hi: 100 });
-  });
-});
-
-describe('layerScale', () => {
-  const days = [
-    day({ precipMedian: 1, hresPrecip: 1, precipP90: 3, tempLo: 10, tempHi: 15, hresTempMin: 10, hresTempMax: 15 }),
-    day({ precipMedian: 8, hresPrecip: 8, precipP90: 20, tempLo: 18, tempHi: 28, hresTempMin: 18, hresTempMax: 28 }),
-  ];
-
-  it('spans all days so the column is comparable', () => {
-    expect(layerScale(days, 'temp', false)).toEqual({ lo: 10, hi: 28 });
-  });
-
-  it('anchors quantity layers at zero', () => {
-    // A 1 mm day must look meaningfully drier than an 8 mm day, not merely shorter.
-    expect(layerScale(days, 'precip', false).lo).toBe(0);
-    expect(layerScale(days, 'wind', false).lo).toBe(0);
-    expect(layerScale(days, 'sun', false).lo).toBe(0);
-  });
-
-  it('widens to fit the spread so a broad ensemble is not clipped', () => {
-    expect(layerScale(days, 'precip', true).hi).toBe(20);
-    expect(layerScale(days, 'precip', false).hi).toBe(8);
-  });
-
-  it('returns a safe unit range when there is nothing to scale', () => {
-    expect(layerScale([], 'temp')).toEqual({ lo: 0, hi: 1 });
-  });
-
-  it('never returns a zero-width scale, which would divide by zero downstream', () => {
-    const flat = [day({ tempLo: 20, tempHi: 20, hresTempMin: 20, hresTempMax: 20 })];
-    const s = layerScale(flat, 'temp', false);
-    expect(s.hi).toBeGreaterThan(s.lo);
-  });
-});
-
-describe('bandGeometry', () => {
-  const scale = { lo: 0, hi: 10 };
-
-  it('places a band as a fraction of the track', () => {
-    const g = bandGeometry({ lo: 2, hi: 7 }, scale)!;
-    expect(g.left).toBeCloseTo(0.2, 10);
-    expect(g.width).toBeCloseTo(0.5, 10);
-  });
-
-  it('clamps a band that runs past the scale', () => {
-    const g = bandGeometry({ lo: -5, hi: 20 }, scale)!;
-    expect(g.left).toBe(0);
-    expect(g.width).toBe(1);
-  });
-
-  it('keeps a zero-width band visible', () => {
-    // A day with no range still needs something on screen.
-    expect(bandGeometry({ lo: 5, hi: 5 }, scale)!.width).toBeGreaterThan(0);
-  });
-
-  it('returns nothing for a missing band', () => {
-    expect(bandGeometry(null, scale)).toBeNull();
   });
 });

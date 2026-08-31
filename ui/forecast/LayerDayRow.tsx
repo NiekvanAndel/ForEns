@@ -1,43 +1,53 @@
 /**
  * A day row, rendered for whichever layer is selected.
  *
- * One row component serves all five layers: `core/model/layers` describes what the
- * row shows and the row draws it. That keeps the arithmetic testable and stops five
- * near-identical components drifting apart.
+ * The middle of the row is the ensemble beam: a shaded band where the 51 members
+ * fall, a hairline at their median, and a marker at the value being reported. When
+ * the marker sits away from the median you can see the deterministic run disagreeing
+ * with the members; when it sits outside the band entirely, `resolveDayValues` has
+ * already swapped in the median and the number carries a `~`.
+ *
+ * All of that geometry comes from `core/model/beam` as fractions, so this component
+ * only places and colours things.
  *
  * Colour follows the quantity, not the layer's position in the switcher — design
  * rule 2 — so temperature is always `--val-temp`, millimetres always `--val-precip`,
  * and so on regardless of which tab you arrived from.
  */
 import { View, Pressable } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
+import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, dayNames, fmtMm, windUnitLabel } from '../../core/i18n';
-import { bandGeometry, layerRow, type LayerKey, type Range } from '../../core/model/layers';
+import { layerRow, type LayerKey } from '../../core/model/layers';
+import { layerBeam, type Beam, type BeamTone, type Scale } from '../../core/model/beam';
+import { resolveDayValues } from '../../core/model/dayValues';
 import type { Day } from '../../core/model/types';
 
-const TRACK_HEIGHT = 6;
+const TRACK_HEIGHT = 7;
+const MARKER_WIDTH = 4;
 
 export interface LayerDayRowProps {
   day: Day;
+  dayIndex: number;
   layer: LayerKey;
-  scale: Range;
-  showSpread: boolean;
+  scale: Scale;
+  /** Evaporation scale, for the sunshine row's second bar. */
+  et0Max?: number;
   onPress?: () => void;
 }
 
-export function LayerDayRow({ day, layer, scale, showSpread, onPress }: LayerDayRowProps) {
+export function LayerDayRow({ day, dayIndex, layer, scale, et0Max = 5, onPress }: LayerDayRowProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
-  const row = layerRow(day, layer, showSpread);
-  const band = bandGeometry(row.band, scale);
-  const whisker = bandGeometry(row.spread, scale);
+  const values = resolveDayValues(day, { dayIndex });
+  const beam = layerBeam(day, layer, dayIndex, scale);
 
   const date = new Date(day.date + 'T12:00:00Z');
   const names = dayNames(prefs.lang);
+  const hasEns = day.ensLoaded ?? false;
 
   const body = (
     <View
@@ -46,7 +56,7 @@ export function LayerDayRow({ day, layer, scale, showSpread, onPress }: LayerDay
         paddingVertical: 8, paddingHorizontal: 2,
       }}
     >
-      <View style={{ width: 44 }}>
+      <View style={{ width: 42 }}>
         <Text variant="label" weight="bold" color={palette.inkHeading}>
           {names[date.getUTCDay()]}
         </Text>
@@ -55,39 +65,20 @@ export function LayerDayRow({ day, layer, scale, showSpread, onPress }: LayerDay
         </Text>
       </View>
 
-      <WeatherIcon wmo={day.dayIcon ?? day.wmo} isDay={1} size={19} />
+      <WeatherIcon wmo={values.wmo ?? day.wmo} isDay={1} size={20} />
 
-      <LeadingValue day={day} layer={layer} row={row} />
+      <LeadingValue day={day} layer={layer} dayIndex={dayIndex} />
 
-      <View style={{ flex: 1, height: 14, justifyContent: 'center' }}>
-        {/* The ensemble whisker sits behind the band: the range the members allow. */}
-        {whisker ? (
-          <View
-            style={{
-              position: 'absolute',
-              left: `${whisker.left * 100}%`,
-              width: `${whisker.width * 100}%`,
-              height: TRACK_HEIGHT + 4,
-              borderRadius: (TRACK_HEIGHT + 4) / 2,
-              backgroundColor: palette.accentTint,
-            }}
-          />
-        ) : null}
-
-        <View
-          style={{
-            height: TRACK_HEIGHT,
-            borderRadius: TRACK_HEIGHT / 2,
-            backgroundColor: palette.hairline,
-          }}
-        />
-
-        {band ? (
-          <BandFill layer={layer} left={band.left} width={band.width} />
-        ) : null}
+      <View style={{ flex: 1, gap: 4 }}>
+        {layer === 'sun' ? (
+          <SunBars day={day} scale={scale} et0Max={et0Max} />
+        ) : (
+          <BeamTrack beam={beam} />
+        )}
+        <SpreadCaption day={day} layer={layer} hasEns={hasEns} />
       </View>
 
-      <TrailingValue day={day} layer={layer} row={row} />
+      <TrailingValue day={day} layer={layer} dayIndex={dayIndex} />
     </View>
   );
 
@@ -99,148 +90,333 @@ export function LayerDayRow({ day, layer, scale, showSpread, onPress }: LayerDay
   );
 }
 
-/** The filled band, tinted by the quantity the layer shows. */
-function BandFill({ layer, left, width }: { layer: LayerKey; left: number; width: number }) {
+/** The track, its shaded member bands, the medians and the reported markers. */
+function BeamTrack({ beam }: { beam: Beam }) {
   const { palette } = useTheme();
-  const style = {
-    position: 'absolute' as const,
-    left: `${left * 100}%` as const,
-    width: `${width * 100}%` as const,
-    height: TRACK_HEIGHT,
-    borderRadius: TRACK_HEIGHT / 2,
+  const shade = useShades();
+
+  return (
+    <View
+      style={{
+        height: TRACK_HEIGHT,
+        borderRadius: TRACK_HEIGHT / 2,
+        backgroundColor: palette.hairline,
+      }}
+    >
+      {beam.ranges.map((r, i) => (
+        <View
+          key={`r${i}`}
+          style={{
+            position: 'absolute',
+            left: `${r.from * 100}%`,
+            width: `${(r.to - r.from) * 100}%`,
+            height: '100%',
+            borderRadius: TRACK_HEIGHT / 2,
+            backgroundColor: shade(r.tone, 0.3),
+          }}
+        />
+      ))}
+
+      {beam.medians.map((m, i) => (
+        <View
+          key={`m${i}`}
+          style={{
+            position: 'absolute',
+            left: `${m.at * 100}%`,
+            marginLeft: -0.5,
+            width: 1,
+            height: '100%',
+            backgroundColor: shade(m.tone, 0.75),
+          }}
+        />
+      ))}
+
+      {beam.markers.map((m, i) => (
+        <View
+          key={`v${i}`}
+          style={{
+            position: 'absolute',
+            left: `${m.at * 100}%`,
+            marginLeft: -MARKER_WIDTH / 2,
+            width: MARKER_WIDTH,
+            height: '100%',
+            borderRadius: 2,
+            backgroundColor: shade(m.tone, 1),
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+/** Sunshine has no ensemble, so its row is two plain bars: hours of sun against the
+ *  day's own daylight, and evaporation against the week's largest. */
+function SunBars({ day, scale, et0Max }: { day: Day; scale: Scale; et0Max: number }) {
+  const { palette } = useTheme();
+  const sun = day.sunHours != null ? Math.min(1, day.sunHours / (scale.hi || 1)) : 0;
+  const et0 = day.et0 != null ? Math.min(1, day.et0 / (et0Max || 1)) : 0;
+  return (
+    <View style={{ gap: 3 }}>
+      <Bar fraction={sun} color={palette.valSun} />
+      <Bar fraction={et0} color={palette.agroBright} />
+    </View>
+  );
+}
+
+function Bar({ fraction, color }: { fraction: number; color: string }) {
+  const { palette } = useTheme();
+  return (
+    <View style={{ height: 5, borderRadius: 3, backgroundColor: palette.hairline }}>
+      <View
+        style={{
+          position: 'absolute', left: 0, height: '100%',
+          width: `${Math.max(1, fraction * 100)}%`,
+          borderRadius: 3, backgroundColor: color,
+        }}
+      />
+    </View>
+  );
+}
+
+/** The members' range in words under the beam — the number the band is showing. */
+function SpreadCaption({ day, layer, hasEns }: { day: Day; layer: LayerKey; hasEns: boolean }) {
+  const { palette } = useTheme();
+  const { prefs } = usePrefs();
+
+  const text = (() => {
+    if (layer === 'sun') return null;
+    if (!hasEns) return '—';
+    switch (layer) {
+      case 'precip':
+        return day.precipP10 === 0 && day.precipP90 === 0
+          ? '0 mm'
+          : `${fmtMm(day.precipP10)}–${fmtMm(day.precipP90)} mm`;
+      case 'temp':
+        return `${convTemp(day.tempMinP10, prefs.tempUnit)}–${convTemp(day.tempMaxP90, prefs.tempUnit)}°`;
+      case 'wind':
+        return `${convWind(day.windP10, prefs.windUnit)}–${convWind(day.windP90, prefs.windUnit)} ${windUnitLabel(prefs.windUnit)}`;
+      case 'humidity':
+        return day.humidityP10 != null && day.humidityP90 != null
+          ? `${Math.round(day.humidityP10)}–${Math.round(day.humidityP90)}%`
+          : '—';
+      default:
+        return null;
+    }
+  })();
+
+  if (!text) return null;
+  return (
+    <Text variant="caption" color={palette.muted} tabular align="center" style={{ fontSize: 10.5 }}>
+      {text}
+    </Text>
+  );
+}
+
+/** Tones, at the opacity the part calls for: band, median hairline, marker. */
+function useShades() {
+  const { palette } = useTheme();
+  return (tone: BeamTone, weight: number): string => {
+    const base =
+      tone === 'low' ? palette.valLow
+        : tone === 'high' ? palette.valHigh
+          : tone === 'precip' ? palette.valPrecip
+            : tone === 'sun' ? palette.valSun
+              : tone === 'et0' ? palette.agroBright
+                : palette.muted;
+    return weight >= 1 ? base : withAlpha(base, weight);
   };
+}
+
+/** Fade a token colour. Tokens are hex or rgb(a); anything else is left alone, which
+ *  degrades to a solid colour rather than to an invalid style. */
+function withAlpha(color: string, alpha: number): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color);
+  if (hex) {
+    const n = parseInt(hex[1]!, 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+  }
+  const rgb = /^rgba?\(([^)]+)\)$/i.exec(color);
+  if (rgb) {
+    const parts = rgb[1]!.split(',').map((p) => p.trim());
+    return `rgba(${parts[0]}, ${parts[1]}, ${parts[2]}, ${alpha})`;
+  }
+  return color;
+}
+
+/** The value shown left of the beam, where the layer has a low end. */
+function LeadingValue({ day, layer, dayIndex }: { day: Day; layer: LayerKey; dayIndex: number }) {
+  const { palette } = useTheme();
+  const { prefs } = usePrefs();
+  const v = resolveDayValues(day, { dayIndex });
+  const width = 40;
 
   if (layer === 'temp') {
-    // Cold to warm across the day's own range.
     return (
-      <LinearGradient
-        colors={[palette.valLow, palette.valTemp]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={style}
+      <Value
+        width={width}
+        align="right"
+        value={convTemp(v.tempMin.value, prefs.tempUnit)}
+        suffix="°"
+        color={palette.valLow}
+        approx={!v.tempMin.direct}
+      />
+    );
+  }
+  if (layer === 'humidity') {
+    return (
+      <Value
+        width={width}
+        align="right"
+        value={v.humidityMin.value != null ? Math.round(v.humidityMin.value) : null}
+        suffix="%"
+        color={palette.valHigh}
+        approx={!v.humidityMin.direct}
       />
     );
   }
   if (layer === 'precip') {
+    // Probability leads: whether it rains matters before how much.
     return (
-      <LinearGradient
-        colors={[palette.sky, palette.accent]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={style}
+      <Value
+        width={width}
+        align="right"
+        value={day.ensLoaded ? Math.round(day.pChance) : null}
+        suffix="%"
+        color={palette.muted}
       />
     );
   }
-  const solid =
-    layer === 'wind' ? palette.inkHeading
-      : layer === 'sun' ? palette.valSun
-        : palette.accent;
-  return <View style={[style, { backgroundColor: solid }]} />;
+  return <View style={{ width }} />;
 }
 
-/** The value shown to the left of the track, where the layer has a low end. */
-function LeadingValue({ day, layer, row }: { day: Day; layer: LayerKey; row: ReturnType<typeof layerRow> }) {
+/** The layer's headline number, right of the beam. */
+function TrailingValue({ day, layer, dayIndex }: { day: Day; layer: LayerKey; dayIndex: number }) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
-
-  if (layer === 'temp') {
-    return (
-      <Text variant="label" weight="bold" color={palette.valLow} tabular align="right" style={{ width: 32 }}>
-        {convTemp(row.secondary, prefs.tempUnit) ?? '—'}°
-      </Text>
-    );
-  }
-  if (layer === 'precip' && row.note) {
-    // Probability leads the row: whether it rains matters before how much.
-    return (
-      <Text variant="caption" weight="bold" color={palette.muted} tabular align="right" style={{ width: 32 }}>
-        {row.note}
-      </Text>
-    );
-  }
-  return <View style={{ width: 32 }} />;
-}
-
-/** The value shown to the right of the track — the layer's headline number. */
-function TrailingValue({ day, layer, row }: { day: Day; layer: LayerKey; row: ReturnType<typeof layerRow> }) {
-  const { palette } = useTheme();
-  const { prefs } = usePrefs();
-  const width = 62;
-
-  if (row.primary == null) {
-    return (
-      <Text variant="label" color={palette.inkDisabled} tabular style={{ width }}>
-        —
-      </Text>
-    );
-  }
+  const v = resolveDayValues(day, { dayIndex });
+  const row = layerRow(day, layer, false, dayIndex);
+  const width = 66;
 
   switch (layer) {
     case 'temp':
       return (
-        <Text variant="label" weight="bold" color={palette.valHigh} tabular style={{ width }}>
-          {convTemp(row.primary, prefs.tempUnit)}°
-        </Text>
+        <Value
+          width={width}
+          value={convTemp(v.tempMax.value, prefs.tempUnit)}
+          suffix="°"
+          color={palette.valHigh}
+          approx={!v.tempMax.direct}
+        />
       );
 
     case 'precip':
       return (
-        <View style={{ width, flexDirection: 'row', alignItems: 'baseline' }}>
-          <Text
-            variant="label"
-            weight="bold"
-            tabular
-            color={row.primary > 0 ? palette.valPrecip : palette.valPrecipZero}
-          >
-            {fmtMm(row.primary)}
-          </Text>
-          <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 10 }}>
-            {' '}mm
-          </Text>
-        </View>
+        <Value
+          width={width}
+          value={v.precip.value != null ? fmtMm(v.precip.value) : null}
+          suffix=" mm"
+          color={v.precip.value ? palette.valPrecip : palette.valPrecipZero}
+          approx={!v.precip.direct}
+        />
       );
 
     case 'wind':
       return (
-        <View style={{ width, flexDirection: 'row', alignItems: 'baseline' }}>
-          <Text variant="label" weight="bold" color={palette.valWind} tabular>
-            {convWind(row.primary, prefs.windUnit)}
-          </Text>
-          <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 10 }}>
-            {' '}{windUnitLabel(prefs.windUnit)}
-          </Text>
-        </View>
-      );
-
-    case 'sun':
-      return (
-        <View style={{ width }}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-            <Text variant="label" weight="bold" color={palette.valSun} tabular>
-              {row.primary.toFixed(1).replace('.', ',')}
-            </Text>
-            <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 10 }}>
-              {' '}u
-            </Text>
-          </View>
-          {row.secondary != null ? (
-            <Text variant="caption" color={palette.muted} tabular style={{ fontSize: 10 }}>
-              ET₀ {fmtMm(row.secondary)} mm
-            </Text>
-          ) : null}
+        <View style={{ width, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+          <WindArrow deg={v.windDir} size={11} color={palette.muted} />
+          <Value
+            value={convWind(v.wind.value, prefs.windUnit)}
+            suffix={` ${windUnitLabel(prefs.windUnit)}`}
+            color={palette.valWind}
+            approx={!v.wind.direct}
+          />
         </View>
       );
 
     case 'humidity':
       return (
-        <View style={{ width, flexDirection: 'row', alignItems: 'baseline' }}>
-          <Text variant="label" weight="bold" color={palette.inkHeading} tabular>
-            {Math.round(row.primary)}
-          </Text>
-          <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 10 }}>
-            {' '}%
+        <Value
+          width={width}
+          value={v.humidityMax.value != null ? Math.round(v.humidityMax.value) : null}
+          suffix="%"
+          color={palette.accentDark}
+          approx={!v.humidityMax.direct}
+        />
+      );
+
+    case 'sun':
+      return (
+        <View style={{ width }}>
+          <Value
+            value={v.sunHours != null ? v.sunHours.toFixed(1).replace('.', ',') : null}
+            suffix=" u"
+            color={palette.valSun}
+          />
+          <Text variant="caption" color={palette.agroBright} tabular style={{ fontSize: 10 }}>
+            {v.et0 != null ? `${fmtMm(v.et0)} mm` : '—'}
           </Text>
         </View>
       );
+
+    default:
+      return (
+        <Value
+          width={width}
+          value={row.primary != null ? Math.round(row.primary) : null}
+          suffix=""
+          color={palette.inkHeading}
+        />
+      );
   }
+}
+
+function Value({
+  value, suffix, color, approx, width, align,
+}: {
+  value: string | number | null;
+  suffix?: string;
+  color: string;
+  approx?: boolean;
+  width?: number;
+  align?: 'right';
+}) {
+  const { palette } = useTheme();
+  const wrap = {
+    width,
+    flexDirection: 'row' as const,
+    alignItems: 'baseline' as const,
+    justifyContent: align === 'right' ? ('flex-end' as const) : ('flex-start' as const),
+  };
+
+  if (value == null) {
+    return (
+      <View style={wrap}>
+        <Text variant="label" color={palette.inkDisabled} tabular>
+          —
+        </Text>
+      </View>
+    );
+  }
+  return (
+    <View style={wrap}>
+      <Text variant="label" weight="bold" color={color} tabular>
+        {value}
+      </Text>
+      {suffix ? (
+        <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 10 }}>
+          {suffix}
+        </Text>
+      ) : null}
+      {approx ? (
+        <Text
+          variant="caption"
+          color={palette.muted}
+          style={{ fontSize: 9, opacity: 0.55 }}
+          accessibilityLabel="ensemblemediaan"
+        >
+          ~
+        </Text>
+      ) : null}
+    </View>
+  );
 }

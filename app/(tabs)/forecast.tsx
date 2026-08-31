@@ -22,7 +22,8 @@ import { OverviewDayRow } from '../../ui/forecast/OverviewDayRow';
 import { DaySheet } from '../../ui/forecast/DaySheet';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
-import { layerScale, type LayerKey } from '../../core/model/layers';
+import { type LayerKey } from '../../core/model/layers';
+import { beamScale, et0Scale } from '../../core/model/beam';
 import { hourWindow } from '../../core/model/hourWindow';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
@@ -82,10 +83,8 @@ export default function ForecastScreen() {
   );
 
   // One scale across every day shown, so the column can be read down.
-  const scale = useMemo(
-    () => layerScale(days, layer, prefs.showSpread),
-    [days, layer, prefs.showSpread]
-  );
+  const scale = useMemo(() => beamScale(days, layer, location.lat), [days, layer, location.lat]);
+  const et0Max = useMemo(() => et0Scale(days), [days]);
 
   const toggleExpanded = () => {
     const next = !expanded;
@@ -151,9 +150,10 @@ export default function ForecastScreen() {
                     <LayerDayRow
                       key={d.date}
                       day={d}
+                      dayIndex={i}
                       layer={layer}
                       scale={scale}
-                      showSpread={prefs.showSpread}
+                      et0Max={et0Max}
                       onPress={() => setSheetDay(d)}
                     />
                   )

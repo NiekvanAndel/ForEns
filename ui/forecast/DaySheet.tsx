@@ -11,9 +11,15 @@
  * the layer switcher, because six renderers that each re-derived the same day is
  * exactly why they drifted apart.
  *
- * The sheet opens on the section you came from: tapping a day under 'Wind' opens the
- * wind reading, not precipitation. Every section carries the chart, the day's
- * figures, and the hour-by-hour list the web app printed in each popup.
+ * The sheet opens on the section you came from, and shows what that section is about
+ * — as the web app's six popups did, and as one sheet that always opened on
+ * precipitation did not.
+ *
+ * Overview is the odd one out and deliberately so: the day's figures and its hours,
+ * with no precipitation narrative and no chart. It is the "what is this day like"
+ * answer, and a reader who wants the ensemble picks a measurand tab, where they get
+ * the members' spread — p10–p90 wide, p25–p75 inside it, the median, and a dot at
+ * the reported value — above the hour-by-hour list.
  *
  * The order is deliberate: the sentence a reader can act on comes first, the
  * meteogram second, and the per-measurand detail below that.
@@ -26,13 +32,14 @@ import { Card, CardHeader, Rule } from '../Card';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
-import { Meteogram } from '../charts/Meteogram';
 import { HourlyList } from './HourlyList';
+import { DayBar } from './DayBar';
 import { OverviewDayRow } from './OverviewDayRow';
 import { SpreadChart } from '../charts/SpreadChart';
 import { usePrefs } from '../../state/prefs';
 import { buildDayDetail, precipNarrative, spreadLabel } from '../../core/model/dayDetail';
 import { LAYERS, layerRow, resolveDayValues, type LayerKey } from '../../core/model/layers';
+import { beamScale } from '../../core/model/beam';
 import type { DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day, ForecastModel } from '../../core/model/types';
 import {
@@ -113,7 +120,7 @@ export function DaySheet({
               },
             ]}
           >
-            <Icon name="caret-right" size={16} color={palette.muted} weight="bold" />
+            <Icon name="x" size={15} color={palette.muted} weight="bold" />
           </Pressable>
         </View>
 
@@ -125,8 +132,10 @@ export function DaySheet({
           }}
           showsVerticalScrollIndicator={false}
         >
-          {/* The sentence first: what the ensemble actually says about the day. */}
-          {narrative ? (
+          {/* Precipitation leads with what the ensemble actually says, in a
+              sentence. Every other section — overview included — goes straight to
+              its own figures. */}
+          {layer === 'precip' && narrative ? (
             <Card>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], marginBottom: space[2] }}>
                 <Text variant="eyebrow" color={palette.muted}>
@@ -165,9 +174,10 @@ export function DaySheet({
           ) : null}
 
           <Card>
-            <CardHeader icon="clock" label={t('perHour', prefs.lang)} />
-            <Meteogram hours={detail.hours} />
-            {ensembleLoading ? (
+            <SectionTabs active={layer} onChange={setLayer} />
+            <Rule soft style={{ marginBottom: space[3] }} />
+            <LayerSection layer={layer} day={day} detail={detail} />
+            {ensembleLoading && layer !== 'overview' ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], marginTop: space[2] }}>
                 <ActivityIndicator size="small" color={palette.muted} />
                 <Text variant="caption" color={palette.muted}>
@@ -175,12 +185,6 @@ export function DaySheet({
                 </Text>
               </View>
             ) : null}
-          </Card>
-
-          <Card>
-            <SectionTabs active={layer} onChange={setLayer} />
-            <Rule soft style={{ marginBottom: space[3] }} />
-            <LayerSection layer={layer} day={day} detail={detail} />
             <HourlyList layer={layer} hours={detail.hours} sourceLabel={detail.sourceLabel} />
           </Card>
         </ScrollView>
@@ -239,7 +243,18 @@ function LayerSection({
   const { prefs } = usePrefs();
   const hours = detail.hours;
   const labels = hours.map((h) => h.time.slice(11, 13));
-  const row = layerRow(day, layer, prefs.showSpread);
+  const row = layerRow(day, layer, prefs.showSpread, detail.dayIndex);
+  const v = resolveDayValues(day, { dayIndex: detail.dayIndex });
+  const hasEns = day.ensLoaded ?? false;
+  // One day, so the scale is that day's own — which is what the web app's popups do,
+  // and why the bar there is wider than the sliver a shared weekly scale would give.
+  const scale = beamScale([day], layer, 52);
+  const mm = (x: number | null) => (x != null ? `${fmtMm(x)} mm` : '—');
+  const deg = (x: number | null) =>
+    x != null ? `${convTemp(x, prefs.tempUnit)}${tempUnitLabel(prefs.tempUnit)}` : '—';
+  const kmh = (x: number | null) =>
+    x != null ? `${convWind(x, prefs.windUnit)} ${windUnitLabel(prefs.windUnit)}` : '—';
+  const pct = (x: number | null) => (x != null ? `${Math.round(x)}%` : '—');
 
   switch (layer) {
     // The overview repeats the list row, then everything the day is made of — the
@@ -255,6 +270,18 @@ function LayerSection({
     case 'precip':
       return (
         <>
+          <DayBar
+            label={t('tabPrecip', prefs.lang)}
+            scale={scale}
+            p10={day.precipP10} p25={day.precipP25} p50={day.precipMedian}
+            p75={day.precipP75} p90={day.precipP90}
+            value={v.precip.value}
+            direct={v.precip.direct}
+            color={palette.valPrecip}
+            format={mm}
+            hasEns={hasEns}
+          />
+          <View style={{ height: space[4] }} />
           <SpreadChart
             labels={labels}
             color={palette.valPrecip}
@@ -281,6 +308,32 @@ function LayerSection({
     case 'temp':
       return (
         <>
+          {/* Maximum and minimum are separate questions, so they get separate bars —
+              the web app's temperature popup does the same. */}
+          <DayBar
+            label={t('maxTemp', prefs.lang)}
+            scale={scale}
+            p10={day.tempMaxP10} p25={day.tempMaxP25} p50={day.tempMaxP50}
+            p75={day.tempMaxP75} p90={day.tempMaxP90}
+            value={v.tempMax.value}
+            direct={v.tempMax.direct}
+            color={palette.valHigh}
+            format={deg}
+            hasEns={hasEns}
+          />
+          <View style={{ height: space[4] }} />
+          <DayBar
+            label={t('minTemp', prefs.lang)}
+            scale={scale}
+            p10={day.tempMinP10} p25={day.tempMinP25} p50={day.tempMinP50}
+            p75={day.tempMinP75} p90={day.tempMinP90}
+            value={v.tempMin.value}
+            direct={v.tempMin.direct}
+            color={palette.valLow}
+            format={deg}
+            hasEns={hasEns}
+          />
+          <View style={{ height: space[4] }} />
           <SpreadChart
             labels={labels}
             color={palette.valTemp}
@@ -307,6 +360,18 @@ function LayerSection({
     case 'wind':
       return (
         <>
+          <DayBar
+            label={t('tabWind', prefs.lang)}
+            scale={scale}
+            p10={day.windP10} p25={day.windP25} p50={day.windP50}
+            p75={day.windP75} p90={day.windP90}
+            value={v.wind.value}
+            direct={v.wind.direct}
+            color={palette.valWind}
+            format={kmh}
+            hasEns={hasEns}
+          />
+          <View style={{ height: space[4] }} />
           <SpreadChart
             labels={labels}
             color={palette.inkHeading}
@@ -331,6 +396,18 @@ function LayerSection({
     case 'humidity':
       return (
         <>
+          <DayBar
+            label={t('relHumidity', prefs.lang)}
+            scale={scale}
+            p10={day.humidityP10} p25={day.humidityP25} p50={day.humidityMedian}
+            p75={day.humidityP75} p90={day.humidityP90}
+            value={v.humidityMax.value}
+            direct={v.humidityMax.direct}
+            color={palette.accentDark}
+            format={pct}
+            hasEns={hasEns}
+          />
+          <View style={{ height: space[4] }} />
           <SpreadChart
             labels={labels}
             color={palette.accent}

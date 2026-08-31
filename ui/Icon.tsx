@@ -11,7 +11,7 @@ import {
   ChartLine, CircleHalf, Clock, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun,
   CloudSnow, Crosshair, DotsSixVertical, Drop, DropHalf, GearSix, Info, MagnifyingGlass, Minus,
   Moon, MoonStars, Pause, Play, PlugsConnected, Plus, Ruler, Sun, TextAa,
-  ThermometerSimple, Translate, Trash, Wind,
+  ThermometerSimple, Translate, Trash, Wind, X,
   type IconProps as PhosphorProps,
   NavigationArrow,
 } from 'phosphor-react-native';
@@ -55,6 +55,7 @@ const ICONS = {
   translate: Translate,
   trash: Trash,
   wind: Wind,
+  x: X,
 } satisfies Record<string, ComponentType<PhosphorProps>>;
 
 export type IconName = keyof typeof ICONS;

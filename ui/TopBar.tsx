@@ -1,18 +1,18 @@
 /**
- * The top bar: where you are, which location of yours this is, and settings.
+ * The top row: search, where you are, and room for what comes next.
  *
- * Replaces the row of location pills. With more than two or three saved places the
- * pills crowded the bar and the name — the one thing worth reading — was the part
- * that got truncated. So the name takes the width, the saved locations become dots,
- * and switching between them is a swipe across the page (see `LocationPager`); the
- * dots are the position indicator that swipe needs, and remain tappable.
+ * Three slots of equal weight — search on the left, the location control in the
+ * middle, an empty slot on the right held open for a future button. Only the two
+ * buttons carry a background; the row itself does not, so the bar reads as part of
+ * the page rather than as a panel sitting on it.
  *
- * Beside them sits the GPS arrow, which adds wherever the device actually is, and
- * settings, which moved up here out of the bottom bar so that bar carries only the
- * three pages.
+ * The middle control is the GPS arrow and one dot per saved location: the arrow adds
+ * wherever the device actually is, and the dots say which saved place you are on and
+ * how many there are — the position indicator the page swipe needs. Tapping a dot
+ * still selects it.
  *
- * Design rule 1 holds: the name is AgroExact green only where a station backs the
- * location, never as decoration.
+ * The location's *name* is not here. It belongs to the page, directly below the row,
+ * where there is width for it — see `LocationTitle`.
  */
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
@@ -23,24 +23,21 @@ import { Text } from './Text';
 import { Icon } from './Icon';
 import { usePrefs } from '../state/prefs';
 import { reverseGeocode, type Place } from '../core/sources/geocoding';
-import { t, ta } from '../core/i18n';
+import { ta } from '../core/i18n';
 
 export interface TopBarProps {
   onSearch: (query: string) => void;
   results: Place[];
   searching: boolean;
   onPick: (place: Place) => void;
-  onOpenSettings: () => void;
 }
 
-export function TopBar({ onSearch, results, searching, onPick, onOpenSettings }: TopBarProps) {
+export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
   const { palette } = useTheme();
   const { prefs, selectLocation, addLocation } = usePrefs();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [locating, setLocating] = useState(false);
-
-  const active = prefs.locations[prefs.activeLocation] ?? prefs.locations[0];
 
   const close = () => {
     setOpen(false);
@@ -154,46 +151,42 @@ export function TopBar({ onSearch, results, searching, onPick, onOpenSettings }:
   return (
     <View
       style={{
-        paddingHorizontal: space[5], paddingTop: 6, paddingBottom: space[3],
-        flexDirection: 'row', gap: space[3], alignItems: 'center',
+        paddingHorizontal: space[5], paddingTop: 6, paddingBottom: space[2],
+        flexDirection: 'row', alignItems: 'center',
       }}
     >
-      <Pressable
-        onPress={() => setOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel={ta('searchPlaceholderNl', prefs.lang)}
-        style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7 }}
-      >
-        {active?.stationId ? (
-          <View
-            style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.agroBright }}
-          />
-        ) : null}
-        <View style={{ flexShrink: 1 }}>
-          <Text
-            variant="locationName"
-            color={active?.stationId ? palette.agroInk : palette.inkHeading}
-            numberOfLines={1}
-          >
-            {active?.name ?? '—'}
-          </Text>
-          {active?.stationName ?? active?.sub ? (
-            <Text variant="caption" color={palette.muted} numberOfLines={1}>
-              {active?.stationName ?? active?.sub}
-            </Text>
-          ) : null}
-        </View>
-        <Icon name="magnifying-glass" size={15} color={palette.muted} />
-      </Pressable>
+      {/* Left: search. */}
+      <View style={{ flex: 1, alignItems: 'flex-start' }}>
+        <RoundButton
+          icon="magnifying-glass"
+          label={ta('searchPlaceholderNl', prefs.lang)}
+          onPress={() => setOpen(true)}
+        />
+      </View>
 
+      {/* Middle: where you are, and which of your places. */}
       <View
         style={{
           flexDirection: 'row', alignItems: 'center', gap: space[3],
-          backgroundColor: palette.glassCapsule,
+          backgroundColor: palette.cream2,
           borderRadius: radius.pill,
-          paddingVertical: 9, paddingHorizontal: 13,
+          paddingVertical: 10, paddingHorizontal: 15,
         }}
       >
+        <Pressable
+          onPress={useMyLocation}
+          accessibilityRole="button"
+          accessibilityLabel={ta('useMyLocation', prefs.lang)}
+          hitSlop={8}
+          disabled={locating}
+        >
+          {locating ? (
+            <ActivityIndicator size="small" color={palette.accentDark} />
+          ) : (
+            <Icon name="navigation-arrow" size={17} color={palette.inkHeading} weight="fill" />
+          )}
+        </Pressable>
+
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {prefs.locations.map((l, i) => {
             const on = i === prefs.activeLocation;
@@ -211,8 +204,9 @@ export function TopBar({ onSearch, results, searching, onPick, onOpenSettings }:
                     width: on ? 8 : 6,
                     height: on ? 8 : 6,
                     borderRadius: 4,
+                    // Green names a station, never a place — design rule 1.
                     backgroundColor: on
-                      ? l.stationId ? palette.agroBright : palette.accentDark
+                      ? l.stationId ? palette.agroBright : palette.inkHeading
                       : palette.inkDisabled,
                   }}
                 />
@@ -220,30 +214,30 @@ export function TopBar({ onSearch, results, searching, onPick, onOpenSettings }:
             );
           })}
         </View>
-
-        <Pressable
-          onPress={useMyLocation}
-          accessibilityRole="button"
-          accessibilityLabel={ta('useMyLocation', prefs.lang)}
-          hitSlop={8}
-          disabled={locating}
-        >
-          {locating ? (
-            <ActivityIndicator size="small" color={palette.accentDark} />
-          ) : (
-            <Icon name="navigation-arrow" size={16} color={palette.accentDark} weight="fill" />
-          )}
-        </Pressable>
       </View>
 
-      <Pressable
-        onPress={onOpenSettings}
-        accessibilityRole="button"
-        accessibilityLabel={t('settings', prefs.lang)}
-        hitSlop={8}
-      >
-        <Icon name="gear-six" size={21} color={palette.muted} />
-      </Pressable>
+      {/* Right: held open, so adding a button later does not move the middle. */}
+      <View style={{ flex: 1, alignItems: 'flex-end' }} />
     </View>
+  );
+}
+
+function RoundButton({
+  icon, label, onPress,
+}: { icon: string; label: string; onPress: () => void }) {
+  const { palette } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={{
+        width: 42, height: 42, borderRadius: radius.pill,
+        backgroundColor: palette.cream2,
+        alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <Icon name={icon} size={19} color={palette.inkHeading} />
+    </Pressable>
   );
 }

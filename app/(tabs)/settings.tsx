@@ -1,10 +1,7 @@
 /**
- * Instellingen, as a sheet over whichever page you were on.
+ * Instellingen.
  *
- * Settings moved out of the bottom bar and into the top row, so it is no longer a
- * page you navigate to and have to navigate back from — it covers the page, and
- * dismisses to exactly where you were. The bottom bar now carries only the three
- * places you actually move between.
+ * A page in the bottom bar, alongside Nu, Radar and Verwachting.
  *
  * Follows the design's SettingsScreen, with two additions the web app has and the
  * design's settings omits: temperature and pressure units. Dropping working
@@ -18,13 +15,13 @@
  * See DEFERRED.md.
  */
 import { useCallback } from 'react';
-import { Modal, ScrollView, View, Pressable } from 'react-native';
+import { ScrollView, View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { radius, space, useTheme } from '../../theme';
-import { Text } from '../Text';
-import { Icon } from '../Icon';
-import { Group, Row, Segmented, Toggle } from './Controls';
+import { Text } from '../../ui/Text';
+import { Icon } from '../../ui/Icon';
+import { Group, Row, Segmented, Toggle } from '../../ui/settings/Controls';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { t, ta, LANG_CODES } from '../../core/i18n';
@@ -34,12 +31,10 @@ import type { FontSizePref, PresUnit, TempUnit, WindUnit } from '../../core/i18n
 
 const APP_VERSION = '0.1';
 
-export interface SettingsSheetProps {
-  visible: boolean;
-  onClose: () => void;
-}
+/** Space the floating glass tab bar occupies, so content can scroll clear of it. */
+const TAB_BAR_CLEARANCE = 110;
 
-export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
+export default function SettingsScreen() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const {
@@ -63,37 +58,19 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
   );
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={onClose}
-    >
     <View style={{ flex: 1, backgroundColor: palette.appBg }}>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: space[5],
-          paddingTop: space[5],
-          paddingBottom: insets.bottom + space[10],
+          paddingTop: insets.top + space[4],
+          paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
           gap: space[6],
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
-          <Text variant="screenTitle" color={palette.inkHeading} style={{ flex: 1 }}>
-            {t('settings', prefs.lang)}
-          </Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel={ta('done', prefs.lang)}
-            hitSlop={10}
-          >
-            <Text variant="body" weight="semibold" color={palette.accentDark}>
-              {ta('done', prefs.lang)}
-            </Text>
-          </Pressable>
-        </View>
+        <Text variant="screenTitle" color={palette.inkHeading}>
+          {t('settings', prefs.lang)}
+        </Text>
 
         <Group label={ta('display', prefs.lang)}>
           <Row icon="translate" label={t('lang', prefs.lang)} hint={ta('langHint', prefs.lang)} stacked>
@@ -241,7 +218,6 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
         </Text>
       </ScrollView>
     </View>
-    </Modal>
   );
 }
 

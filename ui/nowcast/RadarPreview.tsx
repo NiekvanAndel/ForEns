@@ -6,11 +6,16 @@
  *
  * Interaction is deliberately off here: this is a preview that opens a screen, so a
  * pan gesture inside it would fight the page scroll.
+ *
+ * Square rather than a letterbox, and it follows the app's appearance so the dark
+ * theme gets MapKit's dark cartography instead of a bright rectangle in the middle
+ * of a navy page.
  */
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
+import { MAX_DISPLAY_Z, mapChrome } from '../radar/mapStyle';
 import { Card, CardHeader } from '../Card';
 import { Text } from '../Text';
 import { usePrefs } from '../../state/prefs';
@@ -50,10 +55,11 @@ export function useLatestFrame(): RadarFrame | null {
 export function RadarPreview({
   lat, lon, stationName, stationLat, stationLon, onOpen,
 }: RadarPreviewProps) {
-  const { palette } = useTheme();
+  const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
   const frame = useLatestFrame();
   const provider = activeProvider();
+  const chrome = mapChrome(palette, appearance);
 
   const time = frame
     ? new Date(frame.timeMs).toLocaleTimeString(prefs.lang, { hour: '2-digit', minute: '2-digit' })
@@ -68,7 +74,7 @@ export function RadarPreview({
         onAction={onOpen}
       />
       <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel="Open radar">
-        <View style={{ height: 168, borderRadius: 18, overflow: 'hidden' }}>
+        <View style={{ aspectRatio: 1, borderRadius: 18, overflow: 'hidden' }}>
           <MapView
             provider={PROVIDER_DEFAULT}
             style={{ flex: 1 }}
@@ -81,44 +87,30 @@ export function RadarPreview({
             rotateEnabled={false}
             pitchEnabled={false}
             toolbarEnabled={false}
+            userInterfaceStyle={appearance}
           >
             {frame ? (
               <UrlTile
                 urlTemplate={provider.tileTemplate({ frame })}
-                maximumZ={provider.maxZoom}
+                maximumNativeZ={provider.maxZoom}
+                maximumZ={MAX_DISPLAY_Z}
                 zIndex={1}
                 opacity={0.75}
               />
             ) : null}
-            <Marker coordinate={{ latitude: lat, longitude: lon }} tracksViewChanges={false}>
-              <View
-                style={[
-                  {
-                    width: 21, height: 21, borderRadius: 11,
-                    backgroundColor: palette.inkHeading,
-                    borderWidth: 3, borderColor: '#fff',
-                  },
-                  shadowFloat,
-                ]}
-              />
-            </Marker>
+            {/* MapKit's own annotations, not React children — see ui/radar/mapStyle. */}
+            <Marker
+              coordinate={{ latitude: lat, longitude: lon }}
+              pinColor={chrome.here}
+              zIndex={2}
+            />
             {stationLat != null && stationLon != null ? (
               <Marker
                 coordinate={{ latitude: stationLat, longitude: stationLon }}
                 title={stationName}
-                tracksViewChanges={false}
-              >
-                <View
-                  style={[
-                    {
-                      width: 14, height: 14, borderRadius: 7,
-                      backgroundColor: '#fff',
-                      borderWidth: 3, borderColor: palette.agroBright,
-                    },
-                    shadowFloat,
-                  ]}
-                />
-              </Marker>
+                pinColor={palette.agroBright}
+                zIndex={2}
+              />
             ) : null}
           </MapView>
 
@@ -126,14 +118,14 @@ export function RadarPreview({
             style={[
               {
                 position: 'absolute', right: 12, top: 12,
-                backgroundColor: 'rgba(255,255,255,.94)',
+                backgroundColor: chrome.bg,
                 borderRadius: radius.pill,
                 paddingVertical: 6, paddingHorizontal: space[3],
               },
               shadowFloat,
             ]}
           >
-            <Text variant="caption" weight="bold" color="#0C2547" tabular>
+            <Text variant="caption" weight="bold" color={chrome.ink} tabular>
               nu · {time}
             </Text>
           </View>

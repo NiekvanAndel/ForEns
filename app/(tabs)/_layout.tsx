@@ -1,12 +1,9 @@
 /**
- * The three tabs, with the design's glass bar replacing the platform one.
+ * The four tabs, with the design's glass bar replacing the platform one.
  *
  * The design puts the tab bar as a floating capsule inset from the screen edges, so
  * the native bar is hidden and `GlassTabBar` is rendered over the content instead.
- *
- * Settings is no longer among them: it moved into the top row and opens as a sheet
- * over whichever page you are on, so the bar carries only the three places you move
- * between rather than three places and a drawer.
+
  */
 import { Tabs, useRouter, useSegments } from 'expo-router';
 import { View } from 'react-native';
@@ -19,6 +16,7 @@ const TABS = [
   { key: 'index', labelKey: 'tabNow', icon: 'broadcast' },
   { key: 'radar', labelKey: 'tabRadar', icon: 'drop' },
   { key: 'forecast', labelKey: 'tabForecast', icon: 'calendar-blank' },
+  { key: 'settings', labelKey: 'tabSettings', icon: 'gear-six' },
 ] as const;
 
 export default function TabsLayout() {
@@ -47,6 +45,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="index" />
         <Tabs.Screen name="radar" />
         <Tabs.Screen name="forecast" />
+        <Tabs.Screen name="settings" />
       </Tabs>
       <GlassTabBar
         items={items}
