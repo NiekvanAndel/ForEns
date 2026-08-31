@@ -5,6 +5,7 @@
  * two coloured-border exceptions in the system are Callout and StatusCard, neither
  * of which is a Card.
  */
+import type { ReactNode } from 'react';
 import { View, Pressable, type ViewProps, type ViewStyle } from 'react-native';
 import { CaretRight } from 'phosphor-react-native';
 import { radius, shadowCard, space, useTheme } from '../theme';
@@ -44,9 +45,11 @@ export interface CardHeaderProps {
   /** Right-hand action label, e.g. "Details". */
   action?: string;
   onAction?: () => void;
+  /** Placed immediately after the label — a play button, a badge. */
+  adornment?: ReactNode;
 }
 
-export function CardHeader({ icon, label, action, onAction }: CardHeaderProps) {
+export function CardHeader({ icon, label, action, onAction, adornment }: CardHeaderProps) {
   const { palette } = useTheme();
   return (
     <View
@@ -62,6 +65,7 @@ export function CardHeader({ icon, label, action, onAction }: CardHeaderProps) {
       <Text variant="eyebrow" color={palette.muted}>
         {label}
       </Text>
+      {adornment}
       {action ? (
         <Pressable
           onPress={onAction}

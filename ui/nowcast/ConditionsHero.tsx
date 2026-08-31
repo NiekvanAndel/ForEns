@@ -3,8 +3,9 @@
  *
  * Works for any address; a station-backed one turns the title AgroExact green and
  * adds the source line with its dot. Layout follows the design's ConditionsHero:
- * the ▲/▼ pair beside the big reading, a three-cell divider row, then the next
- * three hours.
+ * the ▲/▼ pair beside the big reading, a three-cell divider row, then the hourly
+ * slider — which replaced three static rows, so the next hours are scrollable and
+ * reach into tomorrow instead of stopping three hours out.
  *
  * Reading colours follow the quantity, not the card (design rule 2): ▲ is val-high,
  * ▼ is val-low, temperature is val-temp, millimetres are val-precip, and a zero is
@@ -13,12 +14,13 @@
 import { View } from 'react-native';
 import { space, useTheme } from '../../theme';
 import { Card, Rule, VRule } from '../Card';
+import { HourSlider } from './HourSlider';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, fmtMm, windUnitLabel, t } from '../../core/i18n';
-import type { ForecastModel, Hour } from '../../core/model/types';
+import type { ForecastModel } from '../../core/model/types';
 import type { SavedLocation } from '../../core/prefs';
 
 export interface ConditionsHeroProps {
@@ -118,11 +120,10 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
       </View>
 
       <Rule />
-      <View style={{ paddingHorizontal: space[5], paddingTop: 4, paddingBottom: 10 }}>
-        {model.futureHours.slice(0, 3).map((h) => (
-          <HourRow key={h.time} hour={h} />
-        ))}
-      </View>
+      {/* The next hours, not three rows of them: the slider runs from this morning
+          into tomorrow and opens on now, so "what happens next" is a swipe rather
+          than a jump down the page. */}
+      <HourSlider model={model} />
     </Card>
   );
 }
@@ -151,41 +152,3 @@ function Unit({ children }: { children: React.ReactNode }) {
 }
 
 /** One of the next three hours: time, glyph, temperature, mm, wind, sunshine. */
-function HourRow({ hour }: { hour: Hour }) {
-  const { palette } = useTheme();
-  const { prefs } = usePrefs();
-  const mm = hour.precip ?? 0;
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 2 }}>
-      <Text variant="bodySm" weight="bold" color={palette.muted} tabular style={{ width: 46 }}>
-        {hour.time.slice(11, 16)}
-      </Text>
-      <WeatherIcon wmo={hour.wmo} isDay={hour.isDay} size={19} />
-      <Text variant="bodySm" weight="bold" color={palette.valTemp} tabular style={{ width: 34 }}>
-        {convTemp(hour.temp, prefs.tempUnit) ?? '—'}°
-      </Text>
-      <View style={{ width: 58, flexDirection: 'row', alignItems: 'baseline' }}>
-        <Text
-          variant="bodySm"
-          weight="bold"
-          tabular
-          color={mm > 0 ? palette.valPrecip : palette.valPrecipZero}
-        >
-          {fmtMm(mm)}
-        </Text>
-        <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 11 }}>
-          {' '}mm
-        </Text>
-      </View>
-      <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        <WindArrow deg={hour.windDir ?? null} size={13} />
-        <Text variant="bodySm" weight="bold" color={palette.valWind} tabular>
-          {convWind(hour.wind, prefs.windUnit) ?? '—'}
-        </Text>
-      </View>
-      <Text variant="bodySm" weight="bold" color={palette.valSun} tabular align="right" style={{ width: 34 }}>
-        {hour.sunMin ?? 0}m
-      </Text>
-    </View>
-  );
-}

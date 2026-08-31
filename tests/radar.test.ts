@@ -7,6 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { buildProfile, RainViewerProvider } from '../core/radar/rainviewer';
+import { intensityAt } from '../core/radar/labels';
 import {
   activeProvider, listProviders, registerProvider, setActiveProvider,
   type RadarProvider,
@@ -133,5 +134,31 @@ describe('provider registry', () => {
   it('rejects an unregistered id rather than failing silently later', () => {
     expect(() => setActiveProvider('nope')).toThrow(/no provider registered/);
     expect(activeProvider().id).toBe('rainviewer');
+  });
+});
+
+describe('intensityAt', () => {
+  const bars = [
+    { offsetMin: 0, mmPerHour: 0 },
+    { offsetMin: 30, mmPerHour: 2 },
+    { offsetMin: 60, mmPerHour: 6 },
+  ];
+
+  it('reads a sample exactly at its own offset', () => {
+    expect(intensityAt(bars, 30)).toBe(2);
+  });
+
+  it('interpolates between two samples, since the scrubber lands between them', () => {
+    expect(intensityAt(bars, 15)).toBeCloseTo(1, 10);
+    expect(intensityAt(bars, 45)).toBeCloseTo(4, 10);
+  });
+
+  it('holds the end values rather than extrapolating off the profile', () => {
+    expect(intensityAt(bars, -20)).toBe(0);
+    expect(intensityAt(bars, 500)).toBe(6);
+  });
+
+  it('is zero with no profile at all', () => {
+    expect(intensityAt([], 10)).toBe(0);
   });
 });

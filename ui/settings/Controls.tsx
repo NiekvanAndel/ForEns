@@ -183,3 +183,48 @@ export function Toggle({
     </Pressable>
   );
 }
+
+/**
+ * A row that opens a page of its own.
+ *
+ * Settings had every control on one screen, which by the time units, models,
+ * locations and display had all landed was a long scroll with no shape to it. iOS
+ * answers that with subject pages: the index says what there is and what each is set
+ * to, and the detail is one tap away.
+ */
+export function NavRow({
+  icon, label, value, last, onPress,
+}: {
+  icon?: string;
+  label: string;
+  /** The current setting, shown greyed beside the chevron. */
+  value?: string;
+  last?: boolean;
+  onPress: () => void;
+}) {
+  const { palette } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={value ? `${label}, ${value}` : label}
+      style={{
+        flexDirection: 'row', alignItems: 'center', gap: space[3],
+        paddingVertical: space[4], paddingHorizontal: space[5],
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: palette.hairlineSoft,
+      }}
+    >
+      {icon ? <Icon name={icon} size={19} color={palette.accentDark} /> : null}
+      <Text variant="body" color={palette.inkHeading} style={{ flex: 1 }}>
+        {label}
+      </Text>
+      {value ? (
+        <Text variant="bodySm" color={palette.muted} numberOfLines={1} style={{ flexShrink: 1 }}>
+          {value}
+        </Text>
+      ) : null}
+      <Icon name="caret-right" size={14} color={palette.inkDisabled} weight="bold" />
+    </Pressable>
+  );
+}

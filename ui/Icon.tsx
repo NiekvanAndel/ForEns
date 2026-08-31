@@ -7,8 +7,8 @@
  * than renaming them at every call site.
  */
 import {
-  ArrowDown, ArrowUp, ArrowsClockwise, Broadcast, CalendarBlank, CaretRight,
-  ChartLine, CircleHalf, Clock, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun,
+  ArrowDown, ArrowUp, ArrowsClockwise, ArrowsOut, Broadcast, CalendarBlank, CaretRight,
+  CaretLeft, ChartLine, CircleHalf, Clock, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun,
   CloudSnow, Crosshair, DotsSixVertical, Drop, DropHalf, GearSix, Info, MagnifyingGlass, Minus,
   Moon, MoonStars, Pause, Play, PlugsConnected, Plus, Ruler, Sun, TextAa,
   ThermometerSimple, Translate, Trash, Wind, X,
@@ -21,8 +21,10 @@ const ICONS = {
   'arrow-down': ArrowDown,
   'arrow-up': ArrowUp,
   'arrows-clockwise': ArrowsClockwise,
+  'arrows-out': ArrowsOut,
   broadcast: Broadcast,
   'calendar-blank': CalendarBlank,
+  'caret-left': CaretLeft,
   'caret-right': CaretRight,
   'chart-line': ChartLine,
   'circle-half': CircleHalf,

@@ -10,17 +10,33 @@
  * Square rather than a letterbox, and it follows the app's appearance so the dark
  * theme gets MapKit's dark cartography instead of a bright rectangle in the middle
  * of a navy page.
+ *
+ * It does NOT set `maximumNativeZ`. That prop switches react-native-maps onto its
+ * cached-overlay path, which refetches and rescales tiles itself — worth it on the
+ * radar screen, where a reader can zoom past the provider's deepest level, and not
+ * worth it here, where the region is fixed and cannot over-zoom. Setting it anyway
+ * is what put "Zoom Level Not Supported" tiles across this card.
  */
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
-import { MAX_DISPLAY_Z, mapChrome } from '../radar/mapStyle';
+import { mapChrome } from '../radar/mapStyle';
 import { Card, CardHeader } from '../Card';
 import { Text } from '../Text';
+import { Icon } from '../Icon';
 import { usePrefs } from '../../state/prefs';
 import { ta } from '../../core/i18n';
 import { activeProvider, type RadarFrame } from '../../core/radar';
+
+/** How much of the map the preview shows, in degrees. The card became square, which
+ *  doubled its height — at the old span that pulled the view out far enough to be a
+ *  map of the North Sea rather than of where you are. */
+const PREVIEW_SPAN_DEG = 1.1;
+
+/** How long each frame is held while the loop plays. Slow enough to read a shower's
+ *  direction, fast enough that the whole hour passes in a few seconds. */
+const FRAME_MS = 420;
 
 export interface RadarPreviewProps {
   lat: number;
@@ -31,25 +47,21 @@ export interface RadarPreviewProps {
   onOpen: () => void;
 }
 
-/** Latest observed frame, which is what "nu" means on the preview. */
-export function useLatestFrame(): RadarFrame | null {
-  const [frame, setFrame] = useState<RadarFrame | null>(null);
+/** The observed frames, newest last. The preview shows the newest until it is
+ *  played, and then steps through them. */
+export function useFrames(): RadarFrame[] {
+  const [frames, setFrames] = useState<RadarFrame[]>([]);
   useEffect(() => {
     let alive = true;
     activeProvider()
       .listFrames()
-      .then((f) => {
-        if (!alive) return;
-        setFrame(f.past[f.past.length - 1] ?? null);
-      })
+      .then((f) => { if (alive) setFrames(f.past); })
       .catch(() => {
         // No frames: the map still renders, just without a radar overlay.
       });
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
-  return frame;
+  return frames;
 }
 
 export function RadarPreview({
@@ -57,9 +69,41 @@ export function RadarPreview({
 }: RadarPreviewProps) {
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
-  const frame = useLatestFrame();
+  const frames = useFrames();
   const provider = activeProvider();
   const chrome = mapChrome(palette, appearance);
+
+  // Playing the loop here answers "which way is it moving?" without leaving the
+  // page. It stops itself at the newest frame rather than looping forever, so a
+  // card left on screen is not animating in the corner of the reader's eye.
+  const [playing, setPlaying] = useState(false);
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    setIndex(Math.max(0, frames.length - 1));
+  }, [frames.length]);
+
+  useEffect(() => {
+    if (!playing || frames.length < 2) return;
+    const id = setInterval(() => {
+      setIndex((i) => {
+        if (i >= frames.length - 1) {
+          setPlaying(false);
+          return frames.length - 1;
+        }
+        return i + 1;
+      });
+    }, FRAME_MS);
+    return () => clearInterval(id);
+  }, [playing, frames.length]);
+
+  const startPlaying = () => {
+    if (frames.length < 2) return;
+    setIndex(0);
+    setPlaying(true);
+  };
+
+  const frame = frames[index] ?? null;
 
   const time = frame
     ? new Date(frame.timeMs).toLocaleTimeString(prefs.lang, { hour: '2-digit', minute: '2-digit' })
@@ -72,6 +116,25 @@ export function RadarPreview({
         label={ta('tabRadar', prefs.lang)}
         action={ta('full', prefs.lang)}
         onAction={onOpen}
+        adornment={
+          frames.length > 1 ? (
+            <Pressable
+              onPress={startPlaying}
+              accessibilityRole="button"
+              accessibilityLabel={playing ? 'Bezig met afspelen' : 'Radarbeelden afspelen'}
+              accessibilityState={{ busy: playing }}
+              hitSlop={8}
+              style={{ marginLeft: 2 }}
+            >
+              <Icon
+                name={playing ? 'pause' : 'play'}
+                size={14}
+                color={playing ? palette.accentDark : palette.muted}
+                weight="fill"
+              />
+            </Pressable>
+          ) : null
+        }
       />
       <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel="Open radar">
         <View style={{ aspectRatio: 1, borderRadius: 18, overflow: 'hidden' }}>
@@ -80,7 +143,7 @@ export function RadarPreview({
             style={{ flex: 1 }}
             initialRegion={{
               latitude: lat, longitude: lon,
-              latitudeDelta: 1.6, longitudeDelta: 1.6,
+              latitudeDelta: PREVIEW_SPAN_DEG, longitudeDelta: PREVIEW_SPAN_DEG,
             }}
             scrollEnabled={false}
             zoomEnabled={false}
@@ -91,9 +154,9 @@ export function RadarPreview({
           >
             {frame ? (
               <UrlTile
+                key={frame.id}
                 urlTemplate={provider.tileTemplate({ frame })}
-                maximumNativeZ={provider.maxZoom}
-                maximumZ={MAX_DISPLAY_Z}
+                maximumZ={provider.maxZoom}
                 zIndex={1}
                 opacity={0.75}
               />
@@ -126,7 +189,7 @@ export function RadarPreview({
             ]}
           >
             <Text variant="caption" weight="bold" color={chrome.ink} tabular>
-              nu · {time}
+              {playing ? time : `nu · ${time}`}
             </Text>
           </View>
         </View>

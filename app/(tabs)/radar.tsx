@@ -6,19 +6,21 @@
  * and the nowcast summary.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { space, useTheme } from '../../theme';
+import { shadowFloat, space, useTheme } from '../../theme';
 import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
 import { ScreenFrame } from '../../ui/ScreenFrame';
 import { RadarMap } from '../../ui/radar/RadarMap';
 import { Timeline } from '../../ui/radar/Timeline';
+import { FullScreenRadar } from '../../ui/radar/FullScreenRadar';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useStations, stationsNear } from '../../state/stations';
 import { activeProvider, frameLabel, type RadarFrame } from '../../core/radar';
+import { mapChrome } from '../../ui/radar/mapStyle';
 import { fmtMm, ta } from '../../core/i18n';
 
 const TAB_BAR_CLEARANCE = 110;
@@ -26,16 +28,18 @@ const TAB_BAR_CLEARANCE = 110;
 const STATION_PIN_RADIUS_KM = 60;
 
 export default function RadarScreen() {
-  const { palette } = useTheme();
+  const { palette, appearance } = useTheme();
   const { prefs, location } = usePrefs();
   const { nowcast } = useForecast();
   const insets = useSafeAreaInsets();
   const { stations } = useStations(location.lat, location.lon);
+  const chrome = mapChrome(palette, appearance);
 
   const [frames, setFrames] = useState<RadarFrame[]>([]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [fullScreen, setFullScreen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -78,15 +82,34 @@ export default function RadarScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <RadarMap
-          lat={location.lat}
-          lon={location.lon}
-          frames={frames}
-          activeIndex={index}
-          stations={pins}
-          timeLabel={frames.length ? frameLabel(frames[index]) : '—'}
-          style={{ aspectRatio: 3 / 4 }}
-        />
+        <View>
+          <RadarMap
+            lat={location.lat}
+            lon={location.lon}
+            frames={frames}
+            activeIndex={index}
+            stations={pins}
+            timeLabel={frames.length ? frameLabel(frames[index]) : '—'}
+            style={{ aspectRatio: 3 / 4 }}
+          />
+          <Pressable
+            onPress={() => setFullScreen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={ta('fullScreen', prefs.lang)}
+            hitSlop={8}
+            style={[
+              {
+                position: 'absolute', right: 14, bottom: 14,
+                width: 38, height: 38, borderRadius: 19,
+                backgroundColor: chrome.bg,
+                alignItems: 'center', justifyContent: 'center',
+              },
+              shadowFloat,
+            ]}
+          >
+            <Icon name="arrows-out" size={17} color={chrome.ink} weight="bold" />
+          </Pressable>
+        </View>
 
         <Card>
           {loading ? (
@@ -142,6 +165,20 @@ export default function RadarScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <FullScreenRadar
+        visible={fullScreen}
+        onClose={() => setFullScreen(false)}
+        lat={location.lat}
+        lon={location.lon}
+        frames={frames}
+        activeIndex={index}
+        onScrub={setIndex}
+        playing={playing}
+        onTogglePlay={() => setPlaying((p) => !p)}
+        stations={pins}
+        profile={nowcast}
+      />
     </ScreenFrame>
   );
 }

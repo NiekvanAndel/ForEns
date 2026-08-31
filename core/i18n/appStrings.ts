@@ -71,6 +71,9 @@ export const APP_STRINGS = {
     noData: 'Weerdata is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
     retry: 'Opnieuw proberen',
     useMyLocation: 'Mijn locatie gebruiken',
+    units: 'Eenheden',
+    tabPrecipShort: 'Neerslag',
+    fullScreen: 'Volledig scherm',
   },
   en: {
     tabNow: 'Now', tabRadar: 'Radar', tabForecast: 'Forecast', tabSettings: 'Settings',
@@ -101,7 +104,7 @@ export const APP_STRINGS = {
       'Bars run from the daily minimum to the daily maximum temperature. After day 7 the spread between model members grows quickly.',
     noData: 'Weather data is temporarily unavailable. Please try again later.',
     retry: 'Try again',
-    useMyLocation: 'Use my location',
+    useMyLocation: 'Use my location', units: 'Units', tabPrecipShort: 'Precipitation', fullScreen: 'Full screen',
   },
   de: {
     tabNow: 'Jetzt', tabRadar: 'Radar', tabForecast: 'Vorhersage', tabSettings: 'Einstellungen',
@@ -132,7 +135,7 @@ export const APP_STRINGS = {
       'Die Balken reichen vom Tagesminimum bis zum Tagesmaximum. Ab Tag 7 wächst die Streuung zwischen den Modellläufen schnell.',
     noData: 'Wetterdaten sind vorübergehend nicht verfügbar. Bitte später erneut versuchen.',
     retry: 'Erneut versuchen',
-    useMyLocation: 'Meinen Standort verwenden',
+    useMyLocation: 'Meinen Standort verwenden', units: 'Einheiten', tabPrecipShort: 'Niederschlag', fullScreen: 'Vollbild',
   },
   fr: {
     tabNow: 'Maintenant', tabRadar: 'Radar', tabForecast: 'Prévisions', tabSettings: 'Réglages',
@@ -163,7 +166,7 @@ export const APP_STRINGS = {
       'Les barres vont du minimum au maximum de la journée. Après le jour 7, la dispersion entre les membres du modèle augmente rapidement.',
     noData: 'Les données météo sont temporairement indisponibles. Réessayez plus tard.',
     retry: 'Réessayer',
-    useMyLocation: 'Utiliser ma position',
+    useMyLocation: 'Utiliser ma position', units: 'Unités', tabPrecipShort: 'Précipitations', fullScreen: 'Plein écran',
   },
   es: {
     tabNow: 'Ahora', tabRadar: 'Radar', tabForecast: 'Previsión', tabSettings: 'Ajustes',
@@ -194,7 +197,7 @@ export const APP_STRINGS = {
       'Las barras van del mínimo al máximo del día. A partir del día 7 la dispersión entre los miembros del modelo crece rápidamente.',
     noData: 'Los datos meteorológicos no están disponibles temporalmente. Inténtalo más tarde.',
     retry: 'Reintentar',
-    useMyLocation: 'Usar mi ubicación',
+    useMyLocation: 'Usar mi ubicación', units: 'Unidades', tabPrecipShort: 'Precipitación', fullScreen: 'Pantalla completa',
   },
 } as const;
 

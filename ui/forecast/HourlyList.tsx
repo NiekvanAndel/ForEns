@@ -12,6 +12,11 @@
  *
  * Three-hourly samples beyond the deterministic run's hourly window are marked, so
  * a gap in the model is visible rather than implied.
+ *
+ * On precipitation the row also carries the hour's ensemble, once it has loaded: the
+ * p10–p90 range the members allow, and the share of them that are wet at all. That
+ * pair is what the web app's precipitation popup prints beside every hour, and it is
+ * the difference between "1 mm" and "1 mm, but a third of the members say nothing".
  */
 import { View } from 'react-native';
 import { space, useTheme } from '../../theme';
@@ -35,10 +40,14 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
   const { prefs } = usePrefs();
   if (!hours.length) return null;
 
+  // Only precipitation has a per-hour ensemble behind it, and only once it lands.
+  const withEns = layer === 'precip' && hours.some((h) => h.ens);
+
   return (
     <View style={{ marginTop: space[4] }}>
       <Text variant="eyebrow" color={palette.muted} style={{ marginBottom: space[2] }}>
         {t('perHour', prefs.lang)} · {sourceLabel}
+        {withEns ? ' · ENS' : ''}
       </Text>
       {hours.map((h, i) => (
         <View
@@ -67,6 +76,8 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
             <HourValue layer={layer} hour={h} />
           </View>
 
+          {withEns ? <EnsembleColumns hour={h} /> : null}
+
           {h.isPast ? (
             <Text variant="caption" color={palette.muted} style={{ fontSize: 10 }}>
               {t('measurement', prefs.lang)}
@@ -79,6 +90,36 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
         </View>
       ))}
     </View>
+  );
+}
+
+/** What the 51 members say about this hour: the range they span, and how many of
+ *  them are wet. Held to fixed widths so the column reads down. */
+function EnsembleColumns({ hour }: { hour: DetailHour }) {
+  const { palette } = useTheme();
+  const e = hour.ens;
+  return (
+    <>
+      <Text
+        variant="caption"
+        color={palette.muted}
+        tabular
+        align="right"
+        style={{ width: 74, fontSize: 11 }}
+      >
+        {e ? `(${fmtMm(e.precipP10)}–${fmtMm(e.precipP90)})` : ''}
+      </Text>
+      <Text
+        variant="caption"
+        weight="bold"
+        color={e && e.pChance >= 40 ? palette.valPrecip : palette.muted}
+        tabular
+        align="right"
+        style={{ width: 34, fontSize: 12 }}
+      >
+        {e ? `${Math.round(e.pChance)}%` : ''}
+      </Text>
+    </>
   );
 }
 
