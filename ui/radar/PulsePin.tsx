@@ -7,6 +7,14 @@
  *
  * Honours Reduce Motion: the ring is drawn static rather than removed, so the pin
  * still reads the same, it just stops moving.
+ *
+ * On the map the pin is a marker child, which MapKit rasterises once and then stops
+ * watching. `animated` is how `RadarMap` says whether it is still watching: while it
+ * is, the ring moves; once the snapshot is frozen the ring is drawn static, because a
+ * ring animating into a still image only produces a random frozen frame.
+ *
+ * Colours are chosen against the *map*, not the app background, so they follow the
+ * map's appearance: navy on the light map, sky on the dark one, white ring on both.
  */
 import { useEffect } from 'react';
 import { View } from 'react-native';
@@ -16,13 +24,15 @@ import Animated, {
 } from 'react-native-reanimated';
 import { duration, shadowFloat, useTheme } from '../../theme';
 
-export function PulsePin({ size = 23 }: { size?: number }) {
-  const { palette } = useTheme();
+export function PulsePin({ size = 23, animated = true }: { size?: number; animated?: boolean }) {
+  const { palette, appearance } = useTheme();
   const progress = useSharedValue(0);
   const reduceMotion = useReducedMotion();
 
+  const still = reduceMotion || !animated;
+
   useEffect(() => {
-    if (reduceMotion) {
+    if (still) {
       progress.value = 0;
       return;
     }
@@ -32,7 +42,7 @@ export function PulsePin({ size = 23 }: { size?: number }) {
       false
     );
     return () => cancelAnimation(progress);
-  }, [progress, reduceMotion]);
+  }, [progress, still]);
 
   const ring = useAnimatedStyle(() => ({
     transform: [{ scale: 0.8 + progress.value * 1.1 }],
@@ -40,6 +50,8 @@ export function PulsePin({ size = 23 }: { size?: number }) {
   }));
 
   const ringInset = -Math.round(size * 0.39);
+  const fill = appearance === 'dark' ? palette.skySoft : palette.inkHeading;
+  const ringColor = appearance === 'dark' ? 'rgba(255,255,255,.45)' : 'rgba(12,37,71,.35)';
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
@@ -50,16 +62,16 @@ export function PulsePin({ size = 23 }: { size?: number }) {
             position: 'absolute',
             top: ringInset, bottom: ringInset, left: ringInset, right: ringInset,
             borderRadius: size, borderWidth: 2,
-            borderColor: 'rgba(12,37,71,.35)',
+            borderColor: ringColor,
           },
-          reduceMotion ? { opacity: 0.5 } : ring,
+          still ? { opacity: 0.5 } : ring,
         ]}
       />
       <View
         style={[
           {
             width: size, height: size, borderRadius: size / 2,
-            backgroundColor: palette.inkHeading,
+            backgroundColor: fill,
             borderWidth: 3, borderColor: '#fff',
           },
           shadowFloat,
