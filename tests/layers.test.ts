@@ -1,0 +1,183 @@
+/**
+ * Forecast layer tests.
+ *
+ * The design's layer switcher is decorative in the mock, so this behaviour is
+ * defined here rather than compared against it. What matters is that each layer
+ * reads its own measurand, that the scale is shared across days so the column is
+ * comparable, and that a half-loaded ensemble degrades rather than crashes.
+ */
+import { describe, it, expect } from 'vitest';
+import { layerRow, layerScale, bandGeometry, LAYERS, type LayerKey } from '../core/model/layers';
+import type { Day } from '../core/model/types';
+
+function day(over: Partial<Day> = {}): Day {
+  return {
+    date: '2026-06-15', useHarm: false,
+    precipP10: 0, precipP25: 0.5, precipMedian: 2, precipP75: 5, precipP90: 9,
+    pChance: 70, p5mm: 30, p20mm: 5,
+    tempLo: 11, tempHi: 22,
+    tempMaxP10: 18, tempMaxP25: 20, tempMaxP50: 22, tempMaxP75: 24, tempMaxP90: 26,
+    tempMinP10: 9, tempMinP25: 10, tempMinP50: 11, tempMinP75: 12, tempMinP90: 13,
+    windP10: 12, windP25: 16, windP50: 20, windP75: 26, windP90: 34,
+    humidityMedian: 70, humidityP10: 50, humidityP25: 60, humidityP75: 80, humidityP90: 90,
+    sunHours: 6.5, et0: 3.2, windDir: 220,
+    sunModel: 'ecmwf', sunOpacity: 0.15, sunOpacityDerived: false, sun6Hourly: null,
+    dayIcon: 3, wmo: 3, nMembers: 51, ensLoaded: true,
+    harmTempMax: null, harmTempMin: null, harmPrecip: null, harmWindMax: null,
+    harmRhMin: null, harmRhMax: null, hresRhMin: null, hresRhMax: null,
+    ...over,
+  } as Day;
+}
+
+describe('layerRow', () => {
+  it('gives every layer a different reading of the same day', () => {
+    const d = day();
+    const primaries = LAYERS.map((l) => layerRow(d, l.key).primary);
+    // Temperature 22, precipitation 2, wind 20, sun 6.5, humidity 70.
+    expect(primaries).toEqual([22, 2, 20, 6.5, 70]);
+  });
+
+  it('prefers the deterministic temperature over the ensemble bounds', () => {
+    const r = layerRow(day({ hresTempMax: 25, hresTempMin: 14 }), 'temp');
+    expect(r.primary).toBe(25);
+    expect(r.secondary).toBe(14);
+    expect(r.band).toEqual({ lo: 14, hi: 25 });
+    // The whisker still comes from the ensemble.
+    expect(r.spread).toEqual({ lo: 9, hi: 26 });
+  });
+
+  it('uses the precipitation median, not a mean, and reports the probability', () => {
+    const r = layerRow(day(), 'precip');
+    expect(r.primary).toBe(2);
+    expect(r.band).toEqual({ lo: 0, hi: 2 });
+    expect(r.spread).toEqual({ lo: 0, hi: 9 });
+    expect(r.note).toBe('70%');
+  });
+
+  it('draws no spread for sunshine, which has no ensemble behind it', () => {
+    const r = layerRow(day(), 'sun');
+    expect(r.primary).toBe(6.5);
+    expect(r.secondary).toBe(3.2);
+    expect(r.spread).toBeNull();
+  });
+
+  it('shows humidity as a range', () => {
+    const r = layerRow(day(), 'humidity');
+    expect(r.band).toEqual({ lo: 50, hi: 90 });
+    expect(r.note).toBe('50–90%');
+  });
+
+  it('falls back to deterministic humidity when the ensemble has none', () => {
+    const r = layerRow(
+      day({ humidityP10: null, humidityP90: null, humidityMedian: null, hresRhMin: 44, hresRhMax: 88 }),
+      'humidity'
+    );
+    expect(r.band).toEqual({ lo: 44, hi: 88 });
+    expect(r.primary).toBe(66);
+  });
+
+  it('hides every spread when the preference is off', () => {
+    for (const l of LAYERS) {
+      expect(layerRow(day(), l.key, false).spread, l.key).toBeNull();
+    }
+  });
+
+  it('treats a rounded-null percentile as absent, not as a real zero', () => {
+    // processAll rounds a missing percentile through Math.round(null), which is 0.
+    // Before the ensemble lands, a day must render blank rather than "0°" / "0 mm".
+    const loading = day({
+      ensLoaded: false,
+      tempHi: 0, tempLo: 0, precipMedian: 0, windP50: 0, pChance: 0,
+      humidityMedian: 0, humidityP10: 0, humidityP90: 0,
+      hresTempMax: null, hresTempMin: null, hresPrecip: null, hresWindMax: null,
+      hresRhMin: null, hresRhMax: null, harmRhMin: null, harmRhMax: null,
+    } as unknown as Partial<Day>);
+    expect(layerRow(loading, 'temp').primary).toBeNull();
+    expect(layerRow(loading, 'precip').primary).toBeNull();
+    expect(layerRow(loading, 'wind').primary).toBeNull();
+    expect(layerRow(loading, 'humidity').band).toBeNull();
+    // Once it has loaded, a genuine zero is a genuine zero.
+    const dry = day({ ensLoaded: true, precipMedian: 0, pChance: 0 });
+    expect(layerRow(dry, 'precip').primary).toBe(0);
+    expect(layerRow(dry, 'precip').note).toBe('0%');
+  });
+
+  it('hides spread before the ensemble has loaded, but still shows a value', () => {
+    const d = day({ ensLoaded: false, hresTempMax: 21, hresTempMin: 12, hresPrecip: 1.4 });
+    expect(layerRow(d, 'temp').spread).toBeNull();
+    expect(layerRow(d, 'temp').primary).toBe(21);
+    expect(layerRow(d, 'precip').note).toBeNull();
+  });
+
+  it('survives a day with nothing in it', () => {
+    const empty = day({
+      precipMedian: null, hresPrecip: null, tempHi: null, tempLo: null,
+      hresTempMax: null, hresTempMin: null, windP50: null, hresWindMax: null,
+      sunHours: null, et0: null, humidityMedian: null, humidityP10: null,
+      humidityP90: null, hresRhMin: null, hresRhMax: null, harmRhMin: null, harmRhMax: null,
+    } as unknown as Partial<Day>);
+    for (const l of LAYERS) {
+      const r = layerRow(empty, l.key);
+      expect(r.primary, l.key).toBeNull();
+      expect(r.band, l.key).toBeNull();
+    }
+  });
+});
+
+describe('layerScale', () => {
+  const days = [
+    day({ precipMedian: 1, precipP90: 3, tempLo: 10, tempHi: 15, hresTempMin: 10, hresTempMax: 15 }),
+    day({ precipMedian: 8, precipP90: 20, tempLo: 18, tempHi: 28, hresTempMin: 18, hresTempMax: 28 }),
+  ];
+
+  it('spans all days so the column is comparable', () => {
+    expect(layerScale(days, 'temp', false)).toEqual({ lo: 10, hi: 28 });
+  });
+
+  it('anchors quantity layers at zero', () => {
+    // A 1 mm day must look meaningfully drier than an 8 mm day, not merely shorter.
+    expect(layerScale(days, 'precip', false).lo).toBe(0);
+    expect(layerScale(days, 'wind', false).lo).toBe(0);
+    expect(layerScale(days, 'sun', false).lo).toBe(0);
+  });
+
+  it('widens to fit the spread so a broad ensemble is not clipped', () => {
+    expect(layerScale(days, 'precip', true).hi).toBe(20);
+    expect(layerScale(days, 'precip', false).hi).toBe(8);
+  });
+
+  it('returns a safe unit range when there is nothing to scale', () => {
+    expect(layerScale([], 'temp')).toEqual({ lo: 0, hi: 1 });
+  });
+
+  it('never returns a zero-width scale, which would divide by zero downstream', () => {
+    const flat = [day({ tempLo: 20, tempHi: 20, hresTempMin: 20, hresTempMax: 20 })];
+    const s = layerScale(flat, 'temp', false);
+    expect(s.hi).toBeGreaterThan(s.lo);
+  });
+});
+
+describe('bandGeometry', () => {
+  const scale = { lo: 0, hi: 10 };
+
+  it('places a band as a fraction of the track', () => {
+    const g = bandGeometry({ lo: 2, hi: 7 }, scale)!;
+    expect(g.left).toBeCloseTo(0.2, 10);
+    expect(g.width).toBeCloseTo(0.5, 10);
+  });
+
+  it('clamps a band that runs past the scale', () => {
+    const g = bandGeometry({ lo: -5, hi: 20 }, scale)!;
+    expect(g.left).toBe(0);
+    expect(g.width).toBe(1);
+  });
+
+  it('keeps a zero-width band visible', () => {
+    // A day with no range still needs something on screen.
+    expect(bandGeometry({ lo: 5, hi: 5 }, scale)!.width).toBeGreaterThan(0);
+  });
+
+  it('returns nothing for a missing band', () => {
+    expect(bandGeometry(null, scale)).toBeNull();
+  });
+});
