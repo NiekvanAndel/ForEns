@@ -88,6 +88,16 @@ describe('RainViewerProvider.tileUrl', () => {
     );
   });
 
+  it('expresses the same URL as a z/x/y template for map components', () => {
+    expect(provider.tileTemplate({ frame })).toBe(
+      'https://tiles.rainviewer.com/v2/radar/1700000000/256/{z}/{x}/{y}/2/1_1.png'
+    );
+    // The template must agree with the concrete URL it stands in for.
+    const filled = provider.tileTemplate({ frame })
+      .replace('{z}', '8').replace('{x}', '131').replace('{y}', '84');
+    expect(filled).toBe(provider.tileUrl({ frame, z: 8, x: 131, y: 84 }));
+  });
+
   it('honours constructor options', () => {
     const p512 = new RainViewerProvider({ tileSize: 512, scheme: 6, snow: false });
     expect(p512.tileUrl({ frame, z: 3, x: 1, y: 2 })).toBe(
@@ -108,6 +118,7 @@ describe('provider registry', () => {
       maxZoom: 14,
       listFrames: async () => ({ past: [], forecast: [] }),
       tileUrl: ({ z, x, y }) => `https://example.invalid/${z}/${x}/${y}.png`,
+      tileTemplate: () => 'https://example.invalid/{z}/{x}/{y}.png',
       nowcastProfile: async () => ({
         bars: [], totalMm: 0, confidence: 99, startsInMin: null, wet: false,
       }),

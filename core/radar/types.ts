@@ -79,6 +79,15 @@ export interface RadarProvider {
   tileUrl(params: TileParams): string;
 
   /**
+   * The same URL as a `{z}/{x}/{y}` template.
+   *
+   * Map components take a template and substitute coordinates themselves, so a
+   * provider must be able to express one — string-replacing a concrete URL would
+   * break the moment a provider put digits elsewhere in its path.
+   */
+  tileTemplate(params: Omit<TileParams, 'z' | 'x' | 'y'>): string;
+
+  /**
    * The 0–2h profile at a point.
    *
    * A provider with a real nowcast model answers directly. A tile-only provider

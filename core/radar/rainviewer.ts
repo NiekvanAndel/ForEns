@@ -96,6 +96,17 @@ export class RainViewerProvider implements RadarProvider {
   }
 
   tileUrl({ frame, z, x, y, scheme, smooth }: TileParams): string {
+    return this.buildUrl(frame, String(z), String(x), String(y), scheme, smooth);
+  }
+
+  tileTemplate({ frame, scheme, smooth }: Omit<TileParams, 'z' | 'x' | 'y'>): string {
+    return this.buildUrl(frame, '{z}', '{x}', '{y}', scheme, smooth);
+  }
+
+  private buildUrl(
+    frame: RadarFrame, z: string, x: string, y: string,
+    scheme?: number, smooth?: boolean
+  ): string {
     const { tileSize, snow } = this.opts;
     const s = scheme ?? this.opts.scheme;
     const sm = (smooth ?? this.opts.smooth) ? 1 : 0;

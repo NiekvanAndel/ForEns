@@ -9,6 +9,7 @@ import { LANG, LANG_CODES, type LangCode, type LangStrings } from './strings';
 export { LANG, LANG_CODES };
 export type { LangCode, LangStrings };
 export * from './units';
+export * from './appStrings';
 
 function pack(lang: LangCode): LangStrings {
   return LANG[lang] ?? LANG.nl;

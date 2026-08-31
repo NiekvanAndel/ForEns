@@ -6,7 +6,7 @@
  * for the active appearance; everything appearance-independent (spacing, radii, type)
  * is exported as a plain constant.
  */
-import { useColorScheme } from 'react-native';
+import { createContext, useContext } from 'react';
 import { colors, darkColors, numbers, strings, css } from './tokens.generated';
 
 export type Appearance = 'light' | 'dark';
@@ -62,7 +62,11 @@ const dark = {
   valSun: '#E8A94E',
 } as const;
 
-export type Palette = typeof colors & Partial<typeof dark>;
+/** Every token name in either palette, mapped to a colour string.
+ *  Deliberately not an intersection of the two literal-typed objects: light and dark
+ *  give the same key different literal values, which reduces the intersection to
+ *  `never` and makes every lookup an error. */
+export type Palette = { [K in keyof typeof colors | keyof typeof dark]: string };
 
 export const palettes = { light: colors, dark } as const;
 
@@ -70,12 +74,23 @@ export function paletteFor(appearance: Appearance): Palette {
   return (appearance === 'dark' ? dark : colors) as Palette;
 }
 
-/** Palette for the OS appearance. Screens that let the user pin an appearance should
- *  call `paletteFor()` with the stored preference instead. */
-export function useTheme(): { palette: Palette; appearance: Appearance } {
-  const scheme = useColorScheme();
-  const appearance: Appearance = scheme === 'dark' ? 'dark' : 'light';
-  return { palette: paletteFor(appearance), appearance };
+export interface ThemeValue {
+  palette: Palette;
+  appearance: Appearance;
+}
+
+/** Defaults to light so a component rendered outside the provider — a screenshot
+ *  harness, a test — still paints a complete palette rather than undefined colours. */
+export const ThemeContext = createContext<ThemeValue>({
+  palette: colors as Palette,
+  appearance: 'light',
+});
+
+/** The active palette, resolved from the user's theme setting and the OS.
+ *  Provided by `ThemeProvider`; never read `useColorScheme` directly in a component,
+ *  or an explicit light/dark choice inside the app would be ignored. */
+export function useTheme(): ThemeValue {
+  return useContext(ThemeContext);
 }
 
 /** Spacing scale, in points. `space[5]` is the 16pt step the design uses for gutters. */
