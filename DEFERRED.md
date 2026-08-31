@@ -34,6 +34,28 @@ The background task still runs and still keeps the widget current; it simply
 schedules no notifications while every notify preference is off, which is the
 default.
 
+## Notes on choices made during the August rework
+
+### The current hour is a ring on dark, a wash on light
+
+The design fills the current hour's cell with `--sky-wash`. Inverted onto navy that
+becomes the brightest thing on screen, so on dark it is drawn as a light-blue ring
+around an otherwise unfilled cell. Light keeps the design's wash. If you would rather
+have the ring in both appearances, `ui/forecast/currentHour.ts` is the only file to
+change.
+
+### Swiping to change location wraps around
+
+A swipe past the last saved location returns to the first, as a carousel does, rather
+than stopping. The dots in the top bar show where you are. Say if you would prefer it
+to stop at the ends.
+
+### `~` marks an ensemble stand-in
+
+Where the deterministic IFS run falls outside the ensemble band, the ensemble median
+is shown instead and marked with a small `~`, exactly as `index.html` does. It appears
+on the overview rows and in the day sheet.
+
 ## Open
 
 ### Notifications are local, not push
