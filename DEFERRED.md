@@ -16,6 +16,24 @@ widget reads the same mapping, so the two cannot disagree.
 
 ---
 
+## Hidden pending a decision
+
+Four surfaces are built, tested and working, but **not shown in the UI** at the
+client's direction (31 Aug 2026). Each is hidden rather than deleted: preferences,
+plumbing and tests all remain, so re-exposing one means restoring its rows in
+`app/(tabs)/settings.tsx`.
+
+| Hidden | Where the code still lives | Why |
+| --- | --- | --- |
+| **Meldingen** (rain / wind / frost / quiet hours) | `core/notifications.ts`, `core/backgroundTask.ts` | To be worked out later — see the push limitation below |
+| **Korte termijn: Nowcast / Radar** | `prefs.shortModel` | Needs a second 0–2h source to choose between |
+| **AgroExact integration** | `core/sources/agroexact.ts`, `state/stations.ts` | To be done later |
+| **App and widget icon** | — | To be supplied later |
+
+The background task still runs and still keeps the widget current; it simply
+schedules no notifications while every notify preference is off, which is the
+default.
+
 ## Open
 
 ### Notifications are local, not push
@@ -43,18 +61,16 @@ widget inherits the app icon. Supply a real asset when one exists.
 
 `app.json` sets neither, so Expo's defaults apply. Same reason as above.
 
-### GFS and "Mix" model options
+### GFS and "Mix" — resolved: not wanted
 
-The settings screen offers `ecmwf`, `gfs` and `mix` because the design specifies
-them, and the preference is stored — but **only ECMWF is wired to a data source**.
-Open-Meteo does serve GFS, so `gfs` is a small change in `core/sources/openMeteo.ts`.
-`mix` needs a blending rule that has never been defined; it is a product decision, not
-a coding one.
+Confirmed with the client (31 Aug 2026) that `index.html` never used GFS, and the
+Open-Meteo sources should stay as close to it as possible. No model picker is shown,
+and only ECMWF (plus KNMI HARMONIE-AROME for days 0–1) is requested — exactly the
+web app's source set.
 
-### `shortModel` preference is stored but unused
-
-Same situation: the Nowcast/Radar toggle is persisted and has no effect yet. It would
-select which source drives the 0–2h view once a second one exists.
+The `ModelPref` type remains in `core/prefs.ts` so stored preferences from an earlier
+build still merge cleanly, but nothing reads it. Remove it if GFS is ruled out for
+good.
 
 ### AgroExact connection is a token, not an account
 

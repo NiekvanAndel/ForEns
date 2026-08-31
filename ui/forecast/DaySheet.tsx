@@ -121,7 +121,11 @@ export function DaySheet({
             <Card>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], marginBottom: space[2] }}>
                 <Text variant="eyebrow" color={palette.muted}>
-                  {day.nMembers} {t('members', prefs.lang)}
+                  {/* The translated string already names the model and a member
+                      count, so prefixing nMembers produced "50 ECMWF ENS 51
+                      members". The live count is the honest one: ECMWF publishes
+                      50 perturbed members plus a control run. */}
+                  {day.nMembers} modelleden
                 </Text>
                 {agreement ? (
                   <View
@@ -238,6 +242,7 @@ function LayerSection({
             color={palette.valPrecip}
             unit=" mm"
             showZero
+            clampMin={0}
             series={{
               values: hours.map((h) => h.precip ?? null),
               band: prefs.showSpread
@@ -289,6 +294,7 @@ function LayerSection({
             color={palette.inkHeading}
             unit=""
             showZero
+            clampMin={0}
             series={{
               values: hours.map((h) => convWind(h.wind, prefs.windUnit)),
               secondary: hours.map((h) => convWind(h.gusts, prefs.windUnit)),
@@ -331,6 +337,7 @@ function LayerSection({
             color={palette.valSun}
             unit=" m"
             showZero
+            clampMin={0}
             series={{ values: hours.map((h) => h.sunMin) }}
           />
           <StatRow

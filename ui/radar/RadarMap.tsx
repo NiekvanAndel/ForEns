@@ -1,10 +1,14 @@
 /**
  * The radar map.
  *
- * Every frame is mounted as its own tile overlay and only the active one is opaque.
- * Swapping a single overlay's URL template instead would make the map flash white
- * on each step, because MapKit discards the old tiles before the new ones arrive;
- * keeping them mounted means playback runs off tiles the map has already cached.
+ * Only the active frame is mounted, keyed so it remounts when the frame changes.
+ *
+ * An earlier version mounted every frame and drove visibility with `opacity`, to
+ * avoid a flash between steps. On iOS that renders nothing at all: react-native-maps
+ * does not honour per-overlay opacity on `UrlTile`, so all sixteen overlays stacked
+ * and the map stayed blank. The radar preview on the Nowcast screen, which has
+ * always mounted a single overlay, is what showed the difference. Correctness beats
+ * the optimisation — MapKit's own tile cache makes replay smooth after one pass.
  */
 import { useEffect, useRef } from 'react';
 import { View, Pressable } from 'react-native';
@@ -15,9 +19,6 @@ import { Icon } from '../Icon';
 import { PulsePin, StationPin } from './PulsePin';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import type { AgroStation } from '../../core/sources/agroexact';
-
-/** Above this, mounting every overlay costs more than the flicker it prevents. */
-const MAX_MOUNTED_FRAMES = 16;
 
 export interface RadarMapProps {
   lat: number;
@@ -51,7 +52,7 @@ export function RadarMap({
     mapRef.current?.animateToRegion(region.current, 400);
   }, [lat, lon]);
 
-  const mounted = frames.slice(0, MAX_MOUNTED_FRAMES);
+  const active = frames[activeIndex] ?? frames[frames.length - 1];
 
   const zoom = (factor: number) => {
     const r = region.current;
@@ -85,16 +86,15 @@ export function RadarMap({
         toolbarEnabled={false}
         showsCompass={false}
       >
-        {mounted.map((frame, i) => (
+        {active ? (
           <UrlTile
-            key={frame.id}
-            urlTemplate={provider.tileTemplate({ frame })}
+            key={active.id}
+            urlTemplate={provider.tileTemplate({ frame: active })}
             maximumZ={provider.maxZoom}
             zIndex={1}
-            // Only the active frame is visible; the rest stay mounted and cached.
-            opacity={i === activeIndex ? 0.78 : 0}
+            opacity={0.75}
           />
-        ))}
+        ) : null}
 
         <Marker
           coordinate={{ latitude: lat, longitude: lon }}

@@ -34,16 +34,19 @@ export interface SpreadChartProps {
   height?: number;
   /** Draw the zero line where the quantity can be negative. */
   showZero?: boolean;
+  /** Hard floor for the axis. Precipitation and sunshine cannot go below zero, and
+   *  a padded "nice" range would otherwise label the axis -0,2 mm. */
+  clampMin?: number;
 }
 
-const PAD_LEFT = 34;
+const PAD_LEFT = 42;
 const PAD_RIGHT = 8;
 const PAD_TOP = 10;
 const PAD_BOTTOM = 18;
 const GRID_LINES = 3;
 
 export function SpreadChart({
-  labels, series, color, unit = '', height = 140, showZero,
+  labels, series, color, unit = '', height = 140, showZero, clampMin,
 }: SpreadChartProps) {
   const { palette } = useTheme();
   const [width, setWidth] = useState(0);
@@ -68,8 +71,9 @@ export function SpreadChart({
   }
 
   const range = niceRange(Math.min(...all), Math.max(...all));
-  const lo = showZero ? Math.min(0, range.lo) : range.lo;
-  const hi = range.hi;
+  let lo = showZero ? Math.min(0, range.lo) : range.lo;
+  const hi = Math.max(range.hi, (clampMin ?? lo) + 0.1);
+  if (clampMin != null) lo = Math.max(lo, clampMin);
 
   const plotW = Math.max(1, width - PAD_LEFT - PAD_RIGHT);
   const plotH = height - PAD_TOP - PAD_BOTTOM;
@@ -145,7 +149,9 @@ export function SpreadChart({
                 fontSize={9} fill={palette.muted} textAnchor="end"
                 fontFamily="Figtree_500Medium"
               >
-                {formatTick(v)}{unit}
+                {/* The unit rides only the top tick: repeating it on every
+                    gridline made the labels collide at this size. */}
+                {formatTick(v)}{i === gridValues.length - 1 ? unit : ''}
               </SvgText>
             </G>
           ))}

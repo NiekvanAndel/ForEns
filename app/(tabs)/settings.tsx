@@ -1,14 +1,19 @@
 /**
  * Instellingen.
  *
- * Follows the design's SettingsScreen groups — Weergave, Mijn locaties,
- * Integraties, Weermodel, Meldingen — with two additions the web app has and the
+ * Follows the design's SettingsScreen, with two additions the web app has and the
  * design's settings omits: temperature and pressure units. Dropping working
  * preferences during a port would be a regression, so they live in Weermodel
  * beside the wind unit.
+ *
+ * Three of the design's groups are deliberately not shown yet, at the client's
+ * direction: Meldingen, the Nowcast/Radar short-term choice, and the AgroExact
+ * integration. Each is hidden rather than deleted — the preferences, the plumbing
+ * and the tests all remain, so re-exposing one is a matter of restoring its rows.
+ * See DEFERRED.md.
  */
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, ScrollView, TextInput, View, Pressable } from 'react-native';
+import { useCallback } from 'react';
+import { ScrollView, View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { radius, space, useTheme } from '../../theme';
@@ -17,12 +22,9 @@ import { Icon } from '../../ui/Icon';
 import { Group, Row, Segmented, Toggle } from '../../ui/settings/Controls';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
-import { useStations } from '../../state/stations';
-import { requestNotificationPermission } from '../../core/notifications';
-import { AGRO_DEFAULT_BASE } from '../../core/sources/agroexact';
 import { t, ta, LANG_CODES } from '../../core/i18n';
 import type { LangCode } from '../../core/i18n';
-import type { ThemeMode, ModelPref, ShortModelPref } from '../../core/prefs';
+import type { ThemeMode } from '../../core/prefs';
 import type { FontSizePref, PresUnit, TempUnit, WindUnit } from '../../core/i18n/units';
 
 const TAB_BAR_CLEARANCE = 110;
@@ -32,23 +34,10 @@ export default function SettingsScreen() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const {
-    prefs, setPref, location,
+    prefs, setPref,
     removeLocation, moveLocation, selectLocation,
-    getAgroToken, setAgroToken,
   } = usePrefs();
   const { refresh } = useForecast();
-  const { stations, nearest, usable, error: stationError, reload } = useStations(location.lat, location.lon);
-
-  const [token, setToken] = useState('');
-  const [baseUrl, setBaseUrl] = useState(prefs.agroBase);
-  const [tokenLoaded, setTokenLoaded] = useState(false);
-
-  useEffect(() => {
-    getAgroToken().then((v) => {
-      setToken(v);
-      setTokenLoaded(true);
-    });
-  }, [getAgroToken]);
 
   const tap = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
@@ -63,40 +52,6 @@ export default function SettingsScreen() {
     },
     [setPref, refresh, tap]
   );
-
-  const connectAgro = async () => {
-    if (prefs.agroExact) {
-      setPref('agroExact', false);
-      tap();
-      return;
-    }
-    if (!token.trim()) {
-      Alert.alert('API-token nodig', 'Vul je AgroExact API-token in om te verbinden.');
-      return;
-    }
-    await setAgroToken(token);
-    setPref('agroBase', baseUrl.trim());
-    setPref('agroExact', true);
-    reload();
-    tap();
-  };
-
-  /** Notifications are useless without permission, so ask at the moment of asking
-   *  for them rather than at launch. */
-  const setNotify = async (key: 'notifyRain' | 'notifyWind' | 'notifyFrost', value: boolean) => {
-    tap();
-    if (value) {
-      const granted = await requestNotificationPermission();
-      if (!granted) {
-        Alert.alert(
-          'Meldingen staan uit',
-          'Zet meldingen voor ExactCast aan in de iOS-instellingen om dit te gebruiken.'
-        );
-        return;
-      }
-    }
-    setPref(key, value);
-  };
 
   return (
     <View style={{ flex: 1, backgroundColor: palette.appBg }}>
@@ -190,87 +145,7 @@ export default function SettingsScreen() {
           ))}
         </Group>
 
-        <Group label={ta('integrations', prefs.lang)}>
-          <Row
-            icon="plugs-connected"
-            label={
-              <Text variant="bodySm" weight="semibold" color={palette.inkHeading}>
-                {ta('connectAgro', prefs.lang)}{' '}
-                <Text variant="bodySm" weight="bold" color={palette.agroInk}>
-                  AgroExact
-                </Text>
-              </Text>
-            }
-            hint={
-              prefs.agroExact
-                ? usable
-                  ? `${ta('agroConnected', prefs.lang)} · ${usable.name}, ${usable.dist.toFixed(1).replace('.', ',')} km`
-                  : nearest
-                    ? `${ta('agroConnected', prefs.lang)} · dichtstbijzijnde station ${nearest.dist.toFixed(0)} km — te ver voor deze locatie`
-                    : stationError ?? `${ta('agroConnected', prefs.lang)} · ${stations.length} stations`
-                : ta('agroNotConnected', prefs.lang)
-            }
-            last={!prefs.agroExact ? false : true}
-          >
-            <Toggle on={prefs.agroExact} onChange={connectAgro} label="AgroExact" />
-          </Row>
-
-          {!prefs.agroExact && tokenLoaded ? (
-            <Row label="API-token" hint="Wordt versleuteld bewaard in de sleutelhanger" stacked last>
-              <View style={{ gap: space[2] }}>
-                <TextInput
-                  value={token}
-                  onChangeText={setToken}
-                  placeholder="API-token"
-                  placeholderTextColor={palette.muted}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={{
-                    backgroundColor: palette.cream2,
-                    borderRadius: radius.field,
-                    paddingVertical: 10, paddingHorizontal: 12,
-                    fontFamily: 'Figtree_400Regular', fontSize: 14,
-                    color: palette.inkHeading,
-                  }}
-                />
-                <TextInput
-                  value={baseUrl}
-                  onChangeText={setBaseUrl}
-                  placeholder={AGRO_DEFAULT_BASE}
-                  placeholderTextColor={palette.muted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  style={{
-                    backgroundColor: palette.cream2,
-                    borderRadius: radius.field,
-                    paddingVertical: 9, paddingHorizontal: 12,
-                    fontFamily: 'Figtree_400Regular', fontSize: 12,
-                    color: palette.muted,
-                  }}
-                />
-              </View>
-            </Row>
-          ) : null}
-        </Group>
-
         <Group label={ta('weatherModel', prefs.lang)}>
-          <Row
-            icon="broadcast"
-            label={ta('shortTermLabel', prefs.lang)}
-            hint={ta('shortTermHint', prefs.lang)}
-          >
-            <Segmented<ShortModelPref>
-              compact
-              value={prefs.shortModel}
-              onChange={(v) => { tap(); setPref('shortModel', v); }}
-              options={[
-                { value: 'nowcast', label: 'Nowcast' },
-                { value: 'radar', label: 'Radar' },
-              ]}
-            />
-          </Row>
           <Row
             icon="cloud-sun"
             label="HARMONIE-AROME"
@@ -328,37 +203,6 @@ export default function SettingsScreen() {
                 { value: 'mbar', label: 'mbar' },
                 { value: 'inHg', label: 'inHg' },
               ]}
-            />
-          </Row>
-        </Group>
-
-        <Group label={ta('notifications', prefs.lang)}>
-          <Row icon="cloud-rain" label={ta('notifyRain', prefs.lang)} hint={ta('notifyRainHint', prefs.lang)}>
-            <Toggle
-              on={prefs.notifyRain}
-              onChange={(v) => setNotify('notifyRain', v)}
-              label={ta('notifyRain', prefs.lang)}
-            />
-          </Row>
-          <Row icon="wind" label={ta('notifyWind', prefs.lang)} hint={ta('notifyWindHint', prefs.lang)}>
-            <Toggle
-              on={prefs.notifyWind}
-              onChange={(v) => setNotify('notifyWind', v)}
-              label={ta('notifyWind', prefs.lang)}
-            />
-          </Row>
-          <Row icon="thermometer-simple" label={ta('notifyFrost', prefs.lang)} hint={ta('notifyFrostHint', prefs.lang)}>
-            <Toggle
-              on={prefs.notifyFrost}
-              onChange={(v) => setNotify('notifyFrost', v)}
-              label={ta('notifyFrost', prefs.lang)}
-            />
-          </Row>
-          <Row icon="moon" label={ta('quietHours', prefs.lang)} hint={ta('quietHoursHint', prefs.lang)} last>
-            <Toggle
-              on={prefs.quietHours}
-              onChange={(v) => { tap(); setPref('quietHours', v); }}
-              label={ta('quietHours', prefs.lang)}
             />
           </Row>
         </Group>

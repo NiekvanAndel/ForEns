@@ -23,11 +23,20 @@ import type {
 const INDEX_URL = 'https://api.rainviewer.com/public/weather-maps.json';
 const OPEN_METEO = 'https://api.open-meteo.com/v1/forecast';
 
+interface RainViewerFrame {
+  time: number;
+  path: string;
+}
+
 interface RainViewerIndex {
   host: string;
   radar?: {
-    past?: Array<{ time: number; path: string }>;
-    nowcast?: Array<{ time: number; path: string }>;
+    past?: RainViewerFrame[];
+    /** RainViewer names the forecast frames `nowcast`; `forecast` is accepted too,
+     *  because a blank forward half of the timeline is not worth risking on one
+     *  key name that could not be verified against the live endpoint. */
+    nowcast?: RainViewerFrame[];
+    forecast?: RainViewerFrame[];
   };
 }
 
@@ -89,9 +98,10 @@ export class RainViewerProvider implements RadarProvider {
       // The host is stored with the frame so a tile URL needs no further lookup.
       id: `${idx.host}${f.path}`,
     });
+    const forecastRaw = idx.radar?.nowcast ?? idx.radar?.forecast ?? [];
     return {
       past: (idx.radar?.past ?? []).map((f) => toFrame(f, false)),
-      forecast: (idx.radar?.nowcast ?? []).map((f) => toFrame(f, true)),
+      forecast: forecastRaw.map((f) => toFrame(f, true)),
     };
   }
 
