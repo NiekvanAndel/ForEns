@@ -10,6 +10,10 @@
  * two genuinely stack. Presented as siblings, moving between them would dismiss one
  * modal and present another in the same frame, which iOS does not reliably survive.
  *
+ * Pages arrive from the right and leave to the right, as a navigation stack moves —
+ * see `SubjectPage`. Locations are reordered by dragging one where it belongs rather
+ * than by tapping an arrow per slot — see `LocationList`.
+ *
  * The alternative, and what this replaces, was every control on one screen: five
  * languages, four wind units and three temperature scales as rows of pills, none of
  * which could be read at a glance.
@@ -19,16 +23,16 @@
  * preferences, the plumbing and the tests all remain. See DEFERRED.md.
  */
 import { useCallback, useState } from 'react';
-import { ScrollView, View, Pressable } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
 import { Card } from '../../ui/Card';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { Text } from '../../ui/Text';
-import { Icon } from '../../ui/Icon';
 import { ChoiceList, Group, NavRow, Row, Toggle } from '../../ui/settings/Controls';
 import { SubjectPage } from '../../ui/settings/SubjectPage';
+import { LocationList } from '../../ui/settings/LocationList';
 import { SourceCard } from '../../ui/settings/SourceCard';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
@@ -60,10 +64,7 @@ const LANG_NAMES: Record<LangCode, string> = {
 export default function SettingsScreen() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
-  const {
-    prefs, setPref,
-    removeLocation, moveLocation, selectLocation,
-  } = usePrefs();
+  const { prefs, setPref } = usePrefs();
   const { refresh } = useForecast();
   const [page, setPage] = useState<Page | null>(null);
 
@@ -366,69 +367,9 @@ export default function SettingsScreen() {
         onClose={() => setPage(null)}
       >
         <Group label={ta('myLocations', prefs.lang)}>
-          {prefs.locations.map((l, i) => (
-            <Row
-              key={`${l.name}-${i}`}
-              icon="dots-six-vertical"
-              label={
-                <Text
-                  variant="bodySm"
-                  weight="semibold"
-                  color={l.stationId ? palette.agroInk : palette.inkHeading}
-                >
-                  {l.name}
-                </Text>
-              }
-              hint={l.stationName ?? l.sub}
-              last={i === prefs.locations.length - 1}
-              onPress={() => { tap(); selectLocation(i); }}
-            >
-              <IconButton
-                icon="arrow-up"
-                label="Omhoog"
-                disabled={i === 0}
-                onPress={() => { tap(); moveLocation(i, -1); }}
-              />
-              <IconButton
-                icon="arrow-down"
-                label="Omlaag"
-                disabled={i === prefs.locations.length - 1}
-                onPress={() => { tap(); moveLocation(i, 1); }}
-              />
-              <IconButton
-                icon="trash"
-                label="Verwijderen"
-                tone={palette.valHigh}
-                disabled={prefs.locations.length <= 1}
-                onPress={() => { tap(); removeLocation(i); }}
-              />
-            </Row>
-          ))}
+          <LocationList />
         </Group>
       </SubjectPage>
     </View>
-  );
-}
-
-function IconButton({
-  icon, label, onPress, disabled, tone,
-}: { icon: string; label: string; onPress: () => void; disabled?: boolean; tone?: string }) {
-  const { palette } = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
-      hitSlop={6}
-      style={{ padding: 2 }}
-    >
-      <Icon
-        name={icon}
-        size={17}
-        color={disabled ? palette.inkDisabled : tone ?? palette.muted}
-      />
-    </Pressable>
   );
 }

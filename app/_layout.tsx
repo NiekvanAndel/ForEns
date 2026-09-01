@@ -18,6 +18,7 @@ import {
   Figtree_700Bold, Figtree_800ExtraBold,
 } from '@expo-google-fonts/figtree';
 import { PrefsProvider, usePrefs } from '../state/prefs';
+import { DeviceLocationProvider } from '../state/deviceLocation';
 import { useForecast } from '../state/forecast';
 import { useWidgetSync, writeWidgetPayload } from '../state/widgetSync';
 import { registerBackgroundRefresh, setWidgetWriter } from '../core/backgroundTask';
@@ -87,9 +88,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <PrefsProvider>
           <ThemeProvider>
-            <ForecastProvider>
-              <Shell />
-            </ForecastProvider>
+            <DeviceLocationProvider>
+              <ForecastProvider>
+                <Shell />
+              </ForecastProvider>
+            </DeviceLocationProvider>
           </ThemeProvider>
         </PrefsProvider>
       </SafeAreaProvider>

@@ -11,7 +11,10 @@ import {
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import { DEFAULT_PREFS, mergePrefs, activeLocation, type Prefs, type SavedLocation } from '../core/prefs';
+import {
+  DEFAULT_PREFS, mergePrefs, activeLocation, withCurrentLocation,
+  type Prefs, type SavedLocation,
+} from '../core/prefs';
 
 const PREFS_KEY = 'exactcast.prefs.v1';
 const TOKEN_KEY = 'exactcast.agro.token';
@@ -25,8 +28,11 @@ interface PrefsContextValue {
   location: SavedLocation;
   addLocation: (loc: SavedLocation) => void;
   removeLocation: (index: number) => void;
-  moveLocation: (index: number, delta: number) => void;
+  /** Move a location to an arbitrary slot, for drag-and-drop reordering. */
+  reorderLocation: (from: number, to: number) => void;
   selectLocation: (index: number) => void;
+  /** Record where the device is as the first page, replacing any earlier fix. */
+  setCurrentLocation: (loc: SavedLocation) => void;
   /** Credential access, kept off the Prefs object on purpose. */
   getAgroToken: () => Promise<string>;
   setAgroToken: (token: string) => Promise<void>;
@@ -102,20 +108,24 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const moveLocation = useCallback((index: number, delta: number) => {
+  const reorderLocation = useCallback((from: number, to: number) => {
     setState((p) => {
-      const target = index + delta;
-      if (target < 0 || target >= p.locations.length) return p;
+      if (from === to || from < 0 || to < 0) return p;
+      if (from >= p.locations.length || to >= p.locations.length) return p;
       const locations = [...p.locations];
-      const [item] = locations.splice(index, 1);
-      locations.splice(target, 0, item as SavedLocation);
-      // Keep the same place selected after a reorder, not the same slot.
+      const [item] = locations.splice(from, 1);
+      locations.splice(to, 0, item as SavedLocation);
+      // Follow the place, not the slot: whatever was being viewed stays selected.
       let active = p.activeLocation;
-      if (active === index) active = target;
-      else if (active > index && active <= target) active -= 1;
-      else if (active < index && active >= target) active += 1;
+      if (active === from) active = to;
+      else if (active > from && active <= to) active -= 1;
+      else if (active < from && active >= to) active += 1;
       return { ...p, locations, activeLocation: active };
     });
+  }, []);
+
+  const setCurrentLocation = useCallback((loc: SavedLocation) => {
+    setState((p) => withCurrentLocation(p, loc));
   }, []);
 
   const selectLocation = useCallback((index: number) => {
@@ -142,10 +152,13 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     () => ({
       prefs, ready, setPref, setPrefs,
       location: activeLocation(prefs),
-      addLocation, removeLocation, moveLocation, selectLocation,
-      getAgroToken, setAgroToken,
+      addLocation, removeLocation, reorderLocation, selectLocation,
+      setCurrentLocation, getAgroToken, setAgroToken,
     }),
-    [prefs, ready, setPref, setPrefs, addLocation, removeLocation, moveLocation, selectLocation, getAgroToken, setAgroToken]
+    [
+      prefs, ready, setPref, setPrefs, addLocation, removeLocation,
+      reorderLocation, selectLocation, setCurrentLocation, getAgroToken, setAgroToken,
+    ]
   );
 
   return <PrefsContext.Provider value={value}>{children}</PrefsContext.Provider>;

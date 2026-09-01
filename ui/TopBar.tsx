@@ -6,23 +6,30 @@
  * buttons carry a background; the row itself does not, so the bar reads as part of
  * the page rather than as a panel sitting on it.
  *
- * The middle control is the GPS arrow and one dot per saved location: the arrow adds
- * wherever the device actually is, and the dots say which saved place you are on and
- * how many there are — the position indicator the page swipe needs. Tapping a dot
- * still selects it.
+ * The middle control is the position indicator for the page swipe: the GPS arrow
+ * stands for the device's own page, one dot for each saved place after it, and
+ * whichever you are on is filled. Tapping any of them goes to that page.
+ *
+ * The arrow is an indicator, not an action. It used to be a button that appended
+ * wherever you happened to be as another pin — pressing it twice gave you two of
+ * yourself, and nothing on the row said which page was you. The fix is asked for
+ * automatically at first launch instead (see `DeviceLocationProvider`), so by the
+ * time the row is read the arrow already has a page to point at. It falls back to
+ * taking a fix when there is none: a refused permission, or a first launch that has
+ * not answered yet.
  *
  * The location's *name* is not here. It belongs to the page, directly below the row,
  * where there is width for it — see `LocationTitle`.
  */
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
-import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { radius, shadowCard, space, useTheme } from '../theme';
 import { Text } from './Text';
 import { Icon } from './Icon';
 import { usePrefs } from '../state/prefs';
-import { reverseGeocode, type Place } from '../core/sources/geocoding';
+import { useDeviceLocation } from '../state/deviceLocation';
+import type { Place } from '../core/sources/geocoding';
 import { ta } from '../core/i18n';
 
 export interface TopBarProps {
@@ -34,10 +41,10 @@ export interface TopBarProps {
 
 export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
   const { palette } = useTheme();
-  const { prefs, selectLocation, addLocation } = usePrefs();
+  const { prefs, selectLocation } = usePrefs();
+  const { index: hereIndex, locating, locate } = useDeviceLocation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [locating, setLocating] = useState(false);
 
   const close = () => {
     setOpen(false);
@@ -45,25 +52,11 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
     onSearch('');
   };
 
-  /** Add wherever the device is. A refused permission is not an error worth a
-   *  dialog — the arrow simply does nothing and the saved locations still work. */
-  const useMyLocation = async () => {
-    if (locating) return;
-    setLocating(true);
+  /** Go to the device's page, or take a fix if there is not one yet. */
+  const goHere = () => {
     Haptics.selectionAsync().catch(() => {});
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const place = await reverseGeocode(pos.coords.latitude, pos.coords.longitude, prefs.lang);
-      addLocation({ name: place.name, lat: place.lat, lon: place.lon, sub: place.sub });
-    } catch {
-      // Nothing to say: the bar keeps whatever location it already had.
-    } finally {
-      setLocating(false);
-    }
+    if (hereIndex >= 0) selectLocation(hereIndex);
+    else locate();
   };
 
   if (open) {
@@ -174,8 +167,9 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
         }}
       >
         <Pressable
-          onPress={useMyLocation}
-          accessibilityRole="button"
+          onPress={goHere}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: hereIndex >= 0 && hereIndex === prefs.activeLocation }}
           accessibilityLabel={ta('useMyLocation', prefs.lang)}
           hitSlop={8}
           disabled={locating}
@@ -183,12 +177,26 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
           {locating ? (
             <ActivityIndicator size="small" color={palette.accentDark} />
           ) : (
-            <Icon name="navigation-arrow" size={17} color={palette.inkHeading} weight="fill" />
+            <Icon
+              name="navigation-arrow"
+              size={17}
+              // Filled and inked when you are on your own page; hollow and faint when
+              // you are on one of the saved ones, exactly as the dots behave.
+              color={
+                hereIndex >= 0 && hereIndex === prefs.activeLocation
+                  ? palette.inkHeading
+                  : palette.inkDisabled
+              }
+              weight={hereIndex >= 0 && hereIndex === prefs.activeLocation ? 'fill' : 'regular'}
+            />
           )}
         </Pressable>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {prefs.locations.map((l, i) => {
+            // The device's page is the arrow, not a dot: two indicators for one page
+            // would be a dot that never lights on its own.
+            if (l.current) return null;
             const on = i === prefs.activeLocation;
             return (
               <Pressable

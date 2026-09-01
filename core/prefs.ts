@@ -27,6 +27,16 @@ export interface SavedLocation {
    *  station-backed location green, so this drives colour as well as data. */
   stationId?: string;
   stationName?: string;
+  /**
+   * The device's own position, kept up to date by `DeviceLocationProvider`.
+   *
+   * There is at most one, and it is the first page. The GPS arrow in the top bar is
+   * its page indicator: filled when this is the location being viewed, hollow when
+   * one of the saved places is. It used to be a button that appended wherever you
+   * happened to be as a new pin, which grew the list by one every time it was
+   * pressed and never said which of them was you.
+   */
+  current?: boolean;
 }
 
 export interface Prefs {
@@ -129,6 +139,33 @@ export function mergePrefs(stored: unknown): Prefs {
   }
 
   return out;
+}
+
+/** Where the device is, if it has been resolved. The first page, by construction. */
+export function currentLocationIndex(prefs: Prefs): number {
+  return prefs.locations.findIndex((l) => l.current);
+}
+
+/**
+ * Put the device's position at the head of the list, replacing the previous one.
+ *
+ * Returns a new `Prefs`. The selected place is kept selected across the change: a
+ * position fix arriving in the background must not move the reader off the page
+ * they were reading.
+ */
+export function withCurrentLocation(prefs: Prefs, loc: SavedLocation): Prefs {
+  const fix: SavedLocation = { ...loc, current: true };
+  const at = currentLocationIndex(prefs);
+  if (at >= 0) {
+    const locations = prefs.locations.map((l, i) => (i === at ? fix : l));
+    return { ...prefs, locations };
+  }
+  return {
+    ...prefs,
+    locations: [fix, ...prefs.locations],
+    // Everything shifted one to the right, the viewed page included.
+    activeLocation: prefs.activeLocation + 1,
+  };
 }
 
 /** The location currently being viewed, always defined. */
