@@ -21,6 +21,12 @@
  * both until each wraps on its own — which is how "2,8 mm" became "2," / "8" / "m" /
  * "m". Nested text has no inner layout to squeeze: it is a single line box that
  * cannot break, whatever width it is given.
+ *
+ * Wind sits under the temperatures rather than in a column of its own. Five columns
+ * across a phone left the widest reading — "2,8 mm", value and unit together — the
+ * least room of any of them. Wind is the shortest and pairs naturally with the
+ * temperatures as "what the air is doing", so it stacks there and precipitation
+ * takes the width it gave up.
  */
 import { View, Pressable } from 'react-native';
 import { radius, useTheme } from '../../theme';
@@ -28,7 +34,7 @@ import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
-import { convTemp, convWind, dayNames, fmtMm } from '../../core/i18n';
+import { convTemp, convWind, dayNames, fmtMm, windUnitLabel } from '../../core/i18n';
 import { resolveDayValues } from '../../core/model/dayValues';
 import type { Day } from '../../core/model/types';
 
@@ -81,43 +87,36 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
 
       <WeatherIcon wmo={v.wmo ?? day.wmo} isDay={1} size={26} />
 
-      {/* Minimum and maximum, low colour then high — the pair reads as one range. */}
-      <View
-        style={{
-          flex: 3, minWidth: 62, flexDirection: 'row', alignItems: 'baseline',
-          justifyContent: 'flex-end', gap: 6,
-        }}
-      >
-        <Reading
-          value={convTemp(v.tempMin.value, prefs.tempUnit)}
-          suffix="°"
-          color={palette.valLow}
-          approx={!v.tempMin.direct}
-        />
-        <Reading
-          value={convTemp(v.tempMax.value, prefs.tempUnit)}
-          suffix="°"
-          color={palette.valHigh}
-          approx={!v.tempMax.direct}
-        />
+      {/* Temperature over wind: the two things the air is doing, in one column. */}
+      <View style={{ flex: 3.4, minWidth: 72, alignItems: 'flex-end', gap: 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+          <Reading
+            value={convTemp(v.tempMin.value, prefs.tempUnit)}
+            suffix="°"
+            color={palette.valLow}
+            approx={!v.tempMin.direct}
+          />
+          <Reading
+            value={convTemp(v.tempMax.value, prefs.tempUnit)}
+            suffix="°"
+            color={palette.valHigh}
+            approx={!v.tempMax.direct}
+          />
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+          <WindArrow deg={v.windDir} size={10} color={palette.muted} />
+          <Reading
+            value={convWind(v.wind.value, prefs.windUnit)}
+            suffix={` ${windUnitLabel(prefs.windUnit)}`}
+            color={palette.muted}
+            approx={!v.wind.direct}
+            small
+          />
+        </View>
       </View>
 
-      <View
-        style={{
-          flex: 2.4, minWidth: 48, flexDirection: 'row', alignItems: 'center',
-          justifyContent: 'flex-end', gap: 3,
-        }}
-      >
-        <WindArrow deg={v.windDir} size={11} color={palette.muted} />
-        <Reading
-          value={convWind(v.wind.value, prefs.windUnit)}
-          color={palette.muted}
-          approx={!v.wind.direct}
-          small
-        />
-      </View>
-
-      <View style={{ flex: 2.6, minWidth: 54, flexDirection: 'row', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 3, minWidth: 62, flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Reading
           value={v.precip.value != null ? fmtMm(v.precip.value) : null}
           suffix=" mm"
@@ -126,7 +125,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
         />
       </View>
 
-      <View style={{ flex: 2, minWidth: 44, flexDirection: 'row', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 2.2, minWidth: 48, flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Reading
           value={v.sunHours != null ? v.sunHours.toFixed(1).replace('.', ',') : null}
           suffix=" u"
