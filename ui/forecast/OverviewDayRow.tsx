@@ -10,7 +10,12 @@
  * carries the same `~` the web app prints — the deterministic run was an outlier and
  * the reader should know the number is the ensemble's, not IFS's.
  *
- * Used by both 'Nu' and the 'Verwachting' overview tab, so the two cannot disagree.
+ * Used by both 'Nu' and the 'Verwachting' overview tab, so the two cannot disagree —
+ * which is why the columns are proportional rather than fixed widths. The same row
+ * has to fit inside a card on 'Nu' and the full page width on 'Verwachting', and
+ * fixed widths sized for the second overflowed the first: "2,8 mm" wrapped onto
+ * three lines and the column alignment went with it. Every cell is one line, and the
+ * numbers shrink a step before they would ever wrap.
  */
 import { View, Pressable } from 'react-native';
 import { radius, useTheme } from '../../theme';
@@ -22,14 +27,21 @@ import { convTemp, convWind, dayNames, fmtMm } from '../../core/i18n';
 import { resolveDayValues } from '../../core/model/dayValues';
 import type { Day } from '../../core/model/types';
 
+/** Room for the longest weekday abbreviation and a two-digit date. */
+const DAY_WIDTH = 42;
+/** Tight, because five columns share what is left after the day and the icon. */
+const COL_GAP = 6;
+
 export interface OverviewDayRowProps {
   day: Day;
   /** Position in the forecast. Decides which model speaks for the day. */
   dayIndex: number;
+  /** A hairline above the row, so a run of them reads as one table. */
+  divider?: boolean;
   onPress?: () => void;
 }
 
-export function OverviewDayRow({ day, dayIndex, onPress }: OverviewDayRowProps) {
+export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayRowProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const v = resolveDayValues(day, { dayIndex });
@@ -40,15 +52,24 @@ export function OverviewDayRow({ day, dayIndex, onPress }: OverviewDayRowProps) 
   const body = (
     <View
       style={{
-        flexDirection: 'row', alignItems: 'center', gap: 9,
+        flexDirection: 'row', alignItems: 'center',
         paddingVertical: 11, paddingHorizontal: 4,
+        gap: COL_GAP,
+        borderTopWidth: divider ? 1 : 0,
+        borderTopColor: palette.hairlineSoft,
       }}
     >
-      <View style={{ width: 46 }}>
-        <Text variant="bodySm" weight="bold" color={palette.inkHeading}>
+      <View style={{ width: DAY_WIDTH }}>
+        <Text variant="bodySm" weight="bold" color={palette.inkHeading} numberOfLines={1}>
           {names[date.getUTCDay()]}
         </Text>
-        <Text variant="caption" color={palette.muted} tabular style={{ fontSize: 12 }}>
+        <Text
+          variant="caption"
+          color={palette.muted}
+          tabular
+          numberOfLines={1}
+          style={{ fontSize: 12 }}
+        >
           {date.getUTCDate()}/{date.getUTCMonth() + 1}
         </Text>
       </View>
@@ -56,7 +77,12 @@ export function OverviewDayRow({ day, dayIndex, onPress }: OverviewDayRowProps) 
       <WeatherIcon wmo={v.wmo ?? day.wmo} isDay={1} size={26} />
 
       {/* Minimum and maximum, low colour then high — the pair reads as one range. */}
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5, width: 84 }}>
+      <View
+        style={{
+          flex: 3, flexDirection: 'row', alignItems: 'baseline',
+          justifyContent: 'flex-end', gap: 6,
+        }}
+      >
         <Reading
           value={convTemp(v.tempMin.value, prefs.tempUnit)}
           suffix="°"
@@ -71,7 +97,12 @@ export function OverviewDayRow({ day, dayIndex, onPress }: OverviewDayRowProps) 
         />
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, width: 58 }}>
+      <View
+        style={{
+          flex: 2.4, flexDirection: 'row', alignItems: 'center',
+          justifyContent: 'flex-end', gap: 3,
+        }}
+      >
         <WindArrow deg={v.windDir} size={11} color={palette.muted} />
         <Reading
           value={convWind(v.wind.value, prefs.windUnit)}
@@ -81,7 +112,7 @@ export function OverviewDayRow({ day, dayIndex, onPress }: OverviewDayRowProps) 
         />
       </View>
 
-      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+      <View style={{ flex: 2.6, flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Reading
           value={v.precip.value != null ? fmtMm(v.precip.value) : null}
           suffix=" mm"
@@ -90,7 +121,7 @@ export function OverviewDayRow({ day, dayIndex, onPress }: OverviewDayRowProps) 
         />
       </View>
 
-      <View style={{ width: 52, alignItems: 'flex-end' }}>
+      <View style={{ flex: 2, flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Reading
           value={v.sunHours != null ? v.sunHours.toFixed(1).replace('.', ',') : null}
           suffix=" u"
@@ -137,18 +168,28 @@ function Reading({
     );
   }
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+    // Never wraps: the unit belongs beside its number, not under it.
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', flexShrink: 1 }}>
       <Text
         variant="bodySm"
         weight="bold"
         color={color}
         tabular
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
         style={small ? { fontSize: 14 } : undefined}
       >
         {value}
       </Text>
       {suffix ? (
-        <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 11 }}>
+        <Text
+          variant="caption"
+          weight="semibold"
+          color={palette.muted}
+          numberOfLines={1}
+          style={{ fontSize: 11 }}
+        >
           {suffix}
         </Text>
       ) : null}

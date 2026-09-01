@@ -53,6 +53,7 @@ export function ForecastPreview({
             key={d.date}
             day={d}
             dayIndex={i}
+            divider={i > 0}
             onPress={onOpenDay ? () => onOpenDay(d) : undefined}
           />
         ))}

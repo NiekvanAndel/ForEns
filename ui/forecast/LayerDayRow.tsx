@@ -57,10 +57,14 @@ export interface LayerDayRowProps {
   scale: Scale;
   /** Evaporation scale, for the sunshine row's second bar. */
   et0Max?: number;
+  /** A hairline above the row, so a run of them reads as one table. */
+  divider?: boolean;
   onPress?: () => void;
 }
 
-export function LayerDayRow({ day, dayIndex, layer, scale, et0Max = 5, onPress }: LayerDayRowProps) {
+export function LayerDayRow({
+  day, dayIndex, layer, scale, et0Max = 5, divider, onPress,
+}: LayerDayRowProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const values = resolveDayValues(day, { dayIndex });
@@ -76,10 +80,12 @@ export function LayerDayRow({ day, dayIndex, layer, scale, et0Max = 5, onPress }
       style={{
         flexDirection: 'row', alignItems: 'center', gap: 9,
         paddingVertical: 10, paddingHorizontal: 4,
+        borderTopWidth: divider ? 1 : 0,
+        borderTopColor: palette.hairlineSoft,
       }}
     >
       <View style={{ width: 46 }}>
-        <Text variant="bodySm" weight="bold" color={palette.inkHeading}>
+        <Text variant="bodySm" weight="bold" color={palette.inkHeading} numberOfLines={1}>
           {names[date.getUTCDay()]}
         </Text>
         <Text variant="caption" color={palette.muted} tabular style={{ fontSize: 12 }}>
@@ -434,7 +440,15 @@ function Value({
   }
   return (
     <View style={wrap}>
-      <Text variant="bodySm" weight="bold" color={color} tabular>
+      <Text
+        variant="bodySm"
+        weight="bold"
+        color={color}
+        tabular
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.85}
+      >
         {value}
       </Text>
       {suffix ? (

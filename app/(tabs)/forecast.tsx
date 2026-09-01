@@ -120,7 +120,7 @@ export default function ForecastScreen() {
             <>
               <LayerSwitcher active={layer} onChange={setLayer} />
 
-              <View style={{ gap: 2 }}>
+              <View>
                 {days.map((d, i) =>
                   // The overview tab is the web app's `overzicht`: every measurand at
                   // once, so it has no single bar to draw and its own row instead.
@@ -129,6 +129,7 @@ export default function ForecastScreen() {
                       key={d.date}
                       day={d}
                       dayIndex={i}
+                      divider={i > 0}
                       onPress={() => setSheetDay(d)}
                     />
                   ) : (
@@ -139,6 +140,7 @@ export default function ForecastScreen() {
                       layer={layer}
                       scale={scale}
                       et0Max={et0Max}
+                      divider={i > 0}
                       onPress={() => setSheetDay(d)}
                     />
                   )
