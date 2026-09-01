@@ -9,9 +9,9 @@
 module.exports = {
   type: 'widget',
   name: 'ExactCast',
-  // No icon is set: design rule 4 states there is no logo and that one must never
-  // be drawn or approximated, so the widget inherits the app icon until a real
-  // asset is supplied.
+  // The widget shares the app's icon. It only appears in the widget gallery, where
+  // a mark distinct from the app's would make the widget harder to find, not easier.
+  icon: '../../assets/icon.png',
   colors: {
     // Referenced from Swift as Color("WidgetBackground"), so the widget picks up
     // the design system's cream and navy without hard-coding hex in two places.

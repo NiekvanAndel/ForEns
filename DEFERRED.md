@@ -28,7 +28,7 @@ plumbing and tests all remain, so re-exposing one means restoring its rows in
 | **Meldingen** (rain / wind / frost / quiet hours) | `core/notifications.ts`, `core/backgroundTask.ts` | To be worked out later — see the push limitation below |
 | **Korte termijn: Nowcast / Radar** | `prefs.shortModel` | Needs a second 0–2h source to choose between |
 | **AgroExact integration** | `core/sources/agroexact.ts`, `state/stations.ts` | To be done later |
-| **App and widget icon** | — | To be supplied later |
+| ~~App and widget icon~~ | ~~—~~ | **Done** — see `assets/README.md` |
 
 The background task still runs and still keeps the widget current; it simply
 schedules no notifications while every notify preference is off, which is the
@@ -73,15 +73,11 @@ Two options when this is picked up:
 - Build a small push service (watch the ensemble per subscribed location, send APNs).
 - Or soften the settings copy to match what the app actually does.
 
-### Widget icon
+### Splash screen
 
-`targets/widget/expo-target.config.js` sets no icon. Design rule 4 states there is no
-logo and that one must never be drawn or approximated, so none was invented — the
-widget inherits the app icon. Supply a real asset when one exists.
-
-### App icon and splash screen
-
-`app.json` sets neither, so Expo's defaults apply. Same reason as above.
+`app.json` sets none, so Expo's default applies. `assets/README.md` carries the
+config to paste in when a splash asset exists; the two background colours are
+already chosen to match the app's own grounds.
 
 ### GFS and "Mix" — resolved: not wanted
 

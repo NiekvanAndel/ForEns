@@ -6,10 +6,15 @@
     "orientation": "portrait",
     "scheme": "exactcast",
     "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
     "newArchEnabled": true,
     "platforms": ["ios"],
     "ios": {
       "bundleIdentifier": "com.agroexact.exactcast",
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png"
+      },
       "supportsTablet": false,
       "requireFullScreen": false,
       "config": {
