@@ -57,6 +57,18 @@ export function convTemp(c: number | null | undefined, unit: TempUnit): number |
   return Math.round(v);
 }
 
+/**
+ * A wind bearing as the heading it blows toward.
+ *
+ * `winddirection_10m` is meteorological: the direction the wind comes *from*, so 0°
+ * is a northerly and a northerly blows south. An arrow shows where the air is going,
+ * which is the half turn — the same `(d + 180) % 360` index.html applies everywhere
+ * it draws one.
+ */
+export function windHeading(deg: number): number {
+  return ((deg % 360) + 540) % 360;
+}
+
 /** Numeric wind conversion without a label. In Beaufort this is the force, not a speed. */
 export function convWind(kmh: number | null | undefined, unit: WindUnit): number | null {
   if (kmh == null) return null;

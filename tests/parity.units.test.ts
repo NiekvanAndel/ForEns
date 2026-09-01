@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { loadOracle } from './oracle';
 import {
   fmtTemp, fmtTempShort, tempUnitLabel, convTemp,
-  convWind, fmtWind, windUnitLabel, fmtPressure, degToCompass, toBeaufort,
+  convWind, fmtWind, windUnitLabel, fmtPressure, degToCompass, toBeaufort, windHeading,
   type TempUnit, type WindUnit, type PresUnit,
 } from '../core/i18n/units';
 import { t, dayNames, wmoText, resolveLang } from '../core/i18n';
@@ -156,5 +156,33 @@ describe('resolveLang', () => {
     expect(resolveLang('pt-BR')).toBe('nl');
     expect(resolveLang(null)).toBe('nl');
     expect(resolveLang('')).toBe('nl');
+  });
+});
+
+describe('windHeading', () => {
+  const O = loadOracle(['degToArrow']);
+
+  /** The rotation index.html puts on its up-arrow, dug back out of the markup. */
+  const oracleDegrees = (deg: number): number => {
+    const html: string = O.degToArrow(deg);
+    const m = /rotate\((-?[\d.]+)deg\)/.exec(html);
+    if (!m) throw new Error(`no rotation in ${html}`);
+    return Number(m[1]);
+  };
+
+  it('turns the bearing half a circle, as index.html does', () => {
+    // A northerly (0°) blows toward the south, so the arrow points down.
+    expect(windHeading(0)).toBe(180);
+    expect(windHeading(180)).toBe(0);
+    expect(windHeading(270)).toBe(90);
+    for (let deg = 0; deg < 360; deg += 5) {
+      expect(windHeading(deg), `${deg}°`).toBe(oracleDegrees(deg));
+    }
+  });
+
+  it('stays inside one turn for a bearing outside it', () => {
+    // Not something the API sends, but a rotation of 540° is a bug that hides.
+    expect(windHeading(360)).toBe(180);
+    expect(windHeading(-90)).toBe(90);
   });
 });
