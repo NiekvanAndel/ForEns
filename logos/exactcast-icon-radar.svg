@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs><radialGradient id="bg" cx="0.15" cy="0.86" r="1.05">
+    <stop offset="0" stop-color="#16294A"/><stop offset="0.55" stop-color="#0E182E"/>
+    <stop offset="1" stop-color="#0A1120"/></radialGradient>
+    <clipPath id="sq2"><rect width="1024" height="1024"/></clipPath></defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <g clip-path="url(#sq2)"><path d="M 129.1 584.7 A 300 300 0 0 1 449.3 904.9" fill="none" stroke="#2C577F" stroke-width="28" stroke-linecap="round" opacity="0.42"/><path d="M 116.5 405.2 A 480 480 0 0 1 628.8 917.5" fill="none" stroke="#2C577F" stroke-width="20" stroke-linecap="round" opacity="0.37"/><path d="M 104.0 225.6 A 660 660 0 0 1 808.4 930.0" fill="none" stroke="#2C577F" stroke-width="28" stroke-linecap="round" opacity="0.31"/><path d="M 91.4 46.0 A 840 840 0 0 1 988.0 942.6" fill="none" stroke="#2C577F" stroke-width="20" stroke-linecap="round" opacity="0.26"/><g transform="translate(0,54)"><path d="M 286 566 q -6 -122 118 -140 q 34 -150 190 -142 q 150 8 176 132 q 116 4 116 104 q 0 106 -122 106 l -366 0 q -110 -6 -112 -60 Z" fill="#F2EBE0"/></g><line x1="392" y1="762" x2="350" y2="866" stroke="#4C82B8" stroke-width="26" stroke-linecap="round"/><line x1="500" y1="788" x2="458" y2="892" stroke="#4C82B8" stroke-width="26" stroke-linecap="round"/><line x1="608" y1="762" x2="566" y2="866" stroke="#4C82B8" stroke-width="26" stroke-linecap="round"/><line x1="716" y1="788" x2="674" y2="892" stroke="#4C82B8" stroke-width="26" stroke-linecap="round"/></g>
+</svg>
