@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { buildProfile, RainViewerProvider } from '../core/radar/rainviewer';
-import { intensityAt } from '../core/radar/labels';
+import { frameClock, intensityAt } from '../core/radar/labels';
 import {
   activeProvider, listProviders, registerProvider, setActiveProvider,
   type RadarProvider,
@@ -160,5 +160,21 @@ describe('intensityAt', () => {
 
   it('is zero with no profile at all', () => {
     expect(intensityAt([], 10)).toBe(0);
+  });
+});
+
+describe('frameClock', () => {
+  it('names the hour rather than an offset a reader has to compute', () => {
+    const at = new Date(2026, 5, 15, 9, 5).getTime();
+    expect(frameClock({ id: 'x', timeMs: at, forecast: false })).toBe('09:05');
+  });
+
+  it('pads both halves, so a column of times lines up', () => {
+    const at = new Date(2026, 5, 15, 0, 0).getTime();
+    expect(frameClock({ id: 'x', timeMs: at, forecast: false })).toBe('00:00');
+  });
+
+  it('has something to show for a missing frame', () => {
+    expect(frameClock(undefined)).toBe('—');
   });
 });

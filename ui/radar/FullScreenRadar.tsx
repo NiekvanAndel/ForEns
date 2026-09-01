@@ -27,14 +27,14 @@ import { RadarMap } from './RadarMap';
 import { Timeline } from './Timeline';
 import { NowcastPanel } from './NowcastPanel';
 import { mapChrome } from './mapStyle';
-import { frameLabel, type NowcastProfile, type RadarFrame } from '../../core/radar';
+import { frameClock, type NowcastProfile, type RadarFrame } from '../../core/radar';
 import { usePrefs } from '../../state/prefs';
 import { ta } from '../../core/i18n';
 import type { AgroStation } from '../../core/sources/agroexact';
 
 /** Enough for the headings, the curve and its axis. Animating a fixed maximum is
  *  what lets the timeline stay put while the profile above it folds away. */
-const PROFILE_MAX_HEIGHT = 210;
+const PROFILE_MAX_HEIGHT = 190;
 
 export interface FullScreenRadarProps {
   visible: boolean;
@@ -48,11 +48,13 @@ export interface FullScreenRadarProps {
   onTogglePlay: () => void;
   stations: AgroStation[];
   profile: NowcastProfile | null;
+  /** Named in the profile's header, as on the radar page. */
+  locationName?: string;
 }
 
 export function FullScreenRadar({
   visible, onClose, lat, lon, frames, activeIndex, onScrub,
-  playing, onTogglePlay, stations, profile,
+  playing, onTogglePlay, stations, profile, locationName,
 }: FullScreenRadarProps) {
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
@@ -90,6 +92,14 @@ export function FullScreenRadar({
   // Minutes from now for the frame on screen, which is what the panel's cursor and
   // its headline intensity are pinned to.
   const offsetMin = active ? Math.round((active.timeMs - Date.now()) / 60_000) : 0;
+  // The axis spans the whole loop, so the cursor tracks the scrubber across it
+  // rather than parking against the left edge where the forecast begins.
+  const domain = frames.length
+    ? {
+        from: Math.round((frames[0]!.timeMs - Date.now()) / 60_000),
+        to: Math.round((frames[frames.length - 1]!.timeMs - Date.now()) / 60_000),
+      }
+    : undefined;
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
@@ -101,7 +111,7 @@ export function FullScreenRadar({
             frames={frames}
             activeIndex={activeIndex}
             stations={stations}
-            timeLabel={frameLabel(active)}
+            timeLabel={frameClock(active)}
             showControls={false}
             style={{ flex: 1, borderRadius: 0 }}
           />
@@ -160,6 +170,8 @@ export function FullScreenRadar({
                   profile={profile}
                   offsetMin={offsetMin}
                   width={Math.max(1, panelWidth - space[5] * 2)}
+                  domain={domain}
+                  locationName={locationName}
                 />
               </Animated.View>
             </View>
@@ -172,6 +184,7 @@ export function FullScreenRadar({
               playing={playing}
               onIndexChange={onScrub}
               onTogglePlay={onTogglePlay}
+              showLabels={false}
             />
           </View>
         </View>

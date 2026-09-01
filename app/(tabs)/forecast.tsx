@@ -6,12 +6,17 @@
  *
  * Days 8–14 stay collapsed until asked for, because fetching them means a 16-day
  * deterministic run and a 14-day ensemble — the two slowest calls the app makes.
+ *
+ * The list is not in a card. A card inset the rows by the card's padding on both
+ * sides and drew a border around content that already fills the page — width the
+ * beams could use. Which model and how many days is a footnote at the bottom now,
+ * not a header above it: it does not change, and it was reading as a title.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space, useTheme } from '../../theme';
-import { Card, CardHeader, Rule } from '../../ui/Card';
+import { Card, Rule } from '../../ui/Card';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
 import { ScreenFrame } from '../../ui/ScreenFrame';
@@ -89,12 +94,12 @@ export default function ForecastScreen() {
     : 'ECMWF IFS';
 
   return (
-    <ScreenFrame>
+    <ScreenFrame compactTitle>
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: space[5],
+          paddingHorizontal: space[4],
           paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
-          gap: space[4],
+          gap: space[3],
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -112,11 +117,7 @@ export default function ForecastScreen() {
           </Card>
         ) : (
           <>
-            <Card>
-              <CardHeader
-                icon="calendar-blank"
-                label={`${expanded ? 14 : COLLAPSED_DAYS} dagen · ${modelLabel}`}
-              />
+            <>
               <LayerSwitcher active={layer} onChange={setLayer} />
 
               <View style={{ gap: 2 }}>
@@ -170,9 +171,10 @@ export default function ForecastScreen() {
               </Pressable>
 
               <Text variant="caption" color={palette.muted} style={{ lineHeight: 18 }}>
-                {ta('barsExplain', prefs.lang)}
+                {expanded ? 14 : COLLAPSED_DAYS} dagen · {modelLabel}
+                {'\n'}{ta('barsExplain', prefs.lang)}
               </Text>
-            </Card>
+            </>
 
           </>
         )}

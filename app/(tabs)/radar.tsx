@@ -1,9 +1,14 @@
 /**
- * Radar — the full map with its timeline.
+ * Radar — the map, its profile, and its timeline.
  *
- * Follows the design's RadarScreen: a tall map with the own-position ping, station
- * pins, zoom controls, a time badge and a legend, then a card carrying play/scrub
- * and the nowcast summary.
+ * Almost all of the page is map, because the map is the reason to be here. What sits
+ * under it is one card, not three: the precipitation profile at this location and
+ * the scrubber that drives the loop, with the chart's cursor tracking the scrubber
+ * so the two read as one control.
+ *
+ * The prose summary, the legend, the location title and the timeline's own labels
+ * are all gone from this page. Each was a line of text where the map wanted height,
+ * and each is still available — the summary on 'Nu', the rest in full screen.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
@@ -20,15 +25,15 @@ import { NowcastPanel } from '../../ui/radar/NowcastPanel';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useStations, stationsNear } from '../../state/stations';
-import { activeProvider, frameLabel, type RadarFrame } from '../../core/radar';
+import { activeProvider, frameClock, type RadarFrame } from '../../core/radar';
 import { mapChrome } from '../../ui/radar/mapStyle';
-import { fmtMm, ta } from '../../core/i18n';
+import { ta } from '../../core/i18n';
 
 const TAB_BAR_CLEARANCE = 110;
 /** The map takes as much of the page as it can. Taller than wide, because a shower
  *  track is usually read north-to-south here, and because the panel beneath it is
  *  short. */
-const MAP_ASPECT = 0.62;
+const MAP_ASPECT = 0.78;
 /** Station pins are drawn for this radius around the location. */
 const STATION_PIN_RADIUS_KM = 60;
 
@@ -73,13 +78,21 @@ export default function RadarScreen() {
     [stations, location.lat, location.lon]
   );
 
-  const wet = nowcast?.wet ?? false;
-  const summary = wet
-    ? `${ta('showerOver', prefs.lang)} ${location.name} — ${fmtMm(nowcast?.totalMm ?? 0)} mm ${ta('expected', prefs.lang)}`
-    : `${ta('dryAt', prefs.lang)} ${location.name}`;
+  // The chart's axis spans the whole timeline, not only the forecast: the radar
+  // frames reach back two hours, and a cursor that cannot leave the left edge is not
+  // tracking anything.
+  const offsetMin = frames[index]
+    ? Math.round((frames[index]!.timeMs - Date.now()) / 60_000)
+    : 0;
+  const domain = frames.length
+    ? {
+        from: Math.round((frames[0]!.timeMs - Date.now()) / 60_000),
+        to: Math.round((frames[frames.length - 1]!.timeMs - Date.now()) / 60_000),
+      }
+    : undefined;
 
   return (
-    <ScreenFrame compactTitle>
+    <ScreenFrame hideTitle>
       <ScrollView
         onLayout={(e) => setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 4))}
         contentContainerStyle={{
@@ -96,7 +109,7 @@ export default function RadarScreen() {
             frames={frames}
             activeIndex={index}
             stations={pins}
-            timeLabel={frames.length ? frameLabel(frames[index]) : '—'}
+            timeLabel={frameClock(frames[index])}
             style={{ aspectRatio: MAP_ASPECT }}
           />
           <Pressable
@@ -119,57 +132,38 @@ export default function RadarScreen() {
         </View>
 
         <Card pad={0}>
-          <NowcastPanel
-            profile={nowcast}
-            offsetMin={frames[index] ? Math.round((frames[index]!.timeMs - Date.now()) / 60_000) : 0}
-            width={panelWidth}
-            compact
-          />
-        </Card>
-
-        <Card>
           {loading ? (
-            <View style={{ paddingVertical: space[5], alignItems: 'center' }}>
+            <View style={{ paddingVertical: space[6], alignItems: 'center' }}>
               <ActivityIndicator color={palette.accent} />
             </View>
           ) : frames.length ? (
-            <Timeline
-              frames={frames}
-              index={index}
-              playing={playing}
-              onIndexChange={setIndex}
-              onTogglePlay={() => setPlaying((p) => !p)}
-            />
+            <>
+              <NowcastPanel
+                profile={nowcast}
+                offsetMin={offsetMin}
+                width={panelWidth}
+                domain={domain}
+                locationName={location.name}
+                compact
+              />
+              <View style={{ paddingHorizontal: space[5], paddingBottom: space[4] }}>
+                <Timeline
+                  frames={frames}
+                  index={index}
+                  playing={playing}
+                  onIndexChange={setIndex}
+                  onTogglePlay={() => setPlaying((p) => !p)}
+                  showLabels={false}
+                />
+              </View>
+            </>
           ) : (
-            <Text variant="bodySm" color={palette.muted} align="center">
-              Radarbeelden zijn tijdelijk niet beschikbaar.
-            </Text>
+            <View style={{ padding: space[6] }}>
+              <Text variant="bodySm" color={palette.muted} align="center">
+                Radarbeelden zijn tijdelijk niet beschikbaar.
+              </Text>
+            </View>
           )}
-
-          <View
-            style={{
-              flexDirection: 'row', alignItems: 'center', gap: space[2],
-              marginTop: space[4],
-            }}
-          >
-            <View
-              style={{
-                width: 10, height: 10, borderRadius: 5,
-                backgroundColor: wet ? palette.statusHeavy : palette.statusDry,
-                borderWidth: wet ? 0 : 1,
-                borderColor: palette.statusDryEdge,
-              }}
-            />
-            <Text variant="bodySm" weight="semibold" color={palette.inkHeading} style={{ flex: 1 }}>
-              {summary}
-            </Text>
-          </View>
-
-          <Text variant="caption" color={palette.muted} style={{ marginTop: 7 }}>
-            {ta('nowcastFrom', prefs.lang)}
-            {pins.length ? ` ${ta('andStations', prefs.lang)}` : ''}.
-            {nowcast ? ` ${ta('certainty', prefs.lang)} ${nowcast.confidence}%.` : ''}
-          </Text>
         </Card>
 
         <View
@@ -194,6 +188,7 @@ export default function RadarScreen() {
         onTogglePlay={() => setPlaying((p) => !p)}
         stations={pins}
         profile={nowcast}
+        locationName={location.name}
       />
     </ScreenFrame>
   );

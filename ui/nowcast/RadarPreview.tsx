@@ -162,12 +162,21 @@ export function RadarPreview({
                 opacity={0.75}
               />
             ) : null}
-            {/* MapKit's own annotations, not React children — see ui/radar/mapStyle. */}
+            {/* A small dot, matching the radar page — MapKit's teardrop at pin size
+                covered a county on a card this scale. */}
             <Marker
               coordinate={{ latitude: lat, longitude: lon }}
-              pinColor={chrome.here}
+              anchor={{ x: 0.5, y: 0.5 }}
               zIndex={2}
-            />
+            >
+              <View
+                style={{
+                  width: 14, height: 14, borderRadius: 7,
+                  backgroundColor: chrome.here,
+                  borderWidth: 2.5, borderColor: '#fff',
+                }}
+              />
+            </Marker>
             {stationLat != null && stationLon != null ? (
               <Marker
                 coordinate={{ latitude: stationLat, longitude: stationLon }}

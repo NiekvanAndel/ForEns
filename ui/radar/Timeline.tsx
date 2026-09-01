@@ -6,6 +6,10 @@
  * half an hour of forecast. So the labels are derived from the frames themselves
  * rather than hard-coded, and the "now" boundary is marked, since the difference
  * between observed and forecast radar is the thing a reader most needs to see.
+ *
+ * `showLabels` turns that row off where a chart above the slider already carries
+ * the time axis — three more timestamps under it would be the same information
+ * twice, in a place where height is what the map wants.
  */
 import { useEffect } from 'react';
 import { View, Pressable } from 'react-native';
@@ -13,7 +17,7 @@ import { Scrubber } from './Scrubber';
 import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
-import { frameLabel, type RadarFrame } from '../../core/radar';
+import { frameClock, type RadarFrame } from '../../core/radar';
 
 /** One step per this many milliseconds during playback, matching the design's 450ms. */
 export const PLAY_INTERVAL_MS = 450;
@@ -24,9 +28,13 @@ export interface TimelineProps {
   playing: boolean;
   onIndexChange: (i: number) => void;
   onTogglePlay: () => void;
+  /** The from/at/to row above the slider. */
+  showLabels?: boolean;
 }
 
-export function Timeline({ frames, index, playing, onIndexChange, onTogglePlay }: TimelineProps) {
+export function Timeline({
+  frames, index, playing, onIndexChange, onTogglePlay, showLabels = true,
+}: TimelineProps) {
   const { palette } = useTheme();
   const last = Math.max(0, frames.length - 1);
 
@@ -56,17 +64,19 @@ export function Timeline({ frames, index, playing, onIndexChange, onTogglePlay }
       </Pressable>
 
       <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-          <Text variant="caption" color={palette.muted} tabular>
-            {frameLabel(frames[0])}
-          </Text>
-          <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
-            {frameLabel(frames[index])}
-          </Text>
-          <Text variant="caption" color={palette.muted} tabular>
-            {frameLabel(frames[last])}
-          </Text>
-        </View>
+        {showLabels ? (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Text variant="caption" color={palette.muted} tabular>
+              {frameClock(frames[0])}
+            </Text>
+            <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
+              {frameClock(frames[index])}
+            </Text>
+            <Text variant="caption" color={palette.muted} tabular>
+              {frameClock(frames[last])}
+            </Text>
+          </View>
+        ) : null}
 
         <Scrubber
           value={index}

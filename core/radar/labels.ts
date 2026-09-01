@@ -12,6 +12,19 @@ import type { RadarFrame } from './types';
 const NOW_TOLERANCE_MIN = 5;
 
 /** Label for a frame relative to now: "nu", "-45 min", "+30 min". */
+/**
+ * A frame's wall-clock time.
+ *
+ * "-68 min" is arithmetic a reader has to do against a clock they cannot see. The
+ * time itself is the thing they are actually after — "was it raining at half twelve"
+ * — so the map badge and the timeline both name the hour.
+ */
+export function frameClock(frame: RadarFrame | undefined): string {
+  if (!frame) return '—';
+  const d = new Date(frame.timeMs);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 export function frameLabel(frame: RadarFrame | undefined, nowMs: number = Date.now()): string {
   if (!frame) return '—';
   const deltaMin = Math.round((frame.timeMs - nowMs) / 60000);

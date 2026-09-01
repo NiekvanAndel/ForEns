@@ -1,16 +1,20 @@
 /**
  * The nowcast panel under the full-screen radar.
  *
- * Answers the two questions a radar loop cannot: how hard, and when. The heading
- * pair names the moment the curve is pointing at and the intensity there; the curve
- * itself is the 0–2 hour profile at the chosen location, in millimetres per hour.
+ * Answers what the radar loop cannot: how hard it rains here, and when. The header
+ * names the place and the intensity at the moment the loop is showing; the curve is
+ * the 0–2 hour profile in millimetres per hour.
  *
  * Drawn with the same `smoothPath` the meteograms use, so a shower building over
  * twenty minutes reads as a slope rather than as a staircase.
  *
- * The headings are deliberately small. They were `screenTitle`, which on the
- * full-screen view took a band of height away from the map for two numbers that are
- * read in a glance — the map is the thing worth the space, and these are its caption.
+ * The header is caption-sized on purpose. It was `screenTitle`, which spent a band
+ * of height on two numbers read in a glance — the map is what deserves the space.
+ *
+ * `domain` widens the axis beyond the profile's own range, so the cursor can track
+ * a scrubber that runs through past radar frames the forecast does not cover. Then
+ * dragging the timeline moves the line across the chart rather than parking it
+ * against the left edge, which is what it did when the two spans disagreed.
  */
 import { View } from 'react-native';
 import Svg, { Path, Line, Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
@@ -32,9 +36,16 @@ export interface NowcastPanelProps {
   width: number;
   /** Shorter, for the card on the radar page where the map is already the subject. */
   compact?: boolean;
+  /** The axis span, in minutes from now, when the timeline reaches outside the
+   *  profile. Defaults to the profile's own range. */
+  domain?: { from: number; to: number };
+  /** Named on the left of the header. */
+  locationName?: string;
 }
 
-export function NowcastPanel({ profile, offsetMin, width, compact }: NowcastPanelProps) {
+export function NowcastPanel({
+  profile, offsetMin, width, compact, domain, locationName,
+}: NowcastPanelProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const bars = profile?.bars ?? [];
@@ -53,11 +64,13 @@ export function NowcastPanel({ profile, offsetMin, width, compact }: NowcastPane
   const maxMm = Math.max(1, ...bars.map((b) => b.mmPerHour));
   // A "nice" top so the axis reads 2, 4, 6 rather than 5.3.
   const top = Math.ceil(maxMm / 2) * 2 || 2;
-  const spanMin = Math.max(1, bars[bars.length - 1]!.offsetMin - bars[0]!.offsetMin);
+  const from = Math.min(domain?.from ?? bars[0]!.offsetMin, bars[0]!.offsetMin);
+  const to = Math.max(domain?.to ?? bars[bars.length - 1]!.offsetMin, bars[bars.length - 1]!.offsetMin);
+  const spanMin = Math.max(1, to - from);
   const plotW = Math.max(1, width - PAD_LEFT - space[5]);
   const plotH = chartHeight - PAD_TOP - PAD_BOTTOM;
 
-  const x = (min: number) => PAD_LEFT + ((min - bars[0]!.offsetMin) / spanMin) * plotW;
+  const x = (min: number) => PAD_LEFT + ((min - from) / spanMin) * plotW;
   const y = (mm: number) => PAD_TOP + plotH - (Math.min(mm, top) / top) * plotH;
 
   const points = bars.map((b) => ({ x: x(b.offsetMin), y: y(b.mmPerHour) }));
@@ -66,7 +79,9 @@ export function NowcastPanel({ profile, offsetMin, width, compact }: NowcastPane
 
   // What the scrubber is pointing at, interpolated between the two nearest samples.
   const atNow = intensityAt(bars, offsetMin);
-  const cursorX = x(Math.min(Math.max(offsetMin, bars[0]!.offsetMin), bars[bars.length - 1]!.offsetMin));
+  const cursorX = x(Math.min(Math.max(offsetMin, from), to));
+  // Ticks across the whole axis, not only where the curve is.
+  const ticks = [0, 0.33, 0.66, 1].map((f) => from + f * spanMin);
 
   return (
     <View
@@ -76,32 +91,30 @@ export function NowcastPanel({ profile, offsetMin, width, compact }: NowcastPane
         paddingBottom: space[2],
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-        <View>
-          <Text variant="eyebrow" color={palette.muted}>
-            {ta('tabForecast', prefs.lang)}
+      {/* Where, and how hard — one line, at the size of a caption rather than a
+          headline, because the map above is the thing being read. */}
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[3] }}>
+        <Text
+          variant="bodySm"
+          weight="semibold"
+          color={palette.inkHeading}
+          numberOfLines={1}
+          style={{ flex: 1 }}
+        >
+          {locationName ?? ta('yourLocation', prefs.lang)}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+          <Text
+            variant="bodySm"
+            weight="bold"
+            color={atNow > 0 ? palette.valPrecip : palette.inkHeading}
+            tabular
+          >
+            {fmtMm(atNow)}
           </Text>
-          <Text variant="stat" color={palette.inkHeading} tabular style={{ fontSize: 22 }}>
-            {clockAt(offsetMin)}
+          <Text variant="caption" color={palette.muted}>
+            mm/u
           </Text>
-        </View>
-        <View style={{ marginLeft: 'auto', alignItems: 'flex-end' }}>
-          <Text variant="eyebrow" color={palette.muted}>
-            {ta('tabPrecipShort', prefs.lang)}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-            <Text
-              variant="stat"
-              color={atNow > 0 ? palette.valPrecip : palette.inkHeading}
-              tabular
-              style={{ fontSize: 22 }}
-            >
-              {fmtMm(atNow)}
-            </Text>
-            <Text variant="caption" color={palette.muted}>
-              mm/u
-            </Text>
-          </View>
         </View>
       </View>
 
@@ -142,13 +155,11 @@ export function NowcastPanel({ profile, offsetMin, width, compact }: NowcastPane
       </Svg>
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: PAD_LEFT }}>
-        {bars
-          .filter((_, i) => i % Math.ceil(bars.length / 4) === 0)
-          .map((b) => (
-            <Text key={b.offsetMin} variant="caption" color={palette.muted} tabular>
-              {clockAt(b.offsetMin)}
-            </Text>
-          ))}
+        {ticks.map((min) => (
+          <Text key={min} variant="caption" color={palette.muted} tabular>
+            {clockAt(min)}
+          </Text>
+        ))}
       </View>
     </View>
   );

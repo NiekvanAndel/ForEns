@@ -33,12 +33,15 @@ export interface RadarMapProps {
   timeLabel: string;
   interactive?: boolean;
   showControls?: boolean;
+  /** The pin legend. Off by default: with one pin on the map, a caption naming it
+   *  spends a corner of the map explaining a dot that needs no explaining. */
+  showLegend?: boolean;
   style?: object;
 }
 
 export function RadarMap({
   lat, lon, frames, activeIndex, stations, timeLabel,
-  interactive = true, showControls = true, style,
+  interactive = true, showControls = true, showLegend = false, style,
 }: RadarMapProps) {
   const { palette, appearance } = useTheme();
   const provider = activeProvider();
@@ -107,12 +110,24 @@ export function RadarMap({
           />
         ) : null}
 
+        {/* A small dot rather than MapKit's teardrop, which at pin size covered a
+            county. Drawn as a marker child with tracking left on: freezing the
+            snapshot is what previously left the annotation blank or stranded it
+            mid-pan, and one marker is cheap enough to re-rasterise. */}
         <Marker
           coordinate={{ latitude: lat, longitude: lon }}
-          pinColor={chrome.here}
+          anchor={{ x: 0.5, y: 0.5 }}
           zIndex={2}
           title="Jouw locatie"
-        />
+        >
+          <View
+            style={{
+              width: 16, height: 16, borderRadius: 8,
+              backgroundColor: chrome.here,
+              borderWidth: 2.5, borderColor: '#fff',
+            }}
+          />
+        </Marker>
 
         {stations.map((s) => (
           <Marker
@@ -149,28 +164,30 @@ export function RadarMap({
         </View>
       ) : null}
 
-      <View
-        style={[
-          {
-            position: 'absolute', left: 14, bottom: 14,
-            backgroundColor: chromeBg,
-            borderRadius: radius.tile,
-            paddingVertical: 9, paddingHorizontal: 13,
-            gap: 6,
-          },
-          shadowFloat,
-        ]}
-      >
-        <LegendRow color={chrome.here} ring="#fff" label="Jouw locatie" textColor={chromeInk} />
-        {stations.length ? (
-          <LegendRow
-            color="#fff"
-            ring={palette.agroBright}
-            label="AgroExact-station"
-            textColor={palette.agroInk}
-          />
-        ) : null}
-      </View>
+      {showLegend ? (
+        <View
+          style={[
+            {
+              position: 'absolute', left: 14, bottom: 14,
+              backgroundColor: chromeBg,
+              borderRadius: radius.tile,
+              paddingVertical: 9, paddingHorizontal: 13,
+              gap: 6,
+            },
+            shadowFloat,
+          ]}
+        >
+          <LegendRow color={chrome.here} ring="#fff" label="Jouw locatie" textColor={chromeInk} />
+          {stations.length ? (
+            <LegendRow
+              color="#fff"
+              ring={palette.agroBright}
+              label="AgroExact-station"
+              textColor={palette.agroInk}
+            />
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }

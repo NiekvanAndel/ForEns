@@ -18,9 +18,16 @@ import { LocationTitle } from './LocationTitle';
 import { usePlaceSearch } from './usePlaceSearch';
 import { usePrefs } from '../state/prefs';
 
-export function ScreenFrame({
-  children, compactTitle,
-}: { children: ReactNode; compactTitle?: boolean }) {
+export interface ScreenFrameProps {
+  children: ReactNode;
+  /** A single tighter line instead of the full title block. */
+  compactTitle?: boolean;
+  /** No name at all, for a page that is almost entirely one piece of content and
+   *  wants every point of height for it. */
+  hideTitle?: boolean;
+}
+
+export function ScreenFrame({ children, compactTitle, hideTitle }: ScreenFrameProps) {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const { prefs, addLocation } = usePrefs();
@@ -36,7 +43,7 @@ export function ScreenFrame({
       />
 
       <LocationPager>
-        <LocationTitle compact={compactTitle} />
+        {hideTitle ? null : <LocationTitle compact={compactTitle} />}
         {children}
       </LocationPager>
     </View>
