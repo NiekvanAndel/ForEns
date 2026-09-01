@@ -8,6 +8,12 @@
  *
  * Dragging runs entirely on the UI thread, so scrubbing stays smooth while the map
  * swaps tile overlays underneath.
+ *
+ * `stepPositions` places the steps by *time* rather than by index. Radar frames are
+ * evenly spaced, so on their own the two are the same thing — but the chart above
+ * the scrubber plots a wider span than the frames cover, and a thumb at index
+ * fractions could not line up with a cursor at time fractions. Given positions, both
+ * read the same axis and move together.
  */
 import { useCallback, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
@@ -28,12 +34,14 @@ export interface ScrubberProps {
   onChange: (index: number) => void;
   /** Fraction 0–1 at which to draw the observed/forecast divider. */
   markerFraction?: number | null;
+  /** Where each step sits on the track, 0–1. Defaults to evenly spaced. */
+  stepPositions?: readonly number[];
   disabled?: boolean;
   accessibilityLabel?: string;
 }
 
 export function Scrubber({
-  value, steps, onChange, markerFraction, disabled, accessibilityLabel,
+  value, steps, onChange, markerFraction, stepPositions, disabled, accessibilityLabel,
 }: ScrubberProps) {
   const { palette } = useTheme();
   const [width, setWidth] = useState(0);
@@ -44,18 +52,34 @@ export function Scrubber({
     setWidth(e.nativeEvent.layout.width);
   }, []);
 
+  /** Where a step sits, 0–1 along the track. */
+  const positionOf = useCallback(
+    (i: number) => stepPositions?.[i] ?? (steps > 1 ? i / last : 0),
+    [stepPositions, steps, last]
+  );
+
   /** Position for a step, in points, clamped so the thumb never leaves the track. */
   const usable = Math.max(0, width - THUMB_SIZE);
-  const x = steps > 1 ? (value / last) * usable : 0;
+  const x = positionOf(value) * usable;
 
   const emit = useCallback(
     (px: number) => {
       if (disabled || steps < 2 || usable <= 0) return;
       const fraction = Math.min(1, Math.max(0, px / usable));
-      const next = Math.round(fraction * last);
+      // Nearest step to where the finger is, which with uneven positions is not the
+      // same as rounding a fraction of the count.
+      let next = 0;
+      let best = Infinity;
+      for (let i = 0; i < steps; i++) {
+        const d = Math.abs(positionOf(i) - fraction);
+        if (d < best) {
+          best = d;
+          next = i;
+        }
+      }
       if (next !== value) onChange(next);
     },
-    [disabled, steps, usable, last, value, onChange]
+    [disabled, steps, usable, value, onChange, positionOf]
   );
 
   const pan = Gesture.Pan()

@@ -40,23 +40,23 @@ export function OverviewDayRow({ day, dayIndex, onPress }: OverviewDayRowProps) 
   const body = (
     <View
       style={{
-        flexDirection: 'row', alignItems: 'center', gap: 8,
-        paddingVertical: 9, paddingHorizontal: 2,
+        flexDirection: 'row', alignItems: 'center', gap: 9,
+        paddingVertical: 11, paddingHorizontal: 4,
       }}
     >
-      <View style={{ width: 42 }}>
-        <Text variant="label" weight="bold" color={palette.inkHeading}>
+      <View style={{ width: 46 }}>
+        <Text variant="bodySm" weight="bold" color={palette.inkHeading}>
           {names[date.getUTCDay()]}
         </Text>
-        <Text variant="caption" color={palette.muted} tabular style={{ fontSize: 11 }}>
+        <Text variant="caption" color={palette.muted} tabular style={{ fontSize: 12 }}>
           {date.getUTCDate()}/{date.getUTCMonth() + 1}
         </Text>
       </View>
 
-      <WeatherIcon wmo={v.wmo ?? day.wmo} isDay={1} size={22} />
+      <WeatherIcon wmo={v.wmo ?? day.wmo} isDay={1} size={26} />
 
       {/* Minimum and maximum, low colour then high — the pair reads as one range. */}
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5, width: 78 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5, width: 84 }}>
         <Reading
           value={convTemp(v.tempMin.value, prefs.tempUnit)}
           suffix="°"
@@ -71,7 +71,7 @@ export function OverviewDayRow({ day, dayIndex, onPress }: OverviewDayRowProps) 
         />
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, width: 52 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, width: 58 }}>
         <WindArrow deg={v.windDir} size={11} color={palette.muted} />
         <Reading
           value={convWind(v.wind.value, prefs.windUnit)}
@@ -90,7 +90,7 @@ export function OverviewDayRow({ day, dayIndex, onPress }: OverviewDayRowProps) 
         />
       </View>
 
-      <View style={{ width: 46, alignItems: 'flex-end' }}>
+      <View style={{ width: 52, alignItems: 'flex-end' }}>
         <Reading
           value={v.sunHours != null ? v.sunHours.toFixed(1).replace('.', ',') : null}
           suffix=" u"
@@ -139,16 +139,16 @@ function Reading({
   return (
     <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
       <Text
-        variant="label"
+        variant="bodySm"
         weight="bold"
         color={color}
         tabular
-        style={small ? { fontSize: 13 } : undefined}
+        style={small ? { fontSize: 14 } : undefined}
       >
         {value}
       </Text>
       {suffix ? (
-        <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 10 }}>
+        <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 11 }}>
           {suffix}
         </Text>
       ) : null}

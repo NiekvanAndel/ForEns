@@ -16,9 +16,14 @@
  * instead: one consistent grey for every cloud, with sun yellow, rain blue, snow
  * pale and lightning amber — so a row of mixed conditions reads as one set.
  *
- * Which layer gets which colour comes from `symbolLayers`, because it varies by
- * symbol. `cloud.sun.fill` leads with a cloud; `sun.max.fill` is a sun on its own.
- * Colouring layer one grey regardless is what briefly put out the sun on clear days.
+ * Palette rendering only applies to symbols that actually contain a cloud, which is
+ * the only thing that goes white. A clear day is `sun.max.fill` — no cloud, no
+ * problem — so it keeps multicolour in both appearances and stays yellow. Getting
+ * this wrong put the sun out twice: first grey, then, with one colour supplied for a
+ * symbol iOS draws in more layers than that, blue.
+ *
+ * Where there *is* a cloud, `symbolLayers` says which layer is which, because it
+ * varies: `cloud.sun.fill` leads with a cloud, `cloud.bolt.rain.fill` has three.
  *
  * The same mapping drives the SwiftUI widget, so the two cannot disagree.
  */
@@ -88,22 +93,24 @@ export function WeatherIcon({ wmo = 3, isDay = 1, size = 34, color }: WeatherIco
 
   // A forced colour always wins: a row that tints its glyph means it.
   const forced = !!color;
-  // Dark keeps multicolour, where a white cloud is exactly right. Light uses a
-  // palette so the cloud layer can be grey instead.
-  const multicolor = !forced && appearance === 'dark' && symbolIsMulticolor(code);
-  const paletteMode = !forced && !multicolor && symbolIsMulticolor(code);
+  const roles = symbolLayers(code, day);
+  // Only a cloud renders white, so only a cloud needs the palette treatment — and
+  // only on light, where white is invisible. Everything else keeps its own colours.
+  const needsGreyCloud =
+    !forced && appearance === 'light' && symbolIsMulticolor(code) && roles.includes('cloud');
+  const multicolor = !forced && !needsGreyCloud && symbolIsMulticolor(code);
 
-  const layers = paletteMode
-    ? symbolLayers(code, day).map((role) => layerColor(role, palette, cloud))
+  const layers = needsGreyCloud
+    ? roles.map((role) => layerColor(role, palette, cloud))
     : undefined;
 
   return (
     <SymbolView
       name={wmoSymbol(code, day) as never}
       size={size}
-      type={multicolor ? 'multicolor' : paletteMode ? 'palette' : 'monochrome'}
+      type={multicolor ? 'multicolor' : needsGreyCloud ? 'palette' : 'monochrome'}
       colors={layers}
-      tintColor={multicolor || paletteMode ? undefined : color ?? cloud}
+      tintColor={multicolor || needsGreyCloud ? undefined : color ?? cloud}
       // Never leave a hole in a row if a symbol is missing on this iOS version.
       fallback={
         <Icon

@@ -21,7 +21,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
-import { mapChrome } from '../radar/mapStyle';
+import { START_SPAN_DEG, mapChrome } from '../radar/mapStyle';
 import { Card, CardHeader } from '../Card';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
@@ -33,7 +33,7 @@ import { activeProvider, type RadarFrame } from '../../core/radar';
  *  a preview of the weather heading toward you, not of your street: a shower an hour
  *  away has to be on screen for the card to be worth having. Wide enough to hold the
  *  country and its coast. */
-const PREVIEW_SPAN_DEG = 3.0;
+const PREVIEW_SPAN_DEG = START_SPAN_DEG;
 
 /** How long each frame is held while the loop plays. Slow enough to read a shower's
  *  direction, fast enough that the whole hour passes in a few seconds. */

@@ -11,12 +11,18 @@
  * The header is caption-sized on purpose. It was `screenTitle`, which spent a band
  * of height on two numbers read in a glance — the map is what deserves the space.
  *
- * `domain` widens the axis beyond the profile's own range, so the cursor can track
- * a scrubber that runs through past radar frames the forecast does not cover. Then
- * dragging the timeline moves the line across the chart rather than parking it
- * against the left edge, which is what it did when the two spans disagreed.
+ * `domain` is the shared axis from `radarAxis`, covering the radar loop and the
+ * forecast together. Both this chart and the scrubber under it read that one axis,
+ * which is what makes the cursor and the thumb move as one — drawn against their own
+ * spans they could not, and the cursor sat against the left edge whatever the
+ * scrubber did.
+ *
+ * The chart is a scrubber too: dragging across it moves the loop, since a line you
+ * can see moving is a line you will try to drag.
  */
 import { View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import Svg, { Path, Line, Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
@@ -41,10 +47,12 @@ export interface NowcastPanelProps {
   domain?: { from: number; to: number };
   /** Named on the left of the header. */
   locationName?: string;
+  /** Dragging across the chart scrubs, reporting a position 0–1 along the axis. */
+  onScrubFraction?: (fraction: number) => void;
 }
 
 export function NowcastPanel({
-  profile, offsetMin, width, compact, domain, locationName,
+  profile, offsetMin, width, compact, domain, locationName, onScrubFraction,
 }: NowcastPanelProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -61,6 +69,7 @@ export function NowcastPanel({
   }
 
   const chartHeight = compact ? 96 : 118;
+
   const maxMm = Math.max(1, ...bars.map((b) => b.mmPerHour));
   // A "nice" top so the axis reads 2, 4, 6 rather than 5.3.
   const top = Math.ceil(maxMm / 2) * 2 || 2;
@@ -76,6 +85,20 @@ export function NowcastPanel({
   const points = bars.map((b) => ({ x: x(b.offsetMin), y: y(b.mmPerHour) }));
   const line = smoothPath(points);
   const area = `${line} L${points[points.length - 1]!.x},${PAD_TOP + plotH} L${points[0]!.x},${PAD_TOP + plotH} Z`;
+
+  // Dragging across the plot scrubs the loop. Reported as a fraction of the axis so
+  // the caller maps it back to a frame — this component knows nothing about frames.
+  const report = (x: number) => {
+    if (!onScrubFraction) return;
+    onScrubFraction(Math.min(1, Math.max(0, (x - PAD_LEFT) / plotW)));
+  };
+
+  const scrub = Gesture.Pan()
+    .enabled(!!onScrubFraction)
+    // No slop: a tap on the chart should move the cursor there, not wait for a drag.
+    .minDistance(0)
+    .onBegin((e) => { runOnJS(report)(e.x); })
+    .onUpdate((e) => { runOnJS(report)(e.x); });
 
   // What the scrubber is pointing at, interpolated between the two nearest samples.
   const atNow = intensityAt(bars, offsetMin);
@@ -118,6 +141,7 @@ export function NowcastPanel({
         </View>
       </View>
 
+      <GestureDetector gesture={scrub}>
       <Svg width={width} height={chartHeight} style={{ marginTop: space[2] }}>
         <Defs>
           <SvgGradient id="nowcastFill" x1="0" y1="0" x2="0" y2="1">
@@ -153,6 +177,7 @@ export function NowcastPanel({
         />
         <Circle cx={cursorX} cy={y(atNow)} r={4.5} fill={palette.accentDark} />
       </Svg>
+      </GestureDetector>
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: PAD_LEFT }}>
         {ticks.map((min) => (

@@ -19,8 +19,13 @@
  * `maximumNativeZ` is the deepest level tiles exist for; `maximumZ` is the deepest
  * level the overlay is drawn at. Setting only the latter to the provider's limit is
  * what produced "Zoom Level Not Supported" — past it MapKit stopped drawing rather
- * than upscaling. The map's own `maxZoomLevel` is capped as well, so a reader cannot
- * reach a zoom the provider has nothing for even in principle.
+ * than upscaling.
+ *
+ * Upscaling has a limit of its own, though: stretched far enough the tiles are mush,
+ * and RainViewer serves a placeholder image rather than a tile at some levels. So the
+ * map is clamped at *both* ends — `MIN_ZOOM` because the whole-world levels are the
+ * ones most likely to be missing, `maxZoomFor` a little past the native maximum —
+ * and every starting region is chosen to sit inside that band.
  */
 import type { Appearance, Palette } from '../../theme';
 
@@ -28,9 +33,17 @@ import type { Appearance, Palette } from '../../theme';
  *  upscales its deepest tiles rather than dropping the layer. */
 export const MAX_DISPLAY_Z = 19;
 
-/** How far the map itself will zoom. Beyond roughly four levels past the
- *  provider's own maximum the upscaling is mush, so the map stops there. */
-export const maxZoomFor = (providerMaxZoom: number) => providerMaxZoom + 4;
+/** How far the map itself will zoom in. Two levels past the provider's own maximum
+ *  is as far as upscaled tiles stay readable. */
+export const maxZoomFor = (providerMaxZoom: number) => providerMaxZoom + 2;
+
+/** How far out the map will go. Below this a radar tile covers a continent, which
+ *  providers commonly do not serve at all. */
+export const MIN_ZOOM = 4;
+
+/** The region a radar map opens on, in degrees. Around zoom 7 on a phone: the
+ *  country and the weather heading for it, comfortably inside the tile range. */
+export const START_SPAN_DEG = 2.6;
 
 export interface MapChrome {
   /** Background for anything floating on the map. */

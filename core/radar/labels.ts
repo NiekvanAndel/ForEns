@@ -57,3 +57,35 @@ export function intensityAt(
   return last.mmPerHour;
 }
 
+
+/**
+ * The one time axis the radar page reads.
+ *
+ * The loop and the profile cover different spans — RainViewer's frames run about two
+ * hours back, the nowcast two hours forward — and drawing each against its own axis
+ * is what left the chart's cursor pinned to the left edge while the slider moved.
+ * So both take this: the union of the two, plus where each frame falls within it.
+ */
+export interface RadarAxis {
+  /** Minutes from now at the left edge. */
+  from: number;
+  /** Minutes from now at the right edge. */
+  to: number;
+  /** Each frame's position along the axis, 0–1, in frame order. */
+  positions: number[];
+}
+
+export function radarAxis(
+  frames: readonly RadarFrame[],
+  profileEndMin: number | null,
+  nowMs: number = Date.now()
+): RadarAxis | null {
+  if (!frames.length) return null;
+  const offsets = frames.map((f) => Math.round((f.timeMs - nowMs) / 60_000));
+  const from = Math.min(...offsets);
+  // The profile reaches past the last frame; without it the curve would be drawn
+  // off the right-hand edge of its own axis.
+  const to = Math.max(...offsets, profileEndMin ?? -Infinity);
+  const span = Math.max(1, to - from);
+  return { from, to, positions: offsets.map((o) => (o - from) / span) };
+}

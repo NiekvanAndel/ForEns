@@ -30,10 +30,12 @@ export interface TimelineProps {
   onTogglePlay: () => void;
   /** The from/at/to row above the slider. */
   showLabels?: boolean;
+  /** Where each frame sits on the track, 0–1, when a chart above shares the axis. */
+  stepPositions?: readonly number[];
 }
 
 export function Timeline({
-  frames, index, playing, onIndexChange, onTogglePlay, showLabels = true,
+  frames, index, playing, onIndexChange, onTogglePlay, showLabels = true, stepPositions,
 }: TimelineProps) {
   const { palette } = useTheme();
   const last = Math.max(0, frames.length - 1);
@@ -45,7 +47,10 @@ export function Timeline({
   }, [playing, index, frames.length, onIndexChange]);
 
   const firstForecast = frames.findIndex((f) => f.forecast);
-  const nowFraction = firstForecast > 0 ? firstForecast / last : null;
+  const nowFraction =
+    firstForecast > 0
+      ? stepPositions?.[firstForecast] ?? firstForecast / last
+      : null;
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
@@ -83,6 +88,7 @@ export function Timeline({
           steps={frames.length}
           onChange={onIndexChange}
           markerFraction={nowFraction}
+          stepPositions={stepPositions}
           disabled={frames.length < 2}
           accessibilityLabel="Tijdlijn"
         />

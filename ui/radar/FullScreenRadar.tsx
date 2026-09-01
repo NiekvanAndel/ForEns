@@ -27,7 +27,7 @@ import { RadarMap } from './RadarMap';
 import { Timeline } from './Timeline';
 import { NowcastPanel } from './NowcastPanel';
 import { mapChrome } from './mapStyle';
-import { frameClock, type NowcastProfile, type RadarFrame } from '../../core/radar';
+import { frameClock, radarAxis, type NowcastProfile, type RadarFrame } from '../../core/radar';
 import { usePrefs } from '../../state/prefs';
 import { ta } from '../../core/i18n';
 import type { AgroStation } from '../../core/sources/agroexact';
@@ -92,14 +92,25 @@ export function FullScreenRadar({
   // Minutes from now for the frame on screen, which is what the panel's cursor and
   // its headline intensity are pinned to.
   const offsetMin = active ? Math.round((active.timeMs - Date.now()) / 60_000) : 0;
-  // The axis spans the whole loop, so the cursor tracks the scrubber across it
-  // rather than parking against the left edge where the forecast begins.
-  const domain = frames.length
-    ? {
-        from: Math.round((frames[0]!.timeMs - Date.now()) / 60_000),
-        to: Math.round((frames[frames.length - 1]!.timeMs - Date.now()) / 60_000),
+  // One axis for the chart and the scrubber, exactly as on the radar page.
+  const profileEnd = profile?.bars.length
+    ? profile.bars[profile.bars.length - 1]!.offsetMin
+    : null;
+  const axis = radarAxis(frames, profileEnd);
+
+  const scrubTo = (fraction: number) => {
+    if (!axis) return;
+    let best = 0;
+    let bestDistance = Infinity;
+    axis.positions.forEach((p, i) => {
+      const d = Math.abs(p - fraction);
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = i;
       }
-    : undefined;
+    });
+    onScrub(best);
+  };
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
@@ -170,8 +181,9 @@ export function FullScreenRadar({
                   profile={profile}
                   offsetMin={offsetMin}
                   width={Math.max(1, panelWidth - space[5] * 2)}
-                  domain={domain}
+                  domain={axis ? { from: axis.from, to: axis.to } : undefined}
                   locationName={locationName}
+                  onScrubFraction={scrubTo}
                 />
               </Animated.View>
             </View>
@@ -185,6 +197,7 @@ export function FullScreenRadar({
               onIndexChange={onScrub}
               onTogglePlay={onTogglePlay}
               showLabels={false}
+              stepPositions={axis?.positions}
             />
           </View>
         </View>

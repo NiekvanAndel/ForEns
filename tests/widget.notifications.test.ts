@@ -300,3 +300,20 @@ describe('symbolLayers', () => {
     }
   });
 });
+
+describe('cloudless symbols keep their own colours', () => {
+  // The light-mode palette exists only to stop a white cloud vanishing on cream.
+  // A symbol with no cloud has nothing to fix, and treating it as if it did is what
+  // put the sun out — first grey, then blue.
+  it('a clear day has no cloud layer to grey', () => {
+    for (const code of [0, 1, 75, 86]) {
+      expect(symbolLayers(code, true).includes('cloud'), String(code)).toBe(false);
+    }
+  });
+
+  it('everything overcast or raining does have one', () => {
+    for (const code of [2, 3, 45, 51, 61, 65, 71, 80, 95, 99]) {
+      expect(symbolLayers(code, true).includes('cloud'), String(code)).toBe(true);
+    }
+  });
+});

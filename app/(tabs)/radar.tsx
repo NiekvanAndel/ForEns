@@ -25,7 +25,7 @@ import { NowcastPanel } from '../../ui/radar/NowcastPanel';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useStations, stationsNear } from '../../state/stations';
-import { activeProvider, frameClock, type RadarFrame } from '../../core/radar';
+import { activeProvider, frameClock, radarAxis, type RadarFrame } from '../../core/radar';
 import { mapChrome } from '../../ui/radar/mapStyle';
 import { ta } from '../../core/i18n';
 
@@ -78,18 +78,30 @@ export default function RadarScreen() {
     [stations, location.lat, location.lon]
   );
 
-  // The chart's axis spans the whole timeline, not only the forecast: the radar
-  // frames reach back two hours, and a cursor that cannot leave the left edge is not
-  // tracking anything.
+  // One axis for the chart and the scrubber, so the cursor and the thumb move
+  // together. See `radarAxis`.
+  const profileEnd = nowcast?.bars.length
+    ? nowcast.bars[nowcast.bars.length - 1]!.offsetMin
+    : null;
+  const axis = radarAxis(frames, profileEnd);
   const offsetMin = frames[index]
     ? Math.round((frames[index]!.timeMs - Date.now()) / 60_000)
     : 0;
-  const domain = frames.length
-    ? {
-        from: Math.round((frames[0]!.timeMs - Date.now()) / 60_000),
-        to: Math.round((frames[frames.length - 1]!.timeMs - Date.now()) / 60_000),
+
+  /** A position along the shared axis, back to the frame nearest it. */
+  const scrubTo = (fraction: number) => {
+    if (!axis) return;
+    let best = 0;
+    let bestDistance = Infinity;
+    axis.positions.forEach((p, i) => {
+      const d = Math.abs(p - fraction);
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = i;
       }
-    : undefined;
+    });
+    setIndex(best);
+  };
 
   return (
     <ScreenFrame hideTitle>
@@ -142,8 +154,9 @@ export default function RadarScreen() {
                 profile={nowcast}
                 offsetMin={offsetMin}
                 width={panelWidth}
-                domain={domain}
+                domain={axis ? { from: axis.from, to: axis.to } : undefined}
                 locationName={location.name}
+                onScrubFraction={scrubTo}
                 compact
               />
               <View style={{ paddingHorizontal: space[5], paddingBottom: space[4] }}>
@@ -154,6 +167,7 @@ export default function RadarScreen() {
                   onIndexChange={setIndex}
                   onTogglePlay={() => setPlaying((p) => !p)}
                   showLabels={false}
+                  stepPositions={axis?.positions}
                 />
               </View>
             </>

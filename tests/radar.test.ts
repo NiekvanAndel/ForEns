@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { buildProfile, RainViewerProvider } from '../core/radar/rainviewer';
-import { frameClock, intensityAt } from '../core/radar/labels';
+import { frameClock, intensityAt, radarAxis } from '../core/radar/labels';
 import {
   activeProvider, listProviders, registerProvider, setActiveProvider,
   type RadarProvider,
@@ -176,5 +176,38 @@ describe('frameClock', () => {
 
   it('has something to show for a missing frame', () => {
     expect(frameClock(undefined)).toBe('—');
+  });
+});
+
+describe('radarAxis', () => {
+  const at = (min: number) => ({ id: `f${min}`, timeMs: NOW + min * 60_000, forecast: false });
+  const NOW = 1_800_000_000_000;
+
+  it('spans the frames and the profile together, so one axis serves both', () => {
+    // The bug this prevents: frames run into the past, the profile into the future,
+    // and a cursor on one axis cannot track a thumb on the other.
+    const axis = radarAxis([at(-120), at(-60), at(0)], 120, NOW)!;
+    expect(axis.from).toBe(-120);
+    expect(axis.to).toBe(120);
+  });
+
+  it('places each frame by time, not by index', () => {
+    const axis = radarAxis([at(-120), at(-60), at(0)], 120, NOW)!;
+    expect(axis.positions).toEqual([0, 0.25, 0.5]);
+  });
+
+  it('falls back to the frames alone when there is no profile', () => {
+    const axis = radarAxis([at(-60), at(0)], null, NOW)!;
+    expect(axis.to).toBe(0);
+    expect(axis.positions).toEqual([0, 1]);
+  });
+
+  it('has nothing to say without frames', () => {
+    expect(radarAxis([], 120, NOW)).toBeNull();
+  });
+
+  it('survives a single frame without dividing by zero', () => {
+    const axis = radarAxis([at(0)], 0, NOW)!;
+    expect(axis.positions).toEqual([0]);
   });
 });

@@ -18,6 +18,11 @@
  * widest of them. "24 km/u" and "88%" do not need the same room, and a column wide
  * enough for the first left the beam — the part actually being read — short on every
  * other tab. Layers with nothing on the left get no left column at all.
+ *
+ * Type is a step up from the design's list sizes. The list left its card and gained
+ * the card's padding on both sides; spending that on white space rather than on
+ * legibility would have been a poor trade for a page that is one long column of
+ * numbers.
  */
 import { View, Pressable } from 'react-native';
 import { radius, space, useTheme } from '../../theme';
@@ -31,18 +36,18 @@ import { layerBeam, type Beam, type BeamTone, type Scale } from '../../core/mode
 import { resolveDayValues } from '../../core/model/dayValues';
 import type { Day } from '../../core/model/types';
 
-const TRACK_HEIGHT = 7;
+const TRACK_HEIGHT = 8;
 const MARKER_WIDTH = 4;
 
 /** Room each layer's own numbers need, so the beam keeps the rest. Measured against
  *  the widest realistic reading: "-12°" for temperature, "24,8 mm", "112 km/u". */
 const COLUMNS: Record<LayerKey, { lead: number; trail: number }> = {
   overview: { lead: 0, trail: 0 },
-  temp: { lead: 38, trail: 44 },
-  precip: { lead: 34, trail: 62 },
-  wind: { lead: 0, trail: 78 },
-  sun: { lead: 0, trail: 56 },
-  humidity: { lead: 36, trail: 42 },
+  temp: { lead: 42, trail: 48 },
+  precip: { lead: 38, trail: 70 },
+  wind: { lead: 0, trail: 86 },
+  sun: { lead: 0, trail: 62 },
+  humidity: { lead: 40, trail: 46 },
 };
 
 export interface LayerDayRowProps {
@@ -69,20 +74,20 @@ export function LayerDayRow({ day, dayIndex, layer, scale, et0Max = 5, onPress }
   const body = (
     <View
       style={{
-        flexDirection: 'row', alignItems: 'center', gap: 8,
-        paddingVertical: 8, paddingHorizontal: 2,
+        flexDirection: 'row', alignItems: 'center', gap: 9,
+        paddingVertical: 10, paddingHorizontal: 4,
       }}
     >
-      <View style={{ width: 42 }}>
-        <Text variant="label" weight="bold" color={palette.inkHeading}>
+      <View style={{ width: 46 }}>
+        <Text variant="bodySm" weight="bold" color={palette.inkHeading}>
           {names[date.getUTCDay()]}
         </Text>
-        <Text variant="caption" color={palette.muted} tabular style={{ fontSize: 11 }}>
+        <Text variant="caption" color={palette.muted} tabular style={{ fontSize: 12 }}>
           {date.getUTCDate()}/{date.getUTCMonth() + 1}
         </Text>
       </View>
 
-      <WeatherIcon wmo={values.wmo ?? day.wmo} isDay={1} size={20} />
+      <WeatherIcon wmo={values.wmo ?? day.wmo} isDay={1} size={25} />
 
       {cols.lead > 0 ? (
         <LeadingValue day={day} layer={layer} dayIndex={dayIndex} width={cols.lead} />
@@ -234,7 +239,7 @@ function SpreadCaption({ day, layer, hasEns }: { day: Day; layer: LayerKey; hasE
 
   if (!text) return null;
   return (
-    <Text variant="caption" color={palette.muted} tabular align="center" style={{ fontSize: 10.5 }}>
+    <Text variant="caption" color={palette.muted} tabular align="center" style={{ fontSize: 11.5 }}>
       {text}
     </Text>
   );
@@ -382,7 +387,7 @@ function TrailingValue({
             suffix=" u"
             color={palette.valSun}
           />
-          <Text variant="caption" color={palette.agroBright} tabular style={{ fontSize: 10 }}>
+          <Text variant="caption" color={palette.agroBright} tabular style={{ fontSize: 11 }}>
             {v.et0 != null ? `${fmtMm(v.et0)} mm` : '—'}
           </Text>
         </View>
@@ -429,11 +434,11 @@ function Value({
   }
   return (
     <View style={wrap}>
-      <Text variant="label" weight="bold" color={color} tabular>
+      <Text variant="bodySm" weight="bold" color={color} tabular>
         {value}
       </Text>
       {suffix ? (
-        <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 10 }}>
+        <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 11 }}>
           {suffix}
         </Text>
       ) : null}

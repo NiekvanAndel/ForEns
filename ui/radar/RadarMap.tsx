@@ -19,9 +19,13 @@ import MapView, { Marker, UrlTile, PROVIDER_DEFAULT, type Region } from 'react-n
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
-import { MAX_DISPLAY_Z, mapChrome, maxZoomFor } from './mapStyle';
+import { MAX_DISPLAY_Z, MIN_ZOOM, START_SPAN_DEG, mapChrome, maxZoomFor } from './mapStyle';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import type { AgroStation } from '../../core/sources/agroexact';
+
+/** The span band the zoom buttons work within, matching MIN_ZOOM and maxZoomFor. */
+const MIN_SPAN_DEG = 0.05;
+const MAX_SPAN_DEG = 24;
 
 export interface RadarMapProps {
   lat: number;
@@ -48,7 +52,7 @@ export function RadarMap({
   const mapRef = useRef<MapView>(null);
   const region = useRef<Region>({
     latitude: lat, longitude: lon,
-    latitudeDelta: 2.2, longitudeDelta: 2.2,
+    latitudeDelta: START_SPAN_DEG, longitudeDelta: START_SPAN_DEG,
   });
 
   // Recentre when the chosen location changes, rather than stranding the user
@@ -69,8 +73,10 @@ export function RadarMap({
     const r = region.current;
     const next = {
       ...r,
-      latitudeDelta: Math.min(80, Math.max(0.02, r.latitudeDelta * factor)),
-      longitudeDelta: Math.min(80, Math.max(0.02, r.longitudeDelta * factor)),
+      // Kept inside the same band the map itself is clamped to, so a button press
+      // cannot reach a zoom the provider has no tiles for.
+      latitudeDelta: Math.min(MAX_SPAN_DEG, Math.max(MIN_SPAN_DEG, r.latitudeDelta * factor)),
+      longitudeDelta: Math.min(MAX_SPAN_DEG, Math.max(MIN_SPAN_DEG, r.longitudeDelta * factor)),
     };
     region.current = next;
     mapRef.current?.animateToRegion(next, 200);
@@ -97,6 +103,7 @@ export function RadarMap({
         toolbarEnabled={false}
         showsCompass={false}
         userInterfaceStyle={appearance}
+        minZoomLevel={MIN_ZOOM}
         maxZoomLevel={maxZoomFor(provider.maxZoom)}
       >
         {active ? (
