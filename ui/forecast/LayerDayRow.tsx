@@ -245,7 +245,14 @@ function SpreadCaption({ day, layer, hasEns }: { day: Day; layer: LayerKey; hasE
 
   if (!text) return null;
   return (
-    <Text variant="caption" color={palette.muted} tabular align="center" style={{ fontSize: 11.5 }}>
+    <Text
+      variant="caption"
+      color={palette.muted}
+      tabular
+      align="center"
+      numberOfLines={1}
+      style={{ fontSize: 11.5 }}
+    >
       {text}
     </Text>
   );
@@ -393,7 +400,13 @@ function TrailingValue({
             suffix=" u"
             color={palette.valSun}
           />
-          <Text variant="caption" color={palette.agroBright} tabular style={{ fontSize: 11 }}>
+          <Text
+            variant="caption"
+            color={palette.agroBright}
+            tabular
+            numberOfLines={1}
+            style={{ fontSize: 11 }}
+          >
             {v.et0 != null ? `${fmtMm(v.et0)} mm` : '—'}
           </Text>
         </View>
@@ -422,50 +435,29 @@ function Value({
   align?: 'right';
 }) {
   const { palette } = useTheme();
-  const wrap = {
-    width,
-    flexDirection: 'row' as const,
-    alignItems: 'baseline' as const,
-    justifyContent: align === 'right' ? ('flex-end' as const) : ('flex-start' as const),
-  };
-
-  if (value == null) {
-    return (
-      <View style={wrap}>
-        <Text variant="label" color={palette.inkDisabled} tabular>
-          —
-        </Text>
-      </View>
-    );
-  }
+  // One text node with the unit nested, not a row of two: a row of two is two
+  // shrinkable boxes, and a narrow column squeezes both until each wraps on its own.
   return (
-    <View style={wrap}>
-      <Text
-        variant="bodySm"
-        weight="bold"
-        color={color}
-        tabular
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.85}
-      >
-        {value}
-      </Text>
-      {suffix ? (
+    <Text
+      variant="bodySm"
+      weight="bold"
+      color={value == null ? palette.inkDisabled : color}
+      tabular
+      numberOfLines={1}
+      align={align === 'right' ? 'right' : undefined}
+      style={{ width }}
+    >
+      {value ?? '—'}
+      {value != null && suffix ? (
         <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 11 }}>
           {suffix}
         </Text>
       ) : null}
-      {approx ? (
-        <Text
-          variant="caption"
-          color={palette.muted}
-          style={{ fontSize: 9, opacity: 0.55 }}
-          accessibilityLabel="ensemblemediaan"
-        >
+      {value != null && approx ? (
+        <Text variant="caption" color={palette.muted} style={{ fontSize: 9 }}>
           ~
         </Text>
       ) : null}
-    </View>
+    </Text>
   );
 }

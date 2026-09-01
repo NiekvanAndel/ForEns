@@ -14,8 +14,13 @@
  * which is why the columns are proportional rather than fixed widths. The same row
  * has to fit inside a card on 'Nu' and the full page width on 'Verwachting', and
  * fixed widths sized for the second overflowed the first: "2,8 mm" wrapped onto
- * three lines and the column alignment went with it. Every cell is one line, and the
- * numbers shrink a step before they would ever wrap.
+ * three lines and the column alignment went with it.
+ *
+ * Each reading is one `Text` node with its unit nested inside, not a flex row of two.
+ * A row of two is two independently shrinkable boxes, and a narrow column squeezes
+ * both until each wraps on its own — which is how "2,8 mm" became "2," / "8" / "m" /
+ * "m". Nested text has no inner layout to squeeze: it is a single line box that
+ * cannot break, whatever width it is given.
  */
 import { View, Pressable } from 'react-native';
 import { radius, useTheme } from '../../theme';
@@ -79,7 +84,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
       {/* Minimum and maximum, low colour then high — the pair reads as one range. */}
       <View
         style={{
-          flex: 3, flexDirection: 'row', alignItems: 'baseline',
+          flex: 3, minWidth: 62, flexDirection: 'row', alignItems: 'baseline',
           justifyContent: 'flex-end', gap: 6,
         }}
       >
@@ -99,7 +104,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
 
       <View
         style={{
-          flex: 2.4, flexDirection: 'row', alignItems: 'center',
+          flex: 2.4, minWidth: 48, flexDirection: 'row', alignItems: 'center',
           justifyContent: 'flex-end', gap: 3,
         }}
       >
@@ -112,7 +117,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
         />
       </View>
 
-      <View style={{ flex: 2.6, flexDirection: 'row', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 2.6, minWidth: 54, flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Reading
           value={v.precip.value != null ? fmtMm(v.precip.value) : null}
           suffix=" mm"
@@ -121,7 +126,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
         />
       </View>
 
-      <View style={{ flex: 2, flexDirection: 'row', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 2, minWidth: 44, flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Reading
           value={v.sunHours != null ? v.sunHours.toFixed(1).replace('.', ',') : null}
           suffix=" u"
@@ -149,7 +154,8 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
   );
 }
 
-/** One number, with the `~` the web app uses to mark an ensemble stand-in. */
+/** One number, with its unit and the `~` the web app uses to mark an ensemble
+ *  stand-in — all in one text node, so nothing inside it can be squeezed apart. */
 function Reading({
   value, suffix, color, approx, small,
 }: {
@@ -162,47 +168,31 @@ function Reading({
   const { palette } = useTheme();
   if (value == null) {
     return (
-      <Text variant="label" color={palette.inkDisabled} tabular>
+      <Text variant="bodySm" color={palette.inkDisabled} tabular numberOfLines={1}>
         —
       </Text>
     );
   }
   return (
-    // Never wraps: the unit belongs beside its number, not under it.
-    <View style={{ flexDirection: 'row', alignItems: 'baseline', flexShrink: 1 }}>
-      <Text
-        variant="bodySm"
-        weight="bold"
-        color={color}
-        tabular
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.85}
-        style={small ? { fontSize: 14 } : undefined}
-      >
-        {value}
-      </Text>
+    <Text
+      variant="bodySm"
+      weight="bold"
+      color={color}
+      tabular
+      numberOfLines={1}
+      style={small ? { fontSize: 14 } : undefined}
+    >
+      {value}
       {suffix ? (
-        <Text
-          variant="caption"
-          weight="semibold"
-          color={palette.muted}
-          numberOfLines={1}
-          style={{ fontSize: 11 }}
-        >
+        <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 11 }}>
           {suffix}
         </Text>
       ) : null}
       {approx ? (
-        <Text
-          variant="caption"
-          color={palette.muted}
-          style={{ fontSize: 9, opacity: 0.55 }}
-          accessibilityLabel="ensemblemediaan"
-        >
+        <Text variant="caption" color={palette.muted} style={{ fontSize: 9 }}>
           ~
         </Text>
       ) : null}
-    </View>
+    </Text>
   );
 }
