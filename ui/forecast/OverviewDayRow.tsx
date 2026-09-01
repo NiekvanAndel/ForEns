@@ -22,11 +22,11 @@
  * "m". Nested text has no inner layout to squeeze: it is a single line box that
  * cannot break, whatever width it is given.
  *
- * Wind sits under the temperatures rather than in a column of its own. Five columns
- * across a phone left the widest reading — "2,8 mm", value and unit together — the
- * least room of any of them. Wind is the shortest and pairs naturally with the
- * temperatures as "what the air is doing", so it stacks there and precipitation
- * takes the width it gave up.
+ * The columns run left to right in the order the web app used: day, condition,
+ * temperature, wind, precipitation, sunshine. Wind was briefly stacked under the
+ * temperatures to buy precipitation room, back when precipitation was wrapping —
+ * but the wrapping had a different cause, and one flat row of columns is easier to
+ * read down than a row with one two-storey cell in it.
  */
 import { View, Pressable } from 'react-native';
 import { radius, useTheme } from '../../theme';
@@ -87,36 +87,44 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
 
       <WeatherIcon wmo={v.wmo ?? day.wmo} isDay={1} size={26} />
 
-      {/* Temperature over wind: the two things the air is doing, in one column. */}
-      <View style={{ flex: 3.4, minWidth: 72, alignItems: 'flex-end', gap: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-          <Reading
-            value={convTemp(v.tempMin.value, prefs.tempUnit)}
-            suffix="°"
-            color={palette.valLow}
-            approx={!v.tempMin.direct}
-          />
-          <Reading
-            value={convTemp(v.tempMax.value, prefs.tempUnit)}
-            suffix="°"
-            color={palette.valHigh}
-            approx={!v.tempMax.direct}
-          />
-        </View>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-          <WindArrow deg={v.windDir} size={10} color={palette.muted} />
-          <Reading
-            value={convWind(v.wind.value, prefs.windUnit)}
-            suffix={` ${windUnitLabel(prefs.windUnit)}`}
-            color={palette.muted}
-            approx={!v.wind.direct}
-            small
-          />
-        </View>
+      {/* Minimum and maximum, low colour then high — the pair reads as one range. */}
+      <View
+        style={{
+          flex: 3, minWidth: 58, flexDirection: 'row', alignItems: 'baseline',
+          justifyContent: 'flex-end', gap: 6,
+        }}
+      >
+        <Reading
+          value={convTemp(v.tempMin.value, prefs.tempUnit)}
+          suffix="°"
+          color={palette.valLow}
+          approx={!v.tempMin.direct}
+        />
+        <Reading
+          value={convTemp(v.tempMax.value, prefs.tempUnit)}
+          suffix="°"
+          color={palette.valHigh}
+          approx={!v.tempMax.direct}
+        />
       </View>
 
-      <View style={{ flex: 3, minWidth: 62, flexDirection: 'row', justifyContent: 'flex-end' }}>
+      <View
+        style={{
+          flex: 2.6, minWidth: 52, flexDirection: 'row', alignItems: 'center',
+          justifyContent: 'flex-end', gap: 3,
+        }}
+      >
+        <WindArrow deg={v.windDir} size={11} color={palette.muted} />
+        <Reading
+          value={convWind(v.wind.value, prefs.windUnit)}
+          suffix={` ${windUnitLabel(prefs.windUnit)}`}
+          color={palette.muted}
+          approx={!v.wind.direct}
+          small
+        />
+      </View>
+
+      <View style={{ flex: 3, minWidth: 56, flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Reading
           value={v.precip.value != null ? fmtMm(v.precip.value) : null}
           suffix=" mm"
@@ -125,7 +133,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
         />
       </View>
 
-      <View style={{ flex: 2.2, minWidth: 48, flexDirection: 'row', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 2.2, minWidth: 42, flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Reading
           value={v.sunHours != null ? v.sunHours.toFixed(1).replace('.', ',') : null}
           suffix=" u"
@@ -183,7 +191,12 @@ function Reading({
     >
       {value}
       {suffix ? (
-        <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 11 }}>
+        <Text
+          variant="caption"
+          weight="semibold"
+          color={palette.muted}
+          style={{ fontSize: small ? 10 : 11 }}
+        >
           {suffix}
         </Text>
       ) : null}
