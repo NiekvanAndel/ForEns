@@ -6,14 +6,14 @@
     "orientation": "portrait",
     "scheme": "exactcast",
     "userInterfaceStyle": "automatic",
-    "icon": "./assets/icon.png",
+    "icon": "./logos/exactcast-icon-radar-light.png",
     "newArchEnabled": true,
     "platforms": ["ios"],
     "ios": {
       "bundleIdentifier": "com.agroexact.exactcast",
       "icon": {
-        "light": "./assets/icon.png",
-        "dark": "./assets/icon-dark.png"
+        "light": "./logos/exactcast-icon-radar-light.png",
+        "dark": "./logos/exactcast-icon-radar.png"
       },
       "supportsTablet": false,
       "requireFullScreen": false,

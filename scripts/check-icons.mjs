@@ -21,9 +21,18 @@ const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0
 const ALPHA_COLOUR_TYPES = new Set([4, 6]);
 
 const ICONS = [
-  { path: 'assets/icon.png', required: true, label: 'app icon', alpha: 'forbidden' },
-  { path: 'assets/icon-dark.png', required: false, label: 'dark app icon', alpha: 'any' },
-  { path: 'assets/icon-tinted.png', required: false, label: 'tinted app icon', alpha: 'any' },
+  {
+    path: 'logos/exactcast-icon-radar-light.png',
+    required: true,
+    label: 'default app icon',
+    alpha: 'forbidden',
+  },
+  {
+    path: 'logos/exactcast-icon-radar.png',
+    required: false,
+    label: 'dark app icon',
+    alpha: 'any',
+  },
 ];
 
 function inspect(file) {

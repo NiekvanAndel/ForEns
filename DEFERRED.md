@@ -28,7 +28,7 @@ plumbing and tests all remain, so re-exposing one means restoring its rows in
 | **Meldingen** (rain / wind / frost / quiet hours) | `core/notifications.ts`, `core/backgroundTask.ts` | To be worked out later — see the push limitation below |
 | **Korte termijn: Nowcast / Radar** | `prefs.shortModel` | Needs a second 0–2h source to choose between |
 | **AgroExact integration** | `core/sources/agroexact.ts`, `state/stations.ts` | To be done later |
-| ~~App and widget icon~~ | ~~—~~ | **Done** — see `assets/README.md` |
+| ~~App and widget icon~~ | ~~—~~ | **Done** — see `logos/README.md` |
 
 The background task still runs and still keeps the widget current; it simply
 schedules no notifications while every notify preference is off, which is the
@@ -75,9 +75,9 @@ Two options when this is picked up:
 
 ### Splash screen
 
-`app.json` sets none, so Expo's default applies. `assets/README.md` carries the
-config to paste in when a splash asset exists; the two background colours are
-already chosen to match the app's own grounds.
+`app.json` sets none, so Expo's default applies. `logos/README.md` carries the
+config to paste in, using the icons already there; the two background colours match
+the app's own grounds.
 
 ### GFS and "Mix" — resolved: not wanted
 

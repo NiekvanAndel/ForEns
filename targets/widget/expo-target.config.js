@@ -11,7 +11,7 @@ module.exports = {
   name: 'ExactCast',
   // The widget shares the app's icon. It only appears in the widget gallery, where
   // a mark distinct from the app's would make the widget harder to find, not easier.
-  icon: '../../assets/icon.png',
+  icon: '../../logos/exactcast-icon-radar-light.png',
   colors: {
     // Referenced from Swift as Color("WidgetBackground"), so the widget picks up
     // the design system's cream and navy without hard-coding hex in two places.
