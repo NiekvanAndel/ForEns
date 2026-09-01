@@ -24,6 +24,7 @@
  * legibility would have been a poor trade for a page that is one long column of
  * numbers.
  */
+import type { ReactNode } from 'react';
 import { View, Pressable } from 'react-native';
 import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
@@ -217,21 +218,46 @@ function Bar({ fraction, color }: { fraction: number; color: string }) {
   );
 }
 
-/** The members' range in words under the beam — the number the band is showing. */
+/**
+ * The members' range in words under the beam — the numbers the bands are showing.
+ *
+ * Temperature gets two of them. Its beam has always drawn two bands on one axis,
+ * one for the night's minimum and one for the day's maximum, and a single caption
+ * running from the coldest minimum to the warmest maximum described neither: it
+ * spanned the gap between the bands, which no member ever occupies. The minimum's
+ * spread and the maximum's spread are separate questions — how cold does it get,
+ * how warm does it get — so they are separate numbers, placed under their own bands
+ * and in their own colours.
+ */
 function SpreadCaption({ day, layer, hasEns }: { day: Day; layer: LayerKey; hasEns: boolean }) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
 
+  if (layer === 'sun') return null;
+
+  if (layer === 'temp') {
+    if (!hasEns) return <Caption>—</Caption>;
+    const t = (v: unknown) => convTemp(v as number, prefs.tempUnit);
+    return (
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        <Caption color={palette.valLow}>
+          {t(day.tempMinP10)}–{t(day.tempMinP90)}°
+        </Caption>
+        <Caption color={palette.valHigh}>
+          {t(day.tempMaxP10)}–{t(day.tempMaxP90)}°
+        </Caption>
+      </View>
+    );
+  }
+
+  if (!hasEns) return <Caption>—</Caption>;
+
   const text = (() => {
-    if (layer === 'sun') return null;
-    if (!hasEns) return '—';
     switch (layer) {
       case 'precip':
         return day.precipP10 === 0 && day.precipP90 === 0
           ? '0 mm'
           : `${fmtMm(day.precipP10)}–${fmtMm(day.precipP90)} mm`;
-      case 'temp':
-        return `${convTemp(day.tempMinP10, prefs.tempUnit)}–${convTemp(day.tempMaxP90, prefs.tempUnit)}°`;
       case 'wind':
         return `${convWind(day.windP10, prefs.windUnit)}–${convWind(day.windP90, prefs.windUnit)} ${windUnitLabel(prefs.windUnit)}`;
       case 'humidity':
@@ -244,16 +270,23 @@ function SpreadCaption({ day, layer, hasEns }: { day: Day; layer: LayerKey; hasE
   })();
 
   if (!text) return null;
+  return <Caption align="center">{text}</Caption>;
+}
+
+function Caption({
+  children, color, align,
+}: { children: ReactNode; color?: string; align?: 'center' }) {
+  const { palette } = useTheme();
   return (
     <Text
       variant="caption"
-      color={palette.muted}
+      color={color ?? palette.muted}
       tabular
-      align="center"
+      align={align}
       numberOfLines={1}
       style={{ fontSize: 11.5 }}
     >
-      {text}
+      {children}
     </Text>
   );
 }
