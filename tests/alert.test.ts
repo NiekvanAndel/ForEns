@@ -35,6 +35,7 @@ function profile(over: Partial<NowcastProfile> = {}): NowcastProfile {
       { offsetMin: 60, mmPerHour: 4, height: 53 },
       { offsetMin: 120, mmPerHour: 0, height: 4 },
     ],
+    series: [],
     totalMm: 1.5, confidence: 80, startsInMin: 30, wet: true,
     ...over,
   };

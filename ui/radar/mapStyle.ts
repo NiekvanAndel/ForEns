@@ -26,6 +26,16 @@
  * map is clamped at *both* ends — `MIN_ZOOM` because the whole-world levels are the
  * ones most likely to be missing, `maxZoomFor` a little past the native maximum —
  * and every starting region is chosen to sit inside that band.
+ *
+ * ## Why the map is told the tile size
+ *
+ * MapKit chooses which zoom level to fetch from the tile size it is given, not from
+ * the zoom the map is displaying. Told 256, it asks for roughly two levels deeper on
+ * a 3× screen — which is how a view of the whole country still managed to request
+ * tiles past what RainViewer publishes and get its "zoom level not supported"
+ * placeholder back, drawn across the map as if it were weather. The provider now
+ * declares its tile size and serves retina tiles, so the level requested is close to
+ * the level shown.
  */
 import type { Appearance, Palette } from '../../theme';
 
@@ -41,9 +51,10 @@ export const maxZoomFor = (providerMaxZoom: number) => providerMaxZoom + 2;
  *  providers commonly do not serve at all. */
 export const MIN_ZOOM = 4;
 
-/** The region a radar map opens on, in degrees. Around zoom 7 on a phone: the
- *  country and the weather heading for it, comfortably inside the tile range. */
-export const START_SPAN_DEG = 2.6;
+/** The region a radar map opens on, in degrees. Around zoom 6–7 on a phone: the
+ *  country and the weather heading for it, and far enough out that even a 3× screen
+ *  asking for deeper tiles than it draws stays inside what the provider serves. */
+export const START_SPAN_DEG = 3.4;
 
 export interface MapChrome {
   /** Background for anything floating on the map. */

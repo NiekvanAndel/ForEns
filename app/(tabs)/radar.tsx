@@ -79,11 +79,9 @@ export default function RadarScreen() {
   );
 
   // One axis for the chart and the scrubber, so the cursor and the thumb move
-  // together. See `radarAxis`.
-  const profileEnd = nowcast?.bars.length
-    ? nowcast.bars[nowcast.bars.length - 1]!.offsetMin
-    : null;
-  const axis = radarAxis(frames, profileEnd);
+  // together, and it spans the frames alone so the curve covers what the map can
+  // actually show. See `radarAxis`.
+  const axis = radarAxis(frames);
   const offsetMin = frames[index]
     ? Math.round((frames[index]!.timeMs - Date.now()) / 60_000)
     : 0;

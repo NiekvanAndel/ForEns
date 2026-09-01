@@ -165,6 +165,7 @@ export function RadarPreview({
                 key={frame.id}
                 urlTemplate={provider.tileTemplate({ frame })}
                 maximumZ={provider.maxZoom}
+                tileSize={provider.tileSize}
                 zIndex={1}
                 opacity={0.75}
               />

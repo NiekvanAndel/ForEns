@@ -51,7 +51,19 @@ export interface NowcastBar {
 }
 
 export interface NowcastProfile {
+  /** The four bars the design's alert hero draws: now, +30, +60, +2h. */
   bars: NowcastBar[];
+  /**
+   * The full quarter-hourly series, including the two hours already past.
+   *
+   * The radar chart draws this rather than `bars`. The radar loop is mostly
+   * observation — RainViewer publishes about two hours of it and, depending on the
+   * region, no forecast frames at all — so a curve that began at "now" left the
+   * chart empty over exactly the window the map was showing. Four forward bars are
+   * the right shape for a hero; the chart wants every sample it can get, on both
+   * sides of now.
+   */
+  series: NowcastBar[];
   /** Total expected precipitation over the window, mm. */
   totalMm: number;
   /** Provider confidence, 0–100, shown on the Radar screen. */
@@ -69,8 +81,20 @@ export interface RadarProvider {
   readonly label: string;
   /** Attribution the UI must display, where the provider requires it. */
   readonly attribution?: string;
-  /** Maximum sensible zoom for this provider's tiles. */
+  /** Maximum sensible zoom for this provider's tiles. Past it the map upscales the
+   *  deepest tiles rather than asking for a level the provider would refuse. */
   readonly maxZoom: number;
+
+  /**
+   * The pixel size of one tile, 256 or 512.
+   *
+   * The map needs it as well as the URL. MapKit picks the zoom level to fetch from
+   * the tile size it is told: at 256 on a 3× screen it asks for levels around two
+   * deeper than the map is showing, which is how a country-wide view ended up
+   * requesting tiles past the provider's maximum and getting its "zoom level not
+   * supported" placeholder back.
+   */
+  readonly tileSize: number;
 
   /** Available frames, newest observation last. */
   listFrames(signal?: AbortSignal): Promise<RadarFrames>;

@@ -27,6 +27,13 @@ import type { AgroStation } from '../../core/sources/agroexact';
 const MIN_SPAN_DEG = 0.05;
 const MAX_SPAN_DEG = 24;
 
+/** Everything floating on the map is this tall, so the time badge, the zoom
+ *  buttons and the full-screen back button sit on one line. */
+export const MAP_CHROME_SIZE = 36;
+/** How far the chrome is inset from the map's corners on a card. Full screen passes
+ *  its own, because the top of the map there is under the status bar. */
+const CHROME_INSET = 14;
+
 export interface RadarMapProps {
   lat: number;
   lon: number;
@@ -40,12 +47,17 @@ export interface RadarMapProps {
   /** The pin legend. Off by default: with one pin on the map, a caption naming it
    *  spends a corner of the map explaining a dot that needs no explaining. */
   showLegend?: boolean;
+  /** How far down the floating chrome starts. Full screen passes the safe-area
+   *  inset, so the time badge clears the clock and the battery rather than sitting
+   *  behind them. */
+  chromeTop?: number;
   style?: object;
 }
 
 export function RadarMap({
   lat, lon, frames, activeIndex, stations, timeLabel,
-  interactive = true, showControls = true, showLegend = false, style,
+  interactive = true, showControls = true, showLegend = false,
+  chromeTop = CHROME_INSET, style,
 }: RadarMapProps) {
   const { palette, appearance } = useTheme();
   const provider = activeProvider();
@@ -112,6 +124,7 @@ export function RadarMap({
             urlTemplate={provider.tileTemplate({ frame: active })}
             maximumNativeZ={provider.maxZoom}
             maximumZ={MAX_DISPLAY_Z}
+            tileSize={provider.tileSize}
             zIndex={1}
             opacity={0.75}
           />
@@ -150,10 +163,11 @@ export function RadarMap({
       <View
         style={[
           {
-            position: 'absolute', right: 14, top: 14,
+            position: 'absolute', right: CHROME_INSET, top: chromeTop,
+            height: MAP_CHROME_SIZE, justifyContent: 'center',
             backgroundColor: chromeBg,
             borderRadius: radius.pill,
-            paddingVertical: 8, paddingHorizontal: space[4],
+            paddingHorizontal: space[4],
           },
           shadowFloat,
         ]}
@@ -164,7 +178,7 @@ export function RadarMap({
       </View>
 
       {showControls ? (
-        <View style={{ position: 'absolute', left: 14, top: 14, gap: space[2] }}>
+        <View style={{ position: 'absolute', left: CHROME_INSET, top: chromeTop, gap: space[2] }}>
           <ControlButton icon="plus" label="Inzoomen" bg={chromeBg} ink={chromeInk} onPress={() => zoom(0.5)} />
           <ControlButton icon="minus" label="Uitzoomen" bg={chromeBg} ink={chromeInk} onPress={() => zoom(2)} />
           <ControlButton icon="crosshair" label="Terug naar mijn locatie" bg={chromeBg} ink={chromeInk} onPress={recentre} />
@@ -175,7 +189,7 @@ export function RadarMap({
         <View
           style={[
             {
-              position: 'absolute', left: 14, bottom: 14,
+              position: 'absolute', left: CHROME_INSET, bottom: CHROME_INSET,
               backgroundColor: chromeBg,
               borderRadius: radius.tile,
               paddingVertical: 9, paddingHorizontal: 13,
@@ -209,7 +223,7 @@ function ControlButton({
       accessibilityLabel={label}
       style={[
         {
-          width: 36, height: 36, borderRadius: radius.tile,
+          width: MAP_CHROME_SIZE, height: MAP_CHROME_SIZE, borderRadius: radius.tile,
           backgroundColor: bg,
           alignItems: 'center', justifyContent: 'center',
         },

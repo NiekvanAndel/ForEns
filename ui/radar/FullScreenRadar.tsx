@@ -23,7 +23,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { duration, radius, shadowFloat, space, useTheme } from '../../theme';
 import { Icon } from '../Icon';
-import { RadarMap } from './RadarMap';
+import { RadarMap, MAP_CHROME_SIZE } from './RadarMap';
 import { Timeline } from './Timeline';
 import { NowcastPanel } from './NowcastPanel';
 import { mapChrome } from './mapStyle';
@@ -93,10 +93,7 @@ export function FullScreenRadar({
   // its headline intensity are pinned to.
   const offsetMin = active ? Math.round((active.timeMs - Date.now()) / 60_000) : 0;
   // One axis for the chart and the scrubber, exactly as on the radar page.
-  const profileEnd = profile?.bars.length
-    ? profile.bars[profile.bars.length - 1]!.offsetMin
-    : null;
-  const axis = radarAxis(frames, profileEnd);
+  const axis = radarAxis(frames);
 
   const scrubTo = (fraction: number) => {
     if (!axis) return;
@@ -124,6 +121,9 @@ export function FullScreenRadar({
             stations={stations}
             timeLabel={frameClock(active)}
             showControls={false}
+            // The map runs under the status bar here, so its chrome starts below
+            // the safe area: the time badge used to sit behind the battery.
+            chromeTop={insets.top + space[2]}
             style={{ flex: 1, borderRadius: 0 }}
           />
 
@@ -134,8 +134,10 @@ export function FullScreenRadar({
             hitSlop={10}
             style={[
               {
-                position: 'absolute', left: space[5], top: insets.top + space[3],
-                width: 42, height: 42, borderRadius: radius.pill,
+                // Same line as the time badge on the right, and the same height,
+                // so the two read as one row of chrome across the top.
+                position: 'absolute', left: 14, top: insets.top + space[2],
+                width: MAP_CHROME_SIZE, height: MAP_CHROME_SIZE, borderRadius: radius.pill,
                 backgroundColor: chrome.bg,
                 alignItems: 'center', justifyContent: 'center',
               },

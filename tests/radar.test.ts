@@ -58,6 +58,50 @@ describe('buildProfile', () => {
     expect(p.startsInMin).toBeNull();
   });
 
+  it('keeps the whole series, so the radar chart covers the observed frames too', () => {
+    // Two past quarter-hours then now onwards, with the timestamps Open-Meteo
+    // returns for `past_minutely_15` — local times, and a separate UTC offset.
+    const NOW = Date.parse('2026-06-15T12:00:00Z');
+    const p = buildProfile(
+      {
+        minutely_15: {
+          time: [
+            '2026-06-15T13:30', '2026-06-15T13:45',
+            '2026-06-15T14:00', '2026-06-15T14:15', '2026-06-15T14:30',
+          ],
+          precipitation: [1.0, 0.5, 0, 0.25, 0],
+        },
+        utc_offset_seconds: 7200,
+      },
+      NOW
+    );
+    expect(p.series.map((b) => b.offsetMin)).toEqual([-30, -15, 0, 15, 30]);
+    expect(p.series.map((b) => b.mmPerHour)).toEqual([4, 2, 0, 1, 0]);
+  });
+
+  it('measures the forward window from now, not from the start of the series', () => {
+    // The past samples are the wettest ones. Counting them would put the total and
+    // the "rain starts in" on the wrong side of the present.
+    const NOW = Date.parse('2026-06-15T12:00:00Z');
+    const p = buildProfile(
+      {
+        minutely_15: {
+          time: [
+            '2026-06-15T11:30', '2026-06-15T11:45',
+            '2026-06-15T12:00', '2026-06-15T12:15', '2026-06-15T12:30',
+          ],
+          precipitation: [3.0, 3.0, 0, 0, 0.4],
+        },
+        utc_offset_seconds: 0,
+      },
+      NOW
+    );
+    expect(p.totalMm).toBe(0.4);
+    expect(p.startsInMin).toBe(30);
+    // The hero's bars still read forward from now.
+    expect(p.bars.map((b) => b.mmPerHour)).toEqual([0, 1.6, 0, 0]);
+  });
+
   it('clamps bar heights and survives nulls and a short series', () => {
     const p = buildProfile({ minutely_15: { precipitation: [50, null, 3] } });
     expect(p.bars[0]!.height).toBe(100);
@@ -75,23 +119,29 @@ describe('buildProfile', () => {
 
 describe('RainViewerProvider.tileUrl', () => {
   const provider = new RainViewerProvider();
+
+  it('asks for retina tiles by default, so the map does not over-fetch depth', () => {
+    // At 256 MapKit picks a zoom level around two deeper than the map is drawing,
+    // which is how a country-wide view reached past what RainViewer serves.
+    expect(provider.tileSize).toBe(512);
+  });
   const frame = { timeMs: 1_700_000_000_000, forecast: false, id: 'https://tiles.rainviewer.com/v2/radar/1700000000' };
 
   it('builds a tile URL from the frame handle', () => {
     expect(provider.tileUrl({ frame, z: 8, x: 131, y: 84 })).toBe(
-      'https://tiles.rainviewer.com/v2/radar/1700000000/256/8/131/84/2/1_1.png'
+      'https://tiles.rainviewer.com/v2/radar/1700000000/512/8/131/84/2/1_1.png'
     );
   });
 
   it('honours per-call scheme and smoothing overrides', () => {
     expect(provider.tileUrl({ frame, z: 8, x: 131, y: 84, scheme: 4, smooth: false })).toBe(
-      'https://tiles.rainviewer.com/v2/radar/1700000000/256/8/131/84/4/0_1.png'
+      'https://tiles.rainviewer.com/v2/radar/1700000000/512/8/131/84/4/0_1.png'
     );
   });
 
   it('expresses the same URL as a z/x/y template for map components', () => {
     expect(provider.tileTemplate({ frame })).toBe(
-      'https://tiles.rainviewer.com/v2/radar/1700000000/256/{z}/{x}/{y}/2/1_1.png'
+      'https://tiles.rainviewer.com/v2/radar/1700000000/512/{z}/{x}/{y}/2/1_1.png'
     );
     // The template must agree with the concrete URL it stands in for.
     const filled = provider.tileTemplate({ frame })
@@ -117,11 +167,12 @@ describe('provider registry', () => {
       id: 'exactcast',
       label: 'ExactCast AI nowcast',
       maxZoom: 14,
+      tileSize: 512,
       listFrames: async () => ({ past: [], forecast: [] }),
       tileUrl: ({ z, x, y }) => `https://example.invalid/${z}/${x}/${y}.png`,
       tileTemplate: () => 'https://example.invalid/{z}/{x}/{y}.png',
       nowcastProfile: async () => ({
-        bars: [], totalMm: 0, confidence: 99, startsInMin: null, wet: false,
+        bars: [], series: [], totalMm: 0, confidence: 99, startsInMin: null, wet: false,
       }),
     };
     registerProvider(stub);
@@ -183,31 +234,33 @@ describe('radarAxis', () => {
   const at = (min: number) => ({ id: `f${min}`, timeMs: NOW + min * 60_000, forecast: false });
   const NOW = 1_800_000_000_000;
 
-  it('spans the frames and the profile together, so one axis serves both', () => {
-    // The bug this prevents: frames run into the past, the profile into the future,
-    // and a cursor on one axis cannot track a thumb on the other.
-    const axis = radarAxis([at(-120), at(-60), at(0)], 120, NOW)!;
+  it('spans the frames, so the axis covers exactly what the map can show', () => {
+    // The bug this prevents: the axis was widened to the end of the nowcast
+    // profile, so with a past-only provider the chart ran two hours past the last
+    // radar picture and the thumb hit the right edge halfway through its travel.
+    const axis = radarAxis([at(-120), at(-60), at(0)], NOW)!;
     expect(axis.from).toBe(-120);
-    expect(axis.to).toBe(120);
+    expect(axis.to).toBe(0);
   });
 
   it('places each frame by time, not by index', () => {
-    const axis = radarAxis([at(-120), at(-60), at(0)], 120, NOW)!;
-    expect(axis.positions).toEqual([0, 0.25, 0.5]);
+    // Uneven spacing: by index the middle frame would sit at 0.5.
+    const axis = radarAxis([at(-120), at(-90), at(0)], NOW)!;
+    expect(axis.positions).toEqual([0, 0.25, 1]);
   });
 
-  it('falls back to the frames alone when there is no profile', () => {
-    const axis = radarAxis([at(-60), at(0)], null, NOW)!;
-    expect(axis.to).toBe(0);
-    expect(axis.positions).toEqual([0, 1]);
+  it('reaches into the future when the provider has forecast frames', () => {
+    const axis = radarAxis([at(-60), at(0), at(30)], NOW)!;
+    expect(axis.to).toBe(30);
+    expect(axis.positions).toEqual([0, 2 / 3, 1]);
   });
 
   it('has nothing to say without frames', () => {
-    expect(radarAxis([], 120, NOW)).toBeNull();
+    expect(radarAxis([], NOW)).toBeNull();
   });
 
   it('survives a single frame without dividing by zero', () => {
-    const axis = radarAxis([at(0)], 0, NOW)!;
+    const axis = radarAxis([at(0)], NOW)!;
     expect(axis.positions).toEqual([0]);
   });
 });

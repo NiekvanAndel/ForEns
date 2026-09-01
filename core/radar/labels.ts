@@ -61,10 +61,16 @@ export function intensityAt(
 /**
  * The one time axis the radar page reads.
  *
- * The loop and the profile cover different spans — RainViewer's frames run about two
- * hours back, the nowcast two hours forward — and drawing each against its own axis
- * is what left the chart's cursor pinned to the left edge while the slider moved.
- * So both take this: the union of the two, plus where each frame falls within it.
+ * The chart and the scrubber are drawn against this, which is what makes the
+ * cursor and the thumb move as one — drawn against their own spans they could not,
+ * and the cursor sat against the left edge whatever the scrubber did.
+ *
+ * The axis is the frames' own extent and nothing more. It used to be widened to the
+ * end of the nowcast profile, so that with a past-only provider the chart drew two
+ * hours of forecast over a map that had no frames there at all: the curve ran on
+ * past the last picture, and the thumb reached the right-hand edge halfway through
+ * its travel. What the map can show is what the axis covers; the profile is clipped
+ * to it rather than the other way round.
  */
 export interface RadarAxis {
   /** Minutes from now at the left edge. */
@@ -77,15 +83,12 @@ export interface RadarAxis {
 
 export function radarAxis(
   frames: readonly RadarFrame[],
-  profileEndMin: number | null,
   nowMs: number = Date.now()
 ): RadarAxis | null {
   if (!frames.length) return null;
   const offsets = frames.map((f) => Math.round((f.timeMs - nowMs) / 60_000));
   const from = Math.min(...offsets);
-  // The profile reaches past the last frame; without it the curve would be drawn
-  // off the right-hand edge of its own axis.
-  const to = Math.max(...offsets, profileEndMin ?? -Infinity);
+  const to = Math.max(...offsets);
   const span = Math.max(1, to - from);
   return { from, to, positions: offsets.map((o) => (o - from) / span) };
 }
