@@ -13,11 +13,12 @@
  * Colour is by appearance, and this is the part worth explaining. SF Symbols'
  * multicolour rendering draws the cloud layer white, which is right on navy and
  * nearly invisible on cream. On light the glyphs therefore use `palette` rendering
- * instead: one consistent light grey for every cloud, and the symbol's own second
- * layer keeping sun yellow, rain blue, snow pale and lightning amber. Overcast and
- * fog have no second layer, so they are that same grey throughout — which is what
- * makes a row of mixed conditions read as one set rather than as one dark glyph
- * among lighter ones.
+ * instead: one consistent grey for every cloud, with sun yellow, rain blue, snow
+ * pale and lightning amber — so a row of mixed conditions reads as one set.
+ *
+ * Which layer gets which colour comes from `symbolLayers`, because it varies by
+ * symbol. `cloud.sun.fill` leads with a cloud; `sun.max.fill` is a sun on its own.
+ * Colouring layer one grey regardless is what briefly put out the sun on clear days.
  *
  * The same mapping drives the SwiftUI widget, so the two cannot disagree.
  */
@@ -25,8 +26,8 @@ import { SymbolView } from 'expo-symbols';
 import { Platform } from 'react-native';
 import { useTheme } from '../theme';
 import {
-  symbolAccent, symbolIsMulticolor, wmoCondition, wmoSymbol,
-  type ConditionKey, type SymbolAccent,
+  symbolIsMulticolor, symbolLayers, wmoCondition, wmoSymbol,
+  type ConditionKey, type LayerRole,
 } from '../core/model/conditions';
 import { Icon } from './Icon';
 
@@ -93,7 +94,7 @@ export function WeatherIcon({ wmo = 3, isDay = 1, size = 34, color }: WeatherIco
   const paletteMode = !forced && !multicolor && symbolIsMulticolor(code);
 
   const layers = paletteMode
-    ? [cloud, accentColor(symbolAccent(code), palette, cloud)]
+    ? symbolLayers(code, day).map((role) => layerColor(role, palette, cloud))
     : undefined;
 
   return (
@@ -118,24 +119,25 @@ export function WeatherIcon({ wmo = 3, isDay = 1, size = 34, color }: WeatherIco
   );
 }
 
-/** The second layer's colour: what is falling, or the sun behind the cloud. */
-function accentColor(
-  accent: SymbolAccent,
+/** One layer's colour, by what it depicts. */
+function layerColor(
+  role: LayerRole,
   palette: ReturnType<typeof useTheme>['palette'],
   cloud: string
 ): string {
-  switch (accent) {
+  switch (role) {
+    case 'cloud':
+      return cloud;
     case 'sun':
       return palette.valSun;
+    // Warmer than the cloud it sits behind, so a night glyph is not two greys.
+    case 'moon':
+      return palette.skySoft;
     case 'precip':
       return palette.sky;
     case 'snow':
       return palette.skySoft;
     case 'storm':
       return palette.valTemp;
-    // Overcast and fog have no second layer; giving it the cloud grey keeps the
-    // glyph one flat colour rather than letting a stray layer pick up a tint.
-    case 'none':
-      return cloud;
   }
 }

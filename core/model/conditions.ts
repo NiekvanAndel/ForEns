@@ -93,36 +93,55 @@ export function symbolIsMulticolor(code: number): boolean {
 }
 
 /**
- * Which accent an SF Symbol's second layer wants, so a palette rendering can keep
- * the cloud one consistent grey while sun stays yellow and rain stays blue.
+ * What each layer of a condition's SF Symbol actually depicts, in order.
  *
- * SF Symbols' weather glyphs are layered cloud-first: layer one is the cloud (or,
- * for `sun.max`, the sun itself), layer two the thing falling out of it or the sun
- * behind it. Multicolour renders layer one white, which is right on navy and
- * invisible on cream — hence the palette path in light mode.
+ * Palette rendering colours layers positionally, so it needs to know what is in
+ * them. Assuming layer one is always a cloud is wrong and was: `sun.max.fill` is a
+ * sun on its own, and colouring its first layer cloud-grey put out the sun.
+ *
+ * The roles are read from the symbol's own name — Apple names these compositionally,
+ * `cloud.sun.rain.fill` being exactly cloud, then sun, then rain — so the mapping
+ * cannot drift out of step with `wmoSymbol` the way a hand-kept table would.
  */
-export type SymbolAccent = 'sun' | 'precip' | 'snow' | 'storm' | 'none';
+export type LayerRole = 'cloud' | 'sun' | 'moon' | 'precip' | 'snow' | 'storm';
 
-export function symbolAccent(code: number): SymbolAccent {
-  const key = wmoCondition(code);
-  switch (key) {
-    case 'clear':
-    case 'mostly-clear':
-    case 'partly-cloudy':
-      return 'sun';
-    case 'cloudy':
-    case 'fog':
-      return 'none';
-    case 'snow':
-    case 'heavy-snow':
-    case 'snow-showers':
-      return 'snow';
-    case 'thunderstorm':
-    case 'thunderstorm-hail':
-      return 'storm';
-    default:
-      return 'precip';
+export function symbolLayers(code: number, isDay: boolean = true): LayerRole[] {
+  const roles: LayerRole[] = [];
+  for (const part of wmoSymbol(code, isDay).split('.')) {
+    switch (part) {
+      // Fog is drawn as lines under the cloud and reads as part of it.
+      case 'cloud':
+      case 'fog':
+        roles.push('cloud');
+        break;
+      case 'sun':
+        roles.push('sun');
+        break;
+      // The stars in `moon.stars` are the moon's own layer, not a separate subject.
+      case 'moon':
+      case 'stars':
+        roles.push('moon');
+        break;
+      case 'rain':
+      case 'heavyrain':
+      case 'drizzle':
+      case 'sleet':
+        roles.push('precip');
+        break;
+      case 'snow':
+      case 'snowflake':
+        roles.push('snow');
+        break;
+      case 'bolt':
+      case 'hail':
+        roles.push('storm');
+        break;
+      // `fill` and `max` are qualifiers, not layers.
+      default:
+        break;
+    }
   }
+  return roles;
 }
 
 /** A stable identifier for a condition, kept for tests and analytics. */

@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { buildWidgetPayload, WIDGET_PAYLOAD_VERSION } from '../core/widget';
-import { wmoSymbol, wmoCondition, symbolIsMulticolor } from '../core/model/conditions';
+import { wmoSymbol, wmoCondition, symbolIsMulticolor, symbolLayers } from '../core/model/conditions';
 import {
   planNotification, inQuietHours, afterQuietHours,
   QUIET_START_HOUR, QUIET_END_HOUR,
@@ -258,5 +258,45 @@ describe('planNotification', () => {
     expect(a.id).toBe(b.id);
     const later = planNotification(alert(), on, { locationName: 'X', nowMs: noon + 3600_000 })!;
     expect(later.id).not.toBe(a.id);
+  });
+});
+
+describe('symbolLayers', () => {
+  it('does not call a lone sun a cloud', () => {
+    // The bug this exists to prevent: palette rendering colours layers by position,
+    // so assuming layer one is a cloud painted clear days grey.
+    expect(symbolLayers(0, true)).toEqual(['sun']);
+    expect(symbolLayers(1, true)).toEqual(['sun']);
+  });
+
+  it('reads a composite symbol in the order Apple names it', () => {
+    expect(symbolLayers(2, true)).toEqual(['cloud', 'sun']);
+    expect(symbolLayers(80, true)).toEqual(['cloud', 'sun', 'precip']);
+    expect(symbolLayers(95)).toEqual(['cloud', 'storm', 'precip']);
+  });
+
+  it('keeps the moon and its stars one subject', () => {
+    expect(symbolLayers(0, false)).toEqual(['moon', 'moon']);
+    expect(symbolLayers(2, false)).toEqual(['cloud', 'moon']);
+  });
+
+  it('treats fog as part of its cloud', () => {
+    expect(symbolLayers(45)).toEqual(['cloud', 'cloud']);
+  });
+
+  it('handles a symbol that is only weather, with no cloud at all', () => {
+    expect(symbolLayers(75)).toEqual(['snow']);
+  });
+
+  it('names a layer for every drawn element of every condition', () => {
+    // A symbol whose layers outnumber the roles would leave a layer uncoloured.
+    for (const code of [0, 1, 2, 3, 45, 48, 51, 55, 61, 65, 71, 75, 80, 82, 85, 95, 99]) {
+      for (const day of [true, false]) {
+        const parts = wmoSymbol(code, day)
+          .split('.')
+          .filter((p) => p !== 'fill' && p !== 'max');
+        expect(symbolLayers(code, day), `${code}/${day}`).toHaveLength(parts.length);
+      }
+    }
   });
 });
