@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
 import { Card } from '../../ui/Card';
+import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
 import { ChoiceList, Group, NavRow, Row, Toggle } from '../../ui/settings/Controls';
@@ -37,9 +38,6 @@ import type { ThemeMode } from '../../core/prefs';
 import type { FontSizePref, PresUnit, TempUnit, WindUnit } from '../../core/i18n/units';
 
 const APP_VERSION = '0.1';
-
-/** Space the floating glass tab bar occupies, so content can scroll clear of it. */
-const TAB_BAR_CLEARANCE = 110;
 
 /** Every page below the index. Subjects and the leaves inside them. */
 type Page =

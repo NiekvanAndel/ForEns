@@ -15,6 +15,7 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { shadowFloat, space, useTheme } from '../../theme';
 import { Card } from '../../ui/Card';
+import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
 import { ScreenFrame } from '../../ui/ScreenFrame';
@@ -29,7 +30,6 @@ import { activeProvider, frameClock, radarAxis, type RadarFrame } from '../../co
 import { mapChrome } from '../../ui/radar/mapStyle';
 import { ta } from '../../core/i18n';
 
-const TAB_BAR_CLEARANCE = 110;
 /** The map takes as much of the page as it can. Taller than wide, because a shower
  *  track is usually read north-to-south here, and because the panel beneath it is
  *  short. */

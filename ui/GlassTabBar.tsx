@@ -11,14 +11,29 @@
  * here through the accessibility setting rather than being left to the OS — a
  * `GlassView` still composites, so a user who asked for less transparency must get
  * the flat material instead.
+ *
+ * The bar shows icons alone. The four destinations are distinct enough to read as
+ * pictures, and dropping the captions takes about a fifth off the bar's height —
+ * which the radar page spends on its chart, whose play button used to sit behind
+ * the bar. The words are not lost: each button still carries its label for
+ * VoiceOver, which is where a name actually matters.
  */
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { radius, shadowCard, space, useTheme } from '../theme';
-import { Text } from './Text';
 import { Icon, type IconName } from './Icon';
+
+/**
+ * How much room a scrolling page must leave under its content so the last card
+ * clears the floating bar. The bar is `position: absolute`, so nothing reserves
+ * space for it: every tab page adds this to its own bottom inset.
+ *
+ * It is the bar's own height plus a little air — icons only, no labels, which is
+ * what makes it short enough for a chart and its play button to sit above it.
+ */
+export const TAB_BAR_CLEARANCE = 84;
 
 export interface TabItem {
   key: string;
@@ -77,22 +92,14 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
             style={{
               flex: 1,
               alignItems: 'center',
-              gap: 3,
-              paddingTop: space[2],
-              paddingBottom: 6,
+              // No label under the icon, so the capsule is padded evenly rather
+              // than being top-heavy around a two-storey cell.
+              paddingVertical: 10,
               borderRadius: radius.pill,
               backgroundColor: on ? capsule : 'transparent',
             }}
           >
-            <Icon name={it.icon} size={24} color={on ? accent : idle} weight={on ? 'fill' : 'regular'} />
-            <Text
-              variant="caption"
-              weight={on ? 'semibold' : 'medium'}
-              color={on ? accent : idle}
-              style={{ fontSize: 12 }}
-            >
-              {it.label}
-            </Text>
+            <Icon name={it.icon} size={25} color={on ? accent : idle} weight={on ? 'fill' : 'regular'} />
           </Pressable>
         );
       })}

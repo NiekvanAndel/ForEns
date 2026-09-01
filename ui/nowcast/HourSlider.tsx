@@ -8,22 +8,29 @@
  * Runs through the past as well as the future and opens centred on the current hour,
  * so "has it been raining?" is a swipe left. Past cells are dimmed rather than
  * dropped — the shape of the morning is what makes the afternoon readable.
+ *
+ * Each cell carries five readings: hour, condition, temperature, precipitation,
+ * wind, and sunshine. There is no precipitation bar here. A bar and a number say
+ * the same thing twice, and the room the bar took is what wind and sunshine now
+ * use — the cells are wider for the same reason, so five stacked readings sit in a
+ * calm column instead of being crushed against the cell's edges.
  */
 import { View, ScrollView } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { radius, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
+import { WindArrow } from '../WindArrow';
 import { currentHourDecor, plainDecor } from '../forecast/currentHour';
 import { useCenterOnIndex } from '../forecast/useCenterOnIndex';
 import { usePrefs } from '../../state/prefs';
-import { convTemp, fmtMm } from '../../core/i18n';
+import { convTemp, convWind, fmtMm } from '../../core/i18n';
 import { hourWindow } from '../../core/model/hourWindow';
 import type { ForecastModel } from '../../core/model/types';
 
-const CELL_WIDTH = 62;
+/** Wide enough for "12,4" under a wind arrow without either touching the cell's
+ *  edge. The bar that used to sit here was narrower than the numbers around it. */
+const CELL_WIDTH = 74;
 const CELL_GAP = 6;
-const BAR_HEIGHT = 26;
 /** How much a past hour is faded. Enough to recede, not so much it cannot be read. */
 const PAST_OPACITY = 0.45;
 
@@ -31,9 +38,6 @@ export function HourSlider({ model }: { model: ForecastModel }) {
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
   const { hours, nowIndex } = hourWindow(model, { ahead: 24, behind: 6 });
-  // Scale the bars against the wettest hour shown, floored at 1 mm so a drizzle
-  // does not render as a downpour just because nothing else is falling.
-  const maxMm = Math.max(...hours.map((h) => h.precip ?? 0), 1);
   const decor = currentHourDecor(palette, appearance);
   const { ref, onLayout } = useCenterOnIndex(nowIndex, CELL_WIDTH, CELL_GAP);
 
@@ -73,36 +77,40 @@ export function HourSlider({ model }: { model: ForecastModel }) {
               {convTemp(h.temp, prefs.tempUnit) ?? '—'}°
             </Text>
 
-            <View style={{ height: BAR_HEIGHT, justifyContent: 'flex-end', marginTop: 8 }}>
-              {mm > 0 ? (
-                <LinearGradient
-                  colors={[palette.sky, palette.accent]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={{
-                    width: 16,
-                    height: Math.max(3, (mm / maxMm) * BAR_HEIGHT),
-                    borderRadius: 3,
-                  }}
-                />
-              ) : (
-                <View
-                  style={{
-                    width: 16, height: 3, borderRadius: 3,
-                    backgroundColor: palette.hairline,
-                  }}
-                />
-              )}
+            {/* Precipitation as its amount alone. The unit is nested rather than a
+                sibling, so a narrow cell cannot break "0,4 mm" across two lines. */}
+            <Text
+              variant="caption"
+              weight="bold"
+              tabular
+              numberOfLines={1}
+              color={mm > 0 ? palette.valPrecip : palette.valPrecipZero}
+              style={{ fontSize: 12, marginTop: 8 }}
+            >
+              {fmtMm(mm)}
+              <Text variant="caption" color={palette.muted} style={{ fontSize: 10 }}>
+                {' '}mm
+              </Text>
+            </Text>
+
+            {/* The arrow points the way the wind is going, so direction reads before
+                the number does — which is the order it is asked about. */}
+            <View style={{ alignItems: 'center', gap: 2, marginTop: 8 }}>
+              <WindArrow deg={h.windDir ?? null} size={12} color={palette.muted} />
+              <Text variant="caption" color={palette.muted} tabular numberOfLines={1} style={{ fontSize: 11.5 }}>
+                {convWind(h.wind, prefs.windUnit) ?? '—'}
+              </Text>
             </View>
 
             <Text
               variant="caption"
               weight="bold"
+              color={palette.valSun}
               tabular
-              color={mm > 0 ? palette.valPrecip : palette.valPrecipZero}
-              style={{ fontSize: 11, marginTop: 6 }}
+              numberOfLines={1}
+              style={{ fontSize: 11.5, marginTop: 7 }}
             >
-              {fmtMm(mm)}
+              {Math.round(h.sunMin ?? 0)}m
             </Text>
           </View>
         );

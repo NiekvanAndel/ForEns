@@ -17,6 +17,7 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space, useTheme } from '../../theme';
 import { Card, Rule } from '../../ui/Card';
+import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
 import { ScreenFrame } from '../../ui/ScreenFrame';
@@ -32,7 +33,6 @@ import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleH
 import type { Day } from '../../core/model/types';
 import { t, ta } from '../../core/i18n';
 
-const TAB_BAR_CLEARANCE = 110;
 /** Days shown before the user asks for the extended range. */
 const COLLAPSED_DAYS = 7;
 

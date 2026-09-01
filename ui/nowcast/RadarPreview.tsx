@@ -98,9 +98,17 @@ export function RadarPreview({
     return () => clearInterval(id);
   }, [playing, frames.length]);
 
-  const startPlaying = () => {
+  // One button, two jobs. Pausing holds the frame on screen rather than snapping
+  // back to the newest one: the reader pressed pause to look at *this* picture.
+  // Pressing play again resumes from there, unless the loop already ran to the end,
+  // in which case there is nothing ahead and it starts over.
+  const togglePlaying = () => {
     if (frames.length < 2) return;
-    setIndex(0);
+    if (playing) {
+      setPlaying(false);
+      return;
+    }
+    if (index >= frames.length - 1) setIndex(0);
     setPlaying(true);
   };
 
@@ -120,10 +128,9 @@ export function RadarPreview({
         adornment={
           frames.length > 1 ? (
             <Pressable
-              onPress={startPlaying}
+              onPress={togglePlaying}
               accessibilityRole="button"
-              accessibilityLabel={playing ? 'Bezig met afspelen' : 'Radarbeelden afspelen'}
-              accessibilityState={{ busy: playing }}
+              accessibilityLabel={playing ? 'Radarbeelden pauzeren' : 'Radarbeelden afspelen'}
               hitSlop={8}
               style={{ marginLeft: 2 }}
             >

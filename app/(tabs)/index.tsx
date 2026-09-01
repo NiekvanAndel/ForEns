@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
 import { Text } from '../../ui/Text';
+import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { Card } from '../../ui/Card';
 import { ScreenFrame } from '../../ui/ScreenFrame';
 import { AlertHero } from '../../ui/nowcast/AlertHero';
@@ -27,9 +28,6 @@ import { useForecast } from '../../state/forecast';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
 import { ta } from '../../core/i18n';
-
-/** Space the floating glass tab bar occupies, so content can scroll clear of it. */
-const TAB_BAR_CLEARANCE = 110;
 
 export default function NowcastScreen() {
   const { palette } = useTheme();
