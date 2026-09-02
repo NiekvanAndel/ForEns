@@ -51,6 +51,12 @@ const PrefsContext = createContext<PrefsContextValue | null>(null);
  * It changes nothing else: the stored preferences, the list and the selected index
  * are the real ones, so a neighbour page cannot write to state as if it were the
  * page in front.
+ *
+ * Which is the trap. `location` is the *only* redirected field, so a component that
+ * works out where it is from `prefs.locations[prefs.activeLocation]` gets the page in
+ * front no matter which page it is on. `LocationTitle` did exactly that, and a swipe
+ * showed the same name over two different sets of numbers. Inside the pager, read
+ * `location`; the selected index answers a different question.
  */
 const LocationOverrideContext = createContext<SavedLocation | null>(null);
 

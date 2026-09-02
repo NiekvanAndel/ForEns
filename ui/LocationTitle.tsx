@@ -21,9 +21,14 @@ import { usePrefs } from '../state/prefs';
 
 export function LocationTitle() {
   const { palette } = useTheme();
-  const { prefs } = usePrefs();
-  const active = prefs.locations[prefs.activeLocation] ?? prefs.locations[0];
-  if (!active) return null;
+  // `location`, not `prefs.locations[prefs.activeLocation]`. They are the same thing
+  // on the page in front and different things on the pages either side of it: the
+  // pager renders those through an override that redirects `location` alone. Reading
+  // the selected index instead printed the name of the page you were leaving on the
+  // page you were arriving at, so a swipe showed the same place twice with two
+  // different sets of numbers under it.
+  const { location } = usePrefs();
+  if (!location) return null;
 
   return (
     <View
@@ -33,18 +38,18 @@ export function LocationTitle() {
         paddingBottom: space[1],
       }}
     >
-      {active.stationId ? (
+      {location.stationId ? (
         <View
           style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.agroBright }}
         />
       ) : null}
       <Text
         variant="locationName"
-        color={active.stationId ? palette.agroInk : palette.inkHeading}
+        color={location.stationId ? palette.agroInk : palette.inkHeading}
         numberOfLines={1}
         style={{ flexShrink: 1 }}
       >
-        {active.name}
+        {location.name}
       </Text>
     </View>
   );
