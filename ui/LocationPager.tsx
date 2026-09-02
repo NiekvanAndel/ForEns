@@ -16,11 +16,13 @@
  * follows the finger — the next location is legible before the swipe is finished,
  * and letting go simply completes a movement already half seen.
  *
- * They are drawn from `cachedModel`, so this only happens for a location the reader
- * has already visited; one that has not been shows an empty page, exactly as it did
- * before. Nothing is fetched for a page sliding past. Each neighbour reads its
- * location and its forecast through the two override providers, so no component had
- * to learn that it might not be the page in front.
+ * They are drawn from `cachedModel`, which the forecast provider fills for the two
+ * adjacent locations as soon as the page in front has finished loading. Nothing is
+ * fetched during the gesture itself; by the time a finger moves, the answer is
+ * already there. Each neighbour reads its location and its forecast through the
+ * override providers, so no component had to learn that it might not be the page in
+ * front — and anything too expensive to build twice asks `usePeeking` and draws a
+ * stand-in instead.
  *
  * They are mounted for the duration of the gesture and unmounted after it, because a
  * page is not cheap — 'Nu' holds a map — and two spare copies of one on every screen
@@ -51,6 +53,9 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme';
 import { LocationOverrideProvider, usePrefs } from '../state/prefs';
 import { ForecastOverrideProvider, useForecast } from '../state/forecast';
+import { PeekProvider } from './peek';
+import type { SavedLocation } from '../core/prefs';
+import type { ForecastModel } from '../core/model/types';
 
 /** Fraction of the screen a drag must cross to count, if it is not a flick. */
 const COMMIT_FRACTION = 0.25;
@@ -90,6 +95,11 @@ export function LocationPager({ children }: { children: ReactNode }) {
 
   const prevIndex = count > 1 ? (index - 1 + count) % count : index;
   const nextIndex = count > 1 ? (index + 1) % count : index;
+
+  const modelAt = (at: number): ForecastModel | null => {
+    const l = prefs.locations[at];
+    return l ? cachedModel(l.lat, l.lon) : null;
+  };
 
   const pan = Gesture.Pan()
     .activeOffsetX([-18, 18])
@@ -147,7 +157,12 @@ export function LocationPager({ children }: { children: ReactNode }) {
     <GestureDetector gesture={pan}>
       <Animated.View style={[{ flex: 1 }, style]}>
         {showNeighbours ? (
-          <Neighbour side="left" width={width} index={prevIndex}>
+          <Neighbour
+            side="left"
+            width={width}
+            location={prefs.locations[prevIndex]}
+            model={modelAt(prevIndex)}
+          >
             {children}
           </Neighbour>
         ) : null}
@@ -155,41 +170,60 @@ export function LocationPager({ children }: { children: ReactNode }) {
         <View style={{ flex: 1 }}>{children}</View>
 
         {showNeighbours ? (
-          <Neighbour side="right" width={width} index={nextIndex}>
+          <Neighbour
+            side="right"
+            width={width}
+            location={prefs.locations[nextIndex]}
+            model={modelAt(nextIndex)}
+          >
             {children}
           </Neighbour>
         ) : null}
       </Animated.View>
     </GestureDetector>
   );
+}
 
-  /** One page beside the current one, drawn from the cache or left blank. */
-  function Neighbour({
-    side, width: w, index: at, children: page,
-  }: { side: 'left' | 'right'; width: number; index: number; children: ReactNode }) {
-    const location = prefs.locations[at];
-    const model = location ? cachedModel(location.lat, location.lon) : null;
-    const frame = {
-      position: 'absolute' as const,
-      top: 0,
-      bottom: 0,
-      width: w,
-      [side]: -w,
-      backgroundColor: palette.appBg,
-    };
+/**
+ * One page beside the current one, drawn from the cache or left blank.
+ *
+ * Declared out here, not inside `LocationPager`. A component defined in a render
+ * body is a new type on every render, so React unmounts and rebuilds its whole
+ * subtree each time the parent renders — and the parent renders the moment a
+ * gesture begins, and again on every forecast update behind it. Two entire pages
+ * were being torn down and rebuilt mid-swipe.
+ */
+function Neighbour({
+  side, width, location, model, children,
+}: {
+  side: 'left' | 'right';
+  width: number;
+  location: SavedLocation | undefined;
+  model: ForecastModel | null;
+  children: ReactNode;
+}) {
+  const { palette } = useTheme();
+  const frame = {
+    position: 'absolute' as const,
+    top: 0,
+    bottom: 0,
+    width,
+    [side]: -width,
+    backgroundColor: palette.appBg,
+  };
 
-    // Nothing loaded for that place yet: an empty page, rather than a torn edge or a
-    // fetch nobody asked for.
-    if (!location || !model) return <View style={frame} pointerEvents="none" />;
+  // Nothing loaded for that place yet: an empty page, rather than a torn edge or a
+  // fetch nobody asked for. With neighbours prefetched this is now the exception —
+  // a location added seconds ago, or a network that has not come back.
+  if (!location || !model) return <View style={frame} pointerEvents="none" />;
 
-    return (
-      <View style={frame} pointerEvents="none">
-        <LocationOverrideProvider location={location}>
-          <ForecastOverrideProvider model={model} alert={null}>
-            {page}
-          </ForecastOverrideProvider>
-        </LocationOverrideProvider>
-      </View>
-    );
-  }
+  return (
+    <View style={frame} pointerEvents="none">
+      <LocationOverrideProvider location={location}>
+        <ForecastOverrideProvider model={model} alert={null}>
+          <PeekProvider>{children}</PeekProvider>
+        </ForecastOverrideProvider>
+      </LocationOverrideProvider>
+    </View>
+  );
 }

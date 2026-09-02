@@ -15,8 +15,20 @@
  *
  * The cache holds finished models, not responses, because rebuilding one is
  * `processAll` over the whole 14-day ensemble and the pager needs it inside a frame.
- * It is not a network cache: entries never expire, but nothing reads one for the
- * location in front, which always re-fetches on selection.
+ * Nothing reads one for the location in front, which always re-fetches on selection,
+ * so a stale entry can only ever be glimpsed sliding past — and the hero it slides
+ * past with names the hour its readings are from.
+ *
+ * Two things fill it. The location in front fills it as it loads. Its two neighbours
+ * are prefetched once that has finished: the first two stages only, which is the
+ * hero, the strip and the day rows, and no ensemble — a page being swiped past does
+ * not need percentile beams, and they arrive the moment the reader lands on it.
+ * Without that prefetch the pager had almost nothing to draw, because a cache filled
+ * only by visiting is empty on the swipe that matters.
+ *
+ * It survives a relaunch through AsyncStorage. Old numbers beat no numbers when the
+ * page carries its own timestamp; anything past `CACHE_MAX_AGE_MS` is dropped on
+ * load rather than shown, since past that even a labelled forecast is misleading.
  */
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
@@ -24,11 +36,13 @@ import {
 } from 'react';
 import { processAll } from '../core/model/process';
 import { deriveAlert, type WeatherAlert } from '../core/model/alert';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   loadStage1, loadStage2, loadEnsemble, loadExtended, loadIfsHourly, type HarmonieState,
 } from '../core/sources/openMeteo';
 import { activeProvider, type NowcastProfile } from '../core/radar';
 import type { ForecastModel, WeatherResponse } from '../core/model/types';
+import type { SavedLocation } from '../core/prefs';
 import { usePrefs } from './prefs';
 
 /** Every response the model builder consumes, held so a later stage can rebuild. */
@@ -50,6 +64,21 @@ const EMPTY: Sources = {
   ifsHourly: null, icons: null, iconsExt: null, offsetSec: 0,
   harmonie: { model: null, failed: false, disabled: true },
 };
+
+const CACHE_KEY = 'exactcast.models.v1';
+/** Past this a cached model is dropped rather than drawn. Six hours is two IFS runs:
+ *  old enough to be visibly stale, recent enough to still describe the same weather. */
+const CACHE_MAX_AGE_MS = 6 * 3600_000;
+/** How many locations are kept on disk — the page in front and its two neighbours,
+ *  which is exactly what the pager can reach without another swipe. */
+const CACHE_MAX_ENTRIES = 3;
+/** Ceiling on what is written to disk, as serialised characters. */
+const CACHE_MAX_BYTES = 4_000_000;
+
+interface CacheEntry {
+  model: ForecastModel;
+  savedMs: number;
+}
 
 export type LoadPhase = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -83,7 +112,12 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
 
   const abortRef = useRef<AbortController | null>(null);
   /** Finished models by location. See the note at the top of the file. */
-  const cache = useRef(new Map<string, ForecastModel>());
+  const cache = useRef(new Map<string, CacheEntry>());
+  /** Locations a prefetch is already in flight for, so a re-render cannot start a
+   *  second one for the same place. */
+  const prefetching = useRef(new Set<string>());
+  /** Bumped whenever the cache changes, so the pager re-reads it. */
+  const [cacheVersion, setCacheVersion] = useState(0);
   const coords = { lat: location.lat, lon: location.lon };
   const key = `${location.lat},${location.lon},${prefs.useHarmonie},${nonce}`;
 
@@ -173,7 +207,7 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
 
-  const model = useMemo(
+  const built = useMemo(
     () =>
       processAll(
         sources.observations,
@@ -198,20 +232,153 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     [sources, location.lat, location.lon, prefs.useHarmonie]
   );
 
+  /**
+   * What the page shows: the live model, or the cached one until it arrives.
+   *
+   * Landing on a location resets the sources, so for the second or two before stage
+   * one comes back there is nothing to draw — and the page the reader had just
+   * swiped into view would blank out and show a spinner, undoing the very thing the
+   * swipe was for. If that location is in the cache, it stays on screen until the
+   * fresh one replaces it. The hero says which hour its readings are from, so a
+   * stale one announces itself.
+   *
+   * Only `built` is written back to the cache, so a cached model cannot re-stamp
+   * itself as fresh and outlive its own expiry.
+   */
+  const model = useMemo(
+    () => built ?? cache.current.get(cacheKey(location.lat, location.lon))?.model ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the point
+    [built, location.lat, location.lon, cacheVersion]
+  );
+
   // Coordinates are floats off a geocoder, so they are keyed at a fixed precision
   // rather than compared: four decimals is about ten metres, far finer than any two
   // saved locations are apart.
   const cacheKey = (lat: number, lon: number) => `${lat.toFixed(4)},${lon.toFixed(4)}`;
 
+  /** Put a model in the cache and let the pager know there is something new. */
+  const remember = useCallback((lat: number, lon: number, m: ForecastModel) => {
+    cache.current.set(cacheKey(lat, lon), { model: m, savedMs: Date.now() });
+    setCacheVersion((v) => v + 1);
+  }, []);
+
   useEffect(() => {
-    if (!model) return;
-    cache.current.set(cacheKey(location.lat, location.lon), model);
-  }, [model, location.lat, location.lon]);
+    if (!built) return;
+    remember(location.lat, location.lon, built);
+  }, [built, location.lat, location.lon, remember]);
 
   const cachedModel = useCallback(
-    (lat: number, lon: number) => cache.current.get(cacheKey(lat, lon)) ?? null,
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the point
+    (lat: number, lon: number) => cache.current.get(cacheKey(lat, lon))?.model ?? null,
+    [cacheVersion]
   );
+
+  // ── Read the cache back at startup. ──
+  useEffect(() => {
+    let alive = true;
+    AsyncStorage.getItem(CACHE_KEY)
+      .then((raw) => {
+        if (!alive || !raw) return;
+        const stored = JSON.parse(raw) as Record<string, CacheEntry>;
+        const cutoff = Date.now() - CACHE_MAX_AGE_MS;
+        let added = 0;
+        for (const [k, entry] of Object.entries(stored)) {
+          // Never overwrite something this session already fetched, and never
+          // resurrect a forecast old enough to describe different weather.
+          if (cache.current.has(k)) continue;
+          if (!entry?.model || !(entry.savedMs > cutoff)) continue;
+          cache.current.set(k, entry);
+          added++;
+        }
+        if (added) setCacheVersion((v) => v + 1);
+      })
+      .catch(() => {
+        // Unreadable or corrupt: the cache is an optimisation, so losing it costs a
+        // swipe that shows a blank page rather than anything the app needs.
+      });
+    return () => { alive = false; };
+  }, []);
+
+  // ── Write it back, keeping only what the pager can reach. ──
+  useEffect(() => {
+    if (!cacheVersion) return;
+    const reachable = new Set(
+      [prefs.activeLocation - 1, prefs.activeLocation, prefs.activeLocation + 1]
+        .map((i) => prefs.locations[(i + prefs.locations.length) % prefs.locations.length])
+        .filter((l): l is SavedLocation => !!l)
+        .map((l) => cacheKey(l.lat, l.lon))
+    );
+    const out: Record<string, CacheEntry> = {};
+    let kept = 0;
+    for (const [k, entry] of cache.current) {
+      if (!reachable.has(k) || kept >= CACHE_MAX_ENTRIES) continue;
+      out[k] = entry;
+      kept++;
+    }
+    const payload = JSON.stringify(out);
+    // Three full models are a few hundred kilobytes; an order of magnitude past that
+    // means something unexpected, and a write that size is not worth blocking on.
+    if (payload.length > CACHE_MAX_BYTES) return;
+    AsyncStorage.setItem(CACHE_KEY, payload).catch(() => {
+      // A failed write costs the next launch its head start, not this session.
+    });
+  }, [cacheVersion, prefs.activeLocation, prefs.locations]);
+
+  // ── Prefetch the neighbours, once the page in front is done. ──
+  //
+  // Stages 1 and 2 only. That is the hero, the hourly strip and the day rows; the
+  // ensemble behind the beams is the slowest call the app makes and a page sliding
+  // past does not need it. Landing on the location runs the full load anyway.
+  useEffect(() => {
+    if (phase !== 'ready' || prefs.locations.length < 2) return;
+    const ctrl = new AbortController();
+    const { signal } = ctrl;
+
+    const neighbours = [prefs.activeLocation - 1, prefs.activeLocation + 1]
+      .map((i) => prefs.locations[(i + prefs.locations.length) % prefs.locations.length])
+      .filter((l): l is SavedLocation => !!l)
+      .filter((l) => cacheKey(l.lat, l.lon) !== cacheKey(location.lat, location.lon));
+
+    for (const l of neighbours) {
+      const k = cacheKey(l.lat, l.lon);
+      const entry = cache.current.get(k);
+      const fresh = entry && Date.now() - entry.savedMs < CACHE_MAX_AGE_MS;
+      if (fresh || prefetching.current.has(k)) continue;
+      prefetching.current.add(k);
+
+      (async () => {
+        const coords = { lat: l.lat, lon: l.lon };
+        const s1 = await loadStage1(coords, prefs.useHarmonie, { signal });
+        if (signal.aborted || (!s1.observations && !s1.hourly)) return;
+        const s2 = await loadStage2(coords, { signal });
+        if (signal.aborted) return;
+        const built = processAll(
+          s1.observations, s1.hourly, null, s2.ifs, s2.ifs, null,
+          {
+            lat: l.lat,
+            lon: l.lon,
+            useHarmonie: prefs.useHarmonie,
+            harmFailed: s1.harmonie.failed,
+            ecmwfHourly: s2.icons,
+            ecmwfHourlyExt: null,
+          }
+        );
+        if (built) remember(l.lat, l.lon, built);
+      })()
+        .catch(() => {
+          // A neighbour that will not load leaves an empty page under the swipe,
+          // which is what the pager already handles.
+        })
+        .finally(() => {
+          prefetching.current.delete(k);
+        });
+    }
+
+    return () => ctrl.abort();
+  }, [
+    phase, prefs.activeLocation, prefs.locations, prefs.useHarmonie,
+    location.lat, location.lon, remember,
+  ]);
 
   const alert = useMemo(() => deriveAlert(model, nowcast), [model, nowcast]);
 

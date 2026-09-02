@@ -11,6 +11,11 @@
  * theme gets MapKit's dark cartography instead of a bright rectangle in the middle
  * of a navy page.
  *
+ * On a page being swiped past it draws a still panel instead of a map. Allocating a
+ * second `MapView` on the UI thread at the moment a finger starts moving costs the
+ * smoothness of the very gesture the preview is there to serve, and nobody reads a
+ * radar image travelling across the screen.
+ *
  * It does NOT set `maximumNativeZ`. That prop switches react-native-maps onto its
  * cached-overlay path, which refetches and rescales tiles itself — worth it on the
  * radar screen, where a reader can zoom past the provider's deepest level, and not
@@ -28,6 +33,7 @@ import { Icon } from '../Icon';
 import { usePrefs } from '../../state/prefs';
 import { ta } from '../../core/i18n';
 import { activeProvider, type RadarFrame } from '../../core/radar';
+import { usePeeking } from '../peek';
 
 /** How much of the map the preview shows, in degrees. The card became square, which
  *  a preview of the weather heading toward you, not of your street: a shower an hour
@@ -70,6 +76,7 @@ export function RadarPreview({
 }: RadarPreviewProps) {
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
+  const peeking = usePeeking();
   const frames = useFrames();
   const provider = activeProvider();
   const chrome = mapChrome(palette, appearance);
@@ -146,6 +153,16 @@ export function RadarPreview({
       />
       <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel="Open radar">
         <View style={{ aspectRatio: 1, borderRadius: 18, overflow: 'hidden' }}>
+          {peeking ? (
+            <View
+              style={{
+                flex: 1, alignItems: 'center', justifyContent: 'center',
+                backgroundColor: palette.cream2,
+              }}
+            >
+              <Icon name="broadcast" size={30} color={palette.inkDisabled} />
+            </View>
+          ) : (
           <MapView
             provider={PROVIDER_DEFAULT}
             style={{ flex: 1 }}
@@ -194,6 +211,7 @@ export function RadarPreview({
               />
             ) : null}
           </MapView>
+          )}
 
           <View
             style={[
