@@ -62,7 +62,6 @@ export function DaySheet({
 }: DaySheetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
-  const insets = useSafeAreaInsets();
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
 
   // Open on the section the day was tapped under, rather than inheriting whichever
@@ -71,18 +70,19 @@ export function DaySheet({
     if (visible) setLayer(initialLayer);
   }, [visible, day?.date, initialLayer]);
 
-  const detail = useMemo(
-    () => (model && day ? buildDayDetail(model, day, ensemble) : null),
-    [model, day, ensemble]
+  // The day is re-read from the live model by its date. `day` is captured when the
+  // row is tapped, and every stage that lands afterwards rebuilds the model with new
+  // `Day` objects — so the captured one goes stale within seconds of the sheet
+  // opening, and its ensemble percentiles never arrive at all.
+  const liveDay = useMemo(
+    () => (day && model ? model.days.find((d) => d.date === day.date) ?? day : day),
+    [day, model]
   );
 
-  if (!day || !model || !detail) return null;
-
-  const date = new Date(day.date + 'T12:00:00Z');
-  const names = dayNames(prefs.lang);
-  const title = `${names[date.getUTCDay()]} ${date.getUTCDate()}/${date.getUTCMonth() + 1}`;
-  const narrative = precipNarrative(day);
-  const agreement = spreadLabel(day);
+  const detail = useMemo(
+    () => (model && liveDay ? buildDayDetail(model, liveDay, ensemble) : null),
+    [model, liveDay, ensemble]
+  );
 
   return (
     <Modal
@@ -91,7 +91,58 @@ export function DaySheet({
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={{ flex: 1, backgroundColor: palette.appBg }}>
+      {liveDay && model && detail ? (
+        <SheetBody
+          day={liveDay}
+          model={model}
+          detail={detail}
+          ensembleLoading={ensembleLoading}
+          layer={layer}
+          onLayer={setLayer}
+          onClose={onClose}
+        />
+      ) : (
+        <View style={{ flex: 1, backgroundColor: palette.appBg, justifyContent: 'center' }}>
+          <ActivityIndicator color={palette.accent} />
+        </View>
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * The sheet's contents, separate so the `Modal` above never unmounts while it is up.
+ *
+ * That separation is the whole point. The guard used to sit in front of the modal —
+ * `if (!day || !model || !detail) return null` — and a presented modal that unmounts
+ * is a dismissed one. `model` is null for a moment on every location change and
+ * every refresh, because the sources are cleared before the new ones arrive, so a
+ * sheet left open across one of those closed itself with no one having touched it.
+ * Now the modal stays up and shows a spinner while the model is between runs.
+ */
+function SheetBody({
+  day, model, detail, ensembleLoading, layer, onLayer, onClose,
+}: {
+  day: Day;
+  model: ForecastModel;
+  detail: ReturnType<typeof buildDayDetail>;
+  ensembleLoading?: boolean;
+  layer: LayerKey;
+  onLayer: (k: LayerKey) => void;
+  onClose: () => void;
+}) {
+  const { palette } = useTheme();
+  const { prefs } = usePrefs();
+  const insets = useSafeAreaInsets();
+
+  const date = new Date(day.date + 'T12:00:00Z');
+  const names = dayNames(prefs.lang);
+  const title = `${names[date.getUTCDay()]} ${date.getUTCDate()}/${date.getUTCMonth() + 1}`;
+  const narrative = precipNarrative(day);
+  const agreement = spreadLabel(day);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: palette.appBg }}>
         <View
           style={{
             flexDirection: 'row', alignItems: 'center', gap: space[3],
@@ -174,7 +225,7 @@ export function DaySheet({
           ) : null}
 
           <Card>
-            <SectionTabs active={layer} onChange={setLayer} />
+            <SectionTabs active={layer} onChange={onLayer} />
             <Rule soft style={{ marginBottom: space[3] }} />
             <LayerSection layer={layer} day={day} detail={detail} />
             {ensembleLoading && layer !== 'overview' ? (
@@ -188,8 +239,7 @@ export function DaySheet({
             <HourlyList layer={layer} hours={detail.hours} sourceLabel={detail.sourceLabel} />
           </Card>
         </ScrollView>
-      </View>
-    </Modal>
+    </View>
   );
 }
 
