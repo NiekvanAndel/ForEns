@@ -15,6 +15,9 @@ const PROCESS_FNS = [
   'r1', 'pct', 'pge',
   'getSunriseSunset', 'sunMinutesInHour', 'isHourDay', 'solarPos',
   '_m6median', 'computeMethod6Sun',
+  // The daily icon is the mode of the hours as drawn, so the sunny-period rule is
+  // part of `processAll` now and has to be in the sandbox with it.
+  'sunnyWmo',
   'processAll',
 ] as const;
 
@@ -36,6 +39,7 @@ function run(
   const hJ = o.noHarm ? null : f.hJ;
 
   const oracle = loadOracle(PROCESS_FNS, {
+    consts: ['SUNNY_FRACTION', 'DRY_TRACE_MM'],
     utcOffsetSec: OFFSET,
     nowMs: NOW_MS,
     S: {
@@ -189,5 +193,64 @@ describe('processAll', () => {
     const threeHourly = all.filter((h) => h.is3h);
     expect(threeHourly.length).toBeGreaterThan(0);
     expect(threeHourly.every((h) => h.hour % 3 === 0)).toBe(true);
+  });
+});
+
+/**
+ * The daily icon reads the hours as they are drawn.
+ *
+ * A day whose every hour reads as sunshine must not be labelled cloudy because the
+ * codes underneath say otherwise — and a day with rain in it must be labelled
+ * exactly as it was before, whatever the sun did. Both apps have to make the same
+ * call, so each case is checked against index.html as well as pinned outright.
+ */
+describe('daily icon after the sunny-period rule', () => {
+  /** Overcast codes over a cloudless, brightly lit day: the codes and the sunshine
+   *  disagree, which is the only situation where the rule changes anything. */
+  function sunlitButCloudyCoded(seed: number, dayPrecipMm: number) {
+    const f = buildFixtures(seed);
+    f.ecmwfHourly.hourly.weather_code = f.ecmwfHourly.hourly.time.map(() => 3);
+    f.ecmwfHourlyExt.hourly.weather_code = f.ecmwfHourlyExt.hourly.time.map(() => 3);
+    // No cloud in any layer and full radiation, so method 6 reports a full hour of
+    // sunshine for every daylight hour.
+    const ih = f.iJ.hourly as Record<string, unknown[]>;
+    for (const k of ['cloud_cover_low', 'cloud_cover_mid', 'cloud_cover_high']) {
+      ih[k] = (ih.time as string[]).map(() => 0);
+    }
+    ih.shortwave_radiation = (ih.time as string[]).map(() => 900);
+    const daily = f.iJ.daily as Record<string, unknown[]>;
+    daily.precipitation_sum = (daily.time as string[]).map(() => dayPrecipMm);
+    return f;
+  }
+
+  /** Day 2 onward is drawn from the ECMWF codes, clear of the HARMONIE days. */
+  const ICON_DAY = 3;
+
+  it('gives a dry, sunlit day the sun even when its codes say overcast', () => {
+    const { expected, actual } = run(sunlitButCloudyCoded(4242, 0));
+    expect(actual!.days[ICON_DAY]!.dayIcon).toBe(0);
+    expect(actual).toEqual(expected);
+  });
+
+  it('leaves the same day overcast once rain is forecast', () => {
+    // The only difference from the case above is the day's precipitation, so this
+    // pins the fallback rather than some other property of the fixture.
+    const { expected, actual } = run(sunlitButCloudyCoded(4242, 2));
+    expect(actual!.days[ICON_DAY]!.dayIcon).toBe(3);
+    expect(actual).toEqual(expected);
+  });
+
+  it('falls back on any precipitation the model actually reports', () => {
+    // The daily total is carried rounded to a tenth, so the trace threshold that
+    // matters for a single hour cannot resolve anything finer here: 0.05 mm rounds
+    // up to 0.1 and reads as a wet day, 0.04 rounds to nothing and reads as dry.
+    // The effective rule at day level is therefore "any precipitation at all, to
+    // the model's own reported precision" — which is the rule as specified.
+    const reported = run(sunlitButCloudyCoded(4242, 0.05));
+    const belowPrecision = run(sunlitButCloudyCoded(4242, 0.04));
+    expect(reported.actual!.days[ICON_DAY]!.dayIcon).toBe(3);
+    expect(belowPrecision.actual!.days[ICON_DAY]!.dayIcon).toBe(0);
+    expect(reported.actual).toEqual(reported.expected);
+    expect(belowPrecision.actual).toEqual(belowPrecision.expected);
   });
 });

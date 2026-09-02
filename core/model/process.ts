@@ -19,6 +19,7 @@
  */
 import { percentile, probAtLeast, round1 } from './stats';
 import { computeMethod6Sun, isHourDay, sunMinutesInHour } from '../solar';
+import { sunnyWmo, DRY_TRACE_MM, HOUR_MIN } from './conditions';
 import type {
   Day, ForecastModel, HourlyBlock, Hour, HresHour, Num, NumArray,
   ProcessContext, WeatherResponse,
@@ -36,17 +37,39 @@ const at = (a: NumArray | undefined, i: number): Num => (a ? a[i] : undefined);
 const roundOrNull = (v: Num): number | null => (v != null ? Math.round(v) : null);
 
 /**
- * Most frequent weather code during daylight, per day.
+ * Most frequent weather code during daylight, per day — twice over.
+ *
  * Ties break toward the higher (more severe) code, so a day that is half sunny and
  * half showery is labelled showery rather than by array order.
+ *
+ * `raw` counts the codes as the model reports them. `sunny` counts them after the
+ * sunny-period rule has had its say, so the day is labelled from the same icons the
+ * hourly strip actually draws — a day whose every hour reads as sunshine should not
+ * be drawn cloudy because the codes underneath say otherwise.
+ *
+ * Both are produced in one pass and the caller picks: `sunny` only for a day with no
+ * precipitation forecast at all, `raw` for every other day. That is what keeps the
+ * change to days where there is nothing to hide — a wet day is labelled exactly as it
+ * was before, so no amount of sunshine can talk an icon out of its rain.
+ *
+ * The per-hour precipitation is deliberately passed as zero here: rain is settled for
+ * the whole day by the caller, before either count is consulted.
  */
+interface DayModes {
+  raw: number;
+  sunny: number;
+}
+
 function daylightModeByDay(
   times: string[] | undefined,
   codes: NumArray | undefined,
   lat: number,
-  offsetSec: number
-): Record<string, number> {
-  const byDay: Record<string, Record<number, number>> = {};
+  offsetSec: number,
+  /** Sunshine minutes for an hour, by its timestamp. Absent for a series with no
+   *  sunshine behind it, which simply leaves `sunny` equal to `raw`. */
+  sunAt?: (time: string) => number | null | undefined
+): Record<string, DayModes> {
+  const byDay: Record<string, { raw: Record<number, number>; sunny: Record<number, number> }> = {};
   if (times && codes) {
     for (let i = 0; i < times.length; i++) {
       const c = codes[i];
@@ -54,22 +77,32 @@ function daylightModeByDay(
       const time = times[i] as string;
       if (!isHourDay(time, lat, offsetSec)) continue;
       const day = time.slice(0, 10);
-      (byDay[day] ??= {})[c] = (byDay[day]?.[c] ?? 0) + 1;
+      const bucket = (byDay[day] ??= { raw: {}, sunny: {} });
+      bucket.raw[c] = (bucket.raw[c] ?? 0) + 1;
+      const shown = sunAt ? sunnyWmo(c, sunAt(time), HOUR_MIN, 0) : c;
+      bucket.sunny[shown] = (bucket.sunny[shown] ?? 0) + 1;
     }
   }
-  const out: Record<string, number> = {};
-  for (const day of Object.keys(byDay)) {
+
+  /** The most frequent code, ties to the higher one. */
+  const winner = (counts: Record<number, number>): number => {
     let best = 0;
     let bestN = -1;
-    for (const k of Object.keys(byDay[day] as Record<number, number>)) {
+    for (const k of Object.keys(counts)) {
       const code = +k;
-      const n = (byDay[day] as Record<number, number>)[code] as number;
+      const n = counts[code] as number;
       if (n > bestN || (n === bestN && code > best)) {
         best = code;
         bestN = n;
       }
     }
-    out[day] = best;
+    return best;
+  };
+
+  const out: Record<string, DayModes> = {};
+  for (const day of Object.keys(byDay)) {
+    const bucket = byDay[day] as { raw: Record<number, number>; sunny: Record<number, number> };
+    out[day] = { raw: winner(bucket.raw), sunny: winner(bucket.sunny) };
   }
   return out;
 }
@@ -350,18 +383,36 @@ export function processAll(
 
   // ── Day icons: the daylight mode of hourly codes. HARMONIE for days 0–1 where
   //    available, otherwise the ECMWF icon call. ──
-  const extH = ctx.ecmwfHourlyExt?.hourly?.time ? ctx.ecmwfHourlyExt : ctx.ecmwfHourly ?? null;
-  const ecmwfIconByDay = extH?.hourly?.time
-    ? daylightModeByDay(extH.hourly.time, extH.hourly.weather_code ?? extH.hourly.weathercode, lat, offsetSec)
-    : {};
-  const harmIconByDay = hJ?.hourly?.time
-    ? daylightModeByDay(hJ.hourly.time, hJ.hourly.weathercode ?? hJ.hourly.weather_code, lat, offsetSec)
-    : {};
-
   // ── Method-6 sunshine, from hourly cloud layers plus radiation. ──
+  // Computed before the icon maps, which now read it: the day's icon is the mode of
+  // the hours as they are actually drawn, and an hour is drawn from this.
   const harmAvailable = hJ != null && ctx.useHarmonie && !ctx.harmFailed;
   const sun6Harm = harmAvailable && hJ?.hourly ? computeMethod6Sun(hJ.hourly, lat, lon, offsetSec) : {};
   const sun6Ecmwf = iJ?.hourly ? computeMethod6Sun(iJ.hourly, lat, lon, offsetSec) : {};
+
+  /** Method-6 minutes for one hour, out of whichever run covers it. */
+  const sunAtFrom =
+    (byDay: Record<string, { perHour?: Record<string, number> } | undefined>) =>
+      (time: string): number | null =>
+        byDay[time.slice(0, 10)]?.perHour?.[time] ?? null;
+
+  const extH = ctx.ecmwfHourlyExt?.hourly?.time ? ctx.ecmwfHourlyExt : ctx.ecmwfHourly ?? null;
+  const ecmwfIconByDay = extH?.hourly?.time
+    ? daylightModeByDay(
+        extH.hourly.time,
+        extH.hourly.weather_code ?? extH.hourly.weathercode,
+        lat, offsetSec,
+        sunAtFrom(sun6Ecmwf)
+      )
+    : {};
+  const harmIconByDay = hJ?.hourly?.time
+    ? daylightModeByDay(
+        hJ.hourly.time,
+        hJ.hourly.weathercode ?? hJ.hourly.weather_code,
+        lat, offsetSec,
+        sunAtFrom(sun6Harm)
+      )
+    : {};
 
   // Align the hour strip's sunshine minutes with method 6 wherever it has an answer.
   for (const h of futureHours) {
@@ -378,11 +429,31 @@ export function processAll(
     const harm = harmDays[d] ?? ({} as HarmDay);
     const useHarm = dayIdx <= 1 && harmAvailable;
 
+    // Is any precipitation forecast for this day at all? From the same run that
+    // draws the icon, so the question and the answer come from one model.
+    //
+    // The trace threshold is the one a single hour uses, but it cannot resolve
+    // anything at this scale: the daily total is carried rounded to a tenth, so
+    // 0.05 mm has already become 0.1 by the time it arrives. The effective rule is
+    // therefore "any precipitation the model reports at all", which is what was
+    // asked for. Raise this to 0.2 or so if a day of drizzle should still be
+    // allowed to look sunny.
+    const dayPrecip = useHarm
+      ? harm.precips?.length
+        ? harm.precips.reduce((a, b) => a + b, 0)
+        : null
+      : hresDays[d]?.hresPrecip ?? (o.ps.length ? (percentile(o.ps, 50) as number) : null);
+    const dryDay = (dayPrecip ?? 0) <= DRY_TRACE_MM;
+
+    /** The mode for this day: the drawn icons on a dry day, the raw codes otherwise. */
+    const modeOfDay = (modes: DayModes | undefined): number | null =>
+      modes ? (dryDay ? modes.sunny : modes.raw) : null;
+
     const dayIcon =
       dayIdx <= 1 && harmAvailable && harmIconByDay[d] != null
-        ? (harmIconByDay[d] as number)
+        ? (modeOfDay(harmIconByDay[d]) as number)
         : ecmwfIconByDay[d] != null
-          ? (ecmwfIconByDay[d] as number)
+          ? (modeOfDay(ecmwfIconByDay[d]) as number)
           : hresDays[d]?.hresWmo ?? null;
 
     const wmoMode = o.wmos.length ? modeOf(o.wmos) : harm.wmos?.length ? modeOf(harm.wmos) : 0;

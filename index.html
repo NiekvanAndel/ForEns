@@ -952,37 +952,56 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
   // ── Dag-icoon: modus van uurlijkse weercodes tijdens daglicht ──
   // Bron: HARMONIE-uur voor dag 0/1 (indien beschikbaar), anders ECMWF IFS-uur (aparte icoon-call).
   // Gelijke stand in de modus -> hoogste (zwaarste) WMO-code wint.
-  function daylightModeByDay(times,codes){
+  // Meest voorkomende weercode overdag, per dag — twee keer.
+  // `raw` telt de codes zoals het model ze geeft. `sunny` telt ze nadat de
+  // zonnige-periode-regel zijn zegje heeft gedaan, zodat de dag wordt benoemd met
+  // dezelfde iconen als de uurstrip laat zien: een dag waarvan elk uur als zon
+  // wordt getekend hoort niet bewolkt op de dagregel te staan.
+  // De aanroeper kiest: `sunny` alleen voor een dag zonder enige neerslag, `raw`
+  // voor alle andere. Zo raakt de verandering alleen dagen waar niets te verbergen
+  // valt — een natte dag krijgt exact het icoon dat hij eerder ook kreeg.
+  // De neerslag per uur is hier bewust nul: regen is voor de hele dag al beslist.
+  function daylightModeByDay(times,codes,sunAt){
     const byDay={};
     if(times&&codes){
       for(let i=0;i<times.length;i++){
         const c=codes[i]; if(c==null) continue;
         if(!isHourDay(times[i],S.lat)) continue;
         const day=times[i].slice(0,10);
-        if(!byDay[day]) byDay[day]={};
-        byDay[day][c]=(byDay[day][c]||0)+1;
+        if(!byDay[day]) byDay[day]={raw:{},sunny:{}};
+        byDay[day].raw[c]=(byDay[day].raw[c]||0)+1;
+        const shown=sunAt?sunnyWmo(c,sunAt(times[i]),60,0):c;
+        byDay[day].sunny[shown]=(byDay[day].sunny[shown]||0)+1;
       }
     }
-    const out={};
-    for(const day in byDay){
+    const winner=counts=>{
       let best=null,bestN=-1;
-      for(const k in byDay[day]){
-        const code=+k,n=byDay[day][k];
+      for(const k in counts){
+        const code=+k,n=counts[k];
         if(n>bestN||(n===bestN&&code>best)){best=code;bestN=n;}
       }
-      out[day]=best;
+      return best;
+    };
+    const out={};
+    for(const day in byDay){
+      out[day]={raw:winner(byDay[day].raw),sunny:winner(byDay[day].sunny)};
     }
     return out;
   }
-  const _ecmwfH=(S._ecmwfHourlyExt&&S._ecmwfHourlyExt.hourly&&S._ecmwfHourlyExt.hourly.time)?S._ecmwfHourlyExt:(S._ecmwfHourly||null);
-  const ecmwfIconByDay=_ecmwfH&&_ecmwfH.hourly&&_ecmwfH.hourly.time?daylightModeByDay(_ecmwfH.hourly.time,_ecmwfH.hourly.weather_code||_ecmwfH.hourly.weathercode):{};
-  const harmIconByDay=hJ&&hJ.hourly&&hJ.hourly.time?daylightModeByDay(hJ.hourly.time,hJ.hourly.weathercode||hJ.hourly.weather_code):{};
-
   // Zonneschijn methode 6: per-uur cloud-lagen + straling → dagtotaal & per-uur minuten.
+  // Staat vóór de icoonkaarten, die hem nu lezen: het dagicoon is de modus van de
+  // uren zoals ze getekend worden, en een uur wordt hieruit getekend.
   const _m6off = oJ?.utc_offset_seconds ?? (typeof S!=='undefined'?S._utcOffset:0) ?? 0;
   const _harmAvail6 = hJ!=null && PREFS.useHarmonie && !S.harmFailed;
   const sun6Harm = _harmAvail6 && hJ.hourly ? computeMethod6Sun(hJ.hourly, S.lat, S.lon, _m6off) : {};
   const sun6Ecmwf = iJ?.hourly ? computeMethod6Sun(iJ.hourly, S.lat, S.lon, _m6off) : {};
+
+  // Methode-6 minuten voor één uur, uit de run die dat uur dekt.
+  const _sunAtFrom = byDay => time => byDay[time.slice(0,10)]?.perHour?.[time] ?? null;
+
+  const _ecmwfH=(S._ecmwfHourlyExt&&S._ecmwfHourlyExt.hourly&&S._ecmwfHourlyExt.hourly.time)?S._ecmwfHourlyExt:(S._ecmwfHourly||null);
+  const ecmwfIconByDay=_ecmwfH&&_ecmwfH.hourly&&_ecmwfH.hourly.time?daylightModeByDay(_ecmwfH.hourly.time,_ecmwfH.hourly.weather_code||_ecmwfH.hourly.weathercode,_sunAtFrom(sun6Ecmwf)):{};
+  const harmIconByDay=hJ&&hJ.hourly&&hJ.hourly.time?daylightModeByDay(hJ.hourly.time,hJ.hourly.weathercode||hJ.hourly.weather_code,_sunAtFrom(sun6Harm)):{};
 
   // Zonminuten per uur in futureHours consistent maken met methode 6 (hero-uurstrip, uurdetail, overzicht-popup dag 0–1).
   for(const h of futureHours){
@@ -996,8 +1015,17 @@ function processAll(oJ,hJ,eJ,sJ,iJ,ihJ){
     const harm=harmDays[d]||{};
     const harmAvailable=hJ!=null&&PREFS.useHarmonie&&!S.harmFailed;
     const useHarm=dayIdx<=1&&harmAvailable; // vandaag + morgen: HARMONIE (als beschikbaar)
+    // Valt er überhaupt neerslag op deze dag? Uit dezelfde run die het icoon tekent,
+    // zodat vraag en antwoord uit één model komen. Onder de spoordrempel telt als
+    // droog, net als bij een los uur.
+    const dayPrecip = useHarm
+      ? (harm.precips?.length ? harm.precips.reduce((a,b)=>a+b,0) : null)
+      : (hresDays[d]?.hresPrecip ?? (o.ps.length ? pct(o.ps,50) : null));
+    const dryDay = (dayPrecip ?? 0) <= DRY_TRACE_MM;
+    // Modus voor deze dag: de getekende iconen op een droge dag, anders de ruwe codes.
+    const _modeOfDay = m => m ? (dryDay ? m.sunny : m.raw) : null;
     // Dag-icoon (daglicht-modus): dag 0/1 HARMONIE indien beschikbaar, anders ECMWF; val terug op daily weather_code zolang uurdata nog niet binnen is.
-    const dayIcon=(dayIdx<=1&&harmAvailable&&harmIconByDay[d]!=null)?harmIconByDay[d]:(ecmwfIconByDay[d]!=null?ecmwfIconByDay[d]:(hresDays[d]?.hresWmo??null));
+    const dayIcon=(dayIdx<=1&&harmAvailable&&harmIconByDay[d]!=null)?_modeOfDay(harmIconByDay[d]):(ecmwfIconByDay[d]!=null?_modeOfDay(ecmwfIconByDay[d]):(hresDays[d]?.hresWmo??null));
     const wmoMode=o.wmos.length?o.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,o.wmos[0]):(harm.wmos?.length?harm.wmos.reduce((a,b,_,arr)=>arr.filter(v=>v===b).length>=arr.filter(v=>v===a).length?b:a,harm.wmos[0]):0);
     // Zonuren via methode 6 (Harmonie dag 0–1, anders ECMWF); val terug op oude daily-waarde bij ontbrekende uurdata.
     const _s6 = (useHarm && sun6Harm[d]) ? sun6Harm[d] : (sun6Ecmwf[d] || null);
