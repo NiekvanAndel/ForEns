@@ -29,6 +29,7 @@ import { useForecast } from '../../state/forecast';
 import { useStations, stationsNear } from '../../state/stations';
 import { activeProvider, frameClock, radarAxis, type RadarFrame } from '../../core/radar';
 import { mapChrome } from '../../ui/radar/mapStyle';
+import { usePeeking } from '../../ui/peek';
 import { ta } from '../../core/i18n';
 
 /** The map takes as much of the page as it can. Taller than wide, because a shower
@@ -38,12 +39,13 @@ const MAP_ASPECT = 0.78;
 /** Station pins are drawn for this radius around the location. */
 const STATION_PIN_RADIUS_KM = 60;
 
-export default function RadarScreen() {
+function RadarPage() {
   const { palette, appearance } = useTheme();
   const { prefs, location } = usePrefs();
   const { nowcast } = useForecast();
   const insets = useSafeAreaInsets();
   const { stations } = useStations(location.lat, location.lon);
+  const peeking = usePeeking();
   const chrome = mapChrome(palette, appearance);
 
   const [frames, setFrames] = useState<RadarFrame[]>([]);
@@ -54,6 +56,9 @@ export default function RadarScreen() {
   const [panelWidth, setPanelWidth] = useState(320);
 
   useEffect(() => {
+    // A copy of this page sliding past draws a still panel where the map goes, so
+    // the frames behind it would be fetched for something never shown.
+    if (peeking) return;
     let alive = true;
     const ctrl = new AbortController();
     setLoading(true);
@@ -72,7 +77,7 @@ export default function RadarScreen() {
       alive = false;
       ctrl.abort();
     };
-  }, []);
+  }, [peeking]);
 
   const pins = useMemo(
     () => stationsNear(stations, location.lat, location.lon, STATION_PIN_RADIUS_KM),
@@ -103,107 +108,117 @@ export default function RadarScreen() {
   };
 
   return (
-    <ScreenFrame>
-      <ScrollView
-        onLayout={(e) => setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 4))}
-        contentContainerStyle={{
-          paddingHorizontal: space[5],
-          paddingTop: TOP_BAR_CLEARANCE + insets.top,
-          paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
-          gap: space[4],
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View>
-          <RadarMap
-            lat={location.lat}
-            lon={location.lon}
-            frames={frames}
-            activeIndex={index}
-            stations={pins}
-            timeLabel={frameClock(frames[index])}
-            style={{ aspectRatio: MAP_ASPECT }}
-          />
-          <Pressable
-            onPress={() => setFullScreen(true)}
-            accessibilityRole="button"
-            accessibilityLabel={ta('fullScreen', prefs.lang)}
-            hitSlop={8}
-            style={[
-              {
-                position: 'absolute', right: 14, bottom: 14,
-                width: 38, height: 38, borderRadius: 19,
-                backgroundColor: chrome.bg,
-                alignItems: 'center', justifyContent: 'center',
-              },
-              shadowFloat,
-            ]}
-          >
-            <Icon name="arrows-out" size={17} color={chrome.ink} weight="bold" />
-          </Pressable>
-        </View>
-
-        <Card pad={0}>
-          {loading ? (
-            <View style={{ paddingVertical: space[6], alignItems: 'center' }}>
-              <ActivityIndicator color={palette.accent} />
-            </View>
-          ) : frames.length ? (
-            <>
-              <NowcastPanel
-                profile={nowcast}
-                offsetMin={offsetMin}
-                width={panelWidth}
-                domain={axis ? { from: axis.from, to: axis.to } : undefined}
-                locationName={location.name}
-                onScrubFraction={scrubTo}
-                compact
-              />
-              <View style={{ paddingHorizontal: space[5], paddingBottom: space[4] }}>
-                <Timeline
-                  frames={frames}
-                  index={index}
-                  playing={playing}
-                  onIndexChange={setIndex}
-                  onTogglePlay={() => setPlaying((p) => !p)}
-                  showLabels={false}
-                  stepPositions={axis?.positions}
-                />
-              </View>
-            </>
-          ) : (
-            <View style={{ padding: space[6] }}>
-              <Text variant="bodySm" color={palette.muted} align="center">
-                Radarbeelden zijn tijdelijk niet beschikbaar.
-              </Text>
-            </View>
-          )}
-        </Card>
-
-        <View
-          style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], justifyContent: 'center' }}
+    <>
+    <ScrollView
+      onLayout={(e) => setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 4))}
+      contentContainerStyle={{
+        paddingHorizontal: space[5],
+        paddingTop: TOP_BAR_CLEARANCE + insets.top,
+        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
+        gap: space[4],
+      }}
+      showsVerticalScrollIndicator={false}
+    >
+      <View>
+        <RadarMap
+          lat={location.lat}
+          lon={location.lon}
+          frames={frames}
+          activeIndex={index}
+          stations={pins}
+          timeLabel={frameClock(frames[index])}
+          style={{ aspectRatio: MAP_ASPECT }}
+        />
+        <Pressable
+          onPress={() => setFullScreen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={ta('fullScreen', prefs.lang)}
+          hitSlop={8}
+          style={[
+            {
+              position: 'absolute', right: 14, bottom: 14,
+              width: 38, height: 38, borderRadius: 19,
+              backgroundColor: chrome.bg,
+              alignItems: 'center', justifyContent: 'center',
+            },
+            shadowFloat,
+          ]}
         >
-          <Icon name="arrows-clockwise" size={13} color={palette.muted} />
-          <Text variant="caption" color={palette.muted}>
-            {ta('refreshEvery5', prefs.lang)}
-          </Text>
-        </View>
-      </ScrollView>
+          <Icon name="arrows-out" size={17} color={chrome.ink} weight="bold" />
+        </Pressable>
+      </View>
 
-      <FullScreenRadar
-        visible={fullScreen}
-        onClose={() => setFullScreen(false)}
-        lat={location.lat}
-        lon={location.lon}
-        frames={frames}
-        activeIndex={index}
-        onScrub={setIndex}
-        playing={playing}
-        onTogglePlay={() => setPlaying((p) => !p)}
-        stations={pins}
-        profile={nowcast}
-        locationName={location.name}
-      />
-    </ScreenFrame>
+      <Card pad={0}>
+        {loading ? (
+          <View style={{ paddingVertical: space[6], alignItems: 'center' }}>
+            <ActivityIndicator color={palette.accent} />
+          </View>
+        ) : frames.length ? (
+          <>
+            <NowcastPanel
+              profile={nowcast}
+              offsetMin={offsetMin}
+              width={panelWidth}
+              domain={axis ? { from: axis.from, to: axis.to } : undefined}
+              locationName={location.name}
+              onScrubFraction={scrubTo}
+              compact
+            />
+            <View style={{ paddingHorizontal: space[5], paddingBottom: space[4] }}>
+              <Timeline
+                frames={frames}
+                index={index}
+                playing={playing}
+                onIndexChange={setIndex}
+                onTogglePlay={() => setPlaying((p) => !p)}
+                showLabels={false}
+                stepPositions={axis?.positions}
+              />
+            </View>
+          </>
+        ) : (
+          <View style={{ padding: space[6] }}>
+            <Text variant="bodySm" color={palette.muted} align="center">
+              Radarbeelden zijn tijdelijk niet beschikbaar.
+            </Text>
+          </View>
+        )}
+      </Card>
+
+      <View
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], justifyContent: 'center' }}
+      >
+        <Icon name="arrows-clockwise" size={13} color={palette.muted} />
+        <Text variant="caption" color={palette.muted}>
+          {ta('refreshEvery5', prefs.lang)}
+        </Text>
+      </View>
+    </ScrollView>
+
+    <FullScreenRadar
+      visible={fullScreen}
+      onClose={() => setFullScreen(false)}
+      lat={location.lat}
+      lon={location.lon}
+      frames={frames}
+      activeIndex={index}
+      onScrub={setIndex}
+      playing={playing}
+      onTogglePlay={() => setPlaying((p) => !p)}
+      stations={pins}
+      profile={nowcast}
+      locationName={location.name}
+    />
+    </>
   );
+}
+
+/**
+ * The route: the shared chrome, wrapped around the page above.
+ *
+ * `ScreenFrame` takes the component rather than its output, because the pager
+ * behind it invokes one copy per location — see `LocationPager`.
+ */
+export default function RadarScreen() {
+  return <ScreenFrame page={RadarPage} />;
 }

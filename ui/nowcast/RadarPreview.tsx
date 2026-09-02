@@ -55,10 +55,15 @@ export interface RadarPreviewProps {
 }
 
 /** The observed frames, newest last. The preview shows the newest until it is
- *  played, and then steps through them. */
+ *  played, and then steps through them.
+ *
+ *  A page being swiped past fetches nothing: it draws a still panel instead of a
+ *  map, so the frames would be downloaded for something never shown. */
 export function useFrames(): RadarFrame[] {
   const [frames, setFrames] = useState<RadarFrame[]>([]);
+  const peeking = usePeeking();
   useEffect(() => {
+    if (peeking) return;
     let alive = true;
     activeProvider()
       .listFrames()
@@ -67,7 +72,7 @@ export function useFrames(): RadarFrame[] {
         // No frames: the map still renders, just without a radar overlay.
       });
     return () => { alive = false; };
-  }, []);
+  }, [peeking]);
   return frames;
 }
 

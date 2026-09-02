@@ -32,7 +32,7 @@ import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleH
 import type { Day } from '../../core/model/types';
 import { ta } from '../../core/i18n';
 
-export default function NowcastScreen() {
+function NowcastPage() {
   const { palette } = useTheme();
   const { prefs, location } = usePrefs();
   const {
@@ -108,95 +108,105 @@ export default function NowcastScreen() {
   const timeLabel = model ? model.nowHour.slice(11, 16) : '';
 
   return (
-    <ScreenFrame>
-      <ScrollView
-        contentContainerStyle={{
-          paddingHorizontal: space[5],
-          paddingTop: TOP_BAR_CLEARANCE + insets.top,
-          paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
-          gap: space[4],
-        }}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.muted} />
-        }
-      >
-        <LocationTitle />
+    <>
+    <ScrollView
+      contentContainerStyle={{
+        paddingHorizontal: space[5],
+        paddingTop: TOP_BAR_CLEARANCE + insets.top,
+        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
+        gap: space[4],
+      }}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.muted} />
+      }
+    >
+      <LocationTitle />
 
-        {phase === 'error' ? (
-          <Card>
-            <Text variant="body" color={palette.muted} align="center">
-              {error ?? ta('noData', prefs.lang)}
+      {phase === 'error' ? (
+        <Card>
+          <Text variant="body" color={palette.muted} align="center">
+            {error ?? ta('noData', prefs.lang)}
+          </Text>
+          <Pressable onPress={refresh} accessibilityRole="button" style={{ marginTop: space[4] }}>
+            <Text variant="label" color={palette.accentDark} align="center">
+              {ta('retry', prefs.lang)}
             </Text>
-            <Pressable onPress={refresh} accessibilityRole="button" style={{ marginTop: space[4] }}>
-              <Text variant="label" color={palette.accentDark} align="center">
-                {ta('retry', prefs.lang)}
-              </Text>
-            </Pressable>
-          </Card>
-        ) : !model ? (
-          <Card>
-            <View style={{ paddingVertical: space[8], alignItems: 'center', gap: space[3] }}>
-              <ActivityIndicator color={palette.accent} />
-              <Text variant="bodySm" color={palette.muted}>
-                {ta('shortTerm', prefs.lang)}…
-              </Text>
+          </Pressable>
+        </Card>
+      ) : !model ? (
+        <Card>
+          <View style={{ paddingVertical: space[8], alignItems: 'center', gap: space[3] }}>
+            <ActivityIndicator color={palette.accent} />
+            <Text variant="bodySm" color={palette.muted}>
+              {ta('shortTerm', prefs.lang)}…
+            </Text>
+          </View>
+        </Card>
+      ) : (
+        <>
+          <AlertHero alert={alert} />
+
+          <ConditionsHero
+            model={model}
+            location={location}
+            sourceLabel={sourceLabel}
+            timeLabel={timeLabel}
+          />
+
+          {/* The next hours, as their own block: the hero says what it is doing
+              now, this says what happens next, and a tap on an hour opens that
+              day in 'Verwachting'. */}
+          <Card pad={0}>
+            <View style={{ paddingHorizontal: space[5], paddingTop: space[4] }}>
+              <CardHeader icon="clock" label={ta('shortTerm', prefs.lang)} />
             </View>
+            <HourSlider model={model} onPressHour={openHourDay} />
           </Card>
-        ) : (
-          <>
-            <AlertHero alert={alert} />
 
-            <ConditionsHero
-              model={model}
-              location={location}
-              sourceLabel={sourceLabel}
-              timeLabel={timeLabel}
-            />
+          <RadarPreview
+            lat={location.lat}
+            lon={location.lon}
+            stationName={location.stationName}
+            onOpen={() => router.push('/radar')}
+          />
 
-            {/* The next hours, as their own block: the hero says what it is doing
-                now, this says what happens next, and a tap on an hour opens that
-                day in 'Verwachting'. */}
-            <Card pad={0}>
-              <View style={{ paddingHorizontal: space[5], paddingTop: space[4] }}>
-                <CardHeader icon="clock" label={ta('shortTerm', prefs.lang)} />
-              </View>
-              <HourSlider model={model} onPressHour={openHourDay} />
-            </Card>
+          <ForecastPreview
+            model={model}
+            onOpen={() => router.push('/forecast')}
+            expanded={expanded}
+            onToggleExpanded={toggleExpanded}
+            extendedLoading={!extendedLoaded}
+            onOpenDay={setSheetDay}
+          />
 
-            <RadarPreview
-              lat={location.lat}
-              lon={location.lon}
-              stationName={location.stationName}
-              onOpen={() => router.push('/radar')}
-            />
+          <Text variant="caption" color={palette.muted} align="center">
+            {ta('refreshedAt', prefs.lang)} {timeLabel}
+            {model.hresRunLabel ? ` · ${model.hresRunLabel}` : ''}
+          </Text>
+        </>
+      )}
+    </ScrollView>
 
-            <ForecastPreview
-              model={model}
-              onOpen={() => router.push('/forecast')}
-              expanded={expanded}
-              onToggleExpanded={toggleExpanded}
-              extendedLoading={!extendedLoaded}
-              onOpenDay={setSheetDay}
-            />
-
-            <Text variant="caption" color={palette.muted} align="center">
-              {ta('refreshedAt', prefs.lang)} {timeLabel}
-              {model.hresRunLabel ? ` · ${model.hresRunLabel}` : ''}
-            </Text>
-          </>
-        )}
-      </ScrollView>
-
-      <DaySheet
-        visible={sheetDay != null}
-        day={sheetDay}
-        model={model}
-        ensemble={dayEnsemble}
-        ensembleLoading={ensembleLoading}
-        initialLayer="overview"
-        onClose={() => setSheetDay(null)}
-      />
-    </ScreenFrame>
+    <DaySheet
+      visible={sheetDay != null}
+      day={sheetDay}
+      model={model}
+      ensemble={dayEnsemble}
+      ensembleLoading={ensembleLoading}
+      initialLayer="overview"
+      onClose={() => setSheetDay(null)}
+    />
+    </>
   );
+}
+
+/**
+ * The route: the shared chrome, wrapped around the page above.
+ *
+ * `ScreenFrame` takes the component rather than its output, because the pager
+ * behind it invokes one copy per location — see `LocationPager`.
+ */
+export default function NowcastScreen() {
+  return <ScreenFrame page={NowcastPage} />;
 }

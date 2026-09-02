@@ -19,8 +19,12 @@
  * The swipe wraps the content but not the row: the controls stay put while the page
  * slides, which is what makes the dots read as a position indicator rather than as
  * part of the page.
+ *
+ * It takes the page as a component rather than as children, because the pager has to
+ * be able to invoke it once per location — see `LocationPager`. So a route file is
+ * a body component plus a one-line default export that frames it.
  */
-import type { ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import { View } from 'react-native';
 import { useTheme } from '../theme';
 import { TopBar } from './TopBar';
@@ -28,14 +32,14 @@ import { LocationPager } from './LocationPager';
 import { usePlaceSearch } from './usePlaceSearch';
 import { usePrefs } from '../state/prefs';
 
-export function ScreenFrame({ children }: { children: ReactNode }) {
+export function ScreenFrame({ page }: { page: ComponentType }) {
   const { palette } = useTheme();
   const { prefs, addLocation } = usePrefs();
   const { results, searching, onSearch } = usePlaceSearch(prefs.lang);
 
   return (
     <View style={{ flex: 1, backgroundColor: palette.appBg }}>
-      <LocationPager>{children}</LocationPager>
+      <LocationPager page={page} />
 
       <TopBar
         onSearch={onSearch}

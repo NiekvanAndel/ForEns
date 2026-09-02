@@ -38,16 +38,18 @@ import { beamScale, et0Scale } from '../../core/model/beam';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
 import { t, ta } from '../../core/i18n';
+import { usePeeking } from '../../ui/peek';
 
 /** Days shown before the user asks for the extended range. */
 const COLLAPSED_DAYS = 7;
 
-export default function ForecastScreen() {
+function ForecastPage() {
   const { palette } = useTheme();
   const { prefs, location } = usePrefs();
   const { model, phase, extendedLoaded, loadExtendedDays } = useForecast();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const peeking = usePeeking();
   /** Set when another page asked for a particular day — the hourly strip on 'Nu'. */
   const { day: requestedDay } = useLocalSearchParams<{ day?: string }>();
 
@@ -87,11 +89,13 @@ export default function ForecastScreen() {
   // has landed, and the parameter is then cleared: it is a request, not a state, and
   // leaving it set would reopen the sheet every time the tab came back.
   useEffect(() => {
-    if (!requestedDay || !model) return;
+    // The request belongs to the page in front; a copy sliding past must not open a
+    // sheet nobody can see, still less clear the parameter before it is read.
+    if (peeking || !requestedDay || !model) return;
     const match = model.days.find((d) => d.date === requestedDay);
     if (match) setSheetDay(match);
     router.setParams({ day: undefined });
-  }, [requestedDay, model, router]);
+  }, [peeking, requestedDay, model, router]);
 
   const days = useMemo(
     () => (model ? (expanded ? model.days : model.days.slice(0, COLLAPSED_DAYS)) : []),
@@ -113,106 +117,116 @@ export default function ForecastScreen() {
     : 'ECMWF IFS';
 
   return (
-    <ScreenFrame>
-      <ScrollView
-        contentContainerStyle={{
-          paddingHorizontal: space[4],
-          paddingTop: TOP_BAR_CLEARANCE + insets.top,
-          paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
-          gap: space[3],
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        <LocationTitle />
+    <>
+    <ScrollView
+      contentContainerStyle={{
+        paddingHorizontal: space[4],
+        paddingTop: TOP_BAR_CLEARANCE + insets.top,
+        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
+        gap: space[3],
+      }}
+      showsVerticalScrollIndicator={false}
+    >
+      <LocationTitle />
 
-        {!model ? (
-          <Card>
-            <View style={{ paddingVertical: space[8], alignItems: 'center' }}>
-              {phase === 'error' ? (
-                <Text variant="bodySm" color={palette.muted} align="center">
-                  {ta('noData', prefs.lang)}
-                </Text>
-              ) : (
-                <ActivityIndicator color={palette.accent} />
+      {!model ? (
+        <Card>
+          <View style={{ paddingVertical: space[8], alignItems: 'center' }}>
+            {phase === 'error' ? (
+              <Text variant="bodySm" color={palette.muted} align="center">
+                {ta('noData', prefs.lang)}
+              </Text>
+            ) : (
+              <ActivityIndicator color={palette.accent} />
+            )}
+          </View>
+        </Card>
+      ) : (
+        <>
+          <>
+            <LayerSwitcher active={layer} onChange={setLayer} />
+
+            <View>
+              {days.map((d, i) =>
+                // The overview tab is the web app's `overzicht`: every measurand at
+                // once, so it has no single bar to draw and its own row instead.
+                layer === 'overview' ? (
+                  <OverviewDayRow
+                    key={d.date}
+                    day={d}
+                    dayIndex={i}
+                    divider={i > 0}
+                    onPress={() => setSheetDay(d)}
+                  />
+                ) : (
+                  <LayerDayRow
+                    key={d.date}
+                    day={d}
+                    dayIndex={i}
+                    layer={layer}
+                    scale={scale}
+                    et0Max={et0Max}
+                    divider={i > 0}
+                    onPress={() => setSheetDay(d)}
+                  />
+                )
               )}
             </View>
-          </Card>
-        ) : (
-          <>
-            <>
-              <LayerSwitcher active={layer} onChange={setLayer} />
 
-              <View>
-                {days.map((d, i) =>
-                  // The overview tab is the web app's `overzicht`: every measurand at
-                  // once, so it has no single bar to draw and its own row instead.
-                  layer === 'overview' ? (
-                    <OverviewDayRow
-                      key={d.date}
-                      day={d}
-                      dayIndex={i}
-                      divider={i > 0}
-                      onPress={() => setSheetDay(d)}
-                    />
-                  ) : (
-                    <LayerDayRow
-                      key={d.date}
-                      day={d}
-                      dayIndex={i}
-                      layer={layer}
-                      scale={scale}
-                      et0Max={et0Max}
-                      divider={i > 0}
-                      onPress={() => setSheetDay(d)}
-                    />
-                  )
-                )}
-              </View>
-
-              <Rule soft style={{ marginTop: space[3] }} />
-              <Pressable
-                onPress={toggleExpanded}
-                accessibilityRole="button"
-                accessibilityState={{ expanded }}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                  gap: 6, paddingVertical: space[3],
-                }}
-              >
-                <Text variant="label" weight="semibold" color={palette.accentDark}>
-                  {expanded ? t('viewLess', prefs.lang) : t('viewMoreDays', prefs.lang)}
-                </Text>
-                {expanded && !extendedLoaded ? (
-                  <ActivityIndicator size="small" color={palette.accentDark} />
-                ) : (
-                  <Icon
-                    name={expanded ? 'arrow-up' : 'arrow-down'}
-                    size={13}
-                    color={palette.accentDark}
-                    weight="bold"
-                  />
-                )}
-              </Pressable>
-
-              <Text variant="caption" color={palette.muted} style={{ lineHeight: 18 }}>
-                {expanded ? 14 : COLLAPSED_DAYS} dagen · {modelLabel}
-                {'\n'}{ta('barsExplain', prefs.lang)}
+            <Rule soft style={{ marginTop: space[3] }} />
+            <Pressable
+              onPress={toggleExpanded}
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                gap: 6, paddingVertical: space[3],
+              }}
+            >
+              <Text variant="label" weight="semibold" color={palette.accentDark}>
+                {expanded ? t('viewLess', prefs.lang) : t('viewMoreDays', prefs.lang)}
               </Text>
-            </>
+              {expanded && !extendedLoaded ? (
+                <ActivityIndicator size="small" color={palette.accentDark} />
+              ) : (
+                <Icon
+                  name={expanded ? 'arrow-up' : 'arrow-down'}
+                  size={13}
+                  color={palette.accentDark}
+                  weight="bold"
+                />
+              )}
+            </Pressable>
 
+            <Text variant="caption" color={palette.muted} style={{ lineHeight: 18 }}>
+              {expanded ? 14 : COLLAPSED_DAYS} dagen · {modelLabel}
+              {'\n'}{ta('barsExplain', prefs.lang)}
+            </Text>
           </>
-        )}
-      </ScrollView>
 
-      <DaySheet
-        visible={sheetDay != null}
-        day={sheetDay}
-        model={model}
-        ensemble={dayEnsemble}
-        ensembleLoading={ensembleLoading}
-        initialLayer={layer}
-        onClose={() => setSheetDay(null)}
-      />
-    </ScreenFrame>
+        </>
+      )}
+    </ScrollView>
+
+    <DaySheet
+      visible={sheetDay != null}
+      day={sheetDay}
+      model={model}
+      ensemble={dayEnsemble}
+      ensembleLoading={ensembleLoading}
+      initialLayer={layer}
+      onClose={() => setSheetDay(null)}
+    />
+    </>
   );
+}
+
+/**
+ * The route: the shared chrome, wrapped around the page above.
+ *
+ * `ScreenFrame` takes the component rather than its output, because the pager
+ * behind it invokes one copy per location — see `LocationPager`.
+ */
+export default function ForecastScreen() {
+  return <ScreenFrame page={ForecastPage} />;
 }

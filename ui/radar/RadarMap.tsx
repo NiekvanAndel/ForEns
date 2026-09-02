@@ -13,6 +13,10 @@
  * Zoom limits and pin rendering are explained in ./mapStyle, which the preview on
  * 'Nu' shares.
  *
+ * On a page being swiped past it draws a still panel instead. A second MapView
+ * allocated on the UI thread at the moment a finger starts moving costs the
+ * smoothness of that gesture, and a map travelling across the screen is not read.
+ *
  * There is no recentre button. The map already returns to the location whenever the
  * location changes, and the pin is on screen at every zoom the map allows, so the
  * button existed to undo a pan that a reader who had panned did not want undone.
@@ -25,6 +29,7 @@ import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { MAX_DISPLAY_Z, MIN_ZOOM, START_SPAN_DEG, mapChrome, maxZoomFor } from './mapStyle';
 import { activeProvider, type RadarFrame } from '../../core/radar';
+import { usePeeking } from '../peek';
 import type { AgroStation } from '../../core/sources/agroexact';
 
 /** The span band the zoom buttons work within, matching MIN_ZOOM and maxZoomFor. */
@@ -64,6 +69,7 @@ export function RadarMap({
   chromeTop = CHROME_INSET, style,
 }: RadarMapProps) {
   const { palette, appearance } = useTheme();
+  const peeking = usePeeking();
   const provider = activeProvider();
   const mapRef = useRef<MapView>(null);
   const region = useRef<Region>({
@@ -97,6 +103,23 @@ export function RadarMap({
     region.current = next;
     mapRef.current?.animateToRegion(next, 200);
   };
+
+  if (peeking) {
+    return (
+      <View
+        style={[
+          {
+            borderRadius: radius.appCard, overflow: 'hidden',
+            backgroundColor: palette.cream2,
+            alignItems: 'center', justifyContent: 'center',
+          },
+          style,
+        ]}
+      >
+        <Icon name="broadcast" size={34} color={palette.inkDisabled} />
+      </View>
+    );
+  }
 
   return (
     <View style={[{ borderRadius: radius.appCard, overflow: 'hidden' }, style]}>

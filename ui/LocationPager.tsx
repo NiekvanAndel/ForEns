@@ -24,6 +24,19 @@
  * front — and anything too expensive to build twice asks `usePeeking` and draws a
  * stand-in instead.
  *
+ * ## Why this takes a component and not children
+ *
+ * It took `children` at first, and every neighbour drew the page in front: the same
+ * name over the same numbers, three times across the screen. A page calls `usePrefs`
+ * and `useForecast` at its own top and hands the finished element tree down, so by
+ * the time that tree reached the providers here its props were already bound to the
+ * location the reader was standing on. Wrapping an element in a provider cannot
+ * change what is already inside it.
+ *
+ * Taking the component instead means each panel *invokes* it, so its hooks run
+ * underneath the providers and resolve against that panel's own location. Which is
+ * why every page is now a body component plus a one-line route that frames it.
+ *
  * They are mounted for the duration of the gesture and unmounted after it, because a
  * page is not cheap — 'Nu' holds a map — and two spare copies of one on every screen
  * is a price paid for a gesture that happens occasionally.
@@ -43,7 +56,7 @@
  *
  * Under Reduce Motion the change is immediate and nothing moves.
  */
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -68,7 +81,7 @@ const RUBBER = 0.25;
 const EXIT_MIN_MS = 120;
 const EXIT_MAX_MS = 280;
 
-export function LocationPager({ children }: { children: ReactNode }) {
+export function LocationPager({ page: Page }: { page: ComponentType }) {
   const { prefs, selectLocation } = usePrefs();
   const { cachedModel } = useForecast();
   const { palette } = useTheme();
@@ -162,12 +175,13 @@ export function LocationPager({ children }: { children: ReactNode }) {
             width={width}
             location={prefs.locations[prevIndex]}
             model={modelAt(prevIndex)}
-          >
-            {children}
-          </Neighbour>
+            page={Page}
+          />
         ) : null}
 
-        <View style={{ flex: 1 }}>{children}</View>
+        <View style={{ flex: 1 }}>
+          <Page />
+        </View>
 
         {showNeighbours ? (
           <Neighbour
@@ -175,9 +189,8 @@ export function LocationPager({ children }: { children: ReactNode }) {
             width={width}
             location={prefs.locations[nextIndex]}
             model={modelAt(nextIndex)}
-          >
-            {children}
-          </Neighbour>
+            page={Page}
+          />
         ) : null}
       </Animated.View>
     </GestureDetector>
@@ -194,13 +207,13 @@ export function LocationPager({ children }: { children: ReactNode }) {
  * were being torn down and rebuilt mid-swipe.
  */
 function Neighbour({
-  side, width, location, model, children,
+  side, width, location, model, page: Page,
 }: {
   side: 'left' | 'right';
   width: number;
   location: SavedLocation | undefined;
   model: ForecastModel | null;
-  children: ReactNode;
+  page: ComponentType;
 }) {
   const { palette } = useTheme();
   const frame = {
@@ -221,7 +234,9 @@ function Neighbour({
     <View style={frame} pointerEvents="none">
       <LocationOverrideProvider location={location}>
         <ForecastOverrideProvider model={model} alert={null}>
-          <PeekProvider>{children}</PeekProvider>
+          <PeekProvider>
+            <Page />
+          </PeekProvider>
         </ForecastOverrideProvider>
       </LocationOverrideProvider>
     </View>
