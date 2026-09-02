@@ -40,6 +40,30 @@ interface PrefsContextValue {
 
 const PrefsContext = createContext<PrefsContextValue | null>(null);
 
+/**
+ * A location that stands in for the selected one, for one subtree.
+ *
+ * The pager draws the neighbouring pages during a swipe, and a page is built almost
+ * entirely from `usePrefs().location`. Rather than thread a location prop through
+ * every component that reads one, the neighbour's copy of the page is wrapped in
+ * this and reads it from the same place it always did.
+ *
+ * It changes nothing else: the stored preferences, the list and the selected index
+ * are the real ones, so a neighbour page cannot write to state as if it were the
+ * page in front.
+ */
+const LocationOverrideContext = createContext<SavedLocation | null>(null);
+
+export function LocationOverrideProvider({
+  location, children,
+}: { location: SavedLocation; children: ReactNode }) {
+  return (
+    <LocationOverrideContext.Provider value={location}>
+      {children}
+    </LocationOverrideContext.Provider>
+  );
+}
+
 export function PrefsProvider({ children }: { children: ReactNode }) {
   const [prefs, setState] = useState<Prefs>(DEFAULT_PREFS);
   const [ready, setReady] = useState(false);
@@ -166,6 +190,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 
 export function usePrefs(): PrefsContextValue {
   const ctx = useContext(PrefsContext);
+  const override = useContext(LocationOverrideContext);
   if (!ctx) throw new Error('usePrefs must be used inside a PrefsProvider');
-  return ctx;
+  return override ? { ...ctx, location: override } : ctx;
 }

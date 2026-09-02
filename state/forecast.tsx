@@ -5,6 +5,18 @@
  * lands, which is what lets the hero appear in about a second while the ensemble is
  * still in flight. The web app did this with module globals and direct DOM calls;
  * here each stage updates state and React re-renders what changed.
+ *
+ * ## The cache behind the swipe
+ *
+ * Every model built here is kept, keyed by its location. That does two things: a
+ * location the reader has already visited comes back instantly instead of through a
+ * spinner, and the pager can draw the neighbouring page *during* a swipe rather than
+ * after it — the swipe reveals the next location instead of announcing it.
+ *
+ * The cache holds finished models, not responses, because rebuilding one is
+ * `processAll` over the whole 14-day ensemble and the pager needs it inside a frame.
+ * It is not a network cache: entries never expire, but nothing reads one for the
+ * location in front, which always re-fetches on selection.
  */
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
@@ -53,6 +65,9 @@ interface ForecastContextValue {
   extendedLoaded: boolean;
   refresh: () => void;
   loadExtendedDays: () => void;
+  /** The last model built for a location, or null if it has not been visited.
+   *  Used by the pager to draw a neighbouring page mid-swipe. */
+  cachedModel: (lat: number, lon: number) => ForecastModel | null;
 }
 
 const ForecastContext = createContext<ForecastContextValue | null>(null);
@@ -67,6 +82,8 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
   const [nonce, setNonce] = useState(0);
 
   const abortRef = useRef<AbortController | null>(null);
+  /** Finished models by location. See the note at the top of the file. */
+  const cache = useRef(new Map<string, ForecastModel>());
   const coords = { lat: location.lat, lon: location.lon };
   const key = `${location.lat},${location.lon},${prefs.useHarmonie},${nonce}`;
 
@@ -181,6 +198,21 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     [sources, location.lat, location.lon, prefs.useHarmonie]
   );
 
+  // Coordinates are floats off a geocoder, so they are keyed at a fixed precision
+  // rather than compared: four decimals is about ten metres, far finer than any two
+  // saved locations are apart.
+  const cacheKey = (lat: number, lon: number) => `${lat.toFixed(4)},${lon.toFixed(4)}`;
+
+  useEffect(() => {
+    if (!model) return;
+    cache.current.set(cacheKey(location.lat, location.lon), model);
+  }, [model, location.lat, location.lon]);
+
+  const cachedModel = useCallback(
+    (lat: number, lon: number) => cache.current.get(cacheKey(lat, lon)) ?? null,
+    []
+  );
+
   const alert = useMemo(() => deriveAlert(model, nowcast), [model, nowcast]);
 
   const value = useMemo<ForecastContextValue>(
@@ -188,16 +220,53 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
       model, alert, nowcast,
       harmonie: sources.harmonie,
       offsetSec: sources.offsetSec,
-      phase, error, extendedLoaded, refresh, loadExtendedDays,
+      phase, error, extendedLoaded, refresh, loadExtendedDays, cachedModel,
     }),
-    [model, alert, nowcast, sources.harmonie, sources.offsetSec, phase, error, extendedLoaded, refresh, loadExtendedDays]
+    [
+      model, alert, nowcast, sources.harmonie, sources.offsetSec, phase, error,
+      extendedLoaded, refresh, loadExtendedDays, cachedModel,
+    ]
   );
 
   return <ForecastContext.Provider value={value}>{children}</ForecastContext.Provider>;
 }
 
+/**
+ * A model that stands in for the loaded one, for one subtree.
+ *
+ * The pager's neighbour pages read their forecast from the cache above through this,
+ * exactly as they read their location through `LocationOverrideProvider`. Only the
+ * three fields a page renders from are overridden; the loading phase reads 'ready',
+ * because a cached model is not loading, and the actions stay pointed at the real
+ * provider so a stray press on a page sliding past cannot start a fetch for it.
+ */
+const ForecastOverrideContext = createContext<{
+  model: ForecastModel;
+  alert: WeatherAlert | null;
+} | null>(null);
+
+export function ForecastOverrideProvider({
+  model, alert, children,
+}: { model: ForecastModel; alert: WeatherAlert | null; children: ReactNode }) {
+  const value = useMemo(() => ({ model, alert }), [model, alert]);
+  return (
+    <ForecastOverrideContext.Provider value={value}>{children}</ForecastOverrideContext.Provider>
+  );
+}
+
 export function useForecast(): ForecastContextValue {
   const ctx = useContext(ForecastContext);
+  const override = useContext(ForecastOverrideContext);
   if (!ctx) throw new Error('useForecast must be used inside a ForecastProvider');
-  return ctx;
+  if (!override) return ctx;
+  return {
+    ...ctx,
+    model: override.model,
+    alert: override.alert,
+    // A neighbour's nowcast is not cached — it is two hours of minutely data for a
+    // place the reader may not stop on — so its alert hero shows the model's own
+    // reading of the next hours and no radar profile.
+    nowcast: null,
+    phase: 'ready',
+  };
 }
