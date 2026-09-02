@@ -347,15 +347,21 @@ function wi(c,isDay=1,sz=22){return wmoIcon(c,isDay,sz);}
 // drie kwartier zon ook als regen getekend, wat die middag niet was.
 // Alleen het icoon wordt overruled: de code zelf blijft de tekst, de waarschuwing
 // en al het andere aansturen, want een zonnig half uur maakt onweer niet veilig.
+// Tenzij het echt geregend heeft: een periode met neerslag houdt zijn eigen code,
+// hoe zonnig de rest ook was. Een zonnig uur waarin je nat werd is een bui, en een
+// icoon dat de regen weglaat mist precies wat de lezer nodig had. Onder de
+// spoordrempel telt de periode als droog — een honderdste millimeter is geen regen.
 const SUNNY_FRACTION=0.75;
-function sunnyWmo(wmo,sunMin,periodMin=60){
+const DRY_TRACE_MM=0.05;
+function sunnyWmo(wmo,sunMin,periodMin=60,precipMm=0){
   if(sunMin==null||periodMin<=0) return wmo;
+  if((precipMm??0)>DRY_TRACE_MM) return wmo;
   return sunMin>periodMin*SUNNY_FRACTION ? 0 : wmo;
 }
 // Icoon voor een uur uit het model, dat zijn eigen resolutie kent: na 90 uur is de
 // reeks 3-uurlijks en heeft een rij drie keer zoveel zon nodig.
 function wiHour(h,isDay=1,sz=22){
-  return wi(sunnyWmo(h?.wmo??0,h?.sunMin,h?.is3h?180:60),isDay,sz);
+  return wi(sunnyWmo(h?.wmo??0,h?.sunMin,h?.is3h?180:60,h?.precip),isDay,sz);
 }
 
 const WMO={0:'Helder',1:'Meest helder',2:'Gedeeltelijk bewolkt',3:'Bewolkt',45:'Mist',48:'Rijpmist',51:'Motregen (licht)',53:'Motregen',55:'Motregen (zwaar)',61:'Regen (licht)',63:'Regen',65:'Regen (zwaar)',71:'Sneeuw (licht)',73:'Sneeuw',75:'Sneeuw (zwaar)',80:'Buien (licht)',81:'Buien',82:'Hevige buien',95:'Onweer',96:'Onweer + hagel',99:'Zwaar onweer'};
@@ -1897,13 +1903,16 @@ async function renderZonDayPopup(d){
     if(!_dagUurCache[cacheKey]){
       const base=`latitude=${S.lat}&longitude=${S.lon}&timezone=auto`;
       try{
-        const r=await fetch(`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,weathercode&forecast_days=7&models=ecmwf_ifs`);
+        // Neerslag hoort erbij ook al toont deze popup hem niet: het uurpictogram
+        // laat de zon alleen winnen als het uur droog was.
+        const r=await fetch(`https://api.open-meteo.com/v1/forecast?${base}&hourly=sunshine_duration,et0_fao_evapotranspiration,weathercode,precipitation&forecast_days=7&models=ecmwf_ifs`);
         if(r.ok){
           const j=await r.json();
           _dagUurCache[cacheKey]=(j.hourly?.time||[])
             .map((t,i)=>({time:t,hour:parseInt(t.slice(11,13)),
               sunMin:j.hourly.sunshine_duration?.[i]!=null?Math.round(j.hourly.sunshine_duration[i]/60):0,
               et0h:j.hourly.et0_fao_evapotranspiration?.[i]!=null?r1(j.hourly.et0_fao_evapotranspiration[i]):null,
+              precip:j.hourly.precipitation?.[i]??0,
               wmo:j.hourly.weathercode?.[i]??0,isPast:false}))
             .filter(h=>h.time.slice(0,10)===d.date);
         }

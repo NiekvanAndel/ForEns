@@ -153,12 +153,24 @@ export const HOUR_MIN = 60;
 export const THREE_HOUR_MIN = 180;
 
 /**
+ * Below this a period counts as dry. Radar and model alike report traces that are
+ * not rain — condensation on a gauge, a rounding artefact — and a hundredth of a
+ * millimetre should not be able to hold back the sun.
+ */
+export const DRY_TRACE_MM = 0.05;
+
+/**
  * The code to draw for a period, with a sunny spell allowed to overrule it.
  *
  * A weather code names the period's most notable event, so an afternoon with one
  * ten-minute shower in it is "rain" — and drawn as rain beside three quarters of an
  * hour of sunshine, which is not what that afternoon looked like. Above the
  * threshold the sun is the honest picture.
+ *
+ * Unless it actually rained. A period with precipitation in it keeps its own code
+ * however bright the rest of it was: a sunny hour you got wet in is a shower, and an
+ * icon that leaves the rain out is the one piece of information the reader needed.
+ * So the sun only wins a period that was dry.
  *
  * Only the *icon* is overruled. The code itself still drives the alert hero, the
  * text description and everything else that has to keep saying a thunderstorm is a
@@ -170,19 +182,23 @@ export const THREE_HOUR_MIN = 180;
 export function sunnyWmo(
   wmo: number,
   sunMin: number | null | undefined,
-  periodMin: number = HOUR_MIN
+  periodMin: number = HOUR_MIN,
+  precipMm: number | null | undefined = 0
 ): number {
   if (sunMin == null || periodMin <= 0) return wmo;
+  if ((precipMm ?? 0) > DRY_TRACE_MM) return wmo;
   return sunMin > periodMin * SUNNY_FRACTION ? 0 : wmo;
 }
 
-/** The same rule for an hour off the model, which knows its own resolution. */
+/** The same rule for an hour off the model, which knows its own resolution and
+ *  carries its own precipitation. */
 export function sunnyHourWmo(hour: {
   wmo: number;
   sunMin?: number | null;
+  precip?: number | null;
   is3h?: boolean;
 }): number {
-  return sunnyWmo(hour.wmo, hour.sunMin, hour.is3h ? THREE_HOUR_MIN : HOUR_MIN);
+  return sunnyWmo(hour.wmo, hour.sunMin, hour.is3h ? THREE_HOUR_MIN : HOUR_MIN, hour.precip);
 }
 
 /** A stable identifier for a condition, kept for tests and analytics. */
