@@ -1,8 +1,8 @@
 /**
  * Nu — the main page.
  *
- * Order follows the design's README: conditional alert hero, conditions hero, radar
- * preview, forecast, then the refreshed-at line.
+ * Order follows the design's README: conditional alert hero, conditions hero, the
+ * short-term strip, radar preview, forecast, then the refreshed-at line.
  *
  * The forecast card is the web app's `overzicht` tab rather than a temperature
  * summary: every measurand for each of seven days, with the second week a tap away.
@@ -16,11 +16,14 @@ import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
 import { Text } from '../../ui/Text';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
-import { Card } from '../../ui/Card';
+import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
+import { LocationTitle } from '../../ui/LocationTitle';
+import { Card, CardHeader } from '../../ui/Card';
 import { ScreenFrame } from '../../ui/ScreenFrame';
 import { AlertHero } from '../../ui/nowcast/AlertHero';
 import { ConditionsHero } from '../../ui/nowcast/ConditionsHero';
 import { RadarPreview } from '../../ui/nowcast/RadarPreview';
+import { HourSlider } from '../../ui/nowcast/HourSlider';
 import { ForecastPreview } from '../../ui/nowcast/ForecastPreview';
 import { DaySheet } from '../../ui/forecast/DaySheet';
 import { usePrefs } from '../../state/prefs';
@@ -79,6 +82,17 @@ export default function NowcastScreen() {
     return () => { alive = false; };
   }, [sheetDay, location.lat, location.lon]);
 
+  /** An hour in the strip opens its day on 'Verwachting'. The sheet there carries
+   *  the per-hour detail this strip only summarises, so the tap goes to the page
+   *  that owns it rather than opening a second copy of the sheet here. */
+  const openHourDay = useCallback(
+    (hour: { time: string }) => {
+      Haptics.selectionAsync().catch(() => {});
+      router.push({ pathname: '/forecast', params: { day: hour.time.slice(0, 10) } });
+    },
+    [router]
+  );
+
   const toggleExpanded = () => {
     const next = !expanded;
     setExpanded(next);
@@ -98,6 +112,7 @@ export default function NowcastScreen() {
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: space[5],
+          paddingTop: TOP_BAR_CLEARANCE + insets.top,
           paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
           gap: space[4],
         }}
@@ -106,6 +121,8 @@ export default function NowcastScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.muted} />
         }
       >
+        <LocationTitle />
+
         {phase === 'error' ? (
           <Card>
             <Text variant="body" color={palette.muted} align="center">
@@ -136,6 +153,16 @@ export default function NowcastScreen() {
               sourceLabel={sourceLabel}
               timeLabel={timeLabel}
             />
+
+            {/* The next hours, as their own block: the hero says what it is doing
+                now, this says what happens next, and a tap on an hour opens that
+                day in 'Verwachting'. */}
+            <Card pad={0}>
+              <View style={{ paddingHorizontal: space[5], paddingTop: space[4] }}>
+                <CardHeader icon="clock" label={ta('shortTerm', prefs.lang)} />
+              </View>
+              <HourSlider model={model} onPressHour={openHourDay} />
+            </Card>
 
             <RadarPreview
               lat={location.lat}

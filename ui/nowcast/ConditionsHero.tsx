@@ -3,9 +3,12 @@
  *
  * Works for any address; a station-backed one turns the title AgroExact green and
  * adds the source line with its dot. Layout follows the design's ConditionsHero:
- * the ▲/▼ pair beside the big reading, a three-cell divider row, then the hourly
- * slider — which replaced three static rows, so the next hours are scrollable and
- * reach into tomorrow instead of stopping three hours out.
+ * the ▲/▼ pair beside the big reading, then a three-cell divider row.
+ *
+ * The hourly slider is its own card below this one. It answers a different question
+ * — what happens next, rather than what it is doing now — and inside the hero it was
+ * a fourth band on a card that already had three, with the reader having to work out
+ * where "now" ended and "next" began.
  *
  * Reading colours follow the quantity, not the card (design rule 2): ▲ is val-high,
  * ▼ is val-low, temperature is val-temp, millimetres are val-precip, and a zero is
@@ -14,7 +17,6 @@
 import { View } from 'react-native';
 import { space, useTheme } from '../../theme';
 import { Card, Rule, VRule } from '../Card';
-import { HourSlider } from './HourSlider';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
@@ -119,11 +121,6 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
         </StatCell>
       </View>
 
-      <Rule />
-      {/* The next hours, not three rows of them: the slider runs from this morning
-          into tomorrow and opens on now, so "what happens next" is a swipe rather
-          than a jump down the page. */}
-      <HourSlider model={model} />
     </Card>
   );
 }

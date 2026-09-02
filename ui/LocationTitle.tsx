@@ -1,9 +1,16 @@
 /**
- * The location's name, on its own line under the top row.
+ * The location's name, at the head of the page's own content.
  *
  * It was inside the top bar, competing with three controls for width and losing —
  * a long name truncated before a reader could tell which place they were looking
- * at. On its own row it has the whole screen.
+ * at. Then it sat in a fixed band under the row, which held a strip of every screen
+ * for a word already read. It is the first thing in the scroll now, so it introduces
+ * the page and then gets out of the way.
+ *
+ * One size and one form everywhere, because the pages are read one after another and
+ * a name that changes weight between them reads as a different kind of thing. The
+ * region line is gone with the larger form: the name is the answer, and the page
+ * below it says the rest.
  *
  * Design rule 1: green names a station, never a place. A plain address stays navy.
  */
@@ -12,48 +19,33 @@ import { space, useTheme } from '../theme';
 import { Text } from './Text';
 import { usePrefs } from '../state/prefs';
 
-export interface LocationTitleProps {
-  /** Trades height for the page's own content — the radar page is mostly map, and
-   *  a full-size title there costs a visible band of it. */
-  compact?: boolean;
-}
-
-export function LocationTitle({ compact }: LocationTitleProps) {
+export function LocationTitle() {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const active = prefs.locations[prefs.activeLocation] ?? prefs.locations[0];
   if (!active) return null;
 
-  const sub = active.stationName ?? active.sub;
-
   return (
     <View
       style={{
-        paddingHorizontal: space[5],
-        paddingBottom: compact ? space[2] : space[3],
-        gap: compact ? 0 : 1,
+        flexDirection: 'row', alignItems: 'center', gap: 7,
+        paddingHorizontal: 2,
+        paddingBottom: space[1],
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-        {active.stationId ? (
-          <View
-            style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.agroBright }}
-          />
-        ) : null}
-        <Text
-          variant={compact ? 'locationName' : 'screenTitle'}
-          color={active.stationId ? palette.agroInk : palette.inkHeading}
-          numberOfLines={1}
-          style={{ flexShrink: 1 }}
-        >
-          {active.name}
-        </Text>
-      </View>
-      {sub && !compact ? (
-        <Text variant="caption" color={palette.muted} numberOfLines={1}>
-          {sub}
-        </Text>
+      {active.stationId ? (
+        <View
+          style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.agroBright }}
+        />
       ) : null}
+      <Text
+        variant="locationName"
+        color={active.stationId ? palette.agroInk : palette.inkHeading}
+        numberOfLines={1}
+        style={{ flexShrink: 1 }}
+      >
+        {active.name}
+      </Text>
     </View>
   );
 }

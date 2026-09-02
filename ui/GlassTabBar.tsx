@@ -1,16 +1,12 @@
 /**
  * The liquid-glass tab bar.
  *
- * This is the only glass surface in the design system — `TabBar.jsx` is a
- * translucent tint over a blurred, saturated backdrop, and everything else is solid
- * white on cream. That matches Apple's iOS 26 guidance: glass is for floating
- * chrome, not for content.
+ * Glass is for floating chrome, not for content — `TabBar.jsx` is a translucent tint
+ * over a blurred, saturated backdrop, and every card in the app is solid white on
+ * cream. That matches Apple's iOS 26 guidance.
  *
- * On iOS 26 this uses the real `UIGlassEffect` through expo-glass-effect. The design
- * also specifies an "opaque" material for Reduce Transparency, which is honoured
- * here through the accessibility setting rather than being left to the OS — a
- * `GlassView` still composites, so a user who asked for less transparency must get
- * the flat material instead.
+ * The material itself is `GlassSurface`, shared with the top row so the two ends of
+ * the screen cannot drift apart.
  *
  * The bar shows icons alone. The four destinations are distinct enough to read as
  * pictures, and dropping the captions takes about a fifth off the bar's height —
@@ -18,11 +14,10 @@
  * the bar. The words are not lost: each button still carries its label for
  * VoiceOver, which is where a name actually matters.
  */
-import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Platform, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { radius, shadowCard, space, useTheme } from '../theme';
+import { GlassSurface } from './GlassSurface';
 import { Icon, type IconName } from './Icon';
 
 /**
@@ -47,37 +42,15 @@ export interface GlassTabBarProps {
   onChange: (key: string) => void;
 }
 
-/** True when the user has asked for reduced transparency. */
-function useReduceTransparency(): boolean {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceTransparencyEnabled?.().then((v) => {
-      if (alive) setReduce(!!v);
-    });
-    const sub = AccessibilityInfo.addEventListener('reduceTransparencyChanged', setReduce);
-    return () => {
-      alive = false;
-      sub?.remove();
-    };
-  }, []);
-  return reduce;
-}
-
 export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
   const { palette, appearance } = useTheme();
   const insets = useSafeAreaInsets();
-  const reduceTransparency = useReduceTransparency();
 
   const dark = appearance === 'dark';
-  // Real glass only when the OS provides it and the user has not opted out.
-  const useGlass = isLiquidGlassAvailable() && !reduceTransparency && Platform.OS === 'ios';
 
   const capsule = dark ? palette.glassCapsuleDark : palette.glassCapsule;
   const idle = dark ? palette.appTabIdleDark : palette.appTabIdle;
   const accent = dark ? palette.appAccentDark : palette.appAccent;
-  const opaqueTint = dark ? palette.glassTintDarkOpaque : palette.glassTintOpaque;
-
   const row = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
       {items.map((it) => {
@@ -123,20 +96,9 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
         bottom: Math.max(insets.bottom, space[3]),
       }}
     >
-      {useGlass ? (
-        <GlassView
-          glassEffectStyle={dark ? 'regular' : 'clear'}
-          // Pinned rather than 'auto': the app has its own theme setting, so a user
-          // who chose light inside a dark OS must not get dark glass under it.
-          colorScheme={dark ? 'dark' : 'light'}
-          isInteractive
-          style={[shell, shadowCard]}
-        >
-          {row}
-        </GlassView>
-      ) : (
-        <View style={[shell, shadowCard, { backgroundColor: opaqueTint }]}>{row}</View>
-      )}
+      <GlassSurface interactive style={[shell, shadowCard]}>
+        {row}
+      </GlassSurface>
     </View>
   );
 }

@@ -1,51 +1,48 @@
 /**
- * What every page has around it: the top row, the location name, and the swipe.
+ * What every page has around it: the floating top row, and the swipe.
  *
  * All three pages carry the same chrome, and before this each one built its own —
  * which is how the search debounce came to differ between two of them. The page
  * supplies only its content.
  *
- * The swipe wraps the name and the content but not the top row: the controls stay
- * put while the page — the name included, since that is what changed — slides.
+ * ## Why the row floats
+ *
+ * The row is glass, and glass over a solid background is just a tinted rectangle:
+ * the material only means anything when there is content passing beneath it. So the
+ * row is positioned over the page rather than stacked above it, and each page leaves
+ * `TOP_BAR_CLEARANCE` plus its own safe-area inset at the top of its scroll content.
+ *
+ * The location's name went with it — into each page's scrolling content, where it
+ * scrolls away like any other heading instead of holding a band of the screen for a
+ * word the reader has already read. See `LocationTitle`.
+ *
+ * The swipe wraps the content but not the row: the controls stay put while the page
+ * slides, which is what makes the dots read as a position indicator rather than as
+ * part of the page.
  */
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
 import { TopBar } from './TopBar';
 import { LocationPager } from './LocationPager';
-import { LocationTitle } from './LocationTitle';
 import { usePlaceSearch } from './usePlaceSearch';
 import { usePrefs } from '../state/prefs';
 
-export interface ScreenFrameProps {
-  children: ReactNode;
-  /** A single tighter line instead of the full title block. */
-  compactTitle?: boolean;
-  /** No name at all, for a page that is almost entirely one piece of content and
-   *  wants every point of height for it. */
-  hideTitle?: boolean;
-}
-
-export function ScreenFrame({ children, compactTitle, hideTitle }: ScreenFrameProps) {
+export function ScreenFrame({ children }: { children: ReactNode }) {
   const { palette } = useTheme();
-  const insets = useSafeAreaInsets();
   const { prefs, addLocation } = usePrefs();
   const { results, searching, onSearch } = usePlaceSearch(prefs.lang);
 
   return (
-    <View style={{ flex: 1, backgroundColor: palette.appBg, paddingTop: insets.top }}>
+    <View style={{ flex: 1, backgroundColor: palette.appBg }}>
+      <LocationPager>{children}</LocationPager>
+
       <TopBar
         onSearch={onSearch}
         results={results}
         searching={searching}
         onPick={(p) => addLocation({ name: p.name, lat: p.lat, lon: p.lon, sub: p.sub })}
       />
-
-      <LocationPager>
-        {hideTitle ? null : <LocationTitle compact={compactTitle} />}
-        {children}
-      </LocationPager>
     </View>
   );
 }

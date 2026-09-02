@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { shadowFloat, space, useTheme } from '../../theme';
 import { Card } from '../../ui/Card';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
+import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
 import { ScreenFrame } from '../../ui/ScreenFrame';
@@ -102,11 +103,12 @@ export default function RadarScreen() {
   };
 
   return (
-    <ScreenFrame hideTitle>
+    <ScreenFrame>
       <ScrollView
         onLayout={(e) => setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 4))}
         contentContainerStyle={{
           paddingHorizontal: space[5],
+          paddingTop: TOP_BAR_CLEARANCE + insets.top,
           paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
           gap: space[4],
         }}

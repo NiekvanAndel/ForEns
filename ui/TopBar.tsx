@@ -2,9 +2,15 @@
  * The top row: search, where you are, and room for what comes next.
  *
  * Three slots of equal weight — search on the left, the location control in the
- * middle, an empty slot on the right held open for a future button. Only the two
- * buttons carry a background; the row itself does not, so the bar reads as part of
- * the page rather than as a panel sitting on it.
+ * middle, an empty slot on the right held open for a future button.
+ *
+ * The row floats over the page on glass, so the content scrolls beneath it. That is
+ * the only way the material means anything: glass over a solid background is a
+ * tinted rectangle. The two controls keep their own tinted backgrounds, which is
+ * what makes them read as buttons on the glass rather than as marks in it.
+ *
+ * Pages leave `TOP_BAR_CLEARANCE` plus their safe-area inset at the top of their
+ * scroll content, the way they leave `TAB_BAR_CLEARANCE` at the bottom.
  *
  * The middle control is the position indicator for the page swipe: the GPS arrow
  * stands for the device's own page, one dot for each saved place after it, and
@@ -23,14 +29,22 @@
  */
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { radius, shadowCard, space, useTheme } from '../theme';
+import { GlassSurface } from './GlassSurface';
 import { Text } from './Text';
 import { Icon } from './Icon';
 import { usePrefs } from '../state/prefs';
 import { useDeviceLocation } from '../state/deviceLocation';
 import type { Place } from '../core/sources/geocoding';
 import { ta } from '../core/i18n';
+
+/**
+ * How much room a page leaves under the notch before its own content starts, so the
+ * first card clears the floating row. The row's own height plus a little air.
+ */
+export const TOP_BAR_CLEARANCE = 62;
 
 export interface TopBarProps {
   onSearch: (query: string) => void;
@@ -41,6 +55,7 @@ export interface TopBarProps {
 
 export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
   const { palette } = useTheme();
+  const insets = useSafeAreaInsets();
   const { prefs, selectLocation } = usePrefs();
   const { index: hereIndex, locating, locate } = useDeviceLocation();
   const [open, setOpen] = useState(false);
@@ -61,7 +76,16 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
 
   if (open) {
     return (
-      <View style={{ paddingHorizontal: space[5], paddingTop: 6, paddingBottom: space[3] }}>
+      <View
+        style={{
+          position: 'absolute', left: 0, right: 0, top: 0,
+          paddingHorizontal: space[5],
+          paddingTop: insets.top + 6,
+          paddingBottom: space[3],
+          // Opaque while searching: a list of places over a moving page is unreadable.
+          backgroundColor: palette.appBg,
+        }}
+      >
         <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
           <View
             style={[
@@ -142,9 +166,13 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
   }
 
   return (
-    <View
+    <GlassSurface
+      interactive
       style={{
-        paddingHorizontal: space[5], paddingTop: 6, paddingBottom: space[2],
+        position: 'absolute', left: 0, right: 0, top: 0,
+        paddingHorizontal: space[5],
+        paddingTop: insets.top + 6,
+        paddingBottom: space[2],
         flexDirection: 'row', alignItems: 'center',
       }}
     >
@@ -226,7 +254,7 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
 
       {/* Right: held open, so adding a button later does not move the middle. */}
       <View style={{ flex: 1, alignItems: 'flex-end' }} />
-    </View>
+    </GlassSurface>
   );
 }
 

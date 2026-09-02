@@ -9,13 +9,17 @@
  * so "has it been raining?" is a swipe left. Past cells are dimmed rather than
  * dropped — the shape of the morning is what makes the afternoon readable.
  *
+ * Tapping a cell opens that day in 'Verwachting'. The strip runs a day and a half,
+ * so the hour a reader presses is the shortest route to the day sheet behind it —
+ * and a card whose cells look pressable should be.
+ *
  * Each cell carries five readings: hour, condition, temperature, precipitation,
  * wind, and sunshine. There is no precipitation bar here. A bar and a number say
  * the same thing twice, and the room the bar took is what wind and sunshine now
  * use — the cells are wider for the same reason, so five stacked readings sit in a
  * calm column instead of being crushed against the cell's edges.
  */
-import { View, ScrollView } from 'react-native';
+import { View, ScrollView, Pressable } from 'react-native';
 import { radius, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
@@ -26,7 +30,7 @@ import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, fmtMm } from '../../core/i18n';
 import { hourWindow } from '../../core/model/hourWindow';
 import { sunnyHourWmo } from '../../core/model/conditions';
-import type { ForecastModel } from '../../core/model/types';
+import type { ForecastModel, Hour } from '../../core/model/types';
 
 /** Wide enough for "12,4" under a wind arrow without either touching the cell's
  *  edge. The bar that used to sit here was narrower than the numbers around it. */
@@ -38,7 +42,13 @@ const TEMP_SIZE = 17;
 /** How much a past hour is faded. Enough to recede, not so much it cannot be read. */
 const PAST_OPACITY = 0.45;
 
-export function HourSlider({ model }: { model: ForecastModel }) {
+export interface HourSliderProps {
+  model: ForecastModel;
+  /** Tapping an hour hands back the hour it belongs to. */
+  onPressHour?: (hour: Hour) => void;
+}
+
+export function HourSlider({ model, onPressHour }: HourSliderProps) {
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
   const { hours, nowIndex } = hourWindow(model, { ahead: 24, behind: 6 });
@@ -58,13 +68,17 @@ export function HourSlider({ model }: { model: ForecastModel }) {
       {hours.map((h, i) => {
         const mm = h.precip ?? 0;
         return (
-          <View
+          <Pressable
             key={h.time}
-            style={[
+            onPress={onPressHour ? () => onPressHour(h) : undefined}
+            disabled={!onPressHour}
+            accessibilityRole={onPressHour ? 'button' : undefined}
+            accessibilityLabel={onPressHour ? h.time.slice(0, 16).replace('T', ' ') : undefined}
+            style={({ pressed }) => [
               {
                 width: CELL_WIDTH, alignItems: 'center', borderRadius: radius.card,
                 paddingVertical: 10, paddingHorizontal: 4,
-                opacity: i < nowIndex ? PAST_OPACITY : 1,
+                opacity: (i < nowIndex ? PAST_OPACITY : 1) * (pressed ? 0.6 : 1),
               },
               i === nowIndex ? decor : plainDecor,
             ]}
@@ -122,7 +136,7 @@ export function HourSlider({ model }: { model: ForecastModel }) {
             >
               {Math.round(h.sunMin ?? 0)}m
             </Text>
-          </View>
+          </Pressable>
         );
       })}
     </ScrollView>

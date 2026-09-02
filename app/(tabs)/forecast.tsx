@@ -4,6 +4,9 @@
  * The design's layer switcher is decorative in the mock; here each layer genuinely
  * re-renders the day rows against its own measurand, driven by `core/model/layers`.
  *
+ * A tap on an hour in the strip on 'Nu' arrives here as a `day` route parameter and
+ * opens that day's sheet, since this page owns the sheet and its hourly detail.
+ *
  * Days 8–14 stay collapsed until asked for, because fetching them means a 16-day
  * deterministic run and a 14-day ensemble — the two slowest calls the app makes.
  *
@@ -14,10 +17,13 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space, useTheme } from '../../theme';
 import { Card, Rule } from '../../ui/Card';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
+import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
+import { LocationTitle } from '../../ui/LocationTitle';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
 import { ScreenFrame } from '../../ui/ScreenFrame';
@@ -41,6 +47,9 @@ export default function ForecastScreen() {
   const { prefs, location } = usePrefs();
   const { model, phase, extendedLoaded, loadExtendedDays } = useForecast();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  /** Set when another page asked for a particular day — the hourly strip on 'Nu'. */
+  const { day: requestedDay } = useLocalSearchParams<{ day?: string }>();
 
   const [layer, setLayer] = useState<LayerKey>('overview');
   const [expanded, setExpanded] = useState(false);
@@ -74,6 +83,16 @@ export default function ForecastScreen() {
     return () => { alive = false; };
   }, [sheetDay, location.lat, location.lon]);
 
+  // A day asked for by another page opens its sheet once the model that describes it
+  // has landed, and the parameter is then cleared: it is a request, not a state, and
+  // leaving it set would reopen the sheet every time the tab came back.
+  useEffect(() => {
+    if (!requestedDay || !model) return;
+    const match = model.days.find((d) => d.date === requestedDay);
+    if (match) setSheetDay(match);
+    router.setParams({ day: undefined });
+  }, [requestedDay, model, router]);
+
   const days = useMemo(
     () => (model ? (expanded ? model.days : model.days.slice(0, COLLAPSED_DAYS)) : []),
     [model, expanded]
@@ -94,15 +113,18 @@ export default function ForecastScreen() {
     : 'ECMWF IFS';
 
   return (
-    <ScreenFrame compactTitle>
+    <ScreenFrame>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: space[4],
+          paddingTop: TOP_BAR_CLEARANCE + insets.top,
           paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
           gap: space[3],
         }}
         showsVerticalScrollIndicator={false}
       >
+        <LocationTitle />
+
         {!model ? (
           <Card>
             <View style={{ paddingVertical: space[8], alignItems: 'center' }}>
