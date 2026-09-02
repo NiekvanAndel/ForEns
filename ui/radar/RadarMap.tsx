@@ -12,6 +12,10 @@
  *
  * Zoom limits and pin rendering are explained in ./mapStyle, which the preview on
  * 'Nu' shares.
+ *
+ * There is no recentre button. The map already returns to the location whenever the
+ * location changes, and the pin is on screen at every zoom the map allows, so the
+ * button existed to undo a pan that a reader who had panned did not want undone.
  */
 import { useEffect, useRef } from 'react';
 import { View, Pressable } from 'react-native';
@@ -92,12 +96,6 @@ export function RadarMap({
     };
     region.current = next;
     mapRef.current?.animateToRegion(next, 200);
-  };
-
-  const recentre = () => {
-    const next = { ...region.current, latitude: lat, longitude: lon };
-    region.current = next;
-    mapRef.current?.animateToRegion(next, 300);
   };
 
   return (
@@ -181,7 +179,6 @@ export function RadarMap({
         <View style={{ position: 'absolute', left: CHROME_INSET, top: chromeTop, gap: space[2] }}>
           <ControlButton icon="plus" label="Inzoomen" bg={chromeBg} ink={chromeInk} onPress={() => zoom(0.5)} />
           <ControlButton icon="minus" label="Uitzoomen" bg={chromeBg} ink={chromeInk} onPress={() => zoom(2)} />
-          <ControlButton icon="crosshair" label="Terug naar mijn locatie" bg={chromeBg} ink={chromeInk} onPress={recentre} />
         </View>
       ) : null}
 

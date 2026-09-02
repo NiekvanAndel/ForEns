@@ -144,6 +144,47 @@ export function symbolLayers(code: number, isDay: boolean = true): LayerRole[] {
   return roles;
 }
 
+/** Share of a period that must be sunshine before the sun wins the icon. */
+export const SUNNY_FRACTION = 0.75;
+
+/** How long one row of an hourly series covers. Past 90 hours the model drops to
+ *  three-hourly, and a three-hour row needs three times the sunshine to qualify. */
+export const HOUR_MIN = 60;
+export const THREE_HOUR_MIN = 180;
+
+/**
+ * The code to draw for a period, with a sunny spell allowed to overrule it.
+ *
+ * A weather code names the period's most notable event, so an afternoon with one
+ * ten-minute shower in it is "rain" — and drawn as rain beside three quarters of an
+ * hour of sunshine, which is not what that afternoon looked like. Above the
+ * threshold the sun is the honest picture.
+ *
+ * Only the *icon* is overruled. The code itself still drives the alert hero, the
+ * text description and everything else that has to keep saying a thunderstorm is a
+ * thunderstorm — a sunny half hour does not make one safe.
+ *
+ * `sunMin` is null wherever the sunshine series has not landed, and at night it is
+ * zero, so neither can trip the rule.
+ */
+export function sunnyWmo(
+  wmo: number,
+  sunMin: number | null | undefined,
+  periodMin: number = HOUR_MIN
+): number {
+  if (sunMin == null || periodMin <= 0) return wmo;
+  return sunMin > periodMin * SUNNY_FRACTION ? 0 : wmo;
+}
+
+/** The same rule for an hour off the model, which knows its own resolution. */
+export function sunnyHourWmo(hour: {
+  wmo: number;
+  sunMin?: number | null;
+  is3h?: boolean;
+}): number {
+  return sunnyWmo(hour.wmo, hour.sunMin, hour.is3h ? THREE_HOUR_MIN : HOUR_MIN);
+}
+
 /** A stable identifier for a condition, kept for tests and analytics. */
 export type ConditionKey =
   | 'clear' | 'mostly-clear' | 'partly-cloudy' | 'cloudy' | 'fog'

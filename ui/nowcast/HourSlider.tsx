@@ -25,12 +25,16 @@ import { useCenterOnIndex } from '../forecast/useCenterOnIndex';
 import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, fmtMm } from '../../core/i18n';
 import { hourWindow } from '../../core/model/hourWindow';
+import { sunnyHourWmo } from '../../core/model/conditions';
 import type { ForecastModel } from '../../core/model/types';
 
 /** Wide enough for "12,4" under a wind arrow without either touching the cell's
  *  edge. The bar that used to sit here was narrower than the numbers around it. */
 const CELL_WIDTH = 74;
 const CELL_GAP = 6;
+/** The hour and its temperature are what the strip is read for, so both are a step
+ *  up from the caption sizes around them. */
+const TEMP_SIZE = 17;
 /** How much a past hour is faded. Enough to recede, not so much it cannot be read. */
 const PAST_OPACITY = 0.45;
 
@@ -70,10 +74,16 @@ export function HourSlider({ model }: { model: ForecastModel }) {
             </Text>
 
             <View style={{ marginVertical: 8 }}>
-              <WeatherIcon wmo={h.wmo} isDay={h.isDay} size={24} />
+              <WeatherIcon wmo={sunnyHourWmo(h)} isDay={h.isDay} size={26} />
             </View>
 
-            <Text variant="bodySm" weight="bold" color={palette.valTemp} tabular>
+            <Text
+              variant="bodySm"
+              weight="bold"
+              color={palette.valTemp}
+              tabular
+              style={{ fontSize: TEMP_SIZE }}
+            >
               {convTemp(h.temp, prefs.tempUnit) ?? '—'}°
             </Text>
 

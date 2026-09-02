@@ -341,6 +341,23 @@ function wmoIcon(c,isDay=1,size=22){
 }
 function wi(c,isDay=1,sz=22){return wmoIcon(c,isDay,sz);}
 
+// Zonnige-periode-regel: is meer dan 75% van een periode zon, dan wint de zon van
+// het weercode-icoon. Een weercode noemt het opvallendste voorval van de periode,
+// dus een middag met een bui van tien minuten is "regen" — en werd naast
+// drie kwartier zon ook als regen getekend, wat die middag niet was.
+// Alleen het icoon wordt overruled: de code zelf blijft de tekst, de waarschuwing
+// en al het andere aansturen, want een zonnig half uur maakt onweer niet veilig.
+const SUNNY_FRACTION=0.75;
+function sunnyWmo(wmo,sunMin,periodMin=60){
+  if(sunMin==null||periodMin<=0) return wmo;
+  return sunMin>periodMin*SUNNY_FRACTION ? 0 : wmo;
+}
+// Icoon voor een uur uit het model, dat zijn eigen resolutie kent: na 90 uur is de
+// reeks 3-uurlijks en heeft een rij drie keer zoveel zon nodig.
+function wiHour(h,isDay=1,sz=22){
+  return wi(sunnyWmo(h?.wmo??0,h?.sunMin,h?.is3h?180:60),isDay,sz);
+}
+
 const WMO={0:'Helder',1:'Meest helder',2:'Gedeeltelijk bewolkt',3:'Bewolkt',45:'Mist',48:'Rijpmist',51:'Motregen (licht)',53:'Motregen',55:'Motregen (zwaar)',61:'Regen (licht)',63:'Regen',65:'Regen (zwaar)',71:'Sneeuw (licht)',73:'Sneeuw',75:'Sneeuw (zwaar)',80:'Buien (licht)',81:'Buien',82:'Hevige buien',95:'Onweer',96:'Onweer + hagel',99:'Zwaar onweer'};
 
 function wd(c){return (typeof tWmo==='function')?tWmo(c):(WMO[c]||'Onbekend');}
@@ -1113,7 +1130,7 @@ function render(){
     return`<div onclick="openHourlyPopup(${absIdx})" style="display:grid;grid-template-columns:40px 1fr 28px 1fr auto 1fr auto 1fr auto 1fr auto;align-items:center;padding:10px 16px;${i<2?'border-bottom:1px solid var(--border)':''}cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
       <span style="font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:600;color:var(--muted)">${h.time.slice(11,16)}</span>
       <span></span>
-      <span style="font-size:calc(24px*var(--fz));line-height:1;text-align:center">${wi(h.wmo,h.isDay??1,24)}</span>
+      <span style="font-size:calc(24px*var(--fz));line-height:1;text-align:center">${wiHour(h,h.isDay??1,24)}</span>
       <span></span>
       <span style="font-family:var(--mono);font-size:calc(17px*var(--fz));font-weight:700;color:var(--amber)">${fmtTempShort(h.temp)}</span>
       <span></span>
@@ -1160,7 +1177,7 @@ function renderHourly(){
 
     html+=`<div class="hour-item ${isPast?'past':''} ${i===S.hi?'active':''}" onclick="selHour(${i})" style="${nowStyle}">
       <span class="hour-label">${h.time.slice(11,16)}</span>
-      <span class="hour-icon" style="${isPast?'filter:saturate(.3)':''}">${wi(h.wmo,h.isDay??1)}</span>
+      <span class="hour-icon" style="${isPast?'filter:saturate(.3)':''}">${wiHour(h,h.isDay??1)}</span>
       <span class="hour-temp">${fmtTempShort(h.temp)}</span>
       <span class="hour-precip" style="color:${precipCol}">${precipStr}</span>
       <span class="hour-mm" style="color:var(--muted)">${fmtWind(h.wind)}</span>
@@ -1717,7 +1734,7 @@ async function renderVochtDayPopup(d){
     <div style="font-family:var(--mono);font-size:calc(10px*var(--fz));color:var(--muted);letter-spacing:.08em;text-transform:uppercase;padding:10px 18px 4px">${t('perHour')} · ${useHarm?'HARMONIE-AROME':'IFS'}</div>
     ${dagHoursV.map((h,i)=>`<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto;align-items:center;padding:9px 18px;${i<dagHoursV.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
       <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${h.time.slice(11,16)}</span>
-      <span></span><span style="font-size:calc(20px*var(--fz))">${wi(h.wmo??0,isHourDay(h.time,S.lat),20)}</span><span></span>
+      <span></span><span style="font-size:calc(20px*var(--fz))">${wiHour(h,isHourDay(h.time,S.lat),20)}</span><span></span>
       <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:var(--accent)">${h.humidity!=null?h.humidity+'%':'—'}${h.isPast?'<span style="font-size:calc(11px*var(--fz));color:var(--muted)"> '+t('measurement')+'</span>':''}</span>
     </div>`).join('')}
   </div>`:'';
@@ -1824,7 +1841,7 @@ async function renderWindDayPopup(d){
       const ens=!h.isPast?ensWindHourMap[h.time]:null;
       return`<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto 1fr auto;align-items:center;padding:9px 18px;${i<dagHoursW.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
       <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${h.time.slice(11,16)}</span>
-      <span></span><span style="font-size:calc(20px*var(--fz))">${wi(h.wmo??0,isHourDay(h.time,S.lat),20)}</span><span></span>
+      <span></span><span style="font-size:calc(20px*var(--fz))">${wiHour(h,isHourDay(h.time,S.lat),20)}</span><span></span>
       <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:var(--muted);display:flex;align-items:center;gap:4px">${degToArrow(h.windDir??null)}<span>${fmtWind(h.wind)}</span>${ens?`<span style="font-size:calc(11px*var(--fz));color:var(--muted);opacity:.7;margin-left:4px">${fmtWind(ens.p10)}–${fmtWind(ens.p90)}</span>`:''}</span>
       <span></span>
       <span style="font-family:var(--mono);font-size:calc(13px*var(--fz));color:var(--muted)">${h.gusts!=null?fmtWind(h.gusts)+'↑':'—'}${h.isPast?'<span style="font-size:calc(11px*var(--fz));color:var(--muted)"> '+t('measurement')+'</span>':''}</span>
@@ -1905,7 +1922,7 @@ async function renderZonDayPopup(d){
       const sv=h.isPast?h.sunMin:(d.sun6Hourly?.[h.time]??h.sunMin);
       return `<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto;align-items:center;padding:9px 18px;${i<dagHoursZ.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
       <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${h.time.slice(11,16)}</span>
-      <span></span><span style="font-size:calc(20px*var(--fz))">${wi(h.wmo??0,isHourDay(h.time,S.lat),20)}</span><span></span>
+      <span></span><span style="font-size:calc(20px*var(--fz))">${wiHour(h,isHourDay(h.time,S.lat),20)}</span><span></span>
       <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:${(sv??0)>0?'var(--amber)':'var(--muted)'}">
         ${sv!=null?(sv+'m'):'—'}${h.isPast?'<span style="font-size:calc(11px*var(--fz));color:var(--muted)"> '+t('measurement')+'</span>':''}
       </span>
@@ -2055,7 +2072,7 @@ async function renderTempDayPopup(d){
         return`<div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto;align-items:center;padding:9px 18px;${i<dagHours.length-1?'border-bottom:1px solid var(--border)':''}${h.isPast?';opacity:.5':''}">
           <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${hhmm}</span>
           <span></span>
-          <span style="font-size:calc(20px*var(--fz))">${wi(h.wmo??0,isd,20)}</span>
+          <span style="font-size:calc(20px*var(--fz))">${wiHour(h,isd,20)}</span>
           <span></span>
           <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:${h.isPast?'var(--muted)':'var(--amber)'}">
             ${temp!=null?fmtTempShort(temp):'—'}${h.isPast?'<span style="font-family:var(--mono);font-size:calc(11px*var(--fz));color:var(--muted)"> '+t('measurement')+'</span>':''}
@@ -2284,7 +2301,6 @@ async function renderNeerslagDayPopup(d){
         const hhmm=h.time.slice(11,16);
         const ens=h.isPast?{}:getEns(h.time);
         const isd=isHourDay(h.time, S.lat);
-        const wmo=h.wmo??0;
         const hasUurKans=!h.isPast&&ens.pChance!=null;
         const pChance=hasUurKans?ens.pChance:dagKans;
         const pLabel=h.isPast?'meting':(hasUurKans?`${pChance}%`:`${pChance}%<sup style="font-size:calc(8px*var(--fz));opacity:.6">dag</sup>`);
@@ -2292,7 +2308,7 @@ async function renderNeerslagDayPopup(d){
         <div style="display:grid;grid-template-columns:44px 1fr 28px 1fr auto 1fr auto;align-items:center;padding:9px 18px;${i<ifsHours.length-1?'border-bottom:1px solid var(--border)':''}${h.is3h?';opacity:.75':''}${h.isPast?';opacity:.5':''}">
           <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:600;color:var(--muted)">${hhmm}${h.is3h?'<sup style="font-size:calc(8px*var(--fz))">3h</sup>':''}</span>
           <span></span>
-          <span style="font-size:calc(20px*var(--fz))">${wi(wmo,isd,20)}</span>
+          <span style="font-size:calc(20px*var(--fz))">${wiHour(h,isd,20)}</span>
           <span></span>
           <span style="font-family:var(--mono);font-size:calc(15px*var(--fz));font-weight:700;color:${(h.precip??0)>0?'var(--accent)':'var(--muted)'}">
             ${(h.precip??0).toFixed(1)} mm

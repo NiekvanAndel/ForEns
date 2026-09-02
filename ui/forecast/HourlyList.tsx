@@ -28,6 +28,7 @@ import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, fmtMm, t, tempUnitLabel, windUnitLabel } from '../../core/i18n';
 import type { LayerKey } from '../../core/model/layers';
 import type { DetailHour } from '../../core/model/dayDetail';
+import { sunnyHourWmo } from '../../core/model/conditions';
 
 export interface HourlyListProps {
   layer: LayerKey;
@@ -74,7 +75,7 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
             {h.time.slice(11, 16)}
           </Text>
 
-          <WeatherIcon wmo={h.wmo} isDay={hourIsDay(h)} size={20} />
+          <WeatherIcon wmo={sunnyHourWmo(h)} isDay={hourIsDay(h)} size={20} />
 
           <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline', gap: 6 }}>
             <HourValue layer={layer} hour={h} />

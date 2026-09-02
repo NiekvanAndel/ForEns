@@ -39,9 +39,33 @@ import { resolveDayValues } from '../../core/model/dayValues';
 import type { Day } from '../../core/model/types';
 
 /** Room for the longest weekday abbreviation and a two-digit date. */
-const DAY_WIDTH = 42;
+const DAY_WIDTH = 40;
 /** Tight, because five columns share what is left after the day and the icon. */
-const COL_GAP = 6;
+const COL_GAP = 5;
+
+/**
+ * How big the numbers get.
+ *
+ * Six columns share the row, so "as big as it fits" depends on the phone: the sizes
+ * here fit comfortably from an iPhone 15 up, and on a 375-point screen a freezing
+ * day ("-12° 24°") is a few points too wide for them. So the readings also carry
+ * `adjustsFontSizeToFit` with a floor of 0.85, which shrinks that one column by up
+ * to two points on the narrow screens rather than truncating it — every other row
+ * and every wider phone keeps the full size.
+ *
+ * That prop was removed from this file once before, when it was hiding a
+ * precipitation reading that wrapped because it was built from two text nodes. The
+ * structure is one node now; this is the prop doing its actual job.
+ *
+ * Temperature and precipitation lead; wind and sunshine follow a size down, since
+ * they carry the longer units.
+ */
+const VALUE_SIZE = 17;
+const VALUE_SIZE_SMALL = 15;
+/** The units and the `~`, scaled with the numbers they belong to. */
+const UNIT_SIZE = 12;
+const UNIT_SIZE_SMALL = 11;
+const ICON_SIZE = 30;
 
 export interface OverviewDayRowProps {
   day: Day;
@@ -85,12 +109,12 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
         </Text>
       </View>
 
-      <WeatherIcon wmo={v.wmo ?? day.wmo} isDay={1} size={26} />
+      <WeatherIcon wmo={v.wmo ?? day.wmo} isDay={1} size={ICON_SIZE} />
 
       {/* Minimum and maximum, low colour then high — the pair reads as one range. */}
       <View
         style={{
-          flex: 3, minWidth: 58, flexDirection: 'row', alignItems: 'baseline',
+          flex: 3, minWidth: 56, flexDirection: 'row', alignItems: 'baseline',
           justifyContent: 'flex-end', gap: 6,
         }}
       >
@@ -110,11 +134,11 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
 
       <View
         style={{
-          flex: 2.6, minWidth: 52, flexDirection: 'row', alignItems: 'center',
+          flex: 2.6, minWidth: 50, flexDirection: 'row', alignItems: 'center',
           justifyContent: 'flex-end', gap: 3,
         }}
       >
-        <WindArrow deg={v.windDir} size={11} color={palette.muted} />
+        <WindArrow deg={v.windDir} size={12} color={palette.muted} />
         <Reading
           value={convWind(v.wind.value, prefs.windUnit)}
           suffix={` ${windUnitLabel(prefs.windUnit)}`}
@@ -124,7 +148,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
         />
       </View>
 
-      <View style={{ flex: 3, minWidth: 56, flexDirection: 'row', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 3, minWidth: 54, flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Reading
           value={v.precip.value != null ? fmtMm(v.precip.value) : null}
           suffix=" mm"
@@ -133,7 +157,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
         />
       </View>
 
-      <View style={{ flex: 2.2, minWidth: 42, flexDirection: 'row', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 2.2, minWidth: 44, flexDirection: 'row', justifyContent: 'flex-end' }}>
         <Reading
           value={v.sunHours != null ? v.sunHours.toFixed(1).replace('.', ',') : null}
           suffix=" u"
@@ -175,7 +199,13 @@ function Reading({
   const { palette } = useTheme();
   if (value == null) {
     return (
-      <Text variant="bodySm" color={palette.inkDisabled} tabular numberOfLines={1}>
+      <Text
+        variant="bodySm"
+        color={palette.inkDisabled}
+        tabular
+        numberOfLines={1}
+        style={{ fontSize: small ? VALUE_SIZE_SMALL : VALUE_SIZE }}
+      >
         —
       </Text>
     );
@@ -187,7 +217,9 @@ function Reading({
       color={color}
       tabular
       numberOfLines={1}
-      style={small ? { fontSize: 14 } : undefined}
+      adjustsFontSizeToFit
+      minimumFontScale={0.85}
+      style={{ fontSize: small ? VALUE_SIZE_SMALL : VALUE_SIZE }}
     >
       {value}
       {suffix ? (
@@ -195,13 +227,13 @@ function Reading({
           variant="caption"
           weight="semibold"
           color={palette.muted}
-          style={{ fontSize: small ? 10 : 11 }}
+          style={{ fontSize: small ? UNIT_SIZE_SMALL : UNIT_SIZE }}
         >
           {suffix}
         </Text>
       ) : null}
       {approx ? (
-        <Text variant="caption" color={palette.muted} style={{ fontSize: 9 }}>
+        <Text variant="caption" color={palette.muted} style={{ fontSize: 10 }}>
           ~
         </Text>
       ) : null}

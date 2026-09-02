@@ -104,6 +104,8 @@ export interface OracleOptions {
   nowMs?: number;
   /** Multi-line object constants the extracted functions close over, e.g. `LANG`. */
   objectConsts?: readonly string[];
+  /** Single-line constants the extracted functions close over, e.g. `SUNNY_FRACTION`. */
+  consts?: readonly string[];
 }
 
 /** A Date whose no-argument constructor is pinned, leaving every other form intact. */
@@ -145,6 +147,7 @@ export function loadOracle<const N extends readonly string[]>(
       /* not every oracle needs them */
     }
   }
+  for (const c of opts.consts ?? []) consts.add(extractConst(SOURCE, c));
   parts.push(...consts);
   for (const c of opts.objectConsts ?? []) parts.push(extractObjectConst(SOURCE, c));
   for (const n of names) parts.push(extractFunction(SOURCE, n));
