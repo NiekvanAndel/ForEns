@@ -80,6 +80,20 @@ interface CacheEntry {
   savedMs: number;
 }
 
+/**
+ * A location's cache key.
+ *
+ * Coordinates are floats off a geocoder, so they are keyed at a fixed precision
+ * rather than compared: four decimals is about ten metres, far finer than any two
+ * saved locations are apart.
+ *
+ * At module scope, not inside the provider. It closes over nothing, and as a `const`
+ * in the component body it was declared below its first use — which Babel compiles
+ * to a hoisted `var`, so the call site got `undefined` rather than the function, and
+ * the provider threw on its first render.
+ */
+const cacheKey = (lat: number, lon: number) => `${lat.toFixed(4)},${lon.toFixed(4)}`;
+
 export type LoadPhase = 'idle' | 'loading' | 'ready' | 'error';
 
 interface ForecastContextValue {
@@ -250,11 +264,6 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the point
     [built, location.lat, location.lon, cacheVersion]
   );
-
-  // Coordinates are floats off a geocoder, so they are keyed at a fixed precision
-  // rather than compared: four decimals is about ten metres, far finer than any two
-  // saved locations are apart.
-  const cacheKey = (lat: number, lon: number) => `${lat.toFixed(4)},${lon.toFixed(4)}`;
 
   /** Put a model in the cache and let the pager know there is something new. */
   const remember = useCallback((lat: number, lon: number, m: ForecastModel) => {
