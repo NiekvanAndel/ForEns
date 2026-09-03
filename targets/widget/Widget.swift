@@ -9,7 +9,74 @@ import SwiftUI
 /// the quantity — high is warm red, low is cool blue.
 ///
 /// Every value arrives pre-formatted from `core/widget.ts`; this file lays out
-/// text and never computes weather.
+/// text and never computes weather. The one exception is `glyphLayers`, which reads
+/// a symbol's layers from its name so the glyphs match the app's colours exactly.
+
+// MARK: - Weather glyph
+
+/// The colour of each layer of a weather glyph, read from the symbol's own name.
+///
+/// A port of `glyphLayerColors` in `core/model/conditions.ts`, and it has to stay
+/// one: the app and the widget sit side by side on the same home screen, and a
+/// shower drawn in two different blues there is the kind of thing nobody can
+/// unsee. Apple names these symbols compositionally — `cloud.sun.rain.fill` is
+/// exactly cloud, then sun, then rain — so both sides read the layers the same way.
+///
+/// The widget used to hand every glyph to `.multicolor`, which draws clouds white
+/// and the moon pale blue. Those were never the app's colours.
+private func glyphLayers(_ symbol: String) -> [Color] {
+    var colors: [Color] = []
+    for part in symbol.split(separator: ".") {
+        switch part {
+        // Fog is drawn as lines under the cloud and reads as part of it.
+        case "cloud", "fog":
+            colors.append(Color("WidgetGlyphCloud"))
+        // The stars belong to the moon, and the moon is lit by the sun.
+        case "sun", "moon", "stars":
+            colors.append(Color("WidgetGlyphSun"))
+        case "rain", "heavyrain", "drizzle", "sleet":
+            colors.append(Color("WidgetGlyphPrecip"))
+        // Snow takes the cloud's tone deliberately: white flakes on a grey cloud
+        // read as two objects, and the flakes are the smallest marks in the set.
+        case "snow", "snowflake":
+            colors.append(Color("WidgetGlyphCloud"))
+        case "bolt", "hail":
+            colors.append(Color("WidgetGlyphStorm"))
+        // `fill` and `max` are qualifiers, not layers.
+        default:
+            break
+        }
+    }
+    return colors
+}
+
+/// A weather symbol in the app's own colours.
+///
+/// `foregroundStyle` has no variadic form, so three styles are always passed and a
+/// short list repeats its last colour. SwiftUI ignores styles past the symbol's own
+/// layer count, and a symbol with more layers than the name reveals then takes that
+/// last colour rather than the system's default tint — which is blue, and which is
+/// how a moon came to be blue in the first place.
+///
+/// One expression, no branches: a result builder is a poor place to discover a
+/// compile error, and this file cannot be built from the environment it is written
+/// in.
+struct WeatherGlyph: View {
+    let symbol: String
+    let size: CGFloat
+
+    var body: some View {
+        let layers = glyphLayers(symbol)
+        let first = layers.first ?? Color("WidgetGlyphCloud")
+        let second = layers.count > 1 ? layers[1] : first
+        let third = layers.count > 2 ? layers[2] : second
+
+        Image(systemName: symbol)
+            .symbolRenderingMode(.palette)
+            .font(.system(size: size))
+            .foregroundStyle(first, second, third)
+    }
+}
 
 // MARK: - Timeline
 
@@ -82,9 +149,7 @@ private struct HourColumn: View {
             Text(hour.label)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(Color("WidgetMuted"))
-            Image(systemName: hour.symbol)
-                .symbolRenderingMode(.multicolor)
-                .font(.system(size: 15))
+            WeatherGlyph(symbol: hour.symbol, size: 15)
             Text(hour.temp)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color("WidgetInk"))
@@ -106,9 +171,7 @@ private struct DayRow: View {
                 .foregroundStyle(Color("WidgetInk"))
                 .frame(width: 24, alignment: .leading)
 
-            Image(systemName: day.symbol)
-                .symbolRenderingMode(.multicolor)
-                .font(.system(size: 13))
+            WeatherGlyph(symbol: day.symbol, size: 13)
                 .frame(width: 18)
 
             Text(day.low)
@@ -161,9 +224,7 @@ struct SmallWidget: View {
                     .foregroundStyle(Color("WidgetInk"))
                     .monospacedDigit()
                 Spacer(minLength: 0)
-                Image(systemName: payload.symbol)
-                    .symbolRenderingMode(.multicolor)
-                    .font(.system(size: 26))
+                WeatherGlyph(symbol: payload.symbol, size: 26)
             }
 
             HighLow(payload: payload)
@@ -204,9 +265,7 @@ struct MediumWidget: View {
                     .font(.system(size: 34, weight: .heavy))
                     .foregroundStyle(Color("WidgetInk"))
                     .monospacedDigit()
-                Image(systemName: payload.symbol)
-                    .symbolRenderingMode(.multicolor)
-                    .font(.system(size: 22))
+                WeatherGlyph(symbol: payload.symbol, size: 22)
 
                 Spacer(minLength: 0)
 
@@ -247,9 +306,7 @@ struct LargeWidget: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: payload.symbol)
-                    .symbolRenderingMode(.multicolor)
-                    .font(.system(size: 32))
+                WeatherGlyph(symbol: payload.symbol, size: 32)
             }
 
             if let headline = payload.alertHeadline {
