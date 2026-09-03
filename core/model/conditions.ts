@@ -142,6 +142,47 @@ export function glyphLayerColors(
 }
 
 /**
+ * How one glyph should be handed to `SymbolView`: which rendering mode, and with
+ * what colour or colours.
+ *
+ * The single-layer case is the whole reason this is a function rather than two lines
+ * in the component. expo-symbols drops a palette of one colour on the floor:
+ *
+ *     case .palette:
+ *       if palette.count > 1 {                     // SymbolView.swift:138
+ *         config = config.applying(...)
+ *       }
+ *
+ * No configuration is applied, and with no tint colour set either the symbol falls
+ * back to the system default — which is blue. That is `moon.fill`, `sun.max.fill`,
+ * `cloud.fill` and `snowflake`, and it is why a clear night kept coming out blue
+ * however carefully the colours themselves were chosen. A lone layer is therefore
+ * sent as a monochrome tint, which is the same picture by a route the library
+ * honours.
+ */
+export interface GlyphRendering {
+  type: 'palette' | 'monochrome';
+  /** Set only for `palette`, and only ever with two or more entries. */
+  colors?: string[];
+  /** Set only for `monochrome`. */
+  tintColor?: string;
+}
+
+export function glyphRendering(
+  code: number,
+  isDay: boolean,
+  appearance: GlyphAppearance,
+  /** A colour the caller insists on — a row that tints its glyph means it. */
+  forced?: string
+): GlyphRendering {
+  if (forced) return { type: 'monochrome', tintColor: forced };
+  const layers = glyphLayerColors(code, isDay, appearance);
+  if (layers.length > 1) return { type: 'palette', colors: layers };
+  // One layer, or a symbol whose name yielded none: tint it.
+  return { type: 'monochrome', tintColor: layers[0] ?? glyphCloud(appearance) };
+}
+
+/**
  * What each layer of a condition's SF Symbol actually depicts, in order.
  *
  * Palette rendering colours layers positionally, so it needs to know what is in

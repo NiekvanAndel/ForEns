@@ -32,7 +32,7 @@ import { SymbolView } from 'expo-symbols';
 import { Platform } from 'react-native';
 import { useTheme } from '../theme';
 import {
-  glyphCloud, glyphLayerColors, wmoCondition, wmoSymbol,
+  glyphCloud, glyphRendering, wmoCondition, wmoSymbol,
   type ConditionKey,
 } from '../core/model/conditions';
 import { Icon } from './Icon';
@@ -87,19 +87,17 @@ export function WeatherIcon({ wmo = 3, isDay = 1, size = 34, color }: WeatherIco
     );
   }
 
-  // One colour per layer, from `glyphLayerColors`. A forced colour still wins — a row
-  // that tints its glyph means it — and a symbol whose name yields no layers falls
-  // back to the cloud tone rather than to whatever iOS would pick for it.
-  const stated = color ? [] : glyphLayerColors(code, day, appearance);
-  const layers = stated.length ? stated : undefined;
+  // Which mode and which colours, including the single-layer case that expo-symbols
+  // would otherwise drop. See `glyphRendering`.
+  const render = glyphRendering(code, day, appearance, color);
 
   return (
     <SymbolView
       name={wmoSymbol(code, day) as never}
       size={size}
-      type={layers ? 'palette' : 'monochrome'}
-      colors={layers}
-      tintColor={layers ? undefined : color ?? cloud}
+      type={render.type}
+      colors={render.colors}
+      tintColor={render.tintColor}
       // Never leave a hole in a row if a symbol is missing on this iOS version.
       fallback={
         <Icon

@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  glyphLayerColors, glyphCloud, wmoSymbol,
+  glyphLayerColors, glyphCloud, glyphRendering, wmoSymbol,
   GLYPH_CLOUD_LIGHT, GLYPH_CLOUD_DARK, GLYPH_SUN, GLYPH_PRECIP, GLYPH_STORM,
 } from '../core/model/conditions';
 
@@ -95,5 +95,62 @@ describe('glyphLayerColors', () => {
   it('has a cloud tone for a glyph with no readable layers', () => {
     expect(glyphCloud('light')).toBe(GLYPH_CLOUD_LIGHT);
     expect(glyphCloud('dark')).toBe(GLYPH_CLOUD_DARK);
+  });
+});
+
+/**
+ * How each glyph is handed to expo-symbols.
+ *
+ * The library drops a palette of one colour without applying anything
+ * (`SymbolView.swift:138`), and with no tint set the symbol falls back to the system
+ * default, which is blue. A single-layer glyph must therefore go out as a monochrome
+ * tint. This is what made a clear night blue no matter which yellow was chosen, so
+ * it is asserted per symbol rather than described.
+ */
+describe('glyphRendering', () => {
+  /** Codes whose symbol has exactly one layer, and must never use palette. */
+  const SINGLE: [number, boolean, string][] = [
+    [0, true, GLYPH_SUN],   // sun.max.fill
+    [1, true, GLYPH_SUN],   // sun.max.fill
+    [1, false, GLYPH_SUN],  // moon.fill
+    [3, true, GLYPH_CLOUD_LIGHT],  // cloud.fill
+    [75, true, GLYPH_CLOUD_LIGHT], // snowflake
+    [86, true, GLYPH_CLOUD_LIGHT], // snowflake
+  ];
+
+  for (const [code, isDay, expected] of SINGLE) {
+    it(`tints ${wmoSymbol(code, isDay)} rather than sending a one-colour palette`, () => {
+      const r = glyphRendering(code, isDay, 'light');
+      expect(r.type).toBe('monochrome');
+      expect(r.tintColor).toBe(expected);
+      expect(r.colors).toBeUndefined();
+    });
+  }
+
+  it('never emits a palette with fewer than two colours, for any code', () => {
+    for (let code = 0; code <= 99; code++) {
+      for (const isDay of [true, false]) {
+        for (const appearance of ['light', 'dark'] as const) {
+          const r = glyphRendering(code, isDay, appearance);
+          if (r.type === 'palette') {
+            expect(r.colors!.length, `code ${code}`).toBeGreaterThan(1);
+            expect(r.tintColor, `code ${code}`).toBeUndefined();
+          } else {
+            expect(r.tintColor, `code ${code}`).toMatch(/^#[0-9A-F]{6}$/);
+          }
+        }
+      }
+    }
+  });
+
+  it('uses a palette where there is genuinely more than one layer', () => {
+    const shower = glyphRendering(80, true, 'light');
+    expect(shower.type).toBe('palette');
+    expect(shower.colors).toEqual([GLYPH_CLOUD_LIGHT, GLYPH_SUN, GLYPH_PRECIP]);
+  });
+
+  it('lets a forced colour win outright', () => {
+    const r = glyphRendering(80, true, 'dark', '#123456');
+    expect(r).toEqual({ type: 'monochrome', tintColor: '#123456' });
   });
 });
