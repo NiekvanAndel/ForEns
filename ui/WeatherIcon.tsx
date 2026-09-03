@@ -10,20 +10,19 @@
  * Day and night are separate symbols rather than a tint, so the glyph reads as
  * weather rather than as a UI icon.
  *
- * Colour is ours, not Apple's, and this is the part worth explaining. SF Symbols'
- * multicolour rendering draws the cloud layer white — right on navy, nearly
- * invisible on cream — and the moon a pale blue. So any glyph with a cloud, a sun or
- * a moon in it uses `palette` rendering instead: one consistent grey for every
- * cloud, sun and moon both yellow, rain blue, snow pale and lightning amber, so a
- * row of mixed conditions reads as one set. The cloud tone and the tokens behind the
- * other layers follow the appearance, so the set works in both themes.
+ * Colour is by appearance, and this is the part worth explaining. SF Symbols'
+ * multicolour rendering draws the cloud layer white, which is right on navy and
+ * nearly invisible on cream. On light the glyphs therefore use `palette` rendering
+ * instead: one consistent grey for every cloud, with sun yellow, rain blue, snow
+ * pale and lightning amber — so a row of mixed conditions reads as one set.
  *
- * The exceptions are the glyphs with nothing we have an opinion about — `cloud.fill`
- * and `cloud.fog.fill`, which `symbolIsMulticolor` already excludes and which are
- * drawn monochrome in the cloud grey, and `snowflake`. Getting the rest wrong put
- * the sun out twice: first grey, then, with one colour supplied for a symbol iOS
- * draws in more layers than that, blue. The rule is per-layer now, from the symbol's
- * own name, so neither can recur.
+ * Palette rendering applies to symbols containing a cloud — the only thing that goes
+ * white — and to those containing a moon, which multicolour also draws white and
+ * which therefore disappeared on cream exactly as the clouds did. A clear day is
+ * `sun.max.fill`: no cloud, no moon, so it keeps multicolour in both appearances and
+ * stays Apple's own yellow. Getting this wrong put the sun out twice: first grey,
+ * then, with one colour supplied for a symbol iOS draws in more layers than that,
+ * blue.
  *
  * The sun and the moon are the same yellow, and it is a glyph colour rather than the
  * `--val-sun` text token. That token is a deep orange on light, chosen to be read as
@@ -108,17 +107,14 @@ export function WeatherIcon({ wmo = 3, isDay = 1, size = 34, color }: WeatherIco
   // A forced colour always wins: a row that tints its glyph means it.
   const forced = !!color;
   const roles = symbolLayers(code, day);
-  // Any glyph with parts we have an opinion about is drawn from the palette, in both
-  // appearances. It was light-only, on the reasoning that multicolour's white cloud
-  // is the problem and white is only invisible on cream. But that left the night
-  // glyphs to Apple in the dark theme, where its multicolour moon is a pale blue —
-  // so a moon was yellow by day and blue by night, which is not a rule anyone could
-  // have guessed. One set of colours, both themes; the cloud tone and the tokens
-  // behind rain, snow and lightning already follow the appearance themselves.
+  // Clouds and moons are what multicolour renders white, so those are the symbols
+  // that need the palette treatment — and only on light, where white is invisible.
+  // Everything else keeps its own colours.
   const usePalette =
     !forced &&
+    appearance === 'light' &&
     symbolIsMulticolor(code) &&
-    (roles.includes('cloud') || roles.includes('moon') || roles.includes('sun'));
+    (roles.includes('cloud') || roles.includes('moon'));
   const multicolor = !forced && !usePalette && symbolIsMulticolor(code);
 
   const layers = usePalette
