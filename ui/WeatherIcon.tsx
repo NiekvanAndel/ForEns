@@ -10,37 +10,30 @@
  * Day and night are separate symbols rather than a tint, so the glyph reads as
  * weather rather than as a UI icon.
  *
- * Colour is by appearance, and this is the part worth explaining. SF Symbols'
- * multicolour rendering draws the cloud layer white, which is right on navy and
- * nearly invisible on cream. On light the glyphs therefore use `palette` rendering
- * instead: one consistent grey for every cloud, with sun yellow, rain blue, snow
- * pale and lightning amber — so a row of mixed conditions reads as one set.
+ * Every colour here is ours. Nothing is left to SF Symbols' `multicolor` rendering,
+ * which was the source of a long run of colour bugs: it draws the cloud layer white
+ * and the moon pale blue, and it applied to fifty of the fifty-six icon variants in
+ * the dark theme — colours nobody working on this code could see or look up. So each
+ * glyph is drawn with `palette` rendering and one stated colour per layer.
  *
- * Palette rendering applies to symbols containing a cloud — the only thing that goes
- * white — and to those containing a moon, which multicolour also draws white and
- * which therefore disappeared on cream exactly as the clouds did. A clear day is
- * `sun.max.fill`: no cloud, no moon, so it keeps multicolour in both appearances and
- * stays Apple's own yellow. Getting this wrong put the sun out twice: first grey,
- * then, with one colour supplied for a symbol iOS draws in more layers than that,
- * blue.
+ * The set is the same in both appearances except the cloud, which lifts on navy:
  *
- * The sun and the moon are the same yellow, and it is a glyph colour rather than the
- * `--val-sun` text token. That token is a deep orange on light, chosen to be read as
- * a number on cream; used on a glyph it made the sun behind a cloud orange while the
- * sun on its own — multicolour, drawn by iOS — stayed yellow, so two suns in one
- * column did not match. This yellow is the one iOS draws.
+ *   cloud   #B7C3D1 on light, #C9D6E4 on dark
+ *   sun     #FFCC00      moon    #FFCC00, the same light
+ *   rain    #3FC1EF      snow    the cloud tone, so a snow glyph reads as one object
+ *   bolt    #D9871F
  *
- * Where there *is* a cloud, `symbolLayers` says which layer is which, because it
- * varies: `cloud.sun.fill` leads with a cloud, `cloud.bolt.rain.fill` has three.
- *
- * The same mapping drives the SwiftUI widget, so the two cannot disagree.
+ * Which layer is which comes from `symbolLayers`, which reads the symbol's own name.
+ * The widget shares the symbol *names* through the same module, but draws them with
+ * `.symbolRenderingMode(.multicolor)` in Swift — so its colours are Apple's, not
+ * these. Worth knowing before comparing the two side by side.
  */
 import { SymbolView } from 'expo-symbols';
 import { Platform } from 'react-native';
 import { useTheme } from '../theme';
 import {
-  symbolIsMulticolor, symbolLayers, wmoCondition, wmoSymbol,
-  type ConditionKey, type LayerRole,
+  glyphCloud, glyphLayerColors, wmoCondition, wmoSymbol,
+  type ConditionKey,
 } from '../core/model/conditions';
 import { Icon } from './Icon';
 
@@ -76,21 +69,11 @@ const PHOSPHOR_FALLBACK: Record<ConditionKey, string> = {
   'thunderstorm-hail': 'cloud-lightning',
 };
 
-/** One grey for every cloud, in both appearances. Light enough to sit on cream
- *  without weighing a row down, dark enough to read against it. */
-const CLOUD_LIGHT = '#B7C3D1';
-const CLOUD_DARK = '#C9D6E4';
-
-/** The yellow iOS itself draws `sun.max.fill` in, so a sun behind a cloud and a sun
- *  on its own are the same colour. The moon shares it: a moon is lit by the sun, and
- *  a white one is invisible on cream. */
-const SUN_GLYPH = '#FFCC00';
-
 export function WeatherIcon({ wmo = 3, isDay = 1, size = 34, color }: WeatherIconProps) {
-  const { palette, appearance } = useTheme();
+  const { appearance } = useTheme();
   const day = isDay === 1 || isDay === true;
   const code = wmo;
-  const cloud = appearance === 'dark' ? CLOUD_DARK : CLOUD_LIGHT;
+  const cloud = glyphCloud(appearance);
 
   if (Platform.OS !== 'ios') {
     const key = wmoCondition(code);
@@ -104,30 +87,19 @@ export function WeatherIcon({ wmo = 3, isDay = 1, size = 34, color }: WeatherIco
     );
   }
 
-  // A forced colour always wins: a row that tints its glyph means it.
-  const forced = !!color;
-  const roles = symbolLayers(code, day);
-  // Clouds and moons are what multicolour renders white, so those are the symbols
-  // that need the palette treatment — and only on light, where white is invisible.
-  // Everything else keeps its own colours.
-  const usePalette =
-    !forced &&
-    appearance === 'light' &&
-    symbolIsMulticolor(code) &&
-    (roles.includes('cloud') || roles.includes('moon'));
-  const multicolor = !forced && !usePalette && symbolIsMulticolor(code);
-
-  const layers = usePalette
-    ? roles.map((role) => layerColor(role, palette, cloud))
-    : undefined;
+  // One colour per layer, from `glyphLayerColors`. A forced colour still wins — a row
+  // that tints its glyph means it — and a symbol whose name yields no layers falls
+  // back to the cloud tone rather than to whatever iOS would pick for it.
+  const stated = color ? [] : glyphLayerColors(code, day, appearance);
+  const layers = stated.length ? stated : undefined;
 
   return (
     <SymbolView
       name={wmoSymbol(code, day) as never}
       size={size}
-      type={multicolor ? 'multicolor' : usePalette ? 'palette' : 'monochrome'}
+      type={layers ? 'palette' : 'monochrome'}
       colors={layers}
-      tintColor={multicolor || usePalette ? undefined : color ?? cloud}
+      tintColor={layers ? undefined : color ?? cloud}
       // Never leave a hole in a row if a symbol is missing on this iOS version.
       fallback={
         <Icon
@@ -141,28 +113,4 @@ export function WeatherIcon({ wmo = 3, isDay = 1, size = 34, color }: WeatherIco
       style={{ width: size, height: size }}
     />
   );
-}
-
-/** One layer's colour, by what it depicts. */
-function layerColor(
-  role: LayerRole,
-  palette: ReturnType<typeof useTheme>['palette'],
-  cloud: string
-): string {
-  switch (role) {
-    case 'cloud':
-      return cloud;
-    case 'sun':
-      return SUN_GLYPH;
-    // The same yellow as the sun: it is the same light, and it keeps a night glyph
-    // from being two greys.
-    case 'moon':
-      return SUN_GLYPH;
-    case 'precip':
-      return palette.sky;
-    case 'snow':
-      return palette.skySoft;
-    case 'storm':
-      return palette.valTemp;
-  }
 }

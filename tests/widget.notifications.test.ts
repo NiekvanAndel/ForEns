@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { buildWidgetPayload, WIDGET_PAYLOAD_VERSION } from '../core/widget';
-import { wmoSymbol, wmoCondition, symbolIsMulticolor, symbolLayers } from '../core/model/conditions';
+import { wmoSymbol, wmoCondition, symbolLayers } from '../core/model/conditions';
 import {
   planNotification, inQuietHours, afterQuietHours,
   QUIET_START_HOUR, QUIET_END_HOUR,
@@ -149,13 +149,6 @@ describe('wmoSymbol', () => {
 
   it('falls back rather than returning nothing for an unknown code', () => {
     expect(wmoSymbol(1234)).toBe('cloud.fill');
-  });
-
-  it('keeps plain cloud out of multicolour so it stays quiet in a list', () => {
-    expect(symbolIsMulticolor(0)).toBe(true);
-    expect(symbolIsMulticolor(61)).toBe(true);
-    expect(symbolIsMulticolor(3)).toBe(false);
-    expect(symbolIsMulticolor(45)).toBe(false);
   });
 
   it('maps codes to stable condition keys', () => {

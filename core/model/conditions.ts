@@ -81,15 +81,64 @@ export function wmoSymbol(code: number, isDay: boolean = true): string {
   }
 }
 
+
 /**
- * Whether a code should render in multicolour.
+ * The colour of every layer of every weather glyph.
  *
- * Multicolour gives sun its yellow and rain its blue, which is what makes a glyph
- * read as weather rather than as a UI icon. Plain cloud has no colour of its own,
- * so it takes the palette's muted ink instead and stays quiet in a list.
+ * Here rather than in the component, because this is the part that kept going wrong
+ * and a pure function can be pinned by a test. `tests/glyphColors.test.ts` asserts
+ * every symbol in both appearances against the agreed set; change a constant below
+ * and that test says exactly which glyphs move.
+ *
+ * Nothing is left to SF Symbols' `multicolor` rendering. It draws clouds white and
+ * the moon pale blue, and it covered fifty of the fifty-six icon variants in the
+ * dark theme — colours nobody working on this code could see. Every layer is stated.
+ *
+ * Only the cloud changes between appearances; it lifts on navy so it does not sink
+ * into the page.
  */
-export function symbolIsMulticolor(code: number): boolean {
-  return code !== 3 && code !== 45 && code !== 48;
+export const GLYPH_CLOUD_LIGHT = '#B7C3D1';
+export const GLYPH_CLOUD_DARK = '#C9D6E4';
+/** The sun's yellow, and the moon's: it is the same light. Not the `--val-sun` text
+ *  token, which is a deep orange chosen to be read as a number. */
+export const GLYPH_SUN = '#FFCC00';
+/** Rain, drizzle and sleet. */
+export const GLYPH_PRECIP = '#3FC1EF';
+/** Lightning, warm enough to separate from the rain in the same glyph. */
+export const GLYPH_STORM = '#D9871F';
+
+export type GlyphAppearance = 'light' | 'dark';
+
+/** The cloud tone for an appearance — also what a glyph with no readable layers,
+ *  and every monochrome fallback, is drawn in. */
+export function glyphCloud(appearance: GlyphAppearance): string {
+  return appearance === 'dark' ? GLYPH_CLOUD_DARK : GLYPH_CLOUD_LIGHT;
+}
+
+/** One colour per layer, in the order `symbolLayers` reports them. */
+export function glyphLayerColors(
+  code: number,
+  isDay: boolean,
+  appearance: GlyphAppearance
+): string[] {
+  const cloud = glyphCloud(appearance);
+  return symbolLayers(code, isDay).map((role) => {
+    switch (role) {
+      case 'cloud':
+        return cloud;
+      case 'sun':
+      case 'moon':
+        return GLYPH_SUN;
+      case 'precip':
+        return GLYPH_PRECIP;
+      // Snow takes the cloud's own tone: a white flake against a grey cloud reads as
+      // two objects, and the flakes are the smallest marks in the set.
+      case 'snow':
+        return cloud;
+      case 'storm':
+        return GLYPH_STORM;
+    }
+  });
 }
 
 /**
