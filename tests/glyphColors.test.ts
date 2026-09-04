@@ -23,14 +23,14 @@ const AGREED: [number, boolean, string[], string[]][] = [
   // sun.max.fill — one layer, the same yellow in both.
   [0, true, [GLYPH_SUN], [GLYPH_SUN]],
   [1, true, [GLYPH_SUN], [GLYPH_SUN]],
-  // moon.stars.fill — a pale disc with its stars in the sun's yellow; moon.fill —
-  // the disc alone. The moon lifts on navy the way the cloud does.
-  [0, false, [ML, GLYPH_SUN], [MD, GLYPH_SUN]],
+  // moon.stars.fill and moon.fill — the moon and its stars are one pale night light.
+  // It lifts on navy the way the cloud does.
+  [0, false, [ML, ML], [MD, MD]],
   [1, false, [ML], [MD]],
-  // cloud.sun.fill / cloud.moon.fill — only the cloud moves between appearances, and
-  // the moon keeps the sun's light here: pale on pale would merge the two layers.
+  // cloud.sun.fill / cloud.moon.fill — the sun holds its yellow against either
+  // ground; the moon is pale, and by night the whole glyph moves with the appearance.
   [2, true, [L, GLYPH_SUN], [D, GLYPH_SUN]],
-  [2, false, [L, GLYPH_SUN], [D, GLYPH_SUN]],
+  [2, false, [L, ML], [D, MD]],
   // cloud.fill — one layer, the cloud alone.
   [3, true, [L], [D]],
   // cloud.fog.fill — the fog lines read as part of the cloud, so they share its tone.
@@ -56,7 +56,7 @@ const AGREED: [number, boolean, string[], string[]][] = [
   [86, true, [L], [D]],
   // Showers keep their luminary: cloud, sun or moon, rain.
   [80, true, [L, GLYPH_SUN, GLYPH_PRECIP], [D, GLYPH_SUN, GLYPH_PRECIP]],
-  [80, false, [L, GLYPH_SUN, GLYPH_PRECIP], [D, GLYPH_SUN, GLYPH_PRECIP]],
+  [80, false, [L, ML, GLYPH_PRECIP], [D, MD, GLYPH_PRECIP]],
   [81, true, [L, GLYPH_SUN, GLYPH_PRECIP], [D, GLYPH_SUN, GLYPH_PRECIP]],
   // Thunderstorms: cloud, bolt, rain — and code 99 has no rain layer.
   [95, true, [L, GLYPH_STORM, GLYPH_PRECIP], [D, GLYPH_STORM, GLYPH_PRECIP]],

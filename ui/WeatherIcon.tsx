@@ -20,10 +20,9 @@
  * follows it — both of which lift on navy:
  *
  *   cloud   #B7C3D1 on light, #C9D6E4 on dark
- *   sun     #FFCC00      stars   #FFCC00, the same light
- *   moon    the cloud tone where it is the whole subject (`moon.fill`, and the disc
- *           of `moon.stars.fill`); #FFCC00 beside a cloud, or the two layers would
- *           collapse into one shape
+ *   sun     #FFCC00
+ *   moon    #B7C3D1 on light, #C9D6E4 on dark — and the stars with it, so a clear
+ *           night is one pale light rather than a second sun
  *   rain    #3FC1EF      snow    the cloud tone, so a snow glyph reads as one object
  *   bolt    #D9871F
  *

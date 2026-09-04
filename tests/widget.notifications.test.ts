@@ -268,7 +268,7 @@ describe('symbolLayers', () => {
     expect(symbolLayers(95)).toEqual(['cloud', 'storm', 'precip']);
   });
 
-  it('separates the moon from its stars, which are coloured apart', () => {
+  it('names the moon and its stars as the layers they are', () => {
     expect(symbolLayers(0, false)).toEqual(['moon', 'stars']);
     expect(symbolLayers(2, false)).toEqual(['cloud', 'moon']);
   });

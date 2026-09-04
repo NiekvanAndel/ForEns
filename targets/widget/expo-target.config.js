@@ -27,12 +27,12 @@ module.exports = {
 
     // The weather glyphs, one colour per layer — the same set the app states in
     // core/model/conditions.ts. Only the cloud and the moon differ between
-    // appearances; the sun, the stars, the rain and the lightning hold their own
-    // against either ground. Snow has no colour of its own: it takes the cloud's, so
+    // appearances; the sun, the rain and the lightning hold their own against
+    // either ground. Snow has no colour of its own: it takes the cloud's, so
     // a snow glyph reads as one object.
     WidgetGlyphCloud: { light: '#B7C3D1', dark: '#C9D6E4' },
     WidgetGlyphSun: { light: '#FFCC00', dark: '#FFCC00' },
-    // The moon where it is the whole subject; beside a cloud it keeps the sun's.
+    // The moon and its stars, in every glyph they appear in.
     WidgetGlyphMoon: { light: '#B7C3D1', dark: '#C9D6E4' },
     WidgetGlyphPrecip: { light: '#3FC1EF', dark: '#3FC1EF' },
     WidgetGlyphStorm: { light: '#D9871F', dark: '#D9871F' },
