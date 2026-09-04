@@ -33,7 +33,7 @@ export interface Place {
 }
 
 interface OpenMeteoGeoResponse {
-  results?: Array<{ latitude: number; longitude: number; name: string; admin1?: string; country?: string }>;
+  results?: { latitude: number; longitude: number; name: string; admin1?: string; country?: string }[];
 }
 
 interface NominatimResult {

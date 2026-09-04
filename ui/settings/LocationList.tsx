@@ -28,7 +28,7 @@ import Animated, {
   runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { radius, shadowCard, space, useTheme } from '../../theme';
+import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { usePrefs } from '../../state/prefs';

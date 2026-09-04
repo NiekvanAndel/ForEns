@@ -34,7 +34,6 @@ import { ChoiceList, Group, NavRow, Row, Toggle } from '../../ui/settings/Contro
 import { SubjectPage } from '../../ui/settings/SubjectPage';
 import { LocationList } from '../../ui/settings/LocationList';
 import { SourceCard } from '../../ui/settings/SourceCard';
-import { useRefreshControl } from '../../ui/useRefreshControl';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { t, ta, LANG_CODES, tempUnitLabel, windUnitLabel } from '../../core/i18n';
@@ -68,9 +67,6 @@ export default function SettingsScreen() {
   const { prefs, setPref } = usePrefs();
   const { refresh } = useForecast();
   const [page, setPage] = useState<Page | null>(null);
-  // The index reads from the forecast too — which model answered, how many members —
-  // so the same pull that reloads it on the other pages reloads it here.
-  const refreshControl = useRefreshControl();
 
   const tap = useCallback(() => {
     Haptics.selectionAsync().catch(() => {});
@@ -119,7 +115,6 @@ export default function SettingsScreen() {
           gap: space[6],
         }}
         showsVerticalScrollIndicator={false}
-        refreshControl={refreshControl}
       >
         <Text variant="screenTitle" color={palette.inkHeading}>
           {t('settings', prefs.lang)}

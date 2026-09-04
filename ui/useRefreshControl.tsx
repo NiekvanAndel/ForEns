@@ -10,6 +10,16 @@
  * A page with data of its own (the radar's frames) passes it as `task`; the spinner
  * then waits for both that and the forecast.
  *
+ * ## Where the spinner is drawn
+ *
+ * iOS draws a refresh control at the top edge of the scroll view, and on these pages
+ * that edge is underneath the floating top row — so the spinner appeared behind the
+ * glass and the notch, which is to say it did not appear at all. `progressViewOffset`
+ * pushes it down by exactly the clearance every page already leaves for that row, so
+ * it turns in the gap between the row and the location title, where the reader is
+ * looking. It is drawn in the accent colour for the same reason every other spinner
+ * in the app is: `muted` on a dark background is barely there.
+ *
  * The flag is cleared by watching `phase`, not by awaiting `refresh()`, because the
  * load is staged: it reports itself finished when the last stage lands. The effect
  * depends on `phase` alone, so the render that sets `refreshing` — where the phase
@@ -20,7 +30,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme';
+import { TOP_BAR_CLEARANCE } from './TopBar';
 import { useForecast } from '../state/forecast';
 
 /** Longest the spinner may stay up when nothing tells it the load has ended. */
@@ -29,6 +41,7 @@ const SPINNER_MAX_MS = 15_000;
 export function useRefreshControl(task?: () => Promise<unknown> | void) {
   const { palette } = useTheme();
   const { phase, refresh } = useForecast();
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [taskBusy, setTaskBusy] = useState(false);
 
@@ -55,5 +68,13 @@ export function useRefreshControl(task?: () => Promise<unknown> | void) {
     return () => clearTimeout(id);
   }, [refreshing]);
 
-  return <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.muted} />;
+  return (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      tintColor={palette.accent}
+      colors={[palette.accent]}
+      progressViewOffset={insets.top + TOP_BAR_CLEARANCE}
+    />
+  );
 }

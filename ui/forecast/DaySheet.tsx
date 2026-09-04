@@ -27,8 +27,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { radius, shadowCard, space, useTheme } from '../../theme';
-import { Card, CardHeader, Rule } from '../Card';
+import { radius, space, useTheme } from '../../theme';
+import { Card, Rule } from '../Card';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
@@ -43,7 +43,7 @@ import { beamScale } from '../../core/model/beam';
 import type { DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day, ForecastModel } from '../../core/model/types';
 import {
-  convTemp, convWind, dayNames, fmtMm, t, ta, tempUnitLabel, windUnitLabel, wmoText,
+  convTemp, convWind, dayNames, fmtMm, t, tempUnitLabel, windUnitLabel, wmoText,
 } from '../../core/i18n';
 
 export interface DaySheetProps {
@@ -61,7 +61,6 @@ export function DaySheet({
   visible, day, model, ensemble, ensembleLoading, initialLayer = 'overview', onClose,
 }: DaySheetProps) {
   const { palette } = useTheme();
-  const { prefs } = usePrefs();
   const [layer, setLayer] = useState<LayerKey>(initialLayer);
 
   // Open on the section the day was tapped under, rather than inheriting whichever

@@ -15,7 +15,6 @@ import { useForecast } from '../../state/forecast';
 import { ta } from '../../core/i18n';
 
 export function SourceCard() {
-  const { palette } = useTheme();
   const { prefs, location } = usePrefs();
   const { model, harmonie } = useForecast();
 

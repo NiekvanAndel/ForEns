@@ -87,7 +87,6 @@ export function RadarMap({
   const chrome = mapChrome(palette, appearance);
   const chromeBg = chrome.bg;
   const chromeInk = chrome.ink;
-  const dark = chrome.dark;
 
   const active = frames[activeIndex] ?? frames[frames.length - 1];
 

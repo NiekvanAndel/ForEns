@@ -9,7 +9,7 @@
  * The hourly slider that used to sit on top of this list moved into the hero, where
  * it follows on from the current reading instead of being a scroll away from it.
  */
-import { View, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Pressable, ActivityIndicator } from 'react-native';
 import { space, useTheme } from '../../theme';
 import { Card, CardHeader, Rule } from '../Card';
 import { Text } from '../Text';

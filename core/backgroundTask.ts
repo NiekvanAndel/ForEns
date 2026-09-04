@@ -14,7 +14,7 @@
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loadStage1, loadStage2, loadEnsemble } from './sources/openMeteo';
+import { loadStage1, loadStage2 } from './sources/openMeteo';
 import { processAll } from './model/process';
 import { deriveAlert } from './model/alert';
 import { activeProvider } from './radar';

@@ -26,7 +26,7 @@
  */
 import type { ReactNode } from 'react';
 import { View, Pressable } from 'react-native';
-import { radius, space, useTheme } from '../../theme';
+import { radius, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';

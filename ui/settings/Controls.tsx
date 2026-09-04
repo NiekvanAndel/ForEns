@@ -87,7 +87,7 @@ export function Row({ icon, label, hint, children, last, stacked, onPress }: Row
 }
 
 export interface SegmentedProps<T extends string> {
-  options: ReadonlyArray<{ value: T; label: string }>;
+  options: readonly { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
   compact?: boolean;

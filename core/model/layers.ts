@@ -25,7 +25,7 @@ import { resolveDayValues, type DayValues } from './dayValues';
 
 export type LayerKey = 'overview' | 'temp' | 'precip' | 'wind' | 'sun' | 'humidity';
 
-export const LAYERS: ReadonlyArray<{ key: LayerKey; icon: string; labelKey: string }> = [
+export const LAYERS: readonly { key: LayerKey; icon: string; labelKey: string }[] = [
   { key: 'overview', icon: 'info', labelKey: 'tabOverview' },
   { key: 'temp', icon: 'thermometer-simple', labelKey: 'tabTemp' },
   { key: 'precip', icon: 'drop', labelKey: 'tabPrecip' },

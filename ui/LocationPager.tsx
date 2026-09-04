@@ -84,7 +84,6 @@ const EXIT_MAX_MS = 280;
 export function LocationPager({ page: Page }: { page: ComponentType }) {
   const { prefs, selectLocation } = usePrefs();
   const { cachedModel } = useForecast();
-  const { palette } = useTheme();
   const { width } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
 

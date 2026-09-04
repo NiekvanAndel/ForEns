@@ -19,11 +19,10 @@ import {
 } from '@expo-google-fonts/figtree';
 import { PrefsProvider, usePrefs } from '../state/prefs';
 import { DeviceLocationProvider } from '../state/deviceLocation';
-import { useForecast } from '../state/forecast';
+import { ForecastProvider, useForecast } from '../state/forecast';
 import { useWidgetSync, writeWidgetPayload } from '../state/widgetSync';
 import { registerBackgroundRefresh, setWidgetWriter } from '../core/backgroundTask';
 import { ThemeProvider } from '../state/theme';
-import { ForecastProvider } from '../state/forecast';
 import { useTheme } from '../theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {

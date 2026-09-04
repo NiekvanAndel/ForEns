@@ -277,8 +277,10 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
   }, [built, location.lat, location.lon, remember]);
 
   const cachedModel = useCallback(
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the point
     (lat: number, lon: number) => cache.current.get(cacheKey(lat, lon))?.model ?? null,
+    // The cache is a ref, so nothing here can see it change; `cacheVersion` is what
+    // makes this callback new when it does, which is the point of the dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [cacheVersion]
   );
 

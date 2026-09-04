@@ -137,7 +137,7 @@ function hourlyFixture(rand: () => number, days: number, offsetSec: number, opts
 }
 
 describe('computeMethod6Sun', () => {
-  const cases: Array<[string, Parameters<typeof hourlyFixture>[3]]> = [
+  const cases: [string, Parameters<typeof hourlyFixture>[3]][] = [
     ['mixed cloud', {}],
     ['cirrus-only, so opacity is derived from radiation', { cirrusOnly: true }],
     ['with gaps in the hourly series', { gaps: true }],
