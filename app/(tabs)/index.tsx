@@ -9,7 +9,7 @@
  * Tapping a day opens the same sheet 'Verwachting' opens, on its overview section.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, RefreshControl, ScrollView, View, Pressable } from 'react-native';
+import { ActivityIndicator, ScrollView, View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -20,6 +20,7 @@ import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
 import { Card, CardHeader } from '../../ui/Card';
 import { ScreenFrame } from '../../ui/ScreenFrame';
+import { useRefreshControl } from '../../ui/useRefreshControl';
 import { AlertHero } from '../../ui/nowcast/AlertHero';
 import { ConditionsHero } from '../../ui/nowcast/ConditionsHero';
 import { RadarPreview } from '../../ui/nowcast/RadarPreview';
@@ -41,22 +42,13 @@ function NowcastPage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const [refreshing, setRefreshing] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [sheetDay, setSheetDay] = useState<Day | null>(null);
   const [dayEnsemble, setDayEnsemble] = useState<DayEnsemble | undefined>();
   const [ensembleLoading, setEnsembleLoading] = useState(false);
   const ensembleCache = useRef(new DayEnsembleCache());
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    if (phase !== 'loading') setRefreshing(false);
-  }, [phase]);
+  const refreshControl = useRefreshControl();
 
   useEffect(() => {
     ensembleCache.current.clear();
@@ -117,9 +109,7 @@ function NowcastPage() {
         gap: space[4],
       }}
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={palette.muted} />
-      }
+      refreshControl={refreshControl}
     >
       <LocationTitle />
 

@@ -20,6 +20,7 @@ import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
 import { ScreenFrame } from '../../ui/ScreenFrame';
+import { useRefreshControl } from '../../ui/useRefreshControl';
 import { RadarMap } from '../../ui/radar/RadarMap';
 import { Timeline } from '../../ui/radar/Timeline';
 import { FullScreenRadar } from '../../ui/radar/FullScreenRadar';
@@ -55,29 +56,50 @@ function RadarPage() {
   const [fullScreen, setFullScreen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(320);
 
-  useEffect(() => {
-    // A copy of this page sliding past draws a still panel where the map goes, so
-    // the frames behind it would be fetched for something never shown.
-    if (peeking) return;
-    let alive = true;
-    const ctrl = new AbortController();
-    setLoading(true);
-    activeProvider()
-      .listFrames(ctrl.signal)
+  /**
+   * Fetch the loop.
+   *
+   * A pull to refresh runs the same call as the first load, but without the
+   * spinner: the frames on screen are a few minutes old, not wrong, and blanking
+   * the map to a spinner for a manual refresh loses the reader's place in the
+   * loop for no gain. The control at the top of the page says it is working.
+   */
+  const fetchFrames = useCallback((signal?: AbortSignal, showSpinner = true) => {
+    if (showSpinner) setLoading(true);
+    return activeProvider()
+      .listFrames(signal)
       .then((f) => {
-        if (!alive) return;
+        if (signal?.aborted) return;
         const all = [...f.past, ...f.forecast];
         setFrames(all);
         // Open on the latest observation, not on the oldest frame or a forecast.
         setIndex(Math.max(0, f.past.length - 1));
       })
-      .catch(() => { if (alive) setFrames([]); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => {
-      alive = false;
-      ctrl.abort();
-    };
-  }, [peeking]);
+      .catch(() => {
+        if (signal?.aborted) return;
+        // A failed refresh keeps the frames it already has; only a failed first
+        // load has nothing to fall back on.
+        if (showSpinner) setFrames([]);
+      })
+      .finally(() => {
+        if (!signal?.aborted && showSpinner) setLoading(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    // A copy of this page sliding past draws a still panel where the map goes, so
+    // the frames behind it would be fetched for something never shown.
+    if (peeking) return;
+    const ctrl = new AbortController();
+    fetchFrames(ctrl.signal);
+    return () => ctrl.abort();
+  }, [peeking, fetchFrames]);
+
+  // The forecast context reloads the nowcast profile under the panel; the frames
+  // are this page's own, so the pull waits for them too.
+  const refreshControl = useRefreshControl(
+    useCallback(() => fetchFrames(undefined, false), [fetchFrames])
+  );
 
   const pins = useMemo(
     () => stationsNear(stations, location.lat, location.lon, STATION_PIN_RADIUS_KM),
@@ -118,6 +140,7 @@ function RadarPage() {
         gap: space[4],
       }}
       showsVerticalScrollIndicator={false}
+      refreshControl={refreshControl}
     >
       <View>
         <RadarMap

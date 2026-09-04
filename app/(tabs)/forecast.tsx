@@ -27,6 +27,7 @@ import { LocationTitle } from '../../ui/LocationTitle';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
 import { ScreenFrame } from '../../ui/ScreenFrame';
+import { useRefreshControl } from '../../ui/useRefreshControl';
 import { LayerSwitcher } from '../../ui/forecast/LayerSwitcher';
 import { LayerDayRow } from '../../ui/forecast/LayerDayRow';
 import { OverviewDayRow } from '../../ui/forecast/OverviewDayRow';
@@ -50,6 +51,7 @@ function ForecastPage() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const peeking = usePeeking();
+  const refreshControl = useRefreshControl();
   /** Set when another page asked for a particular day — the hourly strip on 'Nu'. */
   const { day: requestedDay } = useLocalSearchParams<{ day?: string }>();
 
@@ -126,6 +128,7 @@ function ForecastPage() {
         gap: space[3],
       }}
       showsVerticalScrollIndicator={false}
+      refreshControl={refreshControl}
     >
       <LocationTitle />
 
