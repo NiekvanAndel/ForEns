@@ -10,20 +10,25 @@ import { describe, it, expect } from 'vitest';
 import {
   glyphLayerColors, glyphCloud, glyphRendering, wmoSymbol,
   GLYPH_CLOUD_LIGHT, GLYPH_CLOUD_DARK, GLYPH_SUN, GLYPH_PRECIP, GLYPH_STORM,
+  GLYPH_MOON_LIGHT, GLYPH_MOON_DARK,
 } from '../core/model/conditions';
 
 const L = GLYPH_CLOUD_LIGHT;
 const D = GLYPH_CLOUD_DARK;
+const ML = GLYPH_MOON_LIGHT;
+const MD = GLYPH_MOON_DARK;
 
 /** code, day/night, and the layers expected on light and on dark. */
 const AGREED: [number, boolean, string[], string[]][] = [
   // sun.max.fill — one layer, the same yellow in both.
   [0, true, [GLYPH_SUN], [GLYPH_SUN]],
   [1, true, [GLYPH_SUN], [GLYPH_SUN]],
-  // moon.stars.fill and moon.fill — the moon is the same light as the sun.
-  [0, false, [GLYPH_SUN, GLYPH_SUN], [GLYPH_SUN, GLYPH_SUN]],
-  [1, false, [GLYPH_SUN], [GLYPH_SUN]],
-  // cloud.sun.fill / cloud.moon.fill — only the cloud moves between appearances.
+  // moon.stars.fill — a pale disc with its stars in the sun's yellow; moon.fill —
+  // the disc alone. The moon lifts on navy the way the cloud does.
+  [0, false, [ML, GLYPH_SUN], [MD, GLYPH_SUN]],
+  [1, false, [ML], [MD]],
+  // cloud.sun.fill / cloud.moon.fill — only the cloud moves between appearances, and
+  // the moon keeps the sun's light here: pale on pale would merge the two layers.
   [2, true, [L, GLYPH_SUN], [D, GLYPH_SUN]],
   [2, false, [L, GLYPH_SUN], [D, GLYPH_SUN]],
   // cloud.fill — one layer, the cloud alone.
@@ -68,7 +73,7 @@ describe('glyphLayerColors', () => {
     });
   }
 
-  it('changes nothing but the cloud between appearances', () => {
+  it('changes nothing but the cloud and the moon between appearances', () => {
     // The one rule that holds across the whole set, asserted over every code rather
     // than trusting the table above to be exhaustive.
     for (let code = 0; code <= 99; code++) {
@@ -76,7 +81,10 @@ describe('glyphLayerColors', () => {
         const light = glyphLayerColors(code, isDay, 'light');
         const dark = glyphLayerColors(code, isDay, 'dark');
         expect(dark, `code ${code}`).toEqual(
-          light.map((c) => (c === GLYPH_CLOUD_LIGHT ? GLYPH_CLOUD_DARK : c))
+          light.map((c) =>
+            c === GLYPH_CLOUD_LIGHT ? GLYPH_CLOUD_DARK
+              : c === GLYPH_MOON_LIGHT ? GLYPH_MOON_DARK
+              : c)
         );
       }
     }
@@ -112,7 +120,7 @@ describe('glyphRendering', () => {
   const SINGLE: [number, boolean, string][] = [
     [0, true, GLYPH_SUN],   // sun.max.fill
     [1, true, GLYPH_SUN],   // sun.max.fill
-    [1, false, GLYPH_SUN],  // moon.fill
+    [1, false, GLYPH_MOON_LIGHT],  // moon.fill
     [3, true, GLYPH_CLOUD_LIGHT],  // cloud.fill
     [75, true, GLYPH_CLOUD_LIGHT], // snowflake
     [86, true, GLYPH_CLOUD_LIGHT], // snowflake

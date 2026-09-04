@@ -26,14 +26,19 @@ import SwiftUI
 /// and the moon pale blue. Those were never the app's colours.
 private func glyphLayers(_ symbol: String) -> [Color] {
     var colors: [Color] = []
+    // A moon beside a cloud keeps the sun's light: pale on pale would merge the two
+    // layers into one shape. Alone — `moon.fill`, and the disc of `moon.stars.fill`
+    // — it is drawn in the moon's own tone, and the stars carry the warmth.
+    let moon = symbol.contains("cloud") ? Color("WidgetGlyphSun") : Color("WidgetGlyphMoon")
     for part in symbol.split(separator: ".") {
         switch part {
         // Fog is drawn as lines under the cloud and reads as part of it.
         case "cloud", "fog":
             colors.append(Color("WidgetGlyphCloud"))
-        // The stars belong to the moon, and the moon is lit by the sun.
-        case "sun", "moon", "stars":
+        case "sun", "stars":
             colors.append(Color("WidgetGlyphSun"))
+        case "moon":
+            colors.append(moon)
         case "rain", "heavyrain", "drizzle", "sleet":
             colors.append(Color("WidgetGlyphPrecip"))
         // Snow takes the cloud's tone deliberately: white flakes on a grey cloud

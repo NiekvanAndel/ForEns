@@ -16,10 +16,14 @@
  * the dark theme — colours nobody working on this code could see or look up. So each
  * glyph is drawn with `palette` rendering and one stated colour per layer.
  *
- * The set is the same in both appearances except the cloud, which lifts on navy:
+ * The set is the same in both appearances except the cloud — and the moon, which
+ * follows it — both of which lift on navy:
  *
  *   cloud   #B7C3D1 on light, #C9D6E4 on dark
- *   sun     #FFCC00      moon    #FFCC00, the same light
+ *   sun     #FFCC00      stars   #FFCC00, the same light
+ *   moon    the cloud tone where it is the whole subject (`moon.fill`, and the disc
+ *           of `moon.stars.fill`); #FFCC00 beside a cloud, or the two layers would
+ *           collapse into one shape
  *   rain    #3FC1EF      snow    the cloud tone, so a snow glyph reads as one object
  *   bolt    #D9871F
  *

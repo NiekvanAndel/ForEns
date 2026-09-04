@@ -99,9 +99,18 @@ export function wmoSymbol(code: number, isDay: boolean = true): string {
  */
 export const GLYPH_CLOUD_LIGHT = '#B7C3D1';
 export const GLYPH_CLOUD_DARK = '#C9D6E4';
-/** The sun's yellow, and the moon's: it is the same light. Not the `--val-sun` text
+/** The sun's yellow, and the stars': it is the same light. Not the `--val-sun` text
  *  token, which is a deep orange chosen to be read as a number. */
 export const GLYPH_SUN = '#FFCC00';
+/** The moon, where it is the whole subject — `moon.fill` and the disc of
+ *  `moon.stars.fill`. Pale rather than yellow: a lit moon is the colour of the
+ *  cloud it sits beside, and the stars carry the warmth in that glyph. It follows
+ *  the cloud between appearances for the same reason the cloud does — it has to
+ *  lift off navy. Beside a cloud (`cloud.moon.fill`, `cloud.moon.rain.fill`) the
+ *  moon still takes the sun's light, or the two layers would collapse into one
+ *  shape. */
+export const GLYPH_MOON_LIGHT = '#B7C3D1';
+export const GLYPH_MOON_DARK = '#C9D6E4';
 /** Rain, drizzle and sleet. */
 export const GLYPH_PRECIP = '#3FC1EF';
 /** Lightning, warm enough to separate from the rain in the same glyph. */
@@ -115,6 +124,11 @@ export function glyphCloud(appearance: GlyphAppearance): string {
   return appearance === 'dark' ? GLYPH_CLOUD_DARK : GLYPH_CLOUD_LIGHT;
 }
 
+/** The moon's tone for an appearance, for the glyphs where it stands alone. */
+export function glyphMoon(appearance: GlyphAppearance): string {
+  return appearance === 'dark' ? GLYPH_MOON_DARK : GLYPH_MOON_LIGHT;
+}
+
 /** One colour per layer, in the order `symbolLayers` reports them. */
 export function glyphLayerColors(
   code: number,
@@ -122,13 +136,19 @@ export function glyphLayerColors(
   appearance: GlyphAppearance
 ): string[] {
   const cloud = glyphCloud(appearance);
-  return symbolLayers(code, isDay).map((role) => {
+  const roles = symbolLayers(code, isDay);
+  // A moon drawn beside a cloud keeps the sun's light: pale on pale would merge the
+  // two layers into one shape. Alone, it is the moon's own tone.
+  const moon = roles.includes('cloud') ? GLYPH_SUN : glyphMoon(appearance);
+  return roles.map((role) => {
     switch (role) {
       case 'cloud':
         return cloud;
       case 'sun':
-      case 'moon':
+      case 'stars':
         return GLYPH_SUN;
+      case 'moon':
+        return moon;
       case 'precip':
         return GLYPH_PRECIP;
       // Snow takes the cloud's own tone: a white flake against a grey cloud reads as
@@ -193,7 +213,7 @@ export function glyphRendering(
  * `cloud.sun.rain.fill` being exactly cloud, then sun, then rain — so the mapping
  * cannot drift out of step with `wmoSymbol` the way a hand-kept table would.
  */
-export type LayerRole = 'cloud' | 'sun' | 'moon' | 'precip' | 'snow' | 'storm';
+export type LayerRole = 'cloud' | 'sun' | 'moon' | 'stars' | 'precip' | 'snow' | 'storm';
 
 export function symbolLayers(code: number, isDay: boolean = true): LayerRole[] {
   const roles: LayerRole[] = [];
@@ -207,10 +227,13 @@ export function symbolLayers(code: number, isDay: boolean = true): LayerRole[] {
       case 'sun':
         roles.push('sun');
         break;
-      // The stars in `moon.stars` are the moon's own layer, not a separate subject.
+      // The stars in `moon.stars` are their own layer: the disc is pale and they
+      // are not, so they cannot share a role with the moon.
       case 'moon':
-      case 'stars':
         roles.push('moon');
+        break;
+      case 'stars':
+        roles.push('stars');
         break;
       case 'rain':
       case 'heavyrain':
