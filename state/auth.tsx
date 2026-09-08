@@ -64,8 +64,15 @@ export interface AuthState {
    * Returns null rather than throwing when there is nothing to work with: every
    * caller is a data source that has an Open-Meteo path to fall back to, and a
    * throw would turn "no integration" into an error screen.
+   *
+   * Pass `spentToken` — the token a call was just refused with — to refresh one the
+   * clock still believes in. WorkOS can retire an access token ahead of the expiry it
+   * advertised, and the device clock is not WorkOS's clock, so "the API said no" is
+   * better evidence than any local sum. The refresh then runs only while that token
+   * is still the one in hand: two sources refused in the same tick share one refresh
+   * instead of rotating the refresh token twice.
    */
-  getAccessToken: () => Promise<string | null>;
+  getAccessToken: (spentToken?: string) => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -183,10 +190,14 @@ export function AgroAuthProvider({ children }: { children: ReactNode }) {
     setError(null);
   }, [disconnect]);
 
-  const getAccessToken = useCallback(async (): Promise<string | null> => {
+  const getAccessToken = useCallback(async (spentToken?: string): Promise<string | null> => {
     const current = tokensRef.current;
     if (!current) return null;
-    if (!isExpired(current)) return current.accessToken;
+    // A caller that names the token it was refused with is asking for that token to
+    // be replaced. Where it already has been, hand over the replacement and refresh
+    // nothing: the caller is simply behind, not holding a dead credential.
+    if (spentToken != null && spentToken !== current.accessToken) return current.accessToken;
+    if (spentToken == null && !isExpired(current)) return current.accessToken;
     if (!current.refreshToken) {
       await disconnect('expired');
       return null;

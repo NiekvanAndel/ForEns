@@ -129,6 +129,36 @@ export class AgroAuthError extends SourceError {
   }
 }
 
+/**
+ * Run a call against the API with a token it actually accepts.
+ *
+ * A refused call is not proof of a dead account. WorkOS can retire an access token
+ * ahead of the expiry it handed out, and the device clock is its own opinion, so the
+ * first 401 buys a forced refresh and one retry rather than an integration that
+ * reads as connected over data that never arrives. A second refusal is thrown.
+ *
+ * `getToken` is `getAccessToken` from the auth context: called bare for the token in
+ * hand, and with the refused one to ask for its replacement. Resolves to null when
+ * there is no account to call with at all — every caller has a page to draw without.
+ */
+export async function withAgroToken<T>(
+  getToken: (spentToken?: string) => Promise<string | null>,
+  call: (token: string) => Promise<T>
+): Promise<T | null> {
+  const token = await getToken();
+  if (!token) return null;
+  try {
+    return await call(token);
+  } catch (e) {
+    if (!(e instanceof AgroAuthError)) throw e;
+    const fresh = await getToken(token);
+    // Nothing newer to try with: the auth context has already recorded why — a
+    // revoked grant disconnects the integration, a network failure leaves it alone.
+    if (!fresh || fresh === token) throw e;
+    return call(fresh);
+  }
+}
+
 async function agroFetch<T>(
   token: string,
   path: string,

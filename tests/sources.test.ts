@@ -10,7 +10,7 @@ import { parseDayEnsemble } from '../core/sources/ensembleHourly';
 import { fetchJson, tryFetchJson, SourceError } from '../core/sources/http';
 import { loadHourly, loadStage1, urls } from '../core/sources/openMeteo';
 import {
-  agroHeaders, distanceKm, nearestStation, stationsNear, localHourKey,
+  agroHeaders, distanceKm, nearestStation, stationsNear, localHourKey, withAgroToken,
   fetchStations, fetchStationHours, fetchLatestMeasurement, AgroAuthError,
 } from '../core/sources/agroexact';
 import { searchPlaces } from '../core/sources/geocoding';
@@ -350,5 +350,50 @@ describe('parseDayEnsemble', () => {
     });
     expect(out[times[0]!]!.precipP50).toBe(3);
     expect(out[times[0]!]!.temp!.p50).toBe(17);
+  });
+});
+
+describe('withAgroToken', () => {
+  const refused = () => Promise.reject(new AgroAuthError('niet geautoriseerd', 401));
+
+  it('does not call at all without an account', async () => {
+    const call = vi.fn();
+    expect(await withAgroToken(async () => null, call)).toBeNull();
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it('passes the token straight through when the API is happy', async () => {
+    const call = vi.fn(async (t: string) => t.toUpperCase());
+    expect(await withAgroToken(async () => 'live', call)).toBe('LIVE');
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes and retries once when the API refuses a token the clock still trusts', async () => {
+    const getToken = vi.fn(async (spent?: string) => (spent ? 'fresh' : 'stale'));
+    const call = vi.fn(async (t: string) => (t === 'stale' ? refused() : 'data'));
+    expect(await withAgroToken(getToken, call)).toBe('data');
+    expect(getToken).toHaveBeenLastCalledWith('stale');
+    expect(call).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes a second refusal at face value', async () => {
+    const call = vi.fn(refused);
+    await expect(withAgroToken(async (spent) => (spent ? 'fresh' : 'stale'), call))
+      .rejects.toBeInstanceOf(AgroAuthError);
+    expect(call).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up without a retry when there is nothing fresher to try', async () => {
+    const call = vi.fn(refused);
+    // A network failure during the refresh leaves the same token in hand; retrying
+    // with it would only spend a second request on the same answer.
+    await expect(withAgroToken(async () => 'stale', call)).rejects.toBeInstanceOf(AgroAuthError);
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves anything that is not an auth failure alone', async () => {
+    const call = vi.fn(async () => { throw new SourceError('AgroExact', 'HTTP 500', 500); });
+    await expect(withAgroToken(async () => 'live', call)).rejects.toBeInstanceOf(SourceError);
+    expect(call).toHaveBeenCalledTimes(1);
   });
 });

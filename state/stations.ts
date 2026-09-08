@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AgroAuthError, fetchStationObservations, fetchStations,
+  AgroAuthError, fetchStationObservations, fetchStations, withAgroToken,
   type AgroStation, type StationObservations,
 } from '../core/sources/agroexact';
 import { stationForLocation } from '../core/model/station';
@@ -46,17 +46,18 @@ export const observationsKey = (stationId: string, offsetSec: number) =>
  * perfectly good page to draw without stations.
  */
 export function useAgroStations() {
-  const { getAccessToken, status } = useAgroAuth();
-  const enabled = status === 'connected';
+  const auth = useAgroAuth();
+  const enabled = auth.status === 'connected';
 
   return useQuery({
     queryKey: stationsKey,
     enabled,
     staleTime: STATIONS_STALE_MS,
     queryFn: async ({ signal }): Promise<AgroStation[]> => {
-      const token = await getAccessToken();
-      if (!token) return [];
-      return fetchStations(token, { signal });
+      const rows = await withAgroToken(auth.getAccessToken, (token) =>
+        fetchStations(token, { signal })
+      );
+      return rows ?? [];
     },
     // A signed-out account is not a failure worth retrying against.
     retry: (count, error) => !(error instanceof AgroAuthError) && count < 2,
@@ -180,7 +181,7 @@ export function useStationObservations(
   ready: boolean
 ) {
   const { prefs } = usePrefs();
-  const { getAccessToken, status } = useAgroAuth();
+  const auth = useAgroAuth();
   const { data: stations } = useAgroStations();
   const client = useQueryClient();
   const integration = agroIntegration(prefs);
@@ -192,13 +193,14 @@ export function useStationObservations(
 
   const query = useQuery({
     queryKey: observationsKey(station?.id ?? '', offsetSec ?? 0),
-    enabled: ready && status === 'connected' && !!station && offsetSec != null,
+    enabled: ready && auth.status === 'connected' && !!station && offsetSec != null,
     staleTime: OBSERVATIONS_STALE_MS,
     queryFn: async ({ signal }): Promise<StationObservations | null> => {
-      const token = await getAccessToken();
-      if (!token || !station) return null;
-      const obs = await fetchStationObservations(token, station.id, offsetSec ?? 0, { signal });
-      return { ...obs, stationName: obs.stationName ?? station.name };
+      if (!station) return null;
+      const obs = await withAgroToken(auth.getAccessToken, (token) =>
+        fetchStationObservations(token, station.id, offsetSec ?? 0, { signal })
+      );
+      return obs ? { ...obs, stationName: obs.stationName ?? station.name } : null;
     },
     retry: (count, error) => !(error instanceof AgroAuthError) && count < 1,
   });
