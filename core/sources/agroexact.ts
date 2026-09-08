@@ -112,13 +112,14 @@ export interface StationObservations {
 /**
  * Authorization for the AgroExact API.
  *
- * The schema documents `Authorization: Token <api key>` for API keys. An AuthKit
- * access token is a bearer token, so that is what is sent; `agroFetch` falls back to
- * the `Token` scheme once on a 401 rather than making the caller know which kind of
- * credential it holds.
+ * The schema documents `Authorization: Token <api key>` as well, but the only
+ * credential this app holds is an AuthKit access token, and that is a bearer token.
+ * Sending one scheme means a 401 says what it is meant to say — this token is no
+ * good — instead of also standing for "maybe the other scheme would have worked",
+ * which is what `withAgroToken` needs to tell a stale token from a dead account.
  */
-export function agroHeaders(token: string, scheme: 'Bearer' | 'Token' = 'Bearer'): Record<string, string> {
-  return { Accept: 'application/json', Authorization: `${scheme} ${token.trim()}` };
+export function agroHeaders(token: string): Record<string, string> {
+  return { Accept: 'application/json', Authorization: `Bearer ${token.trim()}` };
 }
 
 /** Thrown on a 401/403, so the caller can tell "signed out" from "no data". */
@@ -177,13 +178,10 @@ async function agroFetch<T>(
   const { signal, fetchImpl = fetch } = opts;
   const url = `${AGRO_BASE}${path}`;
 
-  const attempt = async (scheme: 'Bearer' | 'Token') =>
-    fetchImpl(url, { signal, headers: { ...agroHeaders(token, scheme), ...(opts.headers ?? {}) } });
-
-  let r = await attempt('Bearer');
-  // An API key rejected as a bearer token is a scheme mismatch, not a dead
-  // credential — worth exactly one retry before reporting the account as signed out.
-  if (r.status === 401) r = await attempt('Token');
+  const r = await fetchImpl(url, {
+    signal,
+    headers: { ...agroHeaders(token), ...(opts.headers ?? {}) },
+  });
 
   if (r.status === 401 || r.status === 403) {
     throw new AgroAuthError('niet geautoriseerd', r.status);

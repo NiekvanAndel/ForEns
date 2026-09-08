@@ -140,23 +140,18 @@ describe('url construction', () => {
 
 describe('AgroExact', () => {
   it('sends the access token as a bearer token', () => {
-    expect(agroHeaders('abc123').Authorization).toBe('Bearer abc123');
-    expect(agroHeaders('abc123', 'Token').Authorization).toBe('Token abc123');
+    expect(agroHeaders(' abc123 ').Authorization).toBe('Bearer abc123');
   });
 
-  it('retries an API key once under the Token scheme before giving up', async () => {
+  it('spends one request on a refused token, not two', async () => {
     const seen: string[] = [];
     const f = vi.fn(async (_url: string, init?: { headers?: Record<string, string> }) => {
-      const auth = init?.headers?.Authorization ?? '';
-      seen.push(auth);
-      return {
-        ok: auth.startsWith('Token '),
-        status: auth.startsWith('Token ') ? 200 : 401,
-        json: async () => [],
-      } as unknown as Response;
+      seen.push(init?.headers?.Authorization ?? '');
+      return { ok: false, status: 401, json: async () => ({}) } as unknown as Response;
     });
-    await fetchStations('key', { fetchImpl: f as unknown as typeof fetch });
-    expect(seen).toEqual(['Bearer key', 'Token key']);
+    await expect(fetchStations('key', { fetchImpl: f as unknown as typeof fetch }))
+      .rejects.toBeInstanceOf(AgroAuthError);
+    expect(seen).toEqual(['Bearer key']);
   });
 
   it('reports a rejected credential as an auth error, not as no data', async () => {

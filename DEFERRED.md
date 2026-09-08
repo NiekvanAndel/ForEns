@@ -67,8 +67,10 @@ Decisions worth knowing about:
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an
-   AuthKit access token is sent as `Bearer`. `agroFetch` retries once under `Token`
-   on a 401, so both work, but the first live sign-in will confirm which it is.
+   AuthKit access token is sent as `Bearer`, and only as `Bearer`. If the first live
+   sign-in returns 401 on `/stations/` with a token that was just minted, the scheme
+   is the suspect: `agroHeaders` in `core/sources/agroexact.ts` is the one line to
+   change.
 2. **The redirect URI.** `exactcast://oauth/agroexact` must be registered on the
    AuthKit application, verbatim. It is `REDIRECT_URI` in `state/auth.tsx`.
 
