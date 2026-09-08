@@ -173,8 +173,8 @@ describe('AgroExact', () => {
     ];
     const f = mockFetch(() => ({ body }));
     const stations = await fetchStations('t', { fetchImpl: f });
-    // A RainExact can still fill in the rainfall, so it stays; a station with no
-    // position cannot become a location at all.
+    // A rain gauge answers with a full record once external data is substituted in,
+    // so it stays; a station with no position cannot become a location at all.
     expect(stations.map((s) => s.id)).toEqual(['a', 'b']);
     expect(stations[0]!.lat).toBeCloseTo(51.7, 4);
   });
@@ -237,13 +237,17 @@ describe('AgroExact', () => {
     expect(stationName).toBe('Weide');
   });
 
-  it('asks for the partial hour, so a live hour is not read as silence', async () => {
+  it('asks for the partial hour and for externally completed data', async () => {
     let asked = '';
     const f = mockFetch((url) => { asked = url; return { body: [] }; });
     await fetchStationHours('t', 'st1', 0, 26, { fetchImpl: f });
     expect(asked).toContain('/aggregates/st1/');
     expect(asked).toContain('hours=26');
+    // Without this the live hour is withheld and reads as a station gone quiet.
     expect(asked).toContain('include_partial=true');
+    // The app wants every quantity the station can answer for, substituted where
+    // its own sensors cannot: a rain gauge gets a full record, not a lone figure.
+    expect(asked).toContain('station_only=false');
   });
 
   it('reads the latest measurement with its own minute', async () => {
@@ -257,6 +261,7 @@ describe('AgroExact', () => {
     const { current } = await fetchLatestMeasurement('t', 'st1', 7200, { fetchImpl: f });
 
     expect(asked).toContain('latest=true');
+    expect(asked).toContain('station_only=false');
     expect(current!.measTime).toBe('2026-06-15T11:42:00Z');
     expect(current!.time).toBe('2026-06-15T13:00');
     expect(current!.temp).toBe(21);

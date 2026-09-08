@@ -1,11 +1,11 @@
 /**
  * Measurements over model.
  *
- * A station-backed location shows what a nearby instrument actually recorded instead
- * of what a model thinks happened. That substitution is *per quantity*, not per
- * hour: a RainExact measures precipitation and nothing else, an AtmoExact can lose a
- * single sensor, and in both cases the honest page is measured rainfall over a
- * modelled everything-else rather than an hour of blanks.
+ * A station-backed location shows what the station reported instead of what a model
+ * thinks happened. Every field the API sends is used; the substitution is *per
+ * quantity*, not per hour, so a sensor that failed or an hour before the station
+ * existed costs that one figure and nothing else — the alternative, dropping the
+ * whole hour, would put a blank where a perfectly good modelled value belongs.
  *
  * What is deliberately **not** replaced:
  *

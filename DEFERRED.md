@@ -42,9 +42,11 @@ their town, and those locations show measured data instead of modelled data.
 
 Decisions worth knowing about:
 
-- **Only what is measured is replaced, per quantity.** A RainExact fills in the
-  rainfall and leaves everything else to the model. The weather icon is never
-  replaced — a station measures quantities, not conditions.
+- **Everything the station reports is used, per quantity.** Both data calls pass
+  `station_only=false`, so AgroExact substitutes external data for what a given unit
+  does not measure itself and a RainExact location gets a complete page. Whatever
+  still comes back empty stays modelled. The weather icon is never replaced — a
+  station measures quantities, not conditions.
 - **Sunshine minutes stay modelled.** The API reports global radiation (J/cm²),
   which is a different quantity; deriving bright-sunshine minutes from it would be a
   guess presented as a measurement. Say the word if an approximation is preferred.

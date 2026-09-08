@@ -13,6 +13,16 @@
  * peaks that the API already computes — and computing them from a partially
  * delivered hour gives a different answer than the API's.
  *
+ * ## Everything the station reports, not only what it measures itself
+ *
+ * Both calls pass `station_only=false`, which is the API's default but is sent
+ * explicitly because it decides what comes back: with it, AgroExact substitutes
+ * external data for the quantities a given unit does not measure, so a RainExact
+ * answers with a full record rather than a rain figure and a row of nulls. The merge
+ * is still per quantity — whatever arrives as null stays modelled — but the app asks
+ * for everything and uses everything it gets, rather than deciding in advance which
+ * station is allowed to speak about what.
+ *
  * ## Two things the API does that the app does not
  *
  * **Timestamps are UTC, and an aggregate is stamped at the end of its hour.** A row
@@ -52,12 +62,12 @@ export interface NearestStation extends AgroStation {
 }
 
 /**
- * One hour as the station measured it.
+ * One hour as the station reported it.
  *
- * Every field is independently nullable, because a RainExact measures precipitation
- * and nothing else, and even an AtmoExact can lose a sensor. The merge treats each
- * quantity on its own: what the station measured replaces the model, what it did not
- * stays modelled.
+ * Every field is independently nullable: a sensor can fail, and a young station has
+ * hours before it existed. The merge treats each quantity on its own — what came
+ * back replaces the model, what did not stays modelled — so a gap in one field never
+ * costs the hour its other values.
  */
 export interface MeasuredHour {
   /** Local wall-clock hour, `YYYY-MM-DDTHH:00` — the app's own hour key. */
@@ -168,11 +178,10 @@ interface StationRow {
 /**
  * The account's weather stations.
  *
- * Rain gauges are kept alongside full stations. They can only fill in precipitation,
- * but the merge is per quantity, so a RainExact location shows measured rainfall over
- * a modelled everything-else rather than being dropped from the list — and dropping a
- * station someone owns from a screen that claims to list their stations is worse than
- * showing one that speaks about less.
+ * Rain gauges are kept alongside full stations, and are asked the same questions:
+ * with external substitution on, a RainExact location gets a complete page rather
+ * than a rain figure over a row of blanks. Dropping a station someone owns from a
+ * screen that claims to list their stations would be the worse answer anyway.
  *
  * A station without usable coordinates is skipped: it cannot become a location.
  */
@@ -279,6 +288,9 @@ const HOUR_MS = 3600_000;
  * withheld until every late measurement has arrived, which on the hour strip reads as
  * the station having stopped reporting. The values can still change on the next
  * refresh, which is exactly what a live hour does anyway.
+ *
+ * `station_only=false` is the default, sent explicitly: the app wants every quantity
+ * the station can answer for, substituted where its own sensors cannot.
  */
 export async function fetchStationHours(
   token: string,
@@ -289,7 +301,8 @@ export async function fetchStationHours(
 ): Promise<{ hours: Record<string, MeasuredHour>; stationName: string | null }> {
   const rows = await agroFetch<AggregateRow[]>(
     token,
-    `/aggregates/${encodeURIComponent(stationId)}/?hours=${hours}&include_partial=true`,
+    `/aggregates/${encodeURIComponent(stationId)}/` +
+      `?hours=${hours}&include_partial=true&station_only=false`,
     opts
   );
   const out: Record<string, MeasuredHour> = {};
@@ -356,7 +369,7 @@ export async function fetchLatestMeasurement(
 ): Promise<{ current: Measurement | null; stationName: string | null }> {
   const rows = await agroFetch<ReadingRow[]>(
     token,
-    `/readings/${encodeURIComponent(stationId)}/?latest=true`,
+    `/readings/${encodeURIComponent(stationId)}/?latest=true&station_only=false`,
     opts
   );
   const r = (Array.isArray(rows) ? rows : [])[0];
