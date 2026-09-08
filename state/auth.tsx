@@ -73,6 +73,15 @@ export interface AuthState {
    * instead of rotating the refresh token twice.
    */
   getAccessToken: (spentToken?: string) => Promise<string | null>;
+  /**
+   * Report that the API refused a token that had just been minted.
+   *
+   * Refreshing cannot fix that: the grant no longer buys access, whatever the token
+   * endpoint says. The integration goes to `expired` so Instellingen shows the
+   * warning instead of a healthy row over data that never arrives. Locations the
+   * integration created stay, exactly as on a revoked refresh token.
+   */
+  reportUnauthorized: () => void;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -229,9 +238,13 @@ export function AgroAuthProvider({ children }: { children: ReactNode }) {
     return run;
   }, [account, disconnect]);
 
+  const reportUnauthorized = useCallback(() => {
+    void disconnect('expired');
+  }, [disconnect]);
+
   const value = useMemo<AuthState>(
-    () => ({ status, account, error, ready, signIn, signOut, getAccessToken }),
-    [status, account, error, ready, signIn, signOut, getAccessToken]
+    () => ({ status, account, error, ready, signIn, signOut, getAccessToken, reportUnauthorized }),
+    [status, account, error, ready, signIn, signOut, getAccessToken, reportUnauthorized]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

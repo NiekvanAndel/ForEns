@@ -54,8 +54,10 @@ export function useAgroStations() {
     enabled,
     staleTime: STATIONS_STALE_MS,
     queryFn: async ({ signal }): Promise<AgroStation[]> => {
-      const rows = await withAgroToken(auth.getAccessToken, (token) =>
-        fetchStations(token, { signal })
+      const rows = await withAgroToken(
+        auth.getAccessToken,
+        (token) => fetchStations(token, { signal }),
+        auth.reportUnauthorized
       );
       return rows ?? [];
     },
@@ -197,8 +199,10 @@ export function useStationObservations(
     staleTime: OBSERVATIONS_STALE_MS,
     queryFn: async ({ signal }): Promise<StationObservations | null> => {
       if (!station) return null;
-      const obs = await withAgroToken(auth.getAccessToken, (token) =>
-        fetchStationObservations(token, station.id, offsetSec ?? 0, { signal })
+      const obs = await withAgroToken(
+        auth.getAccessToken,
+        (token) => fetchStationObservations(token, station.id, offsetSec ?? 0, { signal }),
+        auth.reportUnauthorized
       );
       return obs ? { ...obs, stationName: obs.stationName ?? station.name } : null;
     },

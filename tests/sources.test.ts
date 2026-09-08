@@ -376,11 +376,24 @@ describe('withAgroToken', () => {
     expect(call).toHaveBeenCalledTimes(2);
   });
 
-  it('takes a second refusal at face value', async () => {
+  it('takes a second refusal at face value, and says so', async () => {
     const call = vi.fn(refused);
-    await expect(withAgroToken(async (spent) => (spent ? 'fresh' : 'stale'), call))
+    const refusedFresh = vi.fn();
+    await expect(withAgroToken(async (spent) => (spent ? 'fresh' : 'stale'), call, refusedFresh))
       .rejects.toBeInstanceOf(AgroAuthError);
     expect(call).toHaveBeenCalledTimes(2);
+    expect(refusedFresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays quiet when the retry fails for a reason other than the token', async () => {
+    const refusedFresh = vi.fn();
+    const call = vi.fn(async (t: string) => {
+      if (t === 'stale') return refused();
+      throw new SourceError('AgroExact', 'HTTP 503', 503);
+    });
+    await expect(withAgroToken(async (spent) => (spent ? 'fresh' : 'stale'), call, refusedFresh))
+      .rejects.toBeInstanceOf(SourceError);
+    expect(refusedFresh).not.toHaveBeenCalled();
   });
 
   it('gives up without a retry when there is nothing fresher to try', async () => {

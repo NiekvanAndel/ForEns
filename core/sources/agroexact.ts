@@ -140,10 +140,15 @@ export class AgroAuthError extends SourceError {
  * `getToken` is `getAccessToken` from the auth context: called bare for the token in
  * hand, and with the refused one to ask for its replacement. Resolves to null when
  * there is no account to call with at all — every caller has a page to draw without.
+ *
+ * `onRefusedFreshToken` runs when a token minted seconds ago is refused too. That is
+ * no longer an expiry problem — the grant does not buy access to this API — and the
+ * auth context uses it to stop claiming the integration is healthy.
  */
 export async function withAgroToken<T>(
   getToken: (spentToken?: string) => Promise<string | null>,
-  call: (token: string) => Promise<T>
+  call: (token: string) => Promise<T>,
+  onRefusedFreshToken?: () => void
 ): Promise<T | null> {
   const token = await getToken();
   if (!token) return null;
@@ -155,7 +160,12 @@ export async function withAgroToken<T>(
     // Nothing newer to try with: the auth context has already recorded why — a
     // revoked grant disconnects the integration, a network failure leaves it alone.
     if (!fresh || fresh === token) throw e;
-    return call(fresh);
+    try {
+      return await call(fresh);
+    } catch (afterRefresh) {
+      if (afterRefresh instanceof AgroAuthError) onRefusedFreshToken?.();
+      throw afterRefresh;
+    }
   }
 }
 
