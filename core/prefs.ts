@@ -6,7 +6,7 @@
  *
  * This module is pure: it defines the shape, the defaults and the merge, and knows
  * nothing about storage. The app persists it through AsyncStorage and the AgroExact
- * token through expo-secure-store, which is why the token is not a field here.
+ * OAuth tokens through expo-secure-store, which is why no credential is a field here.
  */
 import type { LangCode } from './i18n/strings';
 import type { PresUnit, TempUnit, WindUnit, FontSizePref } from './i18n/units';
@@ -23,10 +23,19 @@ export interface SavedLocation {
   lon: number;
   /** Region/country line, shown under the name. */
   sub?: string;
-  /** Set once a nearby AgroExact station has been matched. The design turns a
+  /** Set once an AgroExact station speaks for this location. The design turns a
    *  station-backed location green, so this drives colour as well as data. */
   stationId?: string;
   stationName?: string;
+  /**
+   * Which integration created this location, if any.
+   *
+   * A place someone searched for and saved is theirs; a place the AgroExact sync
+   * created stands for a station on their account. Only the second kind is removed
+   * again when that station leaves the account, which is why the two have to be
+   * distinguishable rather than inferred from `stationId`.
+   */
+  source?: 'agroexact';
   /**
    * The device's own position, kept up to date by `DeviceLocationProvider`.
    *
@@ -39,6 +48,42 @@ export interface SavedLocation {
   current?: boolean;
 }
 
+/**
+ * A connected integration.
+ *
+ * Kept in preferences rather than in memory because Instellingen has to be able to
+ * say "verbonden met …" before any network call, and because an expired token must
+ * not read as "never connected" — the difference is a warning versus an empty row.
+ * Credentials are not here; they are in expo-secure-store. See `state/auth.tsx`.
+ */
+export interface AgroIntegration {
+  /** True from the first successful sign-in until the user disconnects. */
+  connected: boolean;
+  /** Whoever is signed in, for the settings row. Null when AuthKit gave no email. */
+  account: string | null;
+  /**
+   * Opt-in: let the device's own page use a station within `AGRO_MAX_DISTANCE_KM`.
+   *
+   * Off by default. Station locations are bound by id, so this is the one place
+   * where proximity decides anything — and where you are is the one location the
+   * user did not choose, so it is the one place that needs asking first.
+   */
+  useForCurrentLocation: boolean;
+  /** Epoch ms of the last completed station sync, for the settings row. */
+  lastSyncMs: number | null;
+}
+
+export interface Integrations {
+  agroexact?: AgroIntegration;
+}
+
+export const DEFAULT_AGRO_INTEGRATION: AgroIntegration = {
+  connected: false,
+  account: null,
+  useForCurrentLocation: false,
+  lastSyncMs: null,
+};
+
 export interface Prefs {
   lang: LangCode;
   tempUnit: TempUnit;
@@ -50,8 +95,7 @@ export interface Prefs {
   /** Index into `locations` of the location being viewed. */
   activeLocation: number;
   useHarmonie: boolean;
-  agroExact: boolean;
-  agroBase: string;
+  integrations: Integrations;
   model: ModelPref;
   shortModel: ShortModelPref;
   showSpread: boolean;
@@ -78,8 +122,7 @@ export const DEFAULT_PREFS: Prefs = {
   locations: [DEFAULT_LOCATION],
   activeLocation: 0,
   useHarmonie: true,
-  agroExact: false,
-  agroBase: '',
+  integrations: {},
   model: 'ecmwf',
   shortModel: 'nowcast',
   showSpread: true,
@@ -115,12 +158,27 @@ export function mergePrefs(stored: unknown): Prefs {
   take('fontSize', oneOf('sm', 'md', 'lg'));
   take('model', oneOf('ecmwf', 'gfs', 'mix'));
   take('shortModel', oneOf('nowcast', 'radar'));
-  take('agroBase', (v) => typeof v === 'string');
   for (const k of [
-    'useHarmonie', 'agroExact', 'showSpread',
+    'useHarmonie', 'showSpread',
     'notifyRain', 'notifyWind', 'notifyFrost', 'quietHours',
   ] as const) {
     take(k, bool);
+  }
+
+  // Integrations are stored state that outlives the code that wrote them, so each
+  // field is taken on its own and anything missing falls back to the default rather
+  // than leaving a half-built object behind.
+  const agro = (s.integrations as Integrations | undefined)?.agroexact;
+  if (agro && typeof agro === 'object') {
+    out.integrations = {
+      agroexact: {
+        connected: typeof agro.connected === 'boolean' ? agro.connected : false,
+        account: typeof agro.account === 'string' ? agro.account : null,
+        useForCurrentLocation:
+          typeof agro.useForCurrentLocation === 'boolean' ? agro.useForCurrentLocation : false,
+        lastSyncMs: typeof agro.lastSyncMs === 'number' ? agro.lastSyncMs : null,
+      },
+    };
   }
 
   if (Array.isArray(s.locations)) {
@@ -171,4 +229,112 @@ export function withCurrentLocation(prefs: Prefs, loc: SavedLocation): Prefs {
 /** The location currently being viewed, always defined. */
 export function activeLocation(prefs: Prefs): SavedLocation {
   return prefs.locations[prefs.activeLocation] ?? prefs.locations[0] ?? DEFAULT_LOCATION;
+}
+
+/** The AgroExact integration as stored, or the disconnected default. */
+export function agroIntegration(prefs: Prefs): AgroIntegration {
+  return prefs.integrations.agroexact ?? DEFAULT_AGRO_INTEGRATION;
+}
+
+/** Locations the AgroExact sync owns, in list order. */
+export function stationLocations(prefs: Prefs): SavedLocation[] {
+  return prefs.locations.filter((l) => l.source === 'agroexact');
+}
+
+/** One station, as the sync needs it: the station itself plus the town it stands in. */
+export interface StationPlace {
+  stationId: string;
+  stationName: string;
+  lat: number;
+  lon: number;
+  /** The town the coordinates fall in, from a reverse lookup. */
+  place: string;
+  sub?: string;
+}
+
+/**
+ * Reconcile the saved locations with the stations on the account.
+ *
+ * The account is the authority over its own stations, and nothing else: locations
+ * the user saved themselves are left exactly where they are, in their order. A
+ * station that has gone from the account takes its location with it — that is the
+ * point of the sync — but a station that is merely absent from a failed request must
+ * never reach this function, or a network blip would delete someone's pages.
+ *
+ * Two stations in the same town produce two locations. They are different
+ * instruments in different fields, and collapsing them would leave the reader unable
+ * to say which one the numbers came from.
+ *
+ * The viewed page is kept on the same *location*, not the same index: adding or
+ * removing a station must not silently move someone to a different place.
+ */
+export function syncStationLocations(prefs: Prefs, stations: readonly StationPlace[]): Prefs {
+  const viewed = prefs.locations[prefs.activeLocation];
+  const byId = new Map(stations.map((s) => [s.stationId, s]));
+
+  const kept: SavedLocation[] = [];
+  const seen = new Set<string>();
+
+  for (const l of prefs.locations) {
+    if (l.source !== 'agroexact') {
+      kept.push(l);
+      continue;
+    }
+    const station = l.stationId ? byId.get(l.stationId) : undefined;
+    if (!station) continue; // the station left the account
+    seen.add(station.stationId);
+    // A station can be renamed or moved; the location follows it.
+    kept.push({
+      ...l,
+      name: station.place,
+      sub: station.sub ?? l.sub,
+      lat: station.lat,
+      lon: station.lon,
+      stationId: station.stationId,
+      stationName: station.stationName,
+      source: 'agroexact',
+    });
+  }
+
+  for (const s of stations) {
+    if (seen.has(s.stationId)) continue;
+    kept.push({
+      name: s.place,
+      sub: s.sub,
+      lat: s.lat,
+      lon: s.lon,
+      stationId: s.stationId,
+      stationName: s.stationName,
+      source: 'agroexact',
+    });
+  }
+
+  // The app must always have somewhere to show.
+  const locations = kept.length ? kept : [DEFAULT_LOCATION];
+  const at = viewed ? locations.indexOf(viewed) : -1;
+  const activeLocation =
+    at >= 0
+      ? at
+      : Math.min(Math.max(0, prefs.activeLocation), locations.length - 1);
+
+  return { ...prefs, locations, activeLocation };
+}
+
+/**
+ * Forget the AgroExact integration, keeping the places it created.
+ *
+ * A town does not stop existing because a token expired, and someone who has been
+ * swiping to Rosmalen every morning should keep that page — it simply goes back to
+ * being an ordinary Open-Meteo location. Only the station binding is dropped.
+ */
+export function unlinkStationLocations(prefs: Prefs): Prefs {
+  return {
+    ...prefs,
+    locations: prefs.locations.map((l) =>
+      l.source === 'agroexact'
+        ? { ...l, source: undefined, stationId: undefined, stationName: undefined }
+        : l
+    ),
+    integrations: {},
+  };
 }

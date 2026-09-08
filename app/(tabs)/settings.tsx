@@ -18,9 +18,10 @@
  * languages, four wind units and three temperature scales as rows of pills, none of
  * which could be read at a glance.
  *
- * Two of the design's groups are still not shown, at the client's direction:
- * Meldingen and the AgroExact integration. Each is hidden rather than deleted — the
- * preferences, the plumbing and the tests all remain. See DEFERRED.md.
+ * One of the design's groups is still not shown, at the client's direction:
+ * Meldingen. It is hidden rather than deleted — the preferences, the plumbing and
+ * the tests all remain. See DEFERRED.md. Integraties is shown: it is how the
+ * AgroExact account is connected, and there is no way to connect one without it.
  */
 import { useCallback, useState } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -33,12 +34,13 @@ import { Text } from '../../ui/Text';
 import { ChoiceList, Group, NavRow, Row, Toggle } from '../../ui/settings/Controls';
 import { SubjectPage } from '../../ui/settings/SubjectPage';
 import { LocationList } from '../../ui/settings/LocationList';
+import { IntegrationCard } from '../../ui/settings/IntegrationCard';
 import { SourceCard } from '../../ui/settings/SourceCard';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { t, ta, LANG_CODES, tempUnitLabel, windUnitLabel } from '../../core/i18n';
 import type { LangCode } from '../../core/i18n';
-import type { ThemeMode } from '../../core/prefs';
+import { agroIntegration, type ThemeMode } from '../../core/prefs';
 import type { FontSizePref, PresUnit, TempUnit, WindUnit } from '../../core/i18n/units';
 
 const APP_VERSION = '0.1';
@@ -48,7 +50,7 @@ type Page =
   | 'display' | 'lang' | 'fontSize' | 'theme'
   | 'units' | 'windUnit' | 'tempUnit' | 'presUnit'
   | 'model' | 'source'
-  | 'locations';
+  | 'locations' | 'integrations';
 
 /** Which subject a page belongs to, so a subject stays presented while one of its
  *  leaves is open. */
@@ -104,6 +106,7 @@ export default function SettingsScreen() {
   const fontLabel = prefs.fontSize === 'sm' ? 'A' : prefs.fontSize === 'md' ? 'A+' : 'A++';
   const windLabel = windUnitLabel(prefs.windUnit);
   const modelLabel = prefs.useHarmonie ? 'HARMONIE-AROME' : 'ECMWF IFS';
+  const agro = agroIntegration(prefs);
 
   return (
     <View style={{ flex: 1, backgroundColor: palette.appBg }}>
@@ -144,6 +147,12 @@ export default function SettingsScreen() {
             label={ta('myLocations', prefs.lang)}
             value={String(prefs.locations.length)}
             onPress={() => { tap(); setPage('locations'); }}
+          />
+          <NavRow
+            icon="plugs-connected"
+            label={ta('integrations', prefs.lang)}
+            value={agro.connected ? (agro.account ?? ta('agroConnected', prefs.lang)) : ''}
+            onPress={() => { tap(); setPage('integrations'); }}
           />
           <NavRow
             icon="info"
@@ -358,6 +367,15 @@ export default function SettingsScreen() {
         onClose={() => setPage(null)}
       >
         <SourceCard />
+      </SubjectPage>
+
+      {/* ── Integraties ──────────────────────────────────────────────────────── */}
+      <SubjectPage
+        visible={page === 'integrations'}
+        title={ta('integrations', prefs.lang)}
+        onClose={() => setPage(null)}
+      >
+        <IntegrationCard />
       </SubjectPage>
 
       {/* ── Locaties ─────────────────────────────────────────────────────────── */}

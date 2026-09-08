@@ -35,9 +35,29 @@ describe('mergePrefs', () => {
   });
 
   it('rejects a boolean stored as a string', () => {
-    const out = mergePrefs({ useHarmonie: 'false', agroExact: 1 });
+    const out = mergePrefs({ useHarmonie: 'false', showSpread: 1 });
     expect(out.useHarmonie).toBe(true);
-    expect(out.agroExact).toBe(false);
+    expect(out.showSpread).toBe(true);
+  });
+
+  it('reads a stored integration field by field', () => {
+    const out = mergePrefs({
+      integrations: {
+        agroexact: { connected: true, account: 'niek@agroexact.nl', useForCurrentLocation: 'yes' },
+      },
+    });
+    const agro = out.integrations.agroexact!;
+    expect(agro.connected).toBe(true);
+    expect(agro.account).toBe('niek@agroexact.nl');
+    // A field written by an older version, or by nothing at all, falls back rather
+    // than leaving a half-built object behind.
+    expect(agro.useForCurrentLocation).toBe(false);
+    expect(agro.lastSyncMs).toBeNull();
+  });
+
+  it('ignores an integrations block that is not one', () => {
+    expect(mergePrefs({ integrations: { agroexact: 'yes' } }).integrations).toEqual({});
+    expect(mergePrefs({ integrations: 'none' }).integrations).toEqual({});
   });
 
   it('drops malformed locations but keeps the good ones', () => {

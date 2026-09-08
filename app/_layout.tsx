@@ -17,7 +17,10 @@ import {
   Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold,
   Figtree_700Bold, Figtree_800ExtraBold,
 } from '@expo-google-fonts/figtree';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PrefsProvider, usePrefs } from '../state/prefs';
+import { AgroAuthProvider } from '../state/auth';
+import { useStationLocationSync } from '../state/stations';
 import { DeviceLocationProvider } from '../state/deviceLocation';
 import { ForecastProvider, useForecast } from '../state/forecast';
 import { useWidgetSync, writeWidgetPayload } from '../state/widgetSync';
@@ -29,10 +32,33 @@ SplashScreen.preventAutoHideAsync().catch(() => {
   // Already hidden, or unavailable — not worth failing startup over.
 });
 
+/**
+ * One client for the whole app.
+ *
+ * Created at module scope rather than in the component so a Fast Refresh does not
+ * throw the cache away mid-session. The defaults are the app's own manners: a
+ * refetch on every mount would undo the point of caching between screens, and a
+ * failed weather call is better retried once than three times on a train.
+ */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+      staleTime: 5 * 60_000,
+      gcTime: 24 * 60 * 60_000,
+    },
+  },
+});
+
 function Shell() {
   const { palette, appearance } = useTheme();
   const { ready, prefs, location } = usePrefs();
   const { model, alert, nowcast } = useForecast();
+
+  // Stations on the connected account become locations here, once, above every
+  // screen — not inside Instellingen, which the user may never open.
+  useStationLocationSync();
 
   // Mirror the live forecast into the widget whenever it changes.
   useWidgetSync({
@@ -85,15 +111,19 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <PrefsProvider>
-          <ThemeProvider>
-            <DeviceLocationProvider>
-              <ForecastProvider>
-                <Shell />
-              </ForecastProvider>
-            </DeviceLocationProvider>
-          </ThemeProvider>
-        </PrefsProvider>
+        <QueryClientProvider client={queryClient}>
+          <PrefsProvider>
+            <AgroAuthProvider>
+              <ThemeProvider>
+                <DeviceLocationProvider>
+                  <ForecastProvider>
+                    <Shell />
+                  </ForecastProvider>
+                </DeviceLocationProvider>
+              </ThemeProvider>
+            </AgroAuthProvider>
+          </PrefsProvider>
+        </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

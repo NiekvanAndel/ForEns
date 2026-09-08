@@ -70,6 +70,14 @@ function run(
 }
 
 /**
+ * Two deliberate extensions are projected away before comparing.
+ *
+ * The port keeps **24** observed hours where the web app kept 12, because the hero's
+ * figures are now a rolling 24-hour minimum, maximum and rainfall total rather than
+ * today's forecast extremes. The extra hours are older ones prepended to the same
+ * series, so trimming to the last twelve compares like with like; `keeps a full day
+ * of observations` below asserts the longer window is actually there.
+ *
  * The port's `hresHoursByDay` carries the whole IFS hour — temperature, wind,
  * humidity, sunshine — where the web app's carried only millimetres and a weather
  * code, because the web app re-fetched the rest per popup instead. That is an
@@ -85,7 +93,13 @@ function comparable(m: ReturnType<typeof processAll>): ReturnType<typeof process
       hours.map(({ time, hour, precip, wmo, is3h }) => ({ time, hour, precip, wmo, is3h })),
     ])
   );
-  return { ...m, hresHoursByDay } as ReturnType<typeof processAll>;
+  const pastHours = m.pastHours.slice(-12);
+  return {
+    ...m,
+    pastHours,
+    allHours: [...pastHours, ...m.futureHours],
+    hresHoursByDay,
+  } as ReturnType<typeof processAll>;
 }
 
 describe('processAll', () => {
@@ -98,6 +112,17 @@ describe('processAll', () => {
     expect(actual!.futureHours.length).toBeGreaterThan(20);
     expect(actual!.pastHours.length).toBe(12);
     expect(actual!.nMembers).toBe(51);
+  });
+
+  it('keeps a full day of observations, not the web app\'s twelve hours', () => {
+    const f = buildFixtures(1001);
+    const { full } = run(f);
+    // The hero reads a rolling 24 hours off this window, so it has to reach back
+    // that far; the observation call already fetches yesterday.
+    expect(full!.pastHours.length).toBe(24);
+    expect(full!.pastHours.every((h) => h.isPast)).toBe(true);
+    // Still in order, oldest first, and ending where the forecast begins.
+    expect(full!.pastHours[full!.pastHours.length - 1]!.time < full!.nowHour).toBe(true);
   });
 
   it('matches with gaps throughout every series', () => {

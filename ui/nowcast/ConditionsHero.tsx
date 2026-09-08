@@ -5,6 +5,16 @@
  * adds the source line with its dot. Layout follows the design's ConditionsHero:
  * the ▲/▼ pair beside the big reading, then a three-cell divider row.
  *
+ * ## Everything here looks backwards, on purpose
+ *
+ * The card's subject is what it is doing *now*, so its supporting figures are the
+ * last 24 hours rather than the rest of today: the maximum and the minimum since
+ * this time yesterday, and the rain that has actually fallen in them. The ▲/▼ pair
+ * used to be today's forecast extremes, which put a modelled afternoon next to a
+ * measured present — and on a station-backed location that mixed an instrument's
+ * reading with a model's opinion inside one row of numbers. Now every figure on the
+ * card is an observation, and where AgroExact covers the location, a measurement.
+ *
  * The hourly slider is its own card below this one. It answers a different question
  * — what happens next, rather than what it is doing now — and inside the hero it was
  * a fourth band on a card that already had three, with the reader having to work out
@@ -22,6 +32,7 @@ import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, fmtMm, windUnitLabel, t } from '../../core/i18n';
+import { recent24 } from '../../core/model/station';
 import type { ForecastModel } from '../../core/model/types';
 import type { SavedLocation } from '../../core/prefs';
 
@@ -39,17 +50,21 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
   const { prefs } = usePrefs();
   const lang = prefs.lang;
 
-  const now = model.futureHours[0] ?? model.pastHours[model.pastHours.length - 1];
-  const today = model.days[0];
-  const station = !!location.stationId;
+  const modelled = model.futureHours[0] ?? model.pastHours[model.pastHours.length - 1];
+  const measured = model.station?.current ?? null;
+  // Measurements are merged per quantity, exactly as the hour strip merges them: a
+  // rain gauge fills in the rainfall and leaves the wind to the model.
+  const now = {
+    temp: measured?.temp ?? modelled?.temp ?? null,
+    wind: measured?.wind ?? modelled?.wind ?? null,
+    windDir: measured?.windDir ?? modelled?.windDir ?? null,
+    humidity: measured?.humidity ?? modelled?.humidity ?? null,
+    wmo: modelled?.wmo ?? 3,
+    isDay: modelled?.isDay ?? 1,
+  };
+  const station = !!model.station || !!location.stationId;
 
-  const hi = today?.hresTempMax ?? today?.tempHi ?? null;
-  const lo = today?.hresTempMin ?? today?.tempLo ?? null;
-
-  // 24-hour precipitation: what has already fallen plus what is still to come today.
-  const precip24 =
-    model.pastHours.reduce((s, h) => s + (h.precip ?? 0), 0) +
-    model.futureHours.slice(0, 24).reduce((s, h) => s + (h.precip ?? 0), 0);
+  const { tempMin: lo, tempMax: hi, precip: precip24 } = recent24(model);
 
   return (
     <Card pad={0}>
@@ -83,11 +98,12 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
           </View>
 
           <Text variant="metric" color={palette.appValue} tabular>
-            {now?.temp != null ? convTemp(now.temp, prefs.tempUnit) : '—'}°
+            {now.temp != null ? convTemp(now.temp, prefs.tempUnit) : '—'}°
           </Text>
 
           <View style={{ marginLeft: 'auto' }}>
-            <WeatherIcon wmo={now?.wmo ?? 3} isDay={now?.isDay ?? 1} size={54} />
+            {/* The icon stays modelled: a station measures quantities, not conditions. */}
+            <WeatherIcon wmo={now.wmo} isDay={now.isDay} size={54} />
           </View>
         </View>
       </View>
@@ -95,9 +111,9 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
       <Rule />
       <View style={{ flexDirection: 'row' }}>
         <StatCell label={t('hWind', lang)}>
-          <WindArrow deg={now?.windDir ?? null} size={15} />
+          <WindArrow deg={now.windDir} size={15} />
           <Text variant="stat" color={palette.valWind} tabular>
-            {convWind(now?.wind ?? null, prefs.windUnit) ?? '—'}
+            {convWind(now.wind, prefs.windUnit) ?? '—'}
           </Text>
           <Unit>{windUnitLabel(prefs.windUnit)}</Unit>
         </StatCell>
@@ -115,7 +131,7 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
         <VRule />
         <StatCell label={t('hHumidity', lang)}>
           <Text variant="stat" color={palette.inkHeading} tabular>
-            {now?.humidity ?? '—'}
+            {now.humidity ?? '—'}
           </Text>
           <Unit>%</Unit>
         </StatCell>

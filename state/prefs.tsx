@@ -1,23 +1,21 @@
 /**
  * Preferences context.
  *
- * Preferences persist through AsyncStorage. The AgroExact API token is deliberately
- * not part of this object: it is a credential, so it lives in expo-secure-store and
- * is read only by the code that calls the API.
+ * Preferences persist through AsyncStorage. No credential is part of this object:
+ * the AgroExact OAuth tokens are held by `state/auth.tsx` in expo-secure-store, and
+ * are read only by the code that calls the API.
  */
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ReactNode,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import {
   DEFAULT_PREFS, mergePrefs, activeLocation, withCurrentLocation,
   type Prefs, type SavedLocation,
 } from '../core/prefs';
 
 const PREFS_KEY = 'exactcast.prefs.v1';
-const TOKEN_KEY = 'exactcast.agro.token';
 
 interface PrefsContextValue {
   prefs: Prefs;
@@ -25,6 +23,16 @@ interface PrefsContextValue {
   ready: boolean;
   setPref: <K extends keyof Prefs>(key: K, value: Prefs[K]) => void;
   setPrefs: (patch: Partial<Prefs>) => void;
+  /**
+   * Rewrite the whole object from its current value.
+   *
+   * `setPrefs` merges a patch computed from a render's copy, which is fine for a
+   * toggle and wrong for the station sync: that reads the location list, derives a
+   * new one and writes it back, and doing so against a stale copy would drop a
+   * location added in between. This is the reducer form, so the sync always sees
+   * what is actually stored.
+   */
+  mutate: (fn: (prefs: Prefs) => Prefs) => void;
   location: SavedLocation;
   addLocation: (loc: SavedLocation) => void;
   removeLocation: (index: number) => void;
@@ -33,9 +41,6 @@ interface PrefsContextValue {
   selectLocation: (index: number) => void;
   /** Record where the device is as the first page, replacing any earlier fix. */
   setCurrentLocation: (loc: SavedLocation) => void;
-  /** Credential access, kept off the Prefs object on purpose. */
-  getAgroToken: () => Promise<string>;
-  setAgroToken: (token: string) => Promise<void>;
 }
 
 const PrefsContext = createContext<PrefsContextValue | null>(null);
@@ -111,6 +116,10 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     setState((p) => ({ ...p, ...patch }));
   }, []);
 
+  const mutate = useCallback((fn: (prefs: Prefs) => Prefs) => {
+    setState((p) => fn(p));
+  }, []);
+
   const setPref = useCallback(<K extends keyof Prefs>(key: K, value: Prefs[K]) => {
     setState((p) => ({ ...p, [key]: value }));
   }, []);
@@ -164,30 +173,16 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const getAgroToken = useCallback(async () => {
-    try {
-      return (await SecureStore.getItemAsync(TOKEN_KEY)) ?? '';
-    } catch {
-      return '';
-    }
-  }, []);
-
-  const setAgroToken = useCallback(async (token: string) => {
-    const t = token.trim();
-    if (t) await SecureStore.setItemAsync(TOKEN_KEY, t);
-    else await SecureStore.deleteItemAsync(TOKEN_KEY);
-  }, []);
-
   const value = useMemo<PrefsContextValue>(
     () => ({
-      prefs, ready, setPref, setPrefs,
+      prefs, ready, setPref, setPrefs, mutate,
       location: activeLocation(prefs),
       addLocation, removeLocation, reorderLocation, selectLocation,
-      setCurrentLocation, getAgroToken, setAgroToken,
+      setCurrentLocation,
     }),
     [
-      prefs, ready, setPref, setPrefs, addLocation, removeLocation,
-      reorderLocation, selectLocation, setCurrentLocation, getAgroToken, setAgroToken,
+      prefs, ready, setPref, setPrefs, mutate, addLocation, removeLocation,
+      reorderLocation, selectLocation, setCurrentLocation,
     ]
   );
 

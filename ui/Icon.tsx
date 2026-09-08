@@ -14,6 +14,8 @@ import {
   ThermometerSimple, Translate, Trash, Wind, X,
   type IconProps as PhosphorProps,
   NavigationArrow,
+  MapPin,
+  Warning,
 } from 'phosphor-react-native';
 import type { ComponentType } from 'react';
 
@@ -43,6 +45,7 @@ const ICONS = {
   'gear-six': GearSix,
   info: Info,
   'magnifying-glass': MagnifyingGlass,
+  'map-pin': MapPin,
   minus: Minus,
   moon: Moon,
   'navigation-arrow': NavigationArrow,
@@ -57,6 +60,7 @@ const ICONS = {
   'thermometer-simple': ThermometerSimple,
   translate: Translate,
   trash: Trash,
+  warning: Warning,
   wind: Wind,
   x: X,
 } satisfies Record<string, ComponentType<PhosphorProps>>;

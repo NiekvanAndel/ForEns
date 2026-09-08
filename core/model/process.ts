@@ -135,14 +135,19 @@ export function processAll(
 
   const offsetSec = oJ?.utc_offset_seconds ?? hJ?.utc_offset_seconds ?? 0;
 
-  // ── Past 12 hours. Only with observations; without them there is no history. ──
+  // ── Past 24 hours. Only with observations; without them there is no history. ──
+  //
+  // Twelve was enough for the hour strip, which shows at most that many. The hero's
+  // figures are a rolling 24-hour minimum, maximum and rainfall total, so the window
+  // has to reach back a full day — `past_days=1` on the observation call already
+  // fetches it.
   const pastHours: Hour[] = [];
   if (oJ?.hourly?.time) {
     const oh = oJ.hourly;
     const ot = oh.time as string[];
     const pastCandidates: number[] = [];
     for (let i = 0; i < ot.length; i++) if ((ot[i] as string) < nowHour) pastCandidates.push(i);
-    for (const i of pastCandidates.slice(-12)) {
+    for (const i of pastCandidates.slice(-24)) {
       const time = ot[i] as string;
       pastHours.push({
         time,

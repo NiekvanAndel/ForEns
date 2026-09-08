@@ -27,7 +27,8 @@ import { FullScreenRadar } from '../../ui/radar/FullScreenRadar';
 import { NowcastPanel } from '../../ui/radar/NowcastPanel';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
-import { useStations, stationsNear } from '../../state/stations';
+import { useAgroStations } from '../../state/stations';
+import { stationsNear } from '../../core/sources/agroexact';
 import { activeProvider, frameClock, radarAxis, type RadarFrame } from '../../core/radar';
 import { mapChrome } from '../../ui/radar/mapStyle';
 import { usePeeking } from '../../ui/peek';
@@ -45,7 +46,7 @@ function RadarPage() {
   const { prefs, location } = usePrefs();
   const { nowcast } = useForecast();
   const insets = useSafeAreaInsets();
-  const { stations } = useStations(location.lat, location.lon);
+  const { data: stations = [] } = useAgroStations();
   const peeking = usePeeking();
   const chrome = mapChrome(palette, appearance);
 

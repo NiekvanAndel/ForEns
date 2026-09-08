@@ -18,8 +18,8 @@ widget reads the same mapping, so the two cannot disagree.
 
 ## Hidden pending a decision
 
-Four surfaces are built, tested and working, but **not shown in the UI** at the
-client's direction (31 Aug 2026). Each is hidden rather than deleted: preferences,
+Three surfaces are built, tested and working, but **not shown in the UI** at the
+client's direction (31 Aug 2026). The fourth, AgroExact, is now shipped. Each is hidden rather than deleted: preferences,
 plumbing and tests all remain, so re-exposing one means restoring its rows in
 `app/(tabs)/settings.tsx`.
 
@@ -27,12 +27,59 @@ plumbing and tests all remain, so re-exposing one means restoring its rows in
 | --- | --- | --- |
 | **Meldingen** (rain / wind / frost / quiet hours) | `core/notifications.ts`, `core/backgroundTask.ts` | To be worked out later — see the push limitation below |
 | **Korte termijn: Nowcast / Radar** | `prefs.shortModel` | Needs a second 0–2h source to choose between |
-| **AgroExact integration** | `core/sources/agroexact.ts`, `state/stations.ts` | To be done later |
+| ~~**AgroExact integration**~~ | ~~`core/sources/agroexact.ts`, `state/stations.ts`~~ | **Done** — see below |
 | ~~App and widget icon~~ | ~~—~~ | **Done** — see `logos/README.md` |
 
 The background task still runs and still keeps the widget current; it simply
 schedules no notifications while every notify preference is off, which is the
 default.
+
+## The AgroExact integration (8 Sep 2026)
+
+Instellingen → Integraties connects an AgroExact account over OAuth (WorkOS AuthKit,
+PKCE, no client secret). The stations on that account become locations named after
+their town, and those locations show measured data instead of modelled data.
+
+Decisions worth knowing about:
+
+- **Only what is measured is replaced, per quantity.** A RainExact fills in the
+  rainfall and leaves everything else to the model. The weather icon is never
+  replaced — a station measures quantities, not conditions.
+- **Sunshine minutes stay modelled.** The API reports global radiation (J/cm²),
+  which is a different quantity; deriving bright-sunshine minutes from it would be a
+  guess presented as a measurement. Say the word if an approximation is preferred.
+- **The hero's figures are now a rolling 24 hours** — minimum, maximum and rainfall
+  total — for *every* location, station-backed or not. They were today's forecast
+  extremes, which mixed a measured present with a modelled afternoon. `pastHours` is
+  24 hours long for this, where the web app kept 12; the parity suite compares the
+  last twelve and asserts the rest separately.
+- **Forecasts, ensemble spread, radar and notifications are untouched.** They come
+  from the weather models on a station-backed location exactly as they do anywhere.
+- **The widget gets the measured "now" for free** (it reads `currentTemp` and
+  `pastHours` off the same model) but has no station styling of its own. Not asked
+  for; noted so it is not a surprise.
+- **Locations survive a disconnect.** Signing out, or a refresh token WorkOS rejects,
+  leaves the towns in place as ordinary Open-Meteo locations and puts a warning in
+  Instellingen. Only a station leaving the account removes its location.
+
+### Two things to verify against the live API
+
+1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an
+   AuthKit access token is sent as `Bearer`. `agroFetch` retries once under `Token`
+   on a 401, so both work, but the first live sign-in will confirm which it is.
+2. **The redirect URI.** `exactcast://oauth/agroexact` must be registered on the
+   AuthKit application, verbatim. It is `REDIRECT_URI` in `state/auth.tsx`.
+
+### TanStack Query
+
+Adopted for everything AgroExact: the station list is asked for by four call sites
+and is now fetched once. The Open-Meteo pipeline was **left as it is** deliberately —
+it is a staged load where each stage re-runs `processAll` over the ones before it,
+with its own abort handling, a disk-backed model cache and neighbour prefetching for
+the pager. Query would have to model that as five dependent queries plus a derived
+selector, and would not remove the cache it already has. Radar frames and the
+place-search debounce are the two remaining candidates that would genuinely gain
+from it; neither is in this change.
 
 ## Notes on choices made during the August rework
 

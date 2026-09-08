@@ -1,27 +1,40 @@
 /**
- * AgroExact station data.
+ * The AgroExact API — the stations on someone's account and what they measured.
  *
- * Ported from index.html's AGRO block. Where a station is close enough, its live
- * readings replace the modelled "now" and the past hours, and the location title
- * turns AgroExact green — the one place the design system allows green.
+ * Three endpoints, from `/api/v2/schema/`:
  *
- * Two changes from the web app:
+ *  - `/stations/`                 the weather stations linked to the account
+ *  - `/aggregates/{id}/`          hourly roll-ups, which is what the hour strip wants
+ *  - `/readings/{id}/?latest=true` the most recent measurement, which is what the hero wants
  *
- *  - `agroDistKm` was called but never defined (index.html:3509), so
- *    `agroNearestStation` threw a ReferenceError that every caller swallowed with
- *    `.catch()`. The feature therefore never activated. Implemented here as a
- *    haversine distance.
- *  - The token moves from localStorage to expo-secure-store, handled by the caller;
- *    this module only receives it. CORS is irrelevant natively.
+ * The hourly strip is built from **aggregates** rather than raw readings. A station
+ * measures every ten minutes, so folding readings into hours client-side means
+ * pulling six times the data and then re-deriving hourly minima, maxima and gust
+ * peaks that the API already computes — and computing them from a partially
+ * delivered hour gives a different answer than the API's.
+ *
+ * ## Two things the API does that the app does not
+ *
+ * **Timestamps are UTC, and an aggregate is stamped at the end of its hour.** A row
+ * at `14:00Z` covers `13:00Z–14:00Z`. The app's `Hour.time` is a local wall-clock
+ * string with no zone, stamped at the *start* of the hour, so mapping a row means
+ * subtracting the hour before converting. Getting this wrong shifts every measured
+ * value one hour into the future, which is invisible in flat weather and badly wrong
+ * in a shower.
+ *
+ * **Wind is in m/s.** The app works in km/h and converts to the reader's unit at the
+ * edge, so wind and gusts are converted here, once.
+ *
+ * Nothing in this module knows about tokens beyond being handed one; refreshing and
+ * storing them is `state/auth.tsx`.
  */
-import { fetchJson, SourceError, type FetchOptions } from './http';
+import { SourceError, type FetchOptions } from './http';
 import { round1 } from '../model/stats';
-import { isHourDay } from '../solar';
-import type { Hour } from '../model/types';
 
-export const AGRO_DEFAULT_BASE = 'https://app.agroexact.com/api/v2';
+export const AGRO_BASE = 'https://app.agroexact.com/api/v2';
 
-/** A station is only used when it is genuinely near, per the web app's rule. */
+/** How near a station has to be to speak for the device's own position. Only used
+ *  for the opt-in "huidige locatie" rule; a station location is bound by id. */
 export const AGRO_MAX_DISTANCE_KM = 10;
 
 export interface AgroStation {
@@ -29,6 +42,7 @@ export interface AgroStation {
   name: string;
   lat: number;
   lon: number;
+  /** ATMO for a full weather station, RAIN/RAIN+ for a rain gauge. */
   type: string | null;
 }
 
@@ -37,59 +51,153 @@ export interface NearestStation extends AgroStation {
   dist: number;
 }
 
-export interface AgroConfig {
-  token: string;
-  baseUrl?: string;
+/**
+ * One hour as the station measured it.
+ *
+ * Every field is independently nullable, because a RainExact measures precipitation
+ * and nothing else, and even an AtmoExact can lose a sensor. The merge treats each
+ * quantity on its own: what the station measured replaces the model, what it did not
+ * stays modelled.
+ */
+export interface MeasuredHour {
+  /** Local wall-clock hour, `YYYY-MM-DDTHH:00` — the app's own hour key. */
+  time: string;
+  temp: number | null;
+  tempMin: number | null;
+  tempMax: number | null;
+  humidity: number | null;
+  dewpoint: number | null;
+  /** km/h. */
+  wind: number | null;
+  /** km/h, the hour's peak gust. */
+  gusts: number | null;
+  windDir: number | null;
+  precip: number | null;
 }
 
-/** First non-null value among the given keys — the API's field names vary. */
-function field(o: Record<string, unknown>, ...keys: string[]): unknown {
-  for (const k of keys) if (o[k] != null) return o[k];
-  return null;
+/** The latest reading, which is what "nu" means on a station-backed location. */
+export interface Measurement {
+  /** Local wall-clock hour the reading falls in. */
+  time: string;
+  /** The reading's own timestamp, UTC ISO — the hero shows this, to the minute. */
+  measTime: string;
+  temp: number | null;
+  humidity: number | null;
+  dewpoint: number | null;
+  wind: number | null;
+  gusts: number | null;
+  windDir: number | null;
+  precip: number | null;
 }
 
-/** Pull an array of records out of a response, tolerant of the wrapper used. */
-export function agroRecords(json: unknown): Record<string, unknown>[] {
-  if (Array.isArray(json)) return json as Record<string, unknown>[];
-  const o = json as Record<string, unknown> | null;
-  if (!o) return [];
-  for (const key of ['records', 'data', 'results', 'stations', 'readings']) {
-    if (Array.isArray(o[key])) return o[key] as Record<string, unknown>[];
+/** Everything one station has to say, ready to merge into a model. */
+export interface StationObservations {
+  stationId: string;
+  stationName: string | null;
+  /** By local hour key. */
+  hours: Record<string, MeasuredHour>;
+  current: Measurement | null;
+}
+
+/**
+ * Authorization for the AgroExact API.
+ *
+ * The schema documents `Authorization: Token <api key>` for API keys. An AuthKit
+ * access token is a bearer token, so that is what is sent; `agroFetch` falls back to
+ * the `Token` scheme once on a 401 rather than making the caller know which kind of
+ * credential it holds.
+ */
+export function agroHeaders(token: string, scheme: 'Bearer' | 'Token' = 'Bearer'): Record<string, string> {
+  return { Accept: 'application/json', Authorization: `${scheme} ${token.trim()}` };
+}
+
+/** Thrown on a 401/403, so the caller can tell "signed out" from "no data". */
+export class AgroAuthError extends SourceError {
+  constructor(message: string, status?: number) {
+    super('AgroExact', message, status);
+    this.name = 'AgroAuthError';
   }
-  return [];
 }
 
-export function agroBaseUrl(cfg: AgroConfig): string {
-  return (cfg.baseUrl || '').trim() || AGRO_DEFAULT_BASE;
+async function agroFetch<T>(
+  token: string,
+  path: string,
+  opts: FetchOptions = {}
+): Promise<T> {
+  const { signal, fetchImpl = fetch } = opts;
+  const url = `${AGRO_BASE}${path}`;
+
+  const attempt = async (scheme: 'Bearer' | 'Token') =>
+    fetchImpl(url, { signal, headers: { ...agroHeaders(token, scheme), ...(opts.headers ?? {}) } });
+
+  let r = await attempt('Bearer');
+  // An API key rejected as a bearer token is a scheme mismatch, not a dead
+  // credential — worth exactly one retry before reporting the account as signed out.
+  if (r.status === 401) r = await attempt('Token');
+
+  if (r.status === 401 || r.status === 403) {
+    throw new AgroAuthError('niet geautoriseerd', r.status);
+  }
+  if (!r.ok) throw new SourceError('AgroExact', `HTTP ${r.status}`, r.status);
+
+  const body = (await r.json()) as T & { detail?: string };
+  // The API reports its own errors as `{ "detail": "..." }`.
+  if (!Array.isArray(body) && body?.detail) throw new SourceError('AgroExact', body.detail);
+  return body;
 }
 
-/** AgroExact expects `Authorization: Token <key>`; a token that already carries a
- *  scheme is passed through rather than double-prefixed. */
-export function agroHeaders(cfg: AgroConfig): Record<string, string> {
-  const tok = (cfg.token || '').trim();
-  const h: Record<string, string> = { Accept: 'application/json' };
-  if (tok) h.Authorization = /^(token|bearer)\s/i.test(tok) ? tok : `Token ${tok}`;
-  return h;
+const num = (v: unknown): number | null => {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+const msToKmh = (v: number | null): number | null => (v == null ? null : Math.round(v * 3.6));
+const roundOrNull = (v: number | null): number | null => (v == null ? null : Math.round(v));
+
+// ── Stations ────────────────────────────────────────────────────────────────────
+
+interface StationRow {
+  station_id?: string;
+  name?: string;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  version_type?: string | null;
 }
 
-async function agroGet<T>(cfg: AgroConfig, path: string, opts: FetchOptions = {}): Promise<T> {
-  return fetchJson<T>(agroBaseUrl(cfg) + path, 'AgroExact', {
-    retries: 1,
-    ...opts,
-    headers: { ...agroHeaders(cfg), ...(opts.headers ?? {}) },
-  });
+/**
+ * The account's weather stations.
+ *
+ * Rain gauges are kept alongside full stations. They can only fill in precipitation,
+ * but the merge is per quantity, so a RainExact location shows measured rainfall over
+ * a modelled everything-else rather than being dropped from the list — and dropping a
+ * station someone owns from a screen that claims to list their stations is worse than
+ * showing one that speaks about less.
+ *
+ * A station without usable coordinates is skipped: it cannot become a location.
+ */
+export async function fetchStations(
+  token: string,
+  opts: FetchOptions = {}
+): Promise<AgroStation[]> {
+  const rows = await agroFetch<StationRow[]>(token, '/stations/', opts);
+  if (!Array.isArray(rows)) throw new SourceError('AgroExact', 'onverwacht antwoord');
+  return rows
+    .map((r) => ({
+      id: String(r.station_id ?? ''),
+      name: (r.name ?? '').trim() || 'Station',
+      lat: num(r.latitude) as number,
+      lon: num(r.longitude) as number,
+      type: r.version_type ?? null,
+    }))
+    .filter((s) => s.id && Number.isFinite(s.lat) && Number.isFinite(s.lon));
 }
 
 const R_EARTH_KM = 6371;
 const rad = (d: number) => (d * Math.PI) / 180;
 
-/**
- * Great-circle distance in kilometres.
- *
- * This is the function index.html referenced but never defined. Haversine is used
- * rather than equirectangular because station distance decides whether live readings
- * replace the model at all, so the threshold should not drift with latitude.
- */
+/** Great-circle distance in kilometres. Haversine rather than equirectangular
+ *  because it decides whether measurements replace a model at all. */
 export function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const dLat = rad(lat2 - lat1);
   const dLon = rad(lon2 - lon1);
@@ -99,176 +207,201 @@ export function distanceKm(lat1: number, lon1: number, lat2: number, lon2: numbe
   return 2 * R_EARTH_KM * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
-/** Fetch and normalise the station list. Only full weather stations (ATMO) qualify;
- *  a station with no type is kept, since older records omit it. */
-export async function fetchStations(
-  cfg: AgroConfig,
-  opts: FetchOptions = {}
-): Promise<AgroStation[]> {
-  const json = await agroGet<unknown>(cfg, '/stations/', opts);
-  const stations = agroRecords(json)
-    .map((r) => ({
-      id: String(field(r, 'station_id', 'id', 'stationId', 'uuid') ?? ''),
-      name: String(field(r, 'name', 'station_name', 'label') ?? 'Station'),
-      lat: parseFloat(String(field(r, 'latitude', 'lat'))),
-      lon: parseFloat(String(field(r, 'longitude', 'lon', 'lng'))),
-      type: (field(r, 'version_type', 'type', 'kind') as string | null) ?? null,
-    }))
-    .filter((s) => s.id && Number.isFinite(s.lat) && Number.isFinite(s.lon))
-    .filter((s) => !s.type || /atmo/i.test(s.type));
-  if (!stations.length) throw new SourceError('AgroExact', 'no stations in response');
-  return stations;
-}
-
 export function nearestStation(
   stations: readonly AgroStation[],
   lat: number,
   lon: number
 ): NearestStation | null {
-  let best: AgroStation | null = null;
-  let bestD = Infinity;
+  let best: NearestStation | null = null;
   for (const s of stations) {
-    const d = distanceKm(lat, lon, s.lat, s.lon);
-    if (d < bestD) {
-      bestD = d;
-      best = s;
-    }
+    const dist = distanceKm(lat, lon, s.lat, s.lon);
+    if (!best || dist < best.dist) best = { ...s, dist };
   }
-  return best ? { ...best, dist: bestD } : null;
+  return best;
 }
 
-export interface StationHour extends Hour {
-  /** Marks an hour sourced from a station rather than a model. */
-  agro: true;
+/** Stations within `km` of a point, for the map pins. */
+export function stationsNear(
+  stations: readonly AgroStation[],
+  lat: number,
+  lon: number,
+  km: number
+): AgroStation[] {
+  return stations.filter((s) => distanceKm(lat, lon, s.lat, s.lon) <= km);
 }
 
-export interface StationCurrent {
-  time: string;
-  /** The reading's own timestamp, which may be minutes inside the hour. */
-  measTime: string;
-  temp: number | null;
-  humidity: number | null;
-  wind: number | null;
-  gusts: number | null;
-  windDir: number | null;
-  dewpoint: number | null;
-  precip: number;
-  wmo: number;
-  isDay: 0 | 1;
-}
+// ── Measurements ────────────────────────────────────────────────────────────────
 
-export interface StationData {
-  hours: StationHour[];
-  current: StationCurrent;
-}
-
-const mean = (a: number[]): number | null =>
-  a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
-
-/** Mean of bearings, which cannot be averaged arithmetically: 350° and 10° average
- *  to 0°, not 180°. */
-export function circularMean(degs: readonly number[]): number | null {
-  if (!degs.length) return null;
-  let x = 0;
-  let y = 0;
-  for (const d of degs) {
-    x += Math.cos(rad(d));
-    y += Math.sin(rad(d));
-  }
-  const a = (Math.atan2(y / degs.length, x / degs.length) * 180) / Math.PI;
-  return (a + 360) % 360;
-}
-
-const msToKmh = (v: number | null): number | null => (v == null ? null : v * 3.6);
+const pad = (n: number) => String(n).padStart(2, '0');
 
 /**
- * Fetch ~30 hours of readings and fold them into hourly buckets.
+ * The local hour a UTC instant falls in, as the app's hour key.
  *
- * Weather codes come from the model, not the station: an AgroExact station measures
- * quantities, not conditions, so the icon has to keep coming from Open-Meteo.
+ * `offsetSec` is the location's offset as Open-Meteo reported it, so the keys line up
+ * with the model's own hours across a DST change — deriving the offset from the
+ * device instead would put a Dutch station's hours an hour out for anyone whose phone
+ * is set to another zone.
  */
-export async function fetchStationData(
-  cfg: AgroConfig,
+export function localHourKey(utcIso: string, offsetSec: number): string {
+  const ms = new Date(utcIso).getTime();
+  if (!Number.isFinite(ms)) return '';
+  const l = new Date(ms + offsetSec * 1000);
+  return (
+    `${l.getUTCFullYear()}-${pad(l.getUTCMonth() + 1)}-${pad(l.getUTCDate())}` +
+    `T${pad(l.getUTCHours())}:00`
+  );
+}
+
+interface AggregateRow {
+  timestamp?: string;
+  station_name?: string;
+  temperature_150?: number | null;
+  temperature_150_min?: number | null;
+  temperature_150_max?: number | null;
+  temperature_150_avg?: number | null;
+  precipitation?: number | null;
+  windspeed?: number | null;
+  windspeed_avg?: number | null;
+  gust_max?: number | null;
+  wind_direction?: number | null;
+  humidity_150?: number | null;
+  humidity_150_avg?: number | null;
+  dewpoint?: number | null;
+}
+
+/** An aggregate row is stamped at the end of the hour it covers. */
+const HOUR_MS = 3600_000;
+
+/**
+ * The station's last `hours` hours, as hourly measurements.
+ *
+ * `include_partial=true` is deliberate: without it the most recent completed hour is
+ * withheld until every late measurement has arrived, which on the hour strip reads as
+ * the station having stopped reporting. The values can still change on the next
+ * refresh, which is exactly what a live hour does anyway.
+ */
+export async function fetchStationHours(
+  token: string,
   stationId: string,
   offsetSec: number,
-  lat: number,
-  opts: FetchOptions & { wmoByHour?: Record<string, number>; currentWmo?: number } = {}
-): Promise<StationData | null> {
-  const json = await agroGet<unknown>(cfg, `/readings/${stationId}/?hours=30`, opts);
-  const stamp = (r: Record<string, unknown>) =>
-    field(r, 'timestamp', 'time', 'datetime') as string | null;
+  hours = 26,
+  opts: FetchOptions = {}
+): Promise<{ hours: Record<string, MeasuredHour>; stationName: string | null }> {
+  const rows = await agroFetch<AggregateRow[]>(
+    token,
+    `/aggregates/${encodeURIComponent(stationId)}/?hours=${hours}&include_partial=true`,
+    opts
+  );
+  const out: Record<string, MeasuredHour> = {};
+  let stationName: string | null = null;
 
-  const recs = agroRecords(json).filter((r) => stamp(r));
-  if (!recs.length) return null;
-  recs.sort((a, b) => ((stamp(a) as string) < (stamp(b) as string) ? 1 : -1)); // newest first
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!r?.timestamp) continue;
+    const endMs = new Date(r.timestamp).getTime();
+    if (!Number.isFinite(endMs)) continue;
+    stationName ??= r.station_name ?? null;
 
-  const pad = (n: number) => String(n).padStart(2, '0');
-  /** Readings are UTC; the hour strip is local, so bucket by local hour. */
-  const localHourKey = (utcIso: string): string => {
-    const l = new Date(new Date(utcIso).getTime() + (offsetSec || 0) * 1000);
-    return (
-      `${l.getUTCFullYear()}-${pad(l.getUTCMonth() + 1)}-${pad(l.getUTCDate())}` +
-      `T${pad(l.getUTCHours())}:00`
-    );
+    // Stamped at the end of its window, so the hour it describes starts an hour back.
+    const key = localHourKey(new Date(endMs - HOUR_MS).toISOString(), offsetSec);
+    if (!key) continue;
+
+    // The hourly average is the honest value for an hour; the API's bare
+    // `temperature_150` is the last measurement inside it, which on the strip would
+    // make a single late-afternoon spike stand for the whole hour.
+    const temp = num(r.temperature_150_avg) ?? num(r.temperature_150);
+    const humidity = num(r.humidity_150_avg) ?? num(r.humidity_150);
+    const wind = num(r.windspeed_avg) ?? num(r.windspeed);
+
+    out[key] = {
+      time: key,
+      temp: roundOrNull(temp),
+      tempMin: roundOrNull(num(r.temperature_150_min)),
+      tempMax: roundOrNull(num(r.temperature_150_max)),
+      humidity: roundOrNull(humidity),
+      dewpoint: roundOrNull(num(r.dewpoint)),
+      wind: msToKmh(wind),
+      gusts: msToKmh(num(r.gust_max)),
+      windDir: roundOrNull(num(r.wind_direction)),
+      precip: num(r.precipitation) != null ? round1(num(r.precipitation) as number) : null,
+    };
+  }
+
+  return { hours: out, stationName };
+}
+
+interface ReadingRow {
+  timestamp?: string;
+  station_name?: string;
+  temperature_150?: number | null;
+  humidity_150?: number | null;
+  dewpoint?: string | number | null;
+  precipitation?: number | null;
+  windspeed?: number | null;
+  wind_direction?: number | null;
+  gust?: number | null;
+}
+
+/**
+ * The station's most recent measurement.
+ *
+ * `latest=true` reads straight from the API's cache and ignores every window
+ * parameter, which is both the cheapest call available and the one that answers what
+ * the hero asks: what is it doing right now, and when was that measured.
+ */
+export async function fetchLatestMeasurement(
+  token: string,
+  stationId: string,
+  offsetSec: number,
+  opts: FetchOptions = {}
+): Promise<{ current: Measurement | null; stationName: string | null }> {
+  const rows = await agroFetch<ReadingRow[]>(
+    token,
+    `/readings/${encodeURIComponent(stationId)}/?latest=true`,
+    opts
+  );
+  const r = (Array.isArray(rows) ? rows : [])[0];
+  if (!r?.timestamp) return { current: null, stationName: null };
+
+  const time = localHourKey(r.timestamp, offsetSec);
+  if (!time) return { current: null, stationName: r.station_name ?? null };
+
+  return {
+    stationName: r.station_name ?? null,
+    current: {
+      time,
+      measTime: r.timestamp,
+      temp: roundOrNull(num(r.temperature_150)),
+      humidity: roundOrNull(num(r.humidity_150)),
+      dewpoint: roundOrNull(num(r.dewpoint)),
+      wind: msToKmh(num(r.windspeed)),
+      gusts: msToKmh(num(r.gust)),
+      windDir: roundOrNull(num(r.wind_direction)),
+      precip: num(r.precipitation) != null ? round1(num(r.precipitation) as number) : null,
+    },
   };
+}
 
-  const num = (v: unknown): number | null => (v != null ? Number(v) : null);
-  const rTemp = (r: Record<string, unknown>) => num(field(r, 'temperature_150', 'temperature_2m', 'temperature', 'temp'));
-  const rHum = (r: Record<string, unknown>) => num(field(r, 'humidity_150', 'relativehumidity', 'humidity', 'rh'));
-  const rWind = (r: Record<string, unknown>) => num(field(r, 'windspeed', 'wind_speed', 'wind'));
-  const rGust = (r: Record<string, unknown>) => num(field(r, 'gust', 'windgust', 'wind_gust', 'gusts'));
-  const rDir = (r: Record<string, unknown>) => num(field(r, 'wind_direction', 'winddirection', 'wind_dir'));
-  const rDew = (r: Record<string, unknown>) => num(field(r, 'dewpoint', 'dew_point'));
-  const rPrec = (r: Record<string, unknown>) => num(field(r, 'precipitation', 'precip', 'rain'));
-
-  const byHour: Record<string, Record<string, unknown>[]> = {};
-  for (const r of recs) (byHour[localHourKey(stamp(r) as string)] ??= []).push(r);
-
-  const wmoByHour = opts.wmoByHour ?? {};
-  const defined = (a: (number | null)[]) => a.filter((v): v is number => v != null);
-
-  const hours: StationHour[] = Object.keys(byHour)
-    .sort()
-    .map((k) => {
-      const arr = byHour[k] as Record<string, unknown>[];
-      const temps = defined(arr.map(rTemp));
-      const hums = defined(arr.map(rHum));
-      const winds = defined(arr.map(rWind));
-      const gusts = defined(arr.map(rGust));
-      const dews = defined(arr.map(rDew));
-      const dirs = defined(arr.map(rDir));
-      const precSum = arr.reduce((s, r) => s + (rPrec(r) ?? 0), 0);
-      return {
-        time: k,
-        temp: temps.length ? Math.round(mean(temps) as number) : null,
-        humidity: hums.length ? Math.round(mean(hums) as number) : null,
-        wind: winds.length ? Math.round(msToKmh(mean(winds)) as number) : null,
-        gusts: gusts.length ? Math.round(msToKmh(Math.max(...gusts)) as number) : null,
-        windDir: dirs.length ? Math.round(circularMean(dirs) as number) : null,
-        dewpoint: dews.length ? Math.round(mean(dews) as number) : null,
-        precip: round1(precSum),
-        wmo: wmoByHour[k] ?? 0,
-        isDay: isHourDay(k, lat, offsetSec),
-        isPast: true,
-        agro: true as const,
-      };
-    });
-
-  const cur = recs[0] as Record<string, unknown>;
-  const curTime = localHourKey(stamp(cur) as string);
-  const current: StationCurrent = {
-    time: curTime,
-    measTime: stamp(cur) as string,
-    temp: rTemp(cur) != null ? Math.round(rTemp(cur) as number) : null,
-    humidity: rHum(cur) != null ? Math.round(rHum(cur) as number) : null,
-    wind: rWind(cur) != null ? Math.round(msToKmh(rWind(cur)) as number) : null,
-    gusts: rGust(cur) != null ? Math.round(msToKmh(rGust(cur)) as number) : null,
-    windDir: rDir(cur) != null ? Math.round(rDir(cur) as number) : null,
-    dewpoint: rDew(cur) != null ? Math.round(rDew(cur) as number) : null,
-    precip: round1(rPrec(cur) ?? 0),
-    wmo: opts.currentWmo ?? hours[hours.length - 1]?.wmo ?? 0,
-    isDay: isHourDay(curTime, lat, offsetSec),
+/**
+ * Everything one station has to say, in one call site.
+ *
+ * The two requests are independent and both are small, so they go together; a
+ * failure of either is not fatal, because the merge is per quantity and an empty
+ * half simply leaves the model in place.
+ */
+export async function fetchStationObservations(
+  token: string,
+  stationId: string,
+  offsetSec: number,
+  opts: FetchOptions = {}
+): Promise<StationObservations> {
+  const [hourly, latest] = await Promise.all([
+    fetchStationHours(token, stationId, offsetSec, 26, opts),
+    fetchLatestMeasurement(token, stationId, offsetSec, opts),
+  ]);
+  return {
+    stationId,
+    stationName: latest.stationName ?? hourly.stationName,
+    hours: hourly.hours,
+    current: latest.current,
   };
-
-  return { hours, current };
 }
