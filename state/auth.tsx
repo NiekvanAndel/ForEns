@@ -28,7 +28,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import {
   AUTHKIT_ENDPOINTS, AuthRevokedError, OAUTH_SCOPES, WORKOS_CLIENT_ID,
-  exchangeCode, fetchAccount, isExpired, refreshTokens,
+  exchangeCode, fetchAccount, isExpired, refreshTokens, revokeTokens,
   type AuthAccount, type AuthTokens,
 } from '../core/auth/workos';
 
@@ -195,8 +195,12 @@ export function AgroAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    const spent = tokensRef.current;
     await disconnect('disconnected');
     setError(null);
+    // After the local state is gone, so a slow or unreachable WorkOS cannot leave
+    // someone staring at a button that did nothing.
+    if (spent) void revokeTokens(spent);
   }, [disconnect]);
 
   const getAccessToken = useCallback(async (spentToken?: string): Promise<string | null> => {

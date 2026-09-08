@@ -173,6 +173,36 @@ export async function refreshTokens(
   return toTokens(res, nowMs, refreshToken);
 }
 
+/**
+ * Tell WorkOS the tokens are finished with.
+ *
+ * Signing out deletes the keychain entry either way; this is what stops the grant
+ * from outliving the device it was issued to. The refresh token is the one worth
+ * naming — revoking it takes the whole grant with it — and the access token is the
+ * fallback for a session that never got one.
+ *
+ * Never throws. A revocation that does not arrive is a loose end at WorkOS, not a
+ * reason to keep someone signed in on their own phone.
+ */
+export async function revokeTokens(tokens: AuthTokens, opts: FetchOptions = {}): Promise<void> {
+  const token = tokens.refreshToken ?? tokens.accessToken;
+  if (!token) return;
+  try {
+    await postForm(
+      AUTHKIT_ENDPOINTS.revocationEndpoint,
+      {
+        client_id: WORKOS_CLIENT_ID,
+        token,
+        token_type_hint: tokens.refreshToken ? 'refresh_token' : 'access_token',
+      },
+      opts
+    );
+  } catch {
+    // Includes the 400 a token WorkOS has already forgotten produces, which is the
+    // outcome being asked for anyway.
+  }
+}
+
 /** Who the token belongs to. Failure is not fatal: the integration works without a
  *  name against it, so the settings row simply says "Verbonden". */
 export async function fetchAccount(

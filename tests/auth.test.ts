@@ -10,7 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   AUTHKIT_DOMAIN, AUTHKIT_ENDPOINTS, AuthRevokedError, WORKOS_CLIENT_ID,
-  exchangeCode, fetchAccount, isExpired, refreshTokens,
+  exchangeCode, fetchAccount, isExpired, refreshTokens, revokeTokens,
 } from '../core/auth/workos';
 import { SourceError } from '../core/sources/http';
 
@@ -134,5 +134,38 @@ describe('fetchAccount', () => {
     const impl = vi.fn(async () => { throw new Error('offline'); }) as unknown as typeof fetch;
     // The integration works perfectly well without a name against it.
     expect(await fetchAccount('at', { fetchImpl: impl })).toEqual({ email: null, name: null });
+  });
+});
+
+describe('revokeTokens', () => {
+  const tokens = { accessToken: 'a', refreshToken: 'r', expiresAtMs: 0 };
+
+  it('revokes the refresh token, which takes the grant with it', async () => {
+    let body = '';
+    const f = vi.fn(async (_url: string, init?: { body?: string }) => {
+      body = init?.body ?? '';
+      return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    });
+    await revokeTokens(tokens, { fetchImpl: f as unknown as typeof fetch });
+    expect(f.mock.calls[0]?.[0]).toBe(AUTHKIT_ENDPOINTS.revocationEndpoint);
+    expect(body).toContain('token=r');
+    expect(body).toContain('token_type_hint=refresh_token');
+    expect(body).toContain(`client_id=${WORKOS_CLIENT_ID}`);
+  });
+
+  it('falls back to the access token when there is no refresh token', async () => {
+    let body = '';
+    const f = vi.fn(async (_url: string, init?: { body?: string }) => {
+      body = init?.body ?? '';
+      return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    });
+    await revokeTokens({ ...tokens, refreshToken: null }, { fetchImpl: f as unknown as typeof fetch });
+    expect(body).toContain('token=a');
+    expect(body).toContain('token_type_hint=access_token');
+  });
+
+  it('never throws, because signing out has already happened', async () => {
+    const f = vi.fn(async () => { throw new Error('offline'); });
+    await expect(revokeTokens(tokens, { fetchImpl: f as unknown as typeof fetch })).resolves.toBeUndefined();
   });
 });
