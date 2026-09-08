@@ -37,6 +37,21 @@ WebBrowser.maybeCompleteAuthSession();
 
 const TOKENS_KEY = 'exactcast.agro.oauth.v1';
 
+/**
+ * Readable from first unlock after a reboot, rather than only while the screen is
+ * open.
+ *
+ * The default, `WHEN_UNLOCKED`, is stricter than this app can live with: the widget
+ * and the background refresh run on a phone in a pocket, and a keychain read that
+ * fails there is indistinguishable from a signed-out account — the integration would
+ * quietly drop out and reappear on unlock. `AFTER_FIRST_UNLOCK` still keeps the
+ * tokens unreadable on a device that has not been unlocked since it powered on,
+ * which is the case that matters for a lost phone.
+ */
+const KEYCHAIN: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+};
+
 /** Must be registered as a redirect URI on the AuthKit application, verbatim. */
 export const REDIRECT_URI = AuthSession.makeRedirectUri({
   scheme: 'exactcast',
@@ -93,7 +108,7 @@ interface StoredAuth {
 
 async function readStored(): Promise<StoredAuth | null> {
   try {
-    const raw = await SecureStore.getItemAsync(TOKENS_KEY);
+    const raw = await SecureStore.getItemAsync(TOKENS_KEY, KEYCHAIN);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredAuth;
     if (!parsed?.tokens?.accessToken) return null;
@@ -107,8 +122,8 @@ async function readStored(): Promise<StoredAuth | null> {
 
 async function writeStored(value: StoredAuth | null): Promise<void> {
   try {
-    if (value) await SecureStore.setItemAsync(TOKENS_KEY, JSON.stringify(value));
-    else await SecureStore.deleteItemAsync(TOKENS_KEY);
+    if (value) await SecureStore.setItemAsync(TOKENS_KEY, JSON.stringify(value), KEYCHAIN);
+    else await SecureStore.deleteItemAsync(TOKENS_KEY, KEYCHAIN);
   } catch {
     // Failing to persist costs the next launch a sign-in, not this session.
   }
