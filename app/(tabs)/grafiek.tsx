@@ -80,11 +80,15 @@
  *
  * ## Where the two controls live
  *
- * The period is a card of its own, above; the measurement sits with its chart, in
- * the card below. One is about *when* and the other about *what*, and a switcher
- * belongs to the thing it changes. Both rows are `PillSwitcher`, the same control
- * 'Verwachting' picks its layer with — same icons for the quantities the two pages
- * share, so a reader moving between them meets the same picture for the same thing.
+ * The period above, the measurement with its chart below. One is about *when* and
+ * the other about *what*, and a switcher belongs to the thing it changes; a heading
+ * apiece is what keeps them apart, which is what headings are for.
+ *
+ * Neither is in a card. There were two, until the chart came out of its own to reach
+ * the screen's edges — and a single card left floating over a page of bare content
+ * is a box round one paragraph. Both rows are `PillSwitcher`, the same control
+ * 'Verwachting' picks its layer with, so the whole page is one row of pills under a
+ * heading, twice.
  *
  * ## The gesture
  *
@@ -98,7 +102,7 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
-import { Card, CardHeader } from '../../ui/Card';
+import { CardHeader } from '../../ui/Card';
 import { Text } from '../../ui/Text';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
@@ -305,9 +309,11 @@ function GraphPage() {
     >
       <LocationTitle />
 
-      {/* Only the period now, so the card is the section rather than holding two
-          of them. */}
-      <Card style={{ gap: space[3] }}>
+      {/* On the page, like everything under it. Two cards held the page's two
+          questions apart, and then the second one came out to give the chart its
+          width — which left one card floating over a page of bare content. The
+          headings do the separating now, which is what headings are for. */}
+      <View style={{ gap: space[3] }}>
         <CardHeader label={ta('period', prefs.lang)} />
         <RangeSelector
           range={range}
@@ -324,7 +330,7 @@ function GraphPage() {
             setRange(next);
           }}
         />
-      </Card>
+      </View>
 
       {/* Not a card. A chart inside one is inset three times over — the page's own
           margin, the card's, and the room the chart keeps for its axis labels — and

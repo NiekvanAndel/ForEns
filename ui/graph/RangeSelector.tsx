@@ -31,6 +31,7 @@ import * as Haptics from 'expo-haptics';
 import { radius, shadowCard, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
+import { PillSwitcher } from '../PillSwitcher';
 import { usePrefs } from '../../state/prefs';
 import { dayKey } from '../../core/model/series';
 import { dayNames, ta, type AppStringKey } from '../../core/i18n';
@@ -75,7 +76,6 @@ export interface RangeSelectorProps {
 export function RangeSelector({
   range, preset, onPreset, onRange, maxDay,
 }: RangeSelectorProps) {
-  const { palette } = useTheme();
   const { prefs } = usePrefs();
   const [editing, setEditing] = useState<'from' | 'to' | null>(null);
 
@@ -89,32 +89,20 @@ export function RangeSelector({
 
   return (
     <View style={{ gap: space[3] }}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }}>
-        {PRESETS.map((p) => {
-          const on = preset === p.days;
-          return (
-            <Pressable
-              key={p.days}
-              onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
-                onPreset(p.days);
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 14,
-                borderRadius: radius.pill,
-                backgroundColor: on ? palette.accent : palette.surfaceAlt,
-              }}
-            >
-              <Text variant="caption" weight="bold" color={on ? palette.appCard : palette.inkHeading}>
-                {ta(p.labelKey as AppStringKey, prefs.lang)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      {/* The same row the measurement is chosen with, below — one control for
+          "pick one of these", wherever the page asks it. With no icons: four
+          periods would carry the same calendar four times over. */}
+      <PillSwitcher
+        items={PRESETS.map((p) => ({
+          key: String(p.days),
+          label: ta(p.labelKey as AppStringKey, prefs.lang),
+        }))}
+        active={preset == null ? '' : String(preset)}
+        onChange={(days) => {
+          Haptics.selectionAsync().catch(() => {});
+          onPreset(Number(days) as PresetDays);
+        }}
+      />
 
       <View style={{ flexDirection: 'row', gap: space[3] }}>
         <DateField

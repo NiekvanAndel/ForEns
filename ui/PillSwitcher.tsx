@@ -10,9 +10,12 @@
  * drift apart again: a reader moving between the pages meets the same control, and a
  * change to it is a change to both.
  *
- * It scrolls sideways because both lists have outgrown a phone's width. The first few
- * entries still land in view without moving anything, so the common choices are a tap
- * away and the rest are a slide.
+ * It scrolls sideways because the longer lists have outgrown a phone's width. The
+ * first few entries still land in view without moving anything, so the common choices
+ * are a tap away and the rest are a slide; a row that fits simply never scrolls.
+ *
+ * `active` matching none of the keys leaves every pill unselected, which is what the
+ * period row wants once the reader has picked dates of their own.
  */
 import { ScrollView, Pressable, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -22,7 +25,9 @@ import { Icon, type IconName } from './Icon';
 
 export interface PillItem<K extends string> {
   key: K;
-  icon: IconName;
+  /** Optional: the measurements and layers have one apiece, and a row of four
+   *  periods would carry the same calendar four times over for no gain. */
+  icon?: IconName;
   label: string;
 }
 
@@ -49,7 +54,9 @@ export function PillSwitcher<K extends string>({
         const on = item.key === active;
         const content = (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Icon name={item.icon} size={15} color={on ? '#fff' : palette.inkHeading} />
+            {item.icon ? (
+              <Icon name={item.icon} size={15} color={on ? '#fff' : palette.inkHeading} />
+            ) : null}
             <Text variant="label" weight="semibold" color={on ? '#fff' : palette.inkHeading}>
               {item.label}
             </Text>

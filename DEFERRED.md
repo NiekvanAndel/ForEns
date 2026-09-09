@@ -450,10 +450,10 @@ share, so a reader moving between them meets the same picture for the same thing
 The quantity's own colour stays on the *line*; the pill carries the accent gradient
 like every other switcher in the app.
 
-### The chart came out of its card (9 Sep 2026)
+### The chart came out of its card, and then so did the rest (9 Sep 2026)
 
-Everything below the period card is on the page now, and the plot itself reaches the
-screen's edges — out past the page's own margin, by a negative inset. A chart inside
+Nothing on 'Grafiek' is in a card any more, and the plot itself reaches the screen's
+edges — out past the page's own margin, by a negative inset. A chart inside
 a card is held off three times over: the page's margin, the card's, and the room the
 chart keeps for its own axis labels. On a phone that was about a fifth of the width
 spent on nothing.
@@ -463,6 +463,15 @@ spent on nothing.
   outlines. Filled with the card colour on a cream page they would have been solid
   white marks. It takes a `background` now, defaulting to the card colour it was
   born on.
+- **The period selector followed.** Two cards held the page's two questions apart;
+  once the second came out to give the chart its width, the one left was a box round
+  a single paragraph. The headings do the separating now, which is what headings are
+  for.
+- **Both pill rows are `PillSwitcher`**, so the page is one row of pills under a
+  heading, twice. `icon` became optional for it: a row of four periods would have
+  carried the same calendar four times over, and an `active` matching no key leaves
+  every pill unselected — which is exactly what the period row wants once the reader
+  has picked dates of their own.
 - **The band's edges start up per day and down per hour.** Per day they are the
   day's coldest and warmest, which is what a week of temperatures is read for; per
   hour they are the spread inside one hour, which over two days is three
