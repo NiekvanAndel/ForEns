@@ -76,6 +76,9 @@ export const APP_STRINGS = {
     units: 'Eenheden',
     tabPrecipShort: 'Neerslag',
     fullScreen: 'Volledig scherm',
+    lastHour: 'Laatste uur',
+    mapShortcut: 'Kaart',
+    searchLocations: 'Zoek een plaats',
   },
   en: {
     tabNow: 'Now', tabRadar: 'Radar', tabForecast: 'Forecast', tabSettings: 'Settings',
@@ -108,6 +111,7 @@ export const APP_STRINGS = {
     noData: 'Weather data is temporarily unavailable. Please try again later.',
     retry: 'Try again',
     useMyLocation: 'Use my location', units: 'Units', tabPrecipShort: 'Precipitation', fullScreen: 'Full screen',
+    lastHour: 'Last hour', mapShortcut: 'Map', searchLocations: 'Search for a place',
   },
   de: {
     tabNow: 'Jetzt', tabRadar: 'Radar', tabForecast: 'Vorhersage', tabSettings: 'Einstellungen',
@@ -140,6 +144,7 @@ export const APP_STRINGS = {
     noData: 'Wetterdaten sind vorübergehend nicht verfügbar. Bitte später erneut versuchen.',
     retry: 'Erneut versuchen',
     useMyLocation: 'Meinen Standort verwenden', units: 'Einheiten', tabPrecipShort: 'Niederschlag', fullScreen: 'Vollbild',
+    lastHour: 'Letzte Stunde', mapShortcut: 'Karte', searchLocations: 'Ort suchen',
   },
   fr: {
     tabNow: 'Maintenant', tabRadar: 'Radar', tabForecast: 'Prévisions', tabSettings: 'Réglages',
@@ -172,6 +177,7 @@ export const APP_STRINGS = {
     noData: 'Les données météo sont temporairement indisponibles. Réessayez plus tard.',
     retry: 'Réessayer',
     useMyLocation: 'Utiliser ma position', units: 'Unités', tabPrecipShort: 'Précipitations', fullScreen: 'Plein écran',
+    lastHour: 'Dernière heure', mapShortcut: 'Carte', searchLocations: 'Rechercher un lieu',
   },
   es: {
     tabNow: 'Ahora', tabRadar: 'Radar', tabForecast: 'Previsión', tabSettings: 'Ajustes',
@@ -204,6 +210,7 @@ export const APP_STRINGS = {
     noData: 'Los datos meteorológicos no están disponibles temporalmente. Inténtalo más tarde.',
     retry: 'Reintentar',
     useMyLocation: 'Usar mi ubicación', units: 'Unidades', tabPrecipShort: 'Precipitación', fullScreen: 'Pantalla completa',
+    lastHour: 'Última hora', mapShortcut: 'Mapa', searchLocations: 'Buscar un lugar',
   },
 } as const;
 

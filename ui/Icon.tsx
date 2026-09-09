@@ -9,7 +9,8 @@
 import {
   ArrowDown, ArrowUp, ArrowsClockwise, ArrowsOut, Broadcast, CalendarBlank, CaretRight,
   CaretLeft, ChartLine, Check, CircleHalf, Clock, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun,
-  CloudSnow, Crosshair, DotsSixVertical, Drop, DropHalf, GearSix, Info, MagnifyingGlass, Minus,
+  CloudSnow, Crosshair, DotsSixVertical, Drop, DropHalf, GearSix, Info, MagnifyingGlass,
+  MapTrifold, Minus,
   Moon, MoonStars, Pause, Play, PlugsConnected, Plus, Ruler, Sun, TextAa,
   ThermometerSimple, Translate, Trash, Wind, X,
   type IconProps as PhosphorProps,
@@ -43,6 +44,7 @@ const ICONS = {
   'gear-six': GearSix,
   info: Info,
   'magnifying-glass': MagnifyingGlass,
+  'map-trifold': MapTrifold,
   minus: Minus,
   moon: Moon,
   'navigation-arrow': NavigationArrow,

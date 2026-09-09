@@ -1,29 +1,44 @@
 /**
  * The conditions hero — the chosen location's own measurements.
  *
- * Works for any address; a station-backed one turns the title AgroExact green and
- * adds the source line with its dot. Layout follows the design's ConditionsHero:
- * the ▲/▼ pair beside the big reading, then a three-cell divider row.
+ * Works for any address; a station-backed one turns the source line AgroExact green
+ * and gives it its dot.
  *
- * The hourly slider is its own card below this one. It answers a different question
- * — what happens next, rather than what it is doing now — and inside the hero it was
- * a fourth band on a card that already had three, with the reader having to work out
- * where "now" ended and "next" began.
+ * ## Why the rain is the card
+ *
+ * The layout follows the client's mock-up, and its argument is that this is a
+ * rainfall app: what fell in the last hour and what has fallen over the day are the
+ * two numbers a grower opens the page for, so they sit in a tinted strip of their
+ * own with the condition glyph beside them, and everything else is one quiet line
+ * underneath.
+ *
+ * That is a demotion for the temperature, which used to be a 58-point number filling
+ * half the card with the reading least likely to be the reason anyone looked. It is
+ * still the largest thing in the bottom row — it is what that row is anchored on —
+ * but it no longer outweighs the strip above it.
+ *
+ * The three-cell divider row went with it. Temperature, its day range, wind and
+ * humidity read as one sentence with bullets between them in the space the cells
+ * took, and the rule-and-cell grid was carrying no information the spacing does not.
  *
  * Reading colours follow the quantity, not the card (design rule 2): ▲ is val-high,
- * ▼ is val-low, temperature is val-temp, millimetres are val-precip, and a zero is
- * dimmed to val-precip-zero so real numbers stand out.
+ * ▼ is val-low, millimetres are val-precip, and a zero is dimmed to val-precip-zero
+ * so real numbers stand out.
  */
 import { View } from 'react-native';
-import { space, useTheme } from '../../theme';
-import { Card, Rule, VRule } from '../Card';
+import { radius, space, useTheme } from '../../theme';
+import { Card } from '../Card';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
-import { convTemp, convWind, fmtMm, windUnitLabel, t } from '../../core/i18n';
+import { convTemp, convWind, fmtMm, windUnitLabel, t, ta } from '../../core/i18n';
 import type { ForecastModel } from '../../core/model/types';
 import type { SavedLocation } from '../../core/prefs';
+
+/** The temperature stays the biggest mark in the bottom row without competing with
+ *  the strip above it: a step up from `stat`, well short of the old `metric`. */
+const TEMP_SIZE = 27;
 
 export interface ConditionsHeroProps {
   model: ForecastModel;
@@ -46,6 +61,10 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
   const hi = today?.hresTempMax ?? today?.tempHi ?? null;
   const lo = today?.hresTempMin ?? today?.tempLo ?? null;
 
+  // The hour that has just finished, not the one running: a station's last full hour
+  // is a measurement, where the current hour is a total still being added to.
+  const lastHour = model.pastHours[model.pastHours.length - 1]?.precip ?? 0;
+
   // 24-hour precipitation: what has already fallen plus what is still to come today.
   const precip24 =
     model.pastHours.reduce((s, h) => s + (h.precip ?? 0), 0) +
@@ -53,7 +72,7 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
 
   return (
     <Card pad={0}>
-      <View style={{ paddingHorizontal: space[7], paddingTop: 18, paddingBottom: space[5] }}>
+      <View style={{ paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: space[4] }}>
         {/* No location name: the page already carries it above, and repeating it
             here cost the card a line without telling the reader anything. What is
             left is what the card alone knows — when these readings are from, and
@@ -72,70 +91,114 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
           </Text>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18, marginTop: space[4] }}>
-          <View style={{ gap: 2 }}>
-            <Text variant="stat" color={palette.valHigh} tabular style={{ fontSize: 19 }}>
-              ▲ {hi != null ? convTemp(hi, prefs.tempUnit) : '—'}°
+        {/* The strip: the two rainfall readings, and the weather it belongs to. */}
+        <View
+          style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            gap: space[3],
+            marginTop: space[3],
+            paddingVertical: space[3], paddingHorizontal: space[4],
+            backgroundColor: palette.accentTint,
+            borderRadius: radius.tile,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[5] }}>
+            <RainStat label={ta('lastHour', lang)} mm={lastHour} />
+            <View style={{ width: 1, height: 30, backgroundColor: palette.hairline }} />
+            <RainStat label={t('hRain24', lang)} mm={precip24} />
+          </View>
+          <WeatherIcon wmo={now?.wmo ?? 3} isDay={now?.isDay ?? 1} size={44} />
+        </View>
+
+        {/* Everything else, as one line: temperature and its day range, then wind,
+            then humidity, separated by bullets rather than by rules. */}
+        <View
+          style={{
+            flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap',
+            gap: space[2],
+            marginTop: space[4],
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+            <Text
+              variant="stat"
+              color={palette.appValue}
+              tabular
+              style={{ fontSize: TEMP_SIZE }}
+            >
+              {now?.temp != null ? convTemp(now.temp, prefs.tempUnit) : '—'}°
             </Text>
-            <Text variant="stat" color={palette.valLow} tabular style={{ fontSize: 19 }}>
-              ▼ {lo != null ? convTemp(lo, prefs.tempUnit) : '—'}°
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+              <Text variant="caption" weight="bold" color={palette.valHigh} tabular>
+                ▲{hi != null ? convTemp(hi, prefs.tempUnit) : '—'}°
+              </Text>
+              <Text variant="caption" weight="bold" color={palette.muted}>
+                {' / '}
+              </Text>
+              <Text variant="caption" weight="bold" color={palette.valLow} tabular>
+                ▼{lo != null ? convTemp(lo, prefs.tempUnit) : '—'}°
+              </Text>
+            </View>
           </View>
 
-          <Text variant="metric" color={palette.appValue} tabular>
-            {now?.temp != null ? convTemp(now.temp, prefs.tempUnit) : '—'}°
-          </Text>
+          <Bullet />
 
-          <View style={{ marginLeft: 'auto' }}>
-            <WeatherIcon wmo={now?.wmo ?? 3} isDay={now?.isDay ?? 1} size={54} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <WindArrow deg={now?.windDir ?? null} size={14} />
+            <Text variant="label" color={palette.valWind} tabular>
+              {convWind(now?.wind ?? null, prefs.windUnit) ?? '—'}
+            </Text>
+            <Unit>{windUnitLabel(prefs.windUnit)}</Unit>
+          </View>
+
+          <Bullet />
+
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+            <Text variant="label" color={palette.inkHeading} tabular>
+              {now?.humidity ?? '—'}
+            </Text>
+            <Unit>%</Unit>
           </View>
         </View>
       </View>
-
-      <Rule />
-      <View style={{ flexDirection: 'row' }}>
-        <StatCell label={t('hWind', lang)}>
-          <WindArrow deg={now?.windDir ?? null} size={15} />
-          <Text variant="stat" color={palette.valWind} tabular>
-            {convWind(now?.wind ?? null, prefs.windUnit) ?? '—'}
-          </Text>
-          <Unit>{windUnitLabel(prefs.windUnit)}</Unit>
-        </StatCell>
-        <VRule />
-        <StatCell label={t('hRain24', lang)}>
-          <Text
-            variant="stat"
-            color={precip24 > 0 ? palette.valPrecip : palette.valPrecipZero}
-            tabular
-          >
-            {fmtMm(precip24)}
-          </Text>
-          <Unit>mm</Unit>
-        </StatCell>
-        <VRule />
-        <StatCell label={t('hHumidity', lang)}>
-          <Text variant="stat" color={palette.inkHeading} tabular>
-            {now?.humidity ?? '—'}
-          </Text>
-          <Unit>%</Unit>
-        </StatCell>
-      </View>
-
     </Card>
   );
 }
 
-function StatCell({ label, children }: { label: string; children: React.ReactNode }) {
+/** One rainfall reading in the strip: what it is, and how much. */
+function RainStat({ label, mm }: { label: string; mm: number }) {
   const { palette } = useTheme();
   return (
-    <View style={{ flex: 1, alignItems: 'center', paddingVertical: space[4], paddingHorizontal: space[2] }}>
-      <Text variant="caption" weight="bold" color={palette.muted} style={{ letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>
+    <View>
+      <Text
+        variant="caption"
+        weight="bold"
+        color={palette.muted}
+        style={{ letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3, fontSize: 10.5 }}
+      >
         {label}
       </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 5 }}>
-        {children}
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+        <Text
+          variant="stat"
+          color={mm > 0 ? palette.valPrecip : palette.valPrecipZero}
+          tabular
+        >
+          {fmtMm(mm)}
+        </Text>
+        <Unit>mm</Unit>
       </View>
     </View>
+  );
+}
+
+/** The separator between the readings on the bottom line. */
+function Bullet() {
+  const { palette } = useTheme();
+  return (
+    <Text variant="caption" color={palette.inkDisabled}>
+      •
+    </Text>
   );
 }
 
@@ -147,5 +210,3 @@ function Unit({ children }: { children: React.ReactNode }) {
     </Text>
   );
 }
-
-/** One of the next three hours: time, glyph, temperature, mm, wind, sunshine. */

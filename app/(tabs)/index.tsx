@@ -18,7 +18,7 @@ import { Text } from '../../ui/Text';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
-import { Card, CardHeader } from '../../ui/Card';
+import { Card } from '../../ui/Card';
 import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
 import { AlertHero } from '../../ui/nowcast/AlertHero';
@@ -31,7 +31,7 @@ import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
-import { ta } from '../../core/i18n';
+import { t, ta } from '../../core/i18n';
 
 function NowcastPage() {
   const { palette } = useTheme();
@@ -129,7 +129,7 @@ function NowcastPage() {
           <View style={{ paddingVertical: space[8], alignItems: 'center', gap: space[3] }}>
             <ActivityIndicator color={palette.accent} />
             <Text variant="bodySm" color={palette.muted}>
-              {ta('shortTerm', prefs.lang)}…
+              {t('dataLoading', prefs.lang)}
             </Text>
           </View>
         </Card>
@@ -146,11 +146,13 @@ function NowcastPage() {
 
           {/* The next hours, as their own block: the hero says what it is doing
               now, this says what happens next, and a tap on an hour opens that
-              day in 'Verwachting'. */}
-          <Card pad={0}>
-            <View style={{ paddingHorizontal: space[5], paddingTop: space[4] }}>
-              <CardHeader icon="clock" label={ta('shortTerm', prefs.lang)} />
-            </View>
+              day in 'Verwachting'.
+
+              No heading. It said "Korte termijn (0–2 uur)" over a strip that runs a
+              day and a half in both directions, so it was wrong about the one thing
+              a heading is for; and a row of hours labelled with their own times does
+              not need to be told it is hours. */}
+          <Card pad={0} style={{ paddingTop: space[4] }}>
             <HourSlider model={model} onPressHour={openHourDay} />
           </Card>
 

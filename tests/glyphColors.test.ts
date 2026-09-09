@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   glyphLayerColors, glyphCloud, glyphRendering, wmoSymbol,
   GLYPH_CLOUD_LIGHT, GLYPH_CLOUD_DARK, GLYPH_SUN, GLYPH_PRECIP, GLYPH_STORM,
-  GLYPH_MOON_LIGHT, GLYPH_MOON_DARK,
+  GLYPH_MOON_LIGHT, GLYPH_MOON_DARK, GLYPH_STARS,
 } from '../core/model/conditions';
 
 const L = GLYPH_CLOUD_LIGHT;
@@ -23,9 +23,9 @@ const AGREED: [number, boolean, string[], string[]][] = [
   // sun.max.fill — one layer, the same yellow in both.
   [0, true, [GLYPH_SUN], [GLYPH_SUN]],
   [1, true, [GLYPH_SUN], [GLYPH_SUN]],
-  // moon.stars.fill and moon.fill — the moon and its stars are one pale night light.
-  // It lifts on navy the way the cloud does.
-  [0, false, [ML, ML], [MD, MD]],
+  // moon.stars.fill and moon.fill — the moon is a pale night light and lifts on navy
+  // the way the cloud does; the stars beside it are yellow in both appearances.
+  [0, false, [ML, GLYPH_STARS], [MD, GLYPH_STARS]],
   [1, false, [ML], [MD]],
   // cloud.sun.fill / cloud.moon.fill — the sun holds its yellow against either
   // ground; the moon is pale, and by night the whole glyph moves with the appearance.

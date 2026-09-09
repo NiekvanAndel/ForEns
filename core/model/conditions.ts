@@ -94,21 +94,27 @@ export function wmoSymbol(code: number, isDay: boolean = true): string {
  * the moon pale blue, and it covered fifty of the fifty-six icon variants in the
  * dark theme — colours nobody working on this code could see. Every layer is stated.
  *
- * Only the cloud changes between appearances; it lifts on navy so it does not sink
- * into the page.
+ * Only the cloud and the moon change between appearances; both lift on navy so they
+ * do not sink into the page.
  */
 export const GLYPH_CLOUD_LIGHT = '#B7C3D1';
 export const GLYPH_CLOUD_DARK = '#C9D6E4';
 /** The sun's yellow. Not the `--val-sun` text token, which is a deep orange chosen
  *  to be read as a number. */
 export const GLYPH_SUN = '#FFCC00';
-/** The moon, and the stars beside it: night is drawn pale rather than yellow, so a
- *  clear night does not read as a second sun. It holds in every glyph the moon
- *  appears in — `moon.fill`, `moon.stars.fill`, `cloud.moon.fill`,
- *  `cloud.moon.rain.fill` — and follows the cloud between appearances for the same
- *  reason the cloud does: it has to lift off navy. */
+/** The moon: night is drawn pale rather than yellow, so a clear night does not read
+ *  as a second sun. It holds in every glyph the moon appears in — `moon.fill`,
+ *  `moon.stars.fill`, `cloud.moon.fill`, `cloud.moon.rain.fill` — and follows the
+ *  cloud between appearances for the same reason the cloud does: it has to lift off
+ *  navy. */
 export const GLYPH_MOON_LIGHT = '#B7C3D1';
 export const GLYPH_MOON_DARK = '#C9D6E4';
+/** The stars beside the moon in `moon.stars.fill`, at the client's direction: the
+ *  moon stays pale and the stars take the sun's yellow, which is the one mark in the
+ *  night glyph that reads as a light rather than as a surface. The same yellow in
+ *  both appearances — stars do not need to lift off navy, they are the brightest
+ *  thing in the glyph either way. */
+export const GLYPH_STARS = '#FFCC00';
 /** Rain, drizzle and sleet. */
 export const GLYPH_PRECIP = '#3FC1EF';
 /** Lightning, warm enough to separate from the rain in the same glyph. */
@@ -122,7 +128,8 @@ export function glyphCloud(appearance: GlyphAppearance): string {
   return appearance === 'dark' ? GLYPH_CLOUD_DARK : GLYPH_CLOUD_LIGHT;
 }
 
-/** The moon's tone for an appearance — the moon and its stars, in every glyph. */
+/** The moon's tone for an appearance, in every glyph it appears in. The stars
+ *  beside it are their own colour — see `GLYPH_STARS`. */
 export function glyphMoon(appearance: GlyphAppearance): string {
   return appearance === 'dark' ? GLYPH_MOON_DARK : GLYPH_MOON_LIGHT;
 }
@@ -141,11 +148,12 @@ export function glyphLayerColors(
         return cloud;
       case 'sun':
         return GLYPH_SUN;
-      // The stars are drawn in the moon's tone, not the sun's: they are the same
-      // night light, and a yellow star beside a pale moon reads as a mistake.
       case 'moon':
-      case 'stars':
         return moon;
+      // The stars are yellow while the moon stays pale: they are the point of light
+      // in a clear-night glyph, and the contrast is what makes the pair read.
+      case 'stars':
+        return GLYPH_STARS;
       case 'precip':
         return GLYPH_PRECIP;
       // Snow takes the cloud's own tone: a white flake against a grey cloud reads as

@@ -21,8 +21,9 @@
  *
  *   cloud   #B7C3D1 on light, #C9D6E4 on dark
  *   sun     #FFCC00
- *   moon    #B7C3D1 on light, #C9D6E4 on dark — and the stars with it, so a clear
- *           night is one pale light rather than a second sun
+ *   moon    #B7C3D1 on light, #C9D6E4 on dark, so a clear night is pale rather than
+ *           a second sun
+ *   stars   #FFCC00 in both, the one point of light in the night glyph
  *   rain    #3FC1EF      snow    the cloud tone, so a snow glyph reads as one object
  *   bolt    #D9871F
  *

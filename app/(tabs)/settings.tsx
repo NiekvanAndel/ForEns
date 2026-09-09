@@ -33,6 +33,7 @@ import { Text } from '../../ui/Text';
 import { ChoiceList, Group, NavRow, Row, Toggle } from '../../ui/settings/Controls';
 import { SubjectPage } from '../../ui/settings/SubjectPage';
 import { LocationList } from '../../ui/settings/LocationList';
+import { LocationSearch } from '../../ui/settings/LocationSearch';
 import { SourceCard } from '../../ui/settings/SourceCard';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
@@ -366,6 +367,10 @@ export default function SettingsScreen() {
         title={ta('myLocations', prefs.lang)}
         onClose={() => setPage(null)}
       >
+        {/* Adding a place belongs on the page that lists them, not only on the top
+            row over the weather pages. */}
+        <LocationSearch />
+
         <Group label={ta('myLocations', prefs.lang)}>
           <LocationList />
         </Group>

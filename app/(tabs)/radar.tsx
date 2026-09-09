@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { shadowFloat, space, useTheme } from '../../theme';
 import { Card } from '../../ui/Card';
@@ -47,6 +48,8 @@ function RadarPage() {
   const insets = useSafeAreaInsets();
   const { stations } = useStations(location.lat, location.lon);
   const peeking = usePeeking();
+  const router = useRouter();
+  const { full } = useLocalSearchParams<{ full?: string }>();
   const chrome = mapChrome(palette, appearance);
 
   const [frames, setFrames] = useState<RadarFrame[]>([]);
@@ -85,6 +88,20 @@ function RadarPage() {
         if (!signal?.aborted && showSpinner) setLoading(false);
       });
   }, []);
+
+  /**
+   * The map button in the top row lands here with `full=1`, and the modal opens.
+   *
+   * The parameter is cleared as it is honoured, so the modal is not reopened by the
+   * next render, and so closing it and coming back to the tab leaves it shut. Only
+   * the page in front acts on it: the pager renders a copy per location, and three
+   * copies of one modal is one too many.
+   */
+  useEffect(() => {
+    if (peeking || full !== '1') return;
+    setFullScreen(true);
+    router.setParams({ full: '' });
+  }, [peeking, full, router]);
 
   useEffect(() => {
     // A copy of this page sliding past draws a still panel where the map goes, so
