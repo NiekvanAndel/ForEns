@@ -8,11 +8,20 @@
  * The material itself is `GlassSurface`, shared with the top row so the two ends of
  * the screen cannot drift apart.
  *
- * The bar shows icons alone. The four destinations are distinct enough to read as
+ * The bar shows icons alone. The destinations are distinct enough to read as
  * pictures, and dropping the captions takes about a fifth off the bar's height —
  * which the radar page spends on its chart, whose play button used to sit behind
  * the bar. The words are not lost: each button still carries its label for
  * VoiceOver, which is where a name actually matters.
+ *
+ * ## Six of them, on a phone that may be 320 points wide
+ *
+ * The bar sizes its own icons from how many there are rather than to a constant.
+ * Four fitted comfortably at 25 points; six at that size left the outer two touching
+ * the capsule's ends on an SE, and a tab bar that overflows is worse than one drawn
+ * a little smaller. So five or more step down, and the touch target does not go with
+ * them — each button still fills its share of the bar's full height, which is what a
+ * finger actually lands on.
  */
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,6 +38,11 @@ import { Icon, type IconName } from './Icon';
  * what makes it short enough for a chart and its play button to sit above it.
  */
 export const TAB_BAR_CLEARANCE = 84;
+
+/** Icon size by how many tabs share the bar. See the note above. */
+function iconSize(count: number): number {
+  return count >= 6 ? 21 : count === 5 ? 23 : 25;
+}
 
 export interface TabItem {
   key: string;
@@ -51,8 +65,11 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
   const capsule = dark ? palette.glassCapsuleDark : palette.glassCapsule;
   const idle = dark ? palette.appTabIdleDark : palette.appTabIdle;
   const accent = dark ? palette.appAccentDark : palette.appAccent;
+  const size = iconSize(items.length);
   const row = (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+    // The gap goes with the icons: six capsules a full step apart leave the icons
+    // themselves nowhere to sit.
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: items.length >= 6 ? 1 : 2 }}>
       {items.map((it) => {
         const on = it.key === activeKey;
         return (
@@ -66,13 +83,15 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
               flex: 1,
               alignItems: 'center',
               // No label under the icon, so the capsule is padded evenly rather
-              // than being top-heavy around a two-storey cell.
-              paddingVertical: 10,
+              // than being top-heavy around a two-storey cell. The vertical padding
+              // grows as the icon shrinks, so the bar keeps its height and the
+              // buttons keep their touch target.
+              paddingVertical: 10 + (25 - size) / 2,
               borderRadius: radius.pill,
               backgroundColor: on ? capsule : 'transparent',
             }}
           >
-            <Icon name={it.icon} size={25} color={on ? accent : idle} weight={on ? 'fill' : 'regular'} />
+            <Icon name={it.icon} size={size} color={on ? accent : idle} weight={on ? 'fill' : 'regular'} />
           </Pressable>
         );
       })}
@@ -82,7 +101,7 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
   const shell = {
     borderRadius: radius.pill,
     paddingVertical: space[2],
-    paddingHorizontal: 10,
+    paddingHorizontal: items.length >= 6 ? 6 : 10,
     overflow: 'hidden' as const,
   };
 

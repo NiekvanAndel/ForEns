@@ -8,11 +8,20 @@
  *
  * The prose summary, the legend, the location title and the timeline's own labels
  * are all gone from this page. Each was a line of text where the map wanted height,
- * and each is still available — the summary on 'Nu', the rest in full screen.
+ * and each is still available — the summary on 'Nu', the rest on the map page.
+ *
+ * ## The full-screen button is a shortcut now, not an owner
+ *
+ * It used to present the full-screen map as a modal this page owned, which made the
+ * top row's map button reach the map by routing *to this tab* with a parameter
+ * telling it to open that modal. So a button about the map depended on a page about
+ * the radar. Now the map is `app/map.tsx` and this button pushes it, exactly as the
+ * top row's does. The location does not have to be handed over: it is the selected
+ * one, and both pages read the same selection.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { shadowFloat, space, useTheme } from '../../theme';
 import { Card } from '../../ui/Card';
@@ -24,11 +33,11 @@ import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
 import { RadarMap } from '../../ui/radar/RadarMap';
 import { Timeline } from '../../ui/radar/Timeline';
-import { FullScreenRadar } from '../../ui/radar/FullScreenRadar';
+import { frameAtFraction, useRadarFrames } from '../../ui/radar/useRadarFrames';
 import { NowcastPanel } from '../../ui/radar/NowcastPanel';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
-import { activeProvider, frameClock, radarAxis, type RadarFrame } from '../../core/radar';
+import { activeProvider, frameClock, radarAxis } from '../../core/radar';
 import { mapChrome } from '../../ui/radar/mapStyle';
 import { usePeeking } from '../../ui/peek';
 import { ta } from '../../core/i18n';
@@ -40,69 +49,21 @@ const MAP_ASPECT = 0.78;
 
 function RadarPage() {
   const { palette, appearance } = useTheme();
-  const { prefs, location, selectLocation } = usePrefs();
+  const { prefs, location } = usePrefs();
   const { nowcast } = useForecast();
   const insets = useSafeAreaInsets();
   const peeking = usePeeking();
   const router = useRouter();
-  const { full } = useLocalSearchParams<{ full?: string }>();
   const chrome = mapChrome(palette, appearance);
 
-  const [frames, setFrames] = useState<RadarFrame[]>([]);
-  const [index, setIndex] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [fullScreen, setFullScreen] = useState(false);
+  const { frames, index, setIndex, playing, togglePlay, loading, fetch: fetchFrames } =
+    useRadarFrames();
   const [panelWidth, setPanelWidth] = useState(320);
 
   // The radar run covers the Netherlands, Belgium and western Germany. A saved
   // location outside it gets a sentence rather than an empty chart under a map
   // whose pictures do not reach it.
   const covered = activeProvider().coversPoint(location.lat, location.lon);
-
-  /**
-   * Fetch the loop.
-   *
-   * A pull to refresh runs the same call as the first load, but without the
-   * spinner: the frames on screen are a few minutes old, not wrong, and blanking
-   * the map to a spinner for a manual refresh loses the reader's place in the
-   * loop for no gain. The control at the top of the page says it is working.
-   */
-  const fetchFrames = useCallback((signal?: AbortSignal, showSpinner = true) => {
-    if (showSpinner) setLoading(true);
-    return activeProvider()
-      .listFrames(signal)
-      .then((f) => {
-        if (signal?.aborted) return;
-        const all = [...f.past, ...f.forecast];
-        setFrames(all);
-        // Open on the latest observation, not on the oldest frame or a forecast.
-        setIndex(Math.max(0, f.past.length - 1));
-      })
-      .catch(() => {
-        if (signal?.aborted) return;
-        // A failed refresh keeps the frames it already has; only a failed first
-        // load has nothing to fall back on.
-        if (showSpinner) setFrames([]);
-      })
-      .finally(() => {
-        if (!signal?.aborted && showSpinner) setLoading(false);
-      });
-  }, []);
-
-  /**
-   * The map button in the top row lands here with `full=1`, and the modal opens.
-   *
-   * The parameter is cleared as it is honoured, so the modal is not reopened by the
-   * next render, and so closing it and coming back to the tab leaves it shut. Only
-   * the page in front acts on it: the pager renders a copy per location, and three
-   * copies of one modal is one too many.
-   */
-  useEffect(() => {
-    if (peeking || full !== '1') return;
-    setFullScreen(true);
-    router.setParams({ full: '' });
-  }, [peeking, full, router]);
 
   useEffect(() => {
     // A copy of this page sliding past draws a still panel where the map goes, so
@@ -119,16 +80,6 @@ function RadarPage() {
     useCallback(() => fetchFrames(undefined, false), [fetchFrames])
   );
 
-  // Every saved location except the one this page is about, which the map already
-  // marks. Carrying the index along is what lets a tap select it.
-  const places = useMemo(
-    () =>
-      prefs.locations
-        .map((l, index) => ({ location: l, index }))
-        .filter((p) => p.location !== location),
-    [prefs.locations, location]
-  );
-
   // One axis for the chart and the scrubber, so the cursor and the thumb move
   // together, and it spans the frames alone so the curve covers what the map can
   // actually show. See `radarAxis`.
@@ -139,21 +90,11 @@ function RadarPage() {
 
   /** A position along the shared axis, back to the frame nearest it. */
   const scrubTo = (fraction: number) => {
-    if (!axis) return;
-    let best = 0;
-    let bestDistance = Infinity;
-    axis.positions.forEach((p, i) => {
-      const d = Math.abs(p - fraction);
-      if (d < bestDistance) {
-        bestDistance = d;
-        best = i;
-      }
-    });
-    setIndex(best);
+    const at = frameAtFraction(axis?.positions, fraction);
+    if (at != null) setIndex(at);
   };
 
   return (
-    <>
     <ScrollView
       onLayout={(e) => setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 4))}
       contentContainerStyle={{
@@ -175,7 +116,7 @@ function RadarPage() {
           style={{ aspectRatio: MAP_ASPECT }}
         />
         <Pressable
-          onPress={() => setFullScreen(true)}
+          onPress={() => router.push('/map')}
           accessibilityRole="button"
           accessibilityLabel={ta('fullScreen', prefs.lang)}
           hitSlop={8}
@@ -221,7 +162,7 @@ function RadarPage() {
                 index={index}
                 playing={playing}
                 onIndexChange={setIndex}
-                onTogglePlay={() => setPlaying((p) => !p)}
+                onTogglePlay={togglePlay}
                 showLabels={false}
                 stepPositions={axis?.positions}
               />
@@ -245,23 +186,6 @@ function RadarPage() {
         </Text>
       </View>
     </ScrollView>
-
-    <FullScreenRadar
-      visible={fullScreen}
-      onClose={() => setFullScreen(false)}
-      lat={location.lat}
-      lon={location.lon}
-      frames={frames}
-      activeIndex={index}
-      onScrub={setIndex}
-      playing={playing}
-      onTogglePlay={() => setPlaying((p) => !p)}
-      places={places}
-      onSelectPlace={selectLocation}
-      profile={nowcast}
-      locationName={location.name}
-    />
-    </>
   );
 }
 

@@ -325,6 +325,38 @@ interface AggregateRow {
 const HOUR_MS = 3600_000;
 
 /**
+ * One aggregate row as the app's hour.
+ *
+ * The hourly *average* is the honest value for an hour; the API's bare
+ * `temperature_150` is the last measurement inside it, which on a strip or a chart
+ * would let a single late-afternoon spike stand for the whole hour. Where an average
+ * is missing the bare reading is better than a gap, so it is the fallback.
+ *
+ * Shared by the hour strip's fixed window and the graph page's chosen one, so the
+ * two can never disagree about what an hour measured.
+ */
+function mapAggregateRow(key: string, r: AggregateRow): MeasuredHour {
+  const temp = num(r.temperature_150_avg) ?? num(r.temperature_150);
+  const humidity = num(r.humidity_150_avg) ?? num(r.humidity_150);
+  const wind = num(r.windspeed_avg) ?? num(r.windspeed);
+
+  return {
+    time: key,
+    // Temperature keeps its tenth: this is a measurement, and the hero prints it as
+    // one. Everything that wants a whole number rounds where it draws.
+    temp: round1OrNull(temp),
+    tempMin: round1OrNull(num(r.temperature_150_min)),
+    tempMax: round1OrNull(num(r.temperature_150_max)),
+    humidity: roundOrNull(humidity),
+    dewpoint: roundOrNull(num(r.dewpoint)),
+    wind: msToKmh(wind),
+    gusts: msToKmh(num(r.gust_max)),
+    windDir: roundOrNull(num(r.wind_direction)),
+    precip: num(r.precipitation) != null ? round1(num(r.precipitation) as number) : null,
+  };
+}
+
+/**
  * The station's last `hours` hours, as hourly measurements.
  *
  * `include_partial=true` is deliberate: without it the most recent completed hour is
@@ -361,27 +393,7 @@ export async function fetchStationHours(
     const key = localHourKey(new Date(endMs - HOUR_MS).toISOString(), offsetSec);
     if (!key) continue;
 
-    // The hourly average is the honest value for an hour; the API's bare
-    // `temperature_150` is the last measurement inside it, which on the strip would
-    // make a single late-afternoon spike stand for the whole hour.
-    const temp = num(r.temperature_150_avg) ?? num(r.temperature_150);
-    const humidity = num(r.humidity_150_avg) ?? num(r.humidity_150);
-    const wind = num(r.windspeed_avg) ?? num(r.windspeed);
-
-    out[key] = {
-      time: key,
-      // Temperature keeps its tenth: this is a measurement, and the hero prints it
-      // as one. Everything that wants a whole number rounds where it draws.
-      temp: round1OrNull(temp),
-      tempMin: round1OrNull(num(r.temperature_150_min)),
-      tempMax: round1OrNull(num(r.temperature_150_max)),
-      humidity: roundOrNull(humidity),
-      dewpoint: roundOrNull(num(r.dewpoint)),
-      wind: msToKmh(wind),
-      gusts: msToKmh(num(r.gust_max)),
-      windDir: roundOrNull(num(r.wind_direction)),
-      precip: num(r.precipitation) != null ? round1(num(r.precipitation) as number) : null,
-    };
+    out[key] = mapAggregateRow(key, r);
   }
 
   return { hours: out, stationName };
@@ -462,4 +474,152 @@ export async function fetchStationObservations(
     hours: hourly.hours,
     current: latest.current,
   };
+}
+
+// ── The dashboard blocks ────────────────────────────────────────────────────────
+
+/**
+ * `/aggregations/` is the catalog behind the web app's "Actueel" dashboard: one
+ * entry per block, saying what is measured, over which window, in which unit — all
+ * of it already translated by the API. `/aggregations/values/` computes those blocks
+ * for a set of stations.
+ *
+ * Nothing here is derived locally on purpose. The blocks a grower has chosen, their
+ * order and their wording live on the account, so the phone shows the dashboard they
+ * built rather than a second opinion about what matters on their farm. That is also
+ * why the titles are not translated in `appStrings`: the API answers in the language
+ * it is asked for, and inventing a Dutch name for a block someone renamed themselves
+ * would be worse than showing theirs.
+ */
+export interface AggregationBlock {
+  id: number;
+  title: string;
+  /** The measured quantity, e.g. `temperature_150` — direction blocks read as a
+   *  compass point rather than as degrees. */
+  attribute: string;
+  /** Human-readable window, e.g. "laatste 24 uur". Translated by the API. */
+  timeLabel: string;
+  unit: string;
+  /** Position on the account's dashboard. Only selected blocks are shown. */
+  index: number;
+}
+
+interface AggregationRow {
+  id?: number;
+  title?: string;
+  attribute?: string;
+  time_label?: string;
+  unit?: string;
+  selected?: boolean;
+  selected_index?: number | null;
+}
+
+/**
+ * The blocks selected on the account's dashboard, in the account's own order.
+ *
+ * Unselected entries are dropped here rather than at the call site: the catalog also
+ * carries every block a grower *could* add, and a page that showed those would be
+ * showing settings rather than weather.
+ */
+export async function fetchAggregationBlocks(
+  token: string,
+  lang: string,
+  opts: FetchOptions = {}
+): Promise<AggregationBlock[]> {
+  const rows = await agroFetch<AggregationRow[]>(token, '/aggregations/', {
+    ...opts,
+    headers: { 'Accept-Language': lang, ...(opts.headers ?? {}) },
+  });
+  if (!Array.isArray(rows)) throw new SourceError('AgroExact', 'onverwacht antwoord');
+  return rows
+    .filter((r) => r?.selected && typeof r.id === 'number')
+    .map((r) => ({
+      id: r.id as number,
+      title: (r.title ?? '').trim(),
+      attribute: r.attribute ?? '',
+      timeLabel: (r.time_label ?? '').trim(),
+      unit: r.unit ?? '',
+      index: r.selected_index ?? 0,
+    }))
+    .sort((a, b) => a.index - b.index);
+}
+
+interface AggregationValueRow {
+  id?: number;
+  results?: { station_id?: string; value?: number | null }[];
+}
+
+/**
+ * What each selected block currently reads, for one station.
+ *
+ * `stations` alone, without `ids`, is what asks the API for the dashboard's own
+ * selection — the same request the web app makes. Returns values by block id; a
+ * block the response omits is simply absent, and the grid draws a dash for it.
+ */
+export async function fetchAggregationValues(
+  token: string,
+  stationId: string,
+  opts: FetchOptions = {}
+): Promise<Record<number, number | null>> {
+  const rows = await agroFetch<AggregationValueRow[]>(
+    token,
+    `/aggregations/values/?stations=${encodeURIComponent(stationId)}`,
+    opts
+  );
+  const out: Record<number, number | null> = {};
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (typeof r?.id !== 'number') continue;
+    const hit = (r.results ?? []).find((v) => v.station_id === stationId);
+    out[r.id] = hit ? num(hit.value) : null;
+  }
+  return out;
+}
+
+// ── A measured series over a period ─────────────────────────────────────────────
+
+/** A day as the API's `start_date`/`end_date` want it: `dd-mm-YYYY`. */
+export function apiDate(d: Date): string {
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+}
+
+/**
+ * Every hour the station measured between two dates, oldest first.
+ *
+ * The graph page's window, where `fetchStationHours` covers the hour strip's fixed
+ * 26. Same mapping, same end-of-hour correction, same units — it differs only in how
+ * the window is asked for and in returning a list rather than a lookup, because a
+ * chart plots a sequence and a strip looks hours up by name.
+ *
+ * `limit` is high enough that a thirty-day window is not truncated to its newest
+ * rows: the API answers newest-first and cuts at the limit, so a low one would draw
+ * a month that quietly starts a week ago.
+ */
+export async function fetchStationRange(
+  token: string,
+  stationId: string,
+  offsetSec: number,
+  startDate: string,
+  endDate: string,
+  opts: FetchOptions = {}
+): Promise<MeasuredHour[]> {
+  const rows = await agroFetch<AggregateRow[]>(
+    token,
+    `/aggregates/${encodeURIComponent(stationId)}/` +
+      `?start_date=${startDate}&end_date=${endDate}` +
+      `&include_partial=true&station_only=false&limit=5000`,
+    opts
+  );
+  const out: MeasuredHour[] = [];
+
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!r?.timestamp) continue;
+    const endMs = new Date(r.timestamp).getTime();
+    if (!Number.isFinite(endMs)) continue;
+    const key = localHourKey(new Date(endMs - HOUR_MS).toISOString(), offsetSec);
+    if (!key) continue;
+    out.push(mapAggregateRow(key, r));
+  }
+
+  // Oldest first: a chart reads left to right, and the API answers newest first.
+  return out.sort((a, b) => (a.time < b.time ? -1 : 1));
 }

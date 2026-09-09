@@ -64,6 +64,55 @@ Decisions worth knowing about:
   leaves the towns in place as ordinary Open-Meteo locations and puts a warning in
   Instellingen. Only a station leaving the account removes its location.
 
+## Actueel, Grafiek, and the map page (9 Sep 2026)
+
+Two pages added and one relationship inverted.
+
+- **Actueel** is the account's own dashboard where a location has an AgroExact
+  station: the blocks come from `/aggregations/` and their values from
+  `/aggregations/values/`, with the API's own titles, units and time labels, in the
+  order the grower set on the web. The app has no opinion about which blocks matter.
+  Where there is no station — or where the account has selected none — the same grid
+  is built from the weather model instead (`core/model/tiles.ts`), so every location
+  has a page. The two are told apart by the station dot, per block, because a rain
+  gauge measures some of them and not others.
+- **Grafiek** plots one quantity over a chosen period. On a station-backed location
+  it is the station's own hourly record from `/aggregates/{id}/`, running on into
+  the forecast past the current hour; elsewhere it is the model alone. Measurement
+  is drawn solid and forecast dashed, always, with a rule where they meet — see
+  `core/model/series.ts`, which marks every sample with its source. A window longer
+  than three days is bucketed into days, and a day counts as measured only if every
+  hour in it that had a value was measured.
+- **Built with what was already here.** No `react-native-gifted-charts`, no
+  `@expo/ui`: the chart is `react-native-svg` in the idiom of `SpreadChart`, the
+  period presets are the app's own pills, and the from/to fields open a month grid
+  (`ui/graph/RangeSelector.tsx`) rather than a native picker. Agreed 9 Sep 2026 —
+  no new native modules, so no rebuild, and the pages look like the rest of the app.
+- **The map is a page, not a modal.** `app/map.tsx` holds the full-screen map. The
+  top row's map button pushes it, and so does the full-screen button on 'Radar' —
+  which used to be the owner of a modal that the top row reached by routing to the
+  radar tab with `full=1`. Both arrive at the selected location, because the
+  selection is shared state and nothing is passed between them.
+- **Six tabs.** `GlassTabBar` sizes its icons from how many there are (21pt at six,
+  25pt at four) and grows the vertical padding to match, so the bar keeps its height
+  and its touch targets on a narrow phone.
+
+Worth knowing:
+
+- The `/aggregations/` catalog is fetched per language, because the API translates
+  the titles and the time labels and the app's language is a preference rather than
+  the phone's. `agroFetch` sends `Accept-Language` for that call only.
+- Wind from `/aggregations/values/` is metres per second like everywhere else the
+  API speaks, and is converted to km/h in `dashboardTiles` before the page converts
+  again to the reader's own unit. Pinned in `tests/tiles.test.ts`.
+- Both pages skip their network calls while the pager is peeking at them, and draw
+  the modelled version instead, so a swipe does not cost a month of measurements for
+  a location the reader may not stop on.
+- **Not verified against a live account:** the shape of `/aggregations/` and
+  `/aggregations/values/` is taken from the AgroExactRN app's client, not from a
+  real response through this app's bearer token. If the grid comes up empty on a
+  station that has blocks on the web, that pair of calls is the first suspect.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an
