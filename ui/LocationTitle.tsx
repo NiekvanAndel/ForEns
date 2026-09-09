@@ -12,7 +12,10 @@
  * region line is gone with the larger form: the name is the answer, and the page
  * below it says the rest.
  *
- * Design rule 1: green names a station, never a place. A plain address stays navy.
+ * Design rule 1 says green names a station and never a place — and every name here
+ * is a place. The sync names a station's location after the town it stands in, so
+ * the green was colouring a town for the station behind it. The heading ink is what
+ * a place gets; the dot beside it is the station, and that stays green.
  */
 import { View } from 'react-native';
 import { space, useTheme } from '../theme';
@@ -45,7 +48,7 @@ export function LocationTitle() {
       ) : null}
       <Text
         variant="locationName"
-        color={location.stationId ? palette.agroInk : palette.inkHeading}
+        color={palette.inkHeading}
         numberOfLines={1}
         style={{ flexShrink: 1 }}
       >
