@@ -46,8 +46,13 @@ export interface SpreadChartProps {
   labels: string[];
   series: SpreadSeries;
   color: string;
-  /** Unit suffix for the axis labels. */
+  /** Unit suffix for the axis labels. Kept short: it rides the top gridline, where
+   *  a long unit collides with the plot. */
   unit?: string;
+  /** Unit for the cursor's readout, where the axis abbreviates. Wind labels its axis
+   *  with nothing and sunshine with "m", and neither is what a reader pointing at an
+   *  hour wants to be told. Defaults to the axis unit. */
+  valueUnit?: string;
   height?: number;
   /** Draw the zero line where the quantity can be negative. */
   showZero?: boolean;
@@ -63,7 +68,7 @@ const PAD_BOTTOM = 18;
 const GRID_LINES = 3;
 
 export function SpreadChart({
-  labels, series, color, unit = '', height = 140, showZero, clampMin,
+  labels, series, color, unit = '', valueUnit, height = 140, showZero, clampMin,
 }: SpreadChartProps) {
   const { palette } = useTheme();
   const [width, setWidth] = useState(0);
@@ -176,10 +181,11 @@ export function SpreadChart({
   const cursorX = at != null ? px(at) : 0;
   const cursorY = atValue != null ? py(atValue) : null;
 
+  const readUnit = valueUnit ?? unit;
   const reading = [
     at != null ? `${labels[at]}:00` : '',
-    atValue != null ? `${formatTick(atValue)}${unit}` : '—',
-    atBand ? `${formatTick(atBand.lo)}–${formatTick(atBand.hi)}${unit}` : '',
+    atValue != null ? `${formatTick(atValue)}${readUnit}` : '—',
+    atBand ? `${formatTick(atBand.lo)}–${formatTick(atBand.hi)}${readUnit}` : '',
   ].filter(Boolean).join(' · ');
 
   // Beside the point, and inside the chart: pinned above unless the point is too

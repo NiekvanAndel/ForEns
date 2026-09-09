@@ -446,6 +446,7 @@ function LayerSection({
             labels={labels}
             color={palette.inkHeading}
             unit=""
+            valueUnit={` ${windUnitLabel(prefs.windUnit)}`}
             showZero
             clampMin={0}
             series={{
@@ -511,6 +512,7 @@ function LayerSection({
             labels={labels}
             color={palette.valSun}
             unit=" m"
+            valueUnit=" min"
             showZero
             clampMin={0}
             series={{ values: hours.map((h) => h.sunMin) }}
