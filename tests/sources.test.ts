@@ -24,6 +24,11 @@ function mockFetch(handler: (url: string) => { status?: number; body: unknown } 
       ok: (r.status ?? 200) >= 200 && (r.status ?? 200) < 300,
       status: r.status ?? 200,
       json: async () => r.body,
+      // A real response has both, and the readings endpoints read the body as text
+      // because they may answer with one record per line rather than one document.
+      // A double that offered only `json` let a caller through that would have
+      // thrown against the API.
+      text: async () => (typeof r.body === 'string' ? r.body : JSON.stringify(r.body)),
     } as Response;
   }) as unknown as typeof fetch;
 }

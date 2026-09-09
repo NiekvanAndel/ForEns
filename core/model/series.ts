@@ -12,7 +12,7 @@
  * unbroken line is a chart that lies about what is known. Measured is solid,
  * forecast is dashed, and the two never merge.
  *
- * ## Hours or days
+ * ## Minutes, hours or days
  *
  * A month at hourly resolution is seven hundred marks across a phone — unreadable,
  * and slow to draw. So a window longer than `DAY_RESOLUTION_FROM` days is bucketed
@@ -20,6 +20,14 @@
  * behind it, and rainfall becomes the day's total. That is more informative than the
  * hourly version at that width, not merely cheaper: nobody reads a thirty-day chart
  * for what happened at four in the morning on the ninth.
+ *
+ * A single day goes the other way where a station can answer at that grain. An hour
+ * is a coarse thing to look at one day through: a quarter of an hour of heavy rain
+ * and a wet hour become the same bar. `stepMinutes` is what the caller sets — ten
+ * where it has fetched raw readings, sixty everywhere else — and the grid, the
+ * bucketing threshold and the labels follow from it. Nothing else in here changes:
+ * a ten-minute sample and an hourly one are the same shape, and the model still
+ * fills in behind them wherever the station is quiet.
  *
  * A day is measured only if *every* hour in it that has data was measured. A day
  * half from a station and half from a model is not a measurement, and colouring it
@@ -56,7 +64,7 @@ export const SERIES_META: Record<SeriesKey, SeriesMeta> = {
 export const DAY_RESOLUTION_FROM = 3;
 
 export interface Sample {
-  /** `YYYY-MM-DDTHH:00` at hour resolution, `YYYY-MM-DD` at day resolution. */
+  /** `YYYY-MM-DDTHH:MM` at minute and hour resolution, `YYYY-MM-DD` at day. */
   key: string;
   value: number | null;
   /** The spread inside a bucketed day. Absent at hour resolution. */
@@ -73,7 +81,7 @@ export interface Sample {
 }
 
 export interface Series {
-  resolution: 'hour' | 'day';
+  resolution: 'minute' | 'hour' | 'day';
   samples: Sample[];
   /** Null where the window contains no readable value at all. */
   stats: { min: number; max: number; avg: number; total: number } | null;
@@ -92,7 +100,7 @@ export function dayKey(d: Date): string {
 }
 
 /**
- * Every local hour from the start of `from` to the end of `to`.
+ * Every local step from the start of `from` to the end of `to`.
  *
  * Stepped through UTC on purpose. These are wall-clock strings with no zone, so
  * stepping them as local dates would make the device's own daylight saving decide
@@ -101,20 +109,24 @@ export function dayKey(d: Date): string {
  * both land as a gap in the line rather than as a wrong value, which is the right
  * way round for a chart of measurements.
  */
-export function hourKeys(from: string, to: string): string[] {
+export function timeKeys(from: string, to: string, stepMinutes = 60): string[] {
+  const step = Math.max(1, stepMinutes) * 60_000;
   const start = Date.parse(`${from}T00:00:00Z`);
-  const end = Date.parse(`${to}T23:00:00Z`);
+  const end = Date.parse(`${to}T23:59:59Z`);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return [];
   const out: string[] = [];
-  for (let t = start; t <= end; t += 3600_000) {
+  for (let t = start; t <= end; t += step) {
     const d = new Date(t);
     out.push(
       `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}` +
-        `T${pad(d.getUTCHours())}:00`
+        `T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`
     );
   }
   return out;
 }
+
+/** Every local hour in the window. `timeKeys` at its default step. */
+export const hourKeys = (from: string, to: string): string[] => timeKeys(from, to);
 
 /** Whole days between two `YYYY-MM-DD` dates, inclusive of both ends. */
 export function daySpan(from: string, to: string): number {
@@ -198,6 +210,15 @@ export interface BuildSeriesInput {
    * part — and the page lets its date picker reach into the future.
    */
   includeForecast?: boolean;
+  /**
+   * How far apart the samples are.
+   *
+   * Ten where the caller has fetched a station's raw readings for a single day,
+   * sixty everywhere else. It sets the grid and nothing more: the sources are
+   * consulted per sample exactly as before, so an hourly model still answers for the
+   * hour a ten-minute grid falls inside.
+   */
+  stepMinutes?: number;
 }
 
 /**
@@ -208,7 +229,7 @@ export interface BuildSeriesInput {
  * reported wins over what was computed for it.
  */
 export function buildSeries({
-  key, from, to, measured, model, includeForecast = false,
+  key, from, to, measured, model, includeForecast = false, stepMinutes = 60,
 }: BuildSeriesInput): Series {
   const byMeasured = new Map(measured.map((h) => [h.time, h]));
   const byModel = new Map((model?.allHours ?? []).map((h) => [h.time, h]));
@@ -217,7 +238,7 @@ export function buildSeries({
   );
   const nowHour = model?.nowHour ?? '';
 
-  const hours: Sample[] = hourKeys(from, to)
+  const hours: Sample[] = timeKeys(from, to, stepMinutes)
     .filter((time) => includeForecast || nowHour === '' || time <= nowHour)
     .map((time) => {
       const m = byMeasured.get(time);
@@ -229,26 +250,30 @@ export function buildSeries({
         // answer for it: the merge is per quantity everywhere else in the app too.
         if (value != null) return { key: time, value, secondary, measured: true, future };
       }
-      const h = byModel.get(time);
+      // A modelled value is stamped on the hour, so on a finer grid the hour a
+      // sample falls inside is what answers for it — the model has nothing to say
+      // about twenty past three in particular.
+      const h = byModel.get(stepMinutes < 60 ? `${time.slice(0, 14)}00` : time);
       if (h) {
         const { value, secondary } = fromModel(key, h);
         // `allHours` stops 48 hours out, so a value is only accepted from it when
         // there is one; past that the IFS series below carries the line.
         if (value != null) return { key: time, value, secondary, measured: false, future };
       }
-      const p = byHres.get(time);
+      const p = byHres.get(stepMinutes < 60 ? `${time.slice(0, 14)}00` : time);
       if (!p) return { key: time, value: null, measured: false, future };
       const { value, secondary } = fromHres(key, p);
       return { key: time, value, secondary, measured: false, future };
     });
 
   const span = daySpan(hours[0]?.key.slice(0, 10) ?? from, hours[hours.length - 1]?.key.slice(0, 10) ?? to);
-  const bucketed = span > DAY_RESOLUTION_FROM ? bucketByDay(key, hours) : hours;
-  // After the bucketing, so a day's total is added once rather than hour by hour.
+  const byDay = span > DAY_RESOLUTION_FROM;
+  const bucketed = byDay ? bucketByDay(key, hours) : hours;
+  // After the bucketing, so a day's total is added once rather than step by step.
   const samples = key === 'precip' ? withCumulative(bucketed) : bucketed;
 
   return {
-    resolution: span > DAY_RESOLUTION_FROM ? 'day' : 'hour',
+    resolution: byDay ? 'day' : stepMinutes < 60 ? 'minute' : 'hour',
     samples,
     stats: summarise(samples),
     anyMeasured: samples.some((s) => s.measured),

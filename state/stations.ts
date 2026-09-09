@@ -21,7 +21,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AgroAuthError, fetchStationObservations, fetchStationRange, fetchStations, withAgroToken,
+  AgroAuthError, fetchStationObservations, fetchStationRange, fetchStationReadings,
+  fetchStations, withAgroToken,
   type AgroStation, type MeasuredHour, type StationObservations,
 } from '../core/sources/agroexact';
 import { stationForLocation } from '../core/model/station';
@@ -225,35 +226,45 @@ export function useStationObservations(
  *  except the one running, which `include_partial` keeps returning fresh. */
 const RANGE_STALE_MS = 5 * 60_000;
 
-export const rangeKey = (stationId: string, offsetSec: number, from: string, to: string) =>
-  ['agroexact', 'range', stationId, offsetSec, from, to] as const;
+export const rangeKey = (
+  stationId: string, offsetSec: number, from: string, to: string, fine: boolean
+) => ['agroexact', 'range', stationId, offsetSec, from, to, fine] as const;
 
 /**
- * The hours a station measured between two dates.
+ * What a station measured between two dates.
+ *
+ * `fine` picks the endpoint. Off, the hourly roll-up, which is the right answer over
+ * a week or a month. On, the raw readings — about one every ten minutes — which is
+ * what a single day deserves: an hourly bar cannot tell a quarter of an hour of
+ * heavy rain from a wet hour, and on a one-day chart that is the distinction the
+ * reader came for. It is a separate cache entry rather than a finer version of the
+ * same one, so switching back to a week does not throw the day's detail away.
  *
  * Idle until the location's offset is known, for the same reason
- * `useStationObservations` is: the hours have to land on the local hours the model
- * built, and bucketing them against the device's zone puts a Dutch station an hour
- * out for anyone travelling.
+ * `useStationObservations` is: the samples have to land on the local clock the model
+ * built against, and bucketing them by the device's zone puts a Dutch station an
+ * hour out for anyone travelling.
  */
 export function useStationRange(
   stationId: string | null,
   offsetSec: number | null,
   range: { from: string; to: string },
-  enabled = true
+  enabled = true,
+  fine = false
 ) {
   const auth = useAgroAuth();
 
   return useQuery({
-    queryKey: rangeKey(stationId ?? '', offsetSec ?? 0, range.from, range.to),
+    queryKey: rangeKey(stationId ?? '', offsetSec ?? 0, range.from, range.to, fine),
     enabled: enabled && auth.status === 'connected' && !!stationId && offsetSec != null,
     staleTime: RANGE_STALE_MS,
     queryFn: async ({ signal }): Promise<MeasuredHour[]> => {
       if (!stationId) return [];
+      const fetchRows = fine ? fetchStationReadings : fetchStationRange;
       const rows = await withAgroToken(
         auth.getAccessToken,
         (token) =>
-          fetchStationRange(token, stationId, offsetSec ?? 0, range.from, range.to, { signal }),
+          fetchRows(token, stationId, offsetSec ?? 0, range.from, range.to, { signal }),
         auth.reportUnauthorized
       );
       return rows ?? [];

@@ -12,7 +12,8 @@ import { modelTiles, nowcastDepth, type TileLabels } from '../core/model/tiles';
 import {
   arrangeAllTiles, arrangeTiles, DEFAULT_TILE_LAYOUT, reorderTiles, toggleTile,
 } from '../core/prefs';
-import { buildSeries, daySpan, forecastHorizon, hourKeys } from '../core/model/series';
+import { buildSeries, daySpan, forecastHorizon, hourKeys, timeKeys } from '../core/model/series';
+import { localMinuteKey, parseRows } from '../core/sources/agroexact';
 import type { ForecastModel, Hour } from '../core/model/types';
 import type { MeasuredHour } from '../core/sources/agroexact';
 
@@ -220,6 +221,75 @@ describe('the two forecast blocks', () => {
     expect(byId.get('rain-next-24h')?.value).toBe(2);
     // No nowcast handed in: a dash, not a zero.
     expect(byId.get('rain-next-1h')?.value).toBeNull();
+  });
+});
+
+describe('a single day at the grain a station reports on', () => {
+  it('steps the grid by the interval it is given', () => {
+    const keys = timeKeys('2026-06-15', '2026-06-15', 10);
+    expect(keys).toHaveLength(6 * 24);
+    expect(keys[0]).toBe('2026-06-15T00:00');
+    expect(keys[1]).toBe('2026-06-15T00:10');
+    expect(keys[keys.length - 1]).toBe('2026-06-15T23:50');
+    // The default is still the hour, and `hourKeys` is that default.
+    expect(timeKeys('2026-06-15', '2026-06-15')).toEqual(hourKeys('2026-06-15', '2026-06-15'));
+  });
+
+  it('reports the finer grain, and takes a reading at its own minute', () => {
+    const s = buildSeries({
+      key: 'temp', from: '2026-06-15', to: '2026-06-15', stepMinutes: 10,
+      measured: [measured('2026-06-15T10:20', { temp: 18.4 })],
+      model: model(),
+    });
+    expect(s.resolution).toBe('minute');
+    const at = s.samples.find((x) => x.key === '2026-06-15T10:20');
+    expect(at?.value).toBe(18.4);
+    expect(at?.measured).toBe(true);
+  });
+
+  it('lets the hour answer for the minutes inside it where the station is quiet', () => {
+    const s = buildSeries({
+      key: 'temp', from: '2026-06-15', to: '2026-06-15', stepMinutes: 10,
+      measured: [],
+      // The model is stamped on the hour and has nothing to say about 10:20 in
+      // particular, so the hour it falls inside is what answers.
+      model: model({ pastHours: [hour('2026-06-15T10:00', { tempExact: 11 })] }),
+    });
+    expect(s.samples.find((x) => x.key === '2026-06-15T10:20')?.value).toBe(11);
+    expect(s.samples.find((x) => x.key === '2026-06-15T10:20')?.measured).toBe(false);
+  });
+
+  it('still buckets a long window into days whatever the step', () => {
+    const s = buildSeries({
+      key: 'precip', from: '2026-06-01', to: '2026-06-20', stepMinutes: 10,
+      measured: [measured('2026-06-02T10:20', { precip: 2 })],
+      model: null,
+    });
+    expect(s.resolution).toBe('day');
+    expect(s.samples.find((x) => x.key === '2026-06-02')?.value).toBe(2);
+  });
+});
+
+describe('reading a station\'s raw measurements', () => {
+  it('floors a timestamp to the interval the station reports on', () => {
+    // 08:37 UTC, two hours east, lands in the 10:30 slot.
+    expect(localMinuteKey('2026-06-15T08:37:11Z', 7200)).toBe('2026-06-15T10:30');
+    expect(localMinuteKey('2026-06-15T08:40:00Z', 7200)).toBe('2026-06-15T10:40');
+  });
+
+  it('says nothing for a timestamp it cannot read', () => {
+    expect(localMinuteKey('not a time', 0)).toBe('');
+  });
+
+  it('parses both an array and a stream of one record per line', () => {
+    expect(parseRows<{ a: number }>('[{"a":1},{"a":2}]')).toEqual([{ a: 1 }, { a: 2 }]);
+    expect(parseRows<{ a: number }>('{"a":1}\n{"a":2}\n')).toEqual([{ a: 1 }, { a: 2 }]);
+    expect(parseRows('')).toEqual([]);
+  });
+
+  it('skips a record it cannot read rather than losing the series', () => {
+    // A station that wrote one bad line should cost that line and not the chart.
+    expect(parseRows<{ a: number }>('{"a":1}\nnot json\n{"a":3}')).toEqual([{ a: 1 }, { a: 3 }]);
   });
 });
 

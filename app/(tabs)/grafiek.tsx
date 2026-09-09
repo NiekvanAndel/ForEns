@@ -19,13 +19,24 @@
  * the chart draws measurement solid and forecast dashed, and never joins the two
  * into one line. See `SeriesChart`.
  *
- * ## The forecast is a switch, and it moves the calendar
+ * ## The forecast is always drawn
  *
- * Off by default: the page's first question is what has happened, and a chart that
- * ran into tomorrow by default would put a model's opinion in front of a reader
- * checking how much rain actually fell. Turned on, the line carries past the current
- * hour — dashed — and the date fields reach into the future as far as the model
- * does, so the coming days can be read the same way as the past ones.
+ * The line carries past the current hour — dashed, and never joined to the measured
+ * part — and the date fields reach as far ahead as the model does, so the coming
+ * days are read the same way as the past ones.
+ *
+ * There was a switch for it, off by default. It was not earning its place: the dash
+ * already says which half is which, far more precisely than a checkbox above the
+ * chart could, and starting with it off meant the page's most-used window opened
+ * showing half of what it had.
+ *
+ * ## One day is read at the grain a station reports on
+ *
+ * A station measures about every ten minutes, and over a single day that is what the
+ * page asks for. An hourly bar cannot tell a quarter of an hour of heavy rain from a
+ * wet hour, which on a one-day chart is the distinction the reader came for. Longer
+ * windows stay on the hourly roll-up — a month of ten-minute records is thousands of
+ * points nobody can read.
  *
  * ## The running total on rainfall
  *
@@ -63,7 +74,6 @@ import * as Haptics from 'expo-haptics';
 import { radius, space, useTheme } from '../../theme';
 import { Card, CardHeader } from '../../ui/Card';
 import { Text } from '../../ui/Text';
-import { Icon } from '../../ui/Icon';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
@@ -79,7 +89,8 @@ import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useLocationStation, useStationRange } from '../../state/stations';
 import {
-  buildSeries, dayKey, forecastHorizon, SERIES_META, type Sample, type SeriesKey,
+  buildSeries, dayKey, daySpan, forecastHorizon, SERIES_META,
+  type Sample, type SeriesKey,
 } from '../../core/model/series';
 import {
   fmtMm, fmtTempValue, fmtWindValue, tempUnitLabel, windUnitLabel, ta,
@@ -96,6 +107,15 @@ const SERIES: { key: SeriesKey; labelKey: AppStringKey; color: (p: PageColors) =
 
 interface PageColors { temp: string; precip: string; humidity: string; wind: string }
 
+/** What the card is headed, and what the summary calls its highest sample — both
+ *  follow the grain the chart ended up at. */
+const RESOLUTION_LABEL = {
+  minute: 'perTenMinutes', hour: 'perHour', day: 'perDay',
+} as const satisfies Record<string, AppStringKey>;
+const PEAK_LABEL = {
+  minute: 'peakStep', hour: 'peakHour', day: 'peakDay',
+} as const satisfies Record<string, AppStringKey>;
+
 function GraphPage() {
   const { palette } = useTheme();
   const { prefs, location } = usePrefs();
@@ -106,39 +126,34 @@ function GraphPage() {
   const [preset, setPreset] = useState<PresetDays | null>(DEFAULT_PRESET);
   const [range, setRange] = useState<DateRange>(() => presetRange(DEFAULT_PRESET));
   const [key, setKey] = useState<SeriesKey>('temp');
-  const [showForecast, setShowForecast] = useState(false);
   /** The running total over the rainfall bars. On by default — it is the reason the
    *  page can answer "how much fell in this period" at a glance. */
   const [showCumulative, setShowCumulative] = useState(true);
 
   const station = useLocationStation(location);
+  // A single day gets the station's raw readings; anything longer, the hourly
+  // roll-up. See the note at the top.
+  const fine = daySpan(range.from, range.to) === 1;
   // A page sliding past does not fetch a month of measurements for a location the
   // reader may not stop on; it draws the modelled series instead, which is already
   // in hand.
-  const measurements = useStationRange(station?.id ?? null, offsetSec, range, !peeking);
+  const measurements = useStationRange(station?.id ?? null, offsetSec, range, !peeking, fine);
 
   const series = useMemo(
     () =>
       buildSeries({
         key, from: range.from, to: range.to,
-        measured: measurements.data ?? [], model, includeForecast: showForecast,
+        measured: measurements.data ?? [], model, includeForecast: true,
+        // Only where a station actually answered at that grain: the ten-minute grid
+        // is worth its extra samples when they are filled, and is a row of gaps with
+        // an hourly model behind it when they are not.
+        stepMinutes: fine && (measurements.data?.length ?? 0) > 0 ? 10 : 60,
       }),
-    [key, range.from, range.to, measurements.data, model, showForecast]
+    [key, range.from, range.to, measurements.data, model, fine]
   );
 
-  // How far the calendar may reach. Today while the chart is only showing what has
-  // happened; the end of the model's horizon once the forecast is on.
-  const today = dayKey(new Date());
-  const maxDay = showForecast ? forecastHorizon(model) ?? today : today;
-
-  // Turning the forecast off must not leave the window pointing at days the chart
-  // will now refuse to draw, or the page would go blank with no explanation.
-  const clampForecast = (on: boolean) => {
-    setShowForecast(on);
-    if (on || range.to <= today) return;
-    setPreset(null);
-    setRange({ from: range.from > today ? today : range.from, to: today });
-  };
+  // As far ahead as the model can be asked about.
+  const maxDay = forecastHorizon(model) ?? dayKey(new Date());
 
   const meta = SERIES_META[key];
   const colors: PageColors = {
@@ -165,14 +180,15 @@ function GraphPage() {
     : key === 'humidity' ? '%'
     : '';
 
-  // Hours read as clock times, days as dates: a thirty-day chart labelled 00:00 six
-  // times says nothing at all.
+  // Clock times where a sample is a moment, dates where it is a day: a thirty-day
+  // chart labelled 00:00 six times says nothing at all.
+  const byDay = series.resolution === 'day';
   const axisLabel = (s: Sample) =>
-    series.resolution === 'hour' ? s.key.slice(11, 16) : shortDay(s.key, prefs.lang);
+    byDay ? shortDay(s.key, prefs.lang) : s.key.slice(11, 16);
   const readLabel = (s: Sample) =>
-    series.resolution === 'hour'
-      ? `${shortDay(s.key.slice(0, 10), prefs.lang)} ${s.key.slice(11, 16)}`
-      : shortDay(s.key, prefs.lang);
+    byDay
+      ? shortDay(s.key, prefs.lang)
+      : `${shortDay(s.key.slice(0, 10), prefs.lang)} ${s.key.slice(11, 16)}`;
 
   const loading = !model || (measurements.isLoading && !!station);
 
@@ -208,31 +224,6 @@ function GraphPage() {
             }}
           />
 
-          <Pressable
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => {});
-              clampForecast(!showForecast);
-            }}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: showForecast }}
-            accessibilityLabel={ta('showForecast', prefs.lang)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}
-          >
-            <View
-              style={{
-                width: 20, height: 20, borderRadius: 6,
-                alignItems: 'center', justifyContent: 'center',
-                backgroundColor: showForecast ? palette.accent : palette.surfaceAlt,
-              }}
-            >
-              {showForecast ? (
-                <Icon name="check" size={13} color={palette.appCard} weight="bold" />
-              ) : null}
-            </View>
-            <Text variant="bodySm" color={palette.inkHeading}>
-              {ta('showForecast', prefs.lang)}
-            </Text>
-          </Pressable>
         </View>
 
         <View style={{ gap: space[3] }}>
@@ -274,11 +265,7 @@ function GraphPage() {
 
       <Card pad={0}>
         <View style={{ padding: space[4], paddingBottom: 0 }}>
-          <CardHeader
-            label={
-              series.resolution === 'day' ? ta('perDay', prefs.lang) : ta('perHour', prefs.lang)
-            }
-          />
+          <CardHeader label={ta(RESOLUTION_LABEL[series.resolution], prefs.lang)} />
         </View>
 
         {phase === 'loading' && loading ? (
@@ -298,7 +285,9 @@ function GraphPage() {
                   <>
                     <Stat label={ta('total', prefs.lang)} value={format(series.stats.total)} />
                     <Stat
-                      label={ta(series.resolution === 'day' ? 'peakDay' : 'peakHour', prefs.lang)}
+                      // "Piekuur" is wrong of a ten-minute sample and of a day, and
+                      // the peak is the same idea at all three grains.
+                      label={ta(PEAK_LABEL[series.resolution], prefs.lang)}
                       value={format(series.stats.max)}
                     />
                   </>

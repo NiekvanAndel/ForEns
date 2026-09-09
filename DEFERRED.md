@@ -128,7 +128,10 @@ Worth knowing:
 - **A silent date bug.** The `/aggregates/` range call was sending `YYYY-MM-DD`
   where the API wants `dd-mm-YYYY`, so every window the graph page asked for came
   back empty and only the axis moved. `apiDay` converts it now.
-- **The forecast on 'Grafiek' is a switch, off by default.** Turned on, the line
+- **The forecast on 'Grafiek' is always drawn** (the switch is gone, 9 Sep). It was
+  not earning its place: the dash already says which half is which, more precisely
+  than a checkbox above the chart could, and starting with it off meant the page's
+  most-used window opened showing half of what it had. The line
   carries past the current hour and the date fields reach as far ahead as the model
   does — `futureHours` stops at 48 hours, so the series falls back to the IFS hourly
   set behind the day sheets for anything further, which is the full horizon. Past
@@ -311,6 +314,31 @@ Two things to check on a device:
   drawn. So the toggle is not a nicety but the other half of the decision to share
   the axis. Switched off, the entry dims and keeps its place — a legend entry that
   vanished when you used it would be a control you could turn off once.
+
+### One day at the grain a station reports on (9 Sep 2026)
+
+- **A one-day window fetches raw readings**, about one every ten minutes, instead of
+  the hourly roll-up. An hourly bar cannot tell a quarter of an hour of heavy rain
+  from a wet hour, and on a one-day chart that is the distinction the reader came
+  for. Longer windows stay on `/aggregates/`: a month of ten-minute records is
+  thousands of points nobody can read.
+- **`buildSeries` gained a step size** rather than a second code path. The grid, the
+  bucketing threshold and the labels follow from `stepMinutes`; the sources are
+  consulted per sample exactly as before, and a modelled value — stamped on the hour
+  — answers for the minutes inside its own hour, because the model has nothing to say
+  about twenty past three in particular.
+- **The finer grid is only used where the station actually answered.** Ten-minute
+  samples are worth their extra points when they are filled and are a row of gaps
+  with an hourly model behind them when they are not.
+- **`/readings/` may stream NDJSON**, one record per line, where `/aggregates/`
+  answers with an array. Which shape a given path returns could not be settled from
+  here, so `parseRows` reads either and skips a line it cannot parse. The
+  already-shipped `latest=true` call goes through it too — if that endpoint was
+  streaming, the hero's measured "now" was silently empty before this.
+- **Assumed, not verified:** that a reading's `precipitation` is the rainfall in that
+  interval rather than a running total. It is what the field name and the hourly
+  aggregate's use of it imply, and it is what the cumulative line and the summary
+  total depend on. A day whose total reads far too high is the sign it is wrong.
 
 ### Two things to verify against the live API
 

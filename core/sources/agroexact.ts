@@ -194,6 +194,71 @@ async function agroFetch<T>(
   return body;
 }
 
+/**
+ * The readings endpoints, whose body is not necessarily one JSON document.
+ *
+ * `/readings/` streams NDJSON — one measurement per line — where `/aggregates/`
+ * answers with an ordinary array. Which of the two a given path returns is not
+ * something this app can settle from the outside, and `.json()` throws on the first
+ * newline, so the rows are read as text and parsed either way: an array if the body
+ * looks like one, line by line if it does not.
+ *
+ * A line that will not parse is skipped rather than failing the call. A station that
+ * wrote one bad record should cost that record and not the chart.
+ */
+async function agroFetchRows<T>(
+  token: string,
+  path: string,
+  opts: FetchOptions = {}
+): Promise<T[]> {
+  const { signal, fetchImpl = fetch } = opts;
+
+  const r = await fetchImpl(`${AGRO_BASE}${path}`, {
+    signal,
+    headers: { ...agroHeaders(token), ...(opts.headers ?? {}) },
+  });
+
+  if (r.status === 401 || r.status === 403) {
+    throw new AgroAuthError('niet geautoriseerd', r.status);
+  }
+  if (!r.ok) throw new SourceError('AgroExact', `HTTP ${r.status}`, r.status);
+
+  return parseRows<T>(await r.text());
+}
+
+/** Exported for the tests: both body shapes, and the bad line in the middle. */
+export function parseRows<T>(body: string): T[] {
+  const trimmed = body.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  const rows: T[] = [];
+  for (const line of trimmed.split('\n')) {
+    const text = line.trim();
+    if (!text) continue;
+    try {
+      const row = JSON.parse(text) as T & { detail?: string };
+      // The API reports its own errors as `{ "detail": "..." }`.
+      if (row && typeof row === 'object' && 'detail' in row && row.detail) {
+        throw new SourceError('AgroExact', String(row.detail));
+      }
+      rows.push(row);
+    } catch (e) {
+      if (e instanceof SourceError) throw e;
+      // A single unreadable record is not worth the whole series.
+    }
+  }
+  return rows;
+}
+
 const num = (v: unknown): number | null => {
   if (v == null || v === '') return null;
   const n = typeof v === 'number' ? v : Number(v);
@@ -424,12 +489,12 @@ export async function fetchLatestMeasurement(
   offsetSec: number,
   opts: FetchOptions = {}
 ): Promise<{ current: Measurement | null; stationName: string | null }> {
-  const rows = await agroFetch<ReadingRow[]>(
+  const rows = await agroFetchRows<ReadingRow>(
     token,
     `/readings/${encodeURIComponent(stationId)}/?latest=true&station_only=false`,
     opts
   );
-  const r = (Array.isArray(rows) ? rows : [])[0];
+  const r = rows[0];
   if (!r?.timestamp) return { current: null, stationName: null };
 
   const time = localHourKey(r.timestamp, offsetSec);
@@ -533,4 +598,85 @@ export async function fetchStationRange(
 
   // Oldest first: a chart reads left to right, and the API answers newest first.
   return out.sort((a, b) => (a.time < b.time ? -1 : 1));
+}
+
+/**
+ * Every raw measurement a station took between two dates.
+ *
+ * A station reports about every ten minutes, and on a one-day window that is what
+ * the graph page asks for: an hourly roll-up of a single day flattens the quarter of
+ * an hour a shower actually fell into a bar that says it rained all hour. Over longer
+ * windows the aggregates are the right answer — see `fetchStationRange` — because a
+ * month of ten-minute records is thousands of points nobody can read and a great deal
+ * of data to move.
+ *
+ * The API caps this window at 48 hours, which a single day fits inside with room to
+ * spare. `time_rounding` puts the timestamps on the measurement interval rather than
+ * wherever the station's clock happened to be, so the samples land on a regular grid
+ * instead of drifting a minute either way.
+ *
+ * Mapped into the same shape as an hour, with a minute-level key: the series builder
+ * treats the two identically and only its step size differs. What an hour has and a
+ * reading does not — a minimum and a maximum within it — stays null, because a single
+ * measurement has neither.
+ */
+export async function fetchStationReadings(
+  token: string,
+  stationId: string,
+  offsetSec: number,
+  /** Both `YYYY-MM-DD`; converted to the API's own format on the way out. */
+  startDay: string,
+  endDay: string,
+  opts: FetchOptions = {}
+): Promise<MeasuredHour[]> {
+  const rows = await agroFetchRows<ReadingRow>(
+    token,
+    `/readings/${encodeURIComponent(stationId)}/` +
+      `?start_date=${apiDay(startDay)}&end_date=${apiDay(endDay)}` +
+      `&station_only=false&time_rounding=true`,
+    opts
+  );
+
+  const out: MeasuredHour[] = [];
+  for (const r of rows) {
+    if (!r?.timestamp) continue;
+    const time = localMinuteKey(r.timestamp, offsetSec);
+    if (!time) continue;
+    out.push({
+      time,
+      // A reading is stamped at the instant it was taken, so unlike an aggregate it
+      // is not shifted back by a window it covers.
+      temp: round1OrNull(num(r.temperature_150)),
+      tempMin: null,
+      tempMax: null,
+      humidity: roundOrNull(num(r.humidity_150)),
+      dewpoint: roundOrNull(num(r.dewpoint)),
+      wind: msToKmh(num(r.windspeed)),
+      gusts: msToKmh(num(r.gust)),
+      windDir: roundOrNull(num(r.wind_direction)),
+      precip: num(r.precipitation) != null ? round1(num(r.precipitation) as number) : null,
+    });
+  }
+
+  // Oldest first: a chart reads left to right, and the API answers newest first.
+  return out.sort((a, b) => (a.time < b.time ? -1 : 1));
+}
+
+/**
+ * The local ten-minute slot a UTC instant falls in, as the series builder's key.
+ *
+ * The same construction as `localHourKey` and for the same reason — the location's
+ * own offset, not the device's — but keeping the minutes, floored to the interval a
+ * station reports on so a reading lands on the grid the chart draws rather than
+ * between two of its steps.
+ */
+export function localMinuteKey(utcIso: string, offsetSec: number, stepMin = 10): string {
+  const ms = new Date(utcIso).getTime();
+  if (!Number.isFinite(ms)) return '';
+  const l = new Date(ms + offsetSec * 1000);
+  const minute = Math.floor(l.getUTCMinutes() / stepMin) * stepMin;
+  return (
+    `${l.getUTCFullYear()}-${pad(l.getUTCMonth() + 1)}-${pad(l.getUTCDate())}` +
+    `T${pad(l.getUTCHours())}:${pad(minute)}`
+  );
 }
