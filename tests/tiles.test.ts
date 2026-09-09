@@ -223,6 +223,69 @@ describe('the two forecast blocks', () => {
   });
 });
 
+describe('the running rainfall total', () => {
+  const window = { from: '2026-06-15', to: '2026-06-15' };
+
+  it('accumulates across the window, and only for rainfall', () => {
+    const rain = buildSeries({
+      key: 'precip', ...window,
+      measured: [
+        measured('2026-06-15T10:00', { precip: 1.2 }),
+        measured('2026-06-15T11:00', { precip: 0.4 }),
+      ],
+      model: null,
+    });
+    const at = (k: string) => rain.samples.find((s) => s.key === k);
+    expect(at('2026-06-15T10:00')?.cumulative).toBe(1.2);
+    expect(at('2026-06-15T11:00')?.cumulative).toBe(1.6);
+    // The last sample of the window carries the window's whole total.
+    expect(rain.samples[rain.samples.length - 1]?.cumulative).toBe(1.6);
+
+    // A running total of temperatures is a number with no meaning.
+    const temp = buildSeries({ key: 'temp', ...window, measured: [], model: model() });
+    expect(temp.samples.every((s) => s.cumulative === undefined)).toBe(true);
+  });
+
+  it('starts at the left edge of the chosen window, not before it', () => {
+    const s = buildSeries({
+      key: 'precip', ...window,
+      measured: [
+        // Yesterday is outside the window and must not be in the total.
+        measured('2026-06-14T23:00', { precip: 9 }),
+        measured('2026-06-15T10:00', { precip: 2 }),
+      ],
+      model: null,
+    });
+    expect(s.samples[s.samples.length - 1]?.cumulative).toBe(2);
+  });
+
+  it('holds its level across an hour nothing reported', () => {
+    const s = buildSeries({
+      key: 'precip', ...window,
+      measured: [measured('2026-06-15T10:00', { precip: 3 })],
+      model: null,
+    });
+    // An unreported hour is unknown, not dry-and-undoing: the line stays put.
+    expect(s.samples.find((x) => x.key === '2026-06-15T03:00')?.cumulative).toBe(0);
+    expect(s.samples.find((x) => x.key === '2026-06-15T18:00')?.cumulative).toBe(3);
+  });
+
+  it('adds a bucketed day once, not hour by hour', () => {
+    const s = buildSeries({
+      key: 'precip', from: '2026-06-10', to: '2026-06-20',
+      measured: [
+        measured('2026-06-10T10:00', { precip: 1 }),
+        measured('2026-06-10T11:00', { precip: 2 }),
+        measured('2026-06-11T10:00', { precip: 4 }),
+      ],
+      model: null,
+    });
+    expect(s.resolution).toBe('day');
+    expect(s.samples.find((x) => x.key === '2026-06-10')?.cumulative).toBe(3);
+    expect(s.samples.find((x) => x.key === '2026-06-11')?.cumulative).toBe(7);
+  });
+});
+
 describe('the grid arrangement', () => {
   const tiles = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
 

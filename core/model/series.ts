@@ -63,6 +63,9 @@ export interface Sample {
   band?: { lo: number; hi: number } | null;
   /** A second line above the first — gusts over mean wind. */
   secondary?: number | null;
+  /** Rainfall so far, from the start of the window to here. Only on `precip`; see
+   *  `withCumulative`. */
+  cumulative?: number | null;
   /** An instrument reported this, rather than a model. */
   measured: boolean;
   /** This has not happened yet. */
@@ -240,7 +243,9 @@ export function buildSeries({
     });
 
   const span = daySpan(hours[0]?.key.slice(0, 10) ?? from, hours[hours.length - 1]?.key.slice(0, 10) ?? to);
-  const samples = span > DAY_RESOLUTION_FROM ? bucketByDay(key, hours) : hours;
+  const bucketed = span > DAY_RESOLUTION_FROM ? bucketByDay(key, hours) : hours;
+  // After the bucketing, so a day's total is added once rather than hour by hour.
+  const samples = key === 'precip' ? withCumulative(bucketed) : bucketed;
 
   return {
     resolution: span > DAY_RESOLUTION_FROM ? 'day' : 'hour',
@@ -249,6 +254,30 @@ export function buildSeries({
     anyMeasured: samples.some((s) => s.measured),
     forecastFrom: samples.findIndex((s) => s.future),
   };
+}
+
+/**
+ * The running total across the window, sample by sample.
+ *
+ * Only rainfall has one, because only rainfall accumulates: a running total of
+ * temperatures is a number with no meaning. It is what turns "it rained a bit most
+ * hours" into "and that came to eleven millimetres", which is the question a grower
+ * reads a rainfall chart for and the bars alone cannot answer.
+ *
+ * A gap carries the total forward rather than breaking it. An hour the station did
+ * not report is an hour whose rainfall is unknown, not an hour that undid what fell
+ * before it — so the line holds its level across the gap and picks up after.
+ *
+ * It starts at the left edge of the chosen window, not at midnight or at the start
+ * of the record: the window is what the reader picked, and a total that began
+ * somewhere off screen would be a number they cannot check.
+ */
+function withCumulative(samples: Sample[]): Sample[] {
+  let total = 0;
+  return samples.map((s) => {
+    if (s.value != null) total = Math.round((total + s.value) * 10) / 10;
+    return { ...s, cumulative: total };
+  });
 }
 
 /**

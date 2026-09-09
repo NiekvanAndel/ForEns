@@ -16,6 +16,18 @@
  * one thing this page must never say. Bars do the same with fill: solid for what
  * fell, hollow for what is expected.
  *
+ * ## The running total
+ *
+ * Rainfall bars can carry a cumulative line, on the same axis as the bars rather
+ * than on a second one down the right-hand edge. Two axes on a phone is two scales
+ * to hold in your head at a glance, and the reason to want the total here is to see
+ * it *against* the showers that produced it.
+ *
+ * The cost of one axis is real and is the reason the line can be switched off from
+ * the legend: a month's total dwarfs any single hour, so with the line up the bars
+ * flatten. Off, the axis goes back to fitting the bars alone — which is why the
+ * toggle is not a nicety but the other half of the decision to share the axis.
+ *
  * ## Reading a value off it
  *
  * Dragging puts a cursor on the nearest sample and a label beside it, exactly as
@@ -59,6 +71,12 @@ export interface SeriesChartProps {
   /** Marks the secondary line in the readout, e.g. "⤴" for gusts. Without it the
    *  secondary is neither drawn nor read out. */
   secondaryLabel?: string;
+  /** Draw the running total carried on the samples, on the shared axis. */
+  showCumulative?: boolean;
+  /** Names the running total in the cursor's readout. */
+  cumulativeLabel?: string;
+  /** Its own colour, so it reads apart from the bars it runs over. */
+  cumulativeColor?: string;
   /** Short unit riding the top gridline. */
   unit?: string;
   height?: number;
@@ -69,6 +87,7 @@ export interface SeriesChartProps {
 export function SeriesChart({
   samples, shape, color, axisLabel, readLabel, format,
   secondaryLabel, unit = '', height = 190, emptyLabel,
+  showCumulative, cumulativeLabel, cumulativeColor,
 }: SeriesChartProps) {
   const { palette } = useTheme();
   const [width, setWidth] = useState(0);
@@ -77,10 +96,13 @@ export function SeriesChart({
   const [label, setLabel] = useState({ w: 0, h: 0 });
 
   const n = samples.length;
+  // The axis fits what is drawn, and nothing else: with the running total switched
+  // off it goes back to fitting the bars alone. See the note at the top.
   const all = samples.flatMap((s) => [
     ...(s.value != null ? [s.value] : []),
     ...(s.band ? [s.band.lo, s.band.hi] : []),
     ...(secondaryLabel && s.secondary != null ? [s.secondary] : []),
+    ...(showCumulative && s.cumulative != null ? [s.cumulative] : []),
   ]);
 
   if (!n || !all.length) {
@@ -136,6 +158,9 @@ export function SeriesChart({
         at.value != null ? format(at.value) : '—',
         at.band ? `${format(at.band.lo)}–${format(at.band.hi)}` : '',
         secondaryLabel && at.secondary != null ? `${secondaryLabel} ${format(at.secondary)}` : '',
+        showCumulative && at.cumulative != null
+          ? `${cumulativeLabel ?? 'Σ'} ${format(at.cumulative)}`
+          : '',
       ].filter(Boolean).join(' · ')
     : '';
 
@@ -180,6 +205,23 @@ export function SeriesChart({
                   samples={samples} px={px} py={py} color={color}
                   drawSecondary={!!secondaryLabel} cardColor={palette.appCard}
                 />}
+
+            {/* Over the bars, not under them: the total is read against the showers
+                that made it, and a line behind them would be hidden by the tallest
+                ones — which are exactly the ones it is explaining. */}
+            {showCumulative ? (
+              <Path
+                d={smoothPath(
+                  samples
+                    .map((s, i) => (s.cumulative == null ? null : { x: px(i), y: py(s.cumulative) }))
+                    .filter((p): p is Point => p !== null)
+                )}
+                stroke={cumulativeColor ?? color}
+                strokeWidth={2}
+                fill="none"
+                strokeLinecap="round"
+              />
+            ) : null}
 
             {samples.map((s, i) =>
               i % labelStep === 0 ? (

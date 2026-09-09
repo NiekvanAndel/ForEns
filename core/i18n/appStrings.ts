@@ -136,6 +136,7 @@ export const APP_STRINGS = {
     perDay: 'Per dag',
     perHour: 'Per uur',
     showForecast: 'Verwachting tonen',
+    cumulative: 'Cumulatief',
     graphNoStation: 'Voor deze locatie is alleen de laatste 24 uur beschikbaar als historie',
   },
   en: {
@@ -195,7 +196,7 @@ export const APP_STRINGS = {
     measured: 'Measured', forecastPart: 'Forecast', average: 'Average',
     total: 'Total', peakHour: 'Peak hour', peakDay: 'Peak day',
     noSeries: 'No data for this period.', perDay: 'Per day', perHour: 'Per hour',
-    showForecast: 'Show forecast',
+    showForecast: 'Show forecast', cumulative: 'Cumulative',
     graphNoStation: 'Only the last 24 hours are available as history for this location',
   },
   de: {
@@ -255,7 +256,7 @@ export const APP_STRINGS = {
     measured: 'Gemessen', forecastPart: 'Vorhersage', average: 'Durchschnitt',
     total: 'Gesamt', peakHour: 'Spitzenstunde', peakDay: 'Spitzentag',
     noSeries: 'Keine Daten für diesen Zeitraum.', perDay: 'Pro Tag', perHour: 'Pro Stunde',
-    showForecast: 'Vorhersage anzeigen',
+    showForecast: 'Vorhersage anzeigen', cumulative: 'Kumulativ',
     graphNoStation: 'Für diesen Standort sind nur die letzten 24 Stunden als Historie verfügbar',
   },
   fr: {
@@ -315,7 +316,7 @@ export const APP_STRINGS = {
     measured: 'Mesuré', forecastPart: 'Prévu', average: 'Moyenne',
     total: 'Total', peakHour: 'Heure de pointe', peakDay: 'Jour de pointe',
     noSeries: 'Aucune donnée pour cette période.', perDay: 'Par jour', perHour: 'Par heure',
-    showForecast: 'Afficher les prévisions',
+    showForecast: 'Afficher les prévisions', cumulative: 'Cumulé',
     graphNoStation: "Pour ce lieu, seules les dernières 24 heures sont disponibles en historique",
   },
   es: {
@@ -375,7 +376,7 @@ export const APP_STRINGS = {
     measured: 'Medido', forecastPart: 'Previsto', average: 'Media',
     total: 'Total', peakHour: 'Hora punta', peakDay: 'Día punta',
     noSeries: 'No hay datos para este periodo.', perDay: 'Por día', perHour: 'Por hora',
-    showForecast: 'Mostrar previsión',
+    showForecast: 'Mostrar previsión', cumulative: 'Acumulado',
     graphNoStation: 'Para esta ubicación solo están disponibles las últimas 24 horas como histórico',
   },
 } as const;

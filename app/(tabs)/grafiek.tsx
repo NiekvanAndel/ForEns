@@ -27,6 +27,17 @@
  * hour — dashed — and the date fields reach into the future as far as the model
  * does, so the coming days can be read the same way as the past ones.
  *
+ * ## The running total on rainfall
+ *
+ * Rainfall gets a cumulative line over its bars, on the same axis. That is what
+ * turns "it rained a bit most hours" into "and that came to eleven millimetres",
+ * which is the question a rainfall chart is opened for.
+ *
+ * Sharing the axis has a price — a month's total dwarfs any single hour, so the bars
+ * flatten under it — and the legend item is where that is paid back: tapping it
+ * switches the line off, and the axis goes back to fitting the bars alone. So the
+ * legend is a control here, not a caption.
+ *
  * A window longer than a few days is bucketed into days there too — the line becomes
  * each day's mean with its range behind it, and rainfall becomes each day's total.
  * The heading says which of the two is on screen, because "3,4 mm" means different
@@ -90,6 +101,9 @@ function GraphPage() {
   const [range, setRange] = useState<DateRange>(() => presetRange(DEFAULT_PRESET));
   const [key, setKey] = useState<SeriesKey>('temp');
   const [showForecast, setShowForecast] = useState(false);
+  /** The running total over the rainfall bars. On by default — it is the reason the
+   *  page can answer "how much fell in this period" at a glance. */
+  const [showCumulative, setShowCumulative] = useState(true);
 
   const station = useLocationStation(location);
   // A page sliding past does not fetch a month of measurements for a location the
@@ -304,19 +318,37 @@ function GraphPage() {
                 // Gusts belong above the wind line and nowhere else: on temperature
                 // the secondary would be an unlabelled second reading.
                 secondaryLabel={key === 'wind' ? '⤴' : undefined}
+                showCumulative={meta.shape === 'bar' && showCumulative}
+                cumulativeLabel={ta('cumulative', prefs.lang)}
+                cumulativeColor={palette.accentDark}
                 emptyLabel={ta('noSeries', prefs.lang)}
               />
             </View>
 
-            {/* What the chart is made of. On a station-backed location this is a
-                legend for the two line styles; everywhere else it is the whole
-                answer to "where do these numbers come from". */}
+            {/* What the chart is made of — and, for the running total, the switch
+                for it. On a station-backed location the rest is a legend for the two
+                line styles; everywhere else it is the whole answer to "where do
+                these numbers come from", which is a sentence and needs the room to
+                wrap under the entries beside it. */}
             <View
               style={{
-                flexDirection: 'row', alignItems: 'center', gap: space[3],
+                flexDirection: 'row', alignItems: 'center',
+                flexWrap: 'wrap', columnGap: space[3], rowGap: space[2],
                 paddingHorizontal: space[4], paddingBottom: space[4],
               }}
             >
+              {meta.shape === 'bar' ? (
+                <Legend
+                  color={palette.accentDark}
+                  label={ta('cumulative', prefs.lang)}
+                  on={showCumulative}
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setShowCumulative((v) => !v);
+                  }}
+                />
+              ) : null}
+
               {series.anyMeasured ? (
                 <>
                   <Legend color={color} label={ta('measured', prefs.lang)} />
@@ -366,24 +398,52 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** A line style, named. */
-function Legend({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) {
+/**
+ * A line style, named — and, where it is given an `onPress`, the switch for it.
+ *
+ * Switched off it keeps its place and dims, both the rule and the word, so the way
+ * back is exactly where the way out was. A legend entry that vanished when you used
+ * it would be a control you could turn off once.
+ */
+function Legend({
+  color, label, dashed, on = true, onPress,
+}: {
+  color: string;
+  label: string;
+  dashed?: boolean;
+  on?: boolean;
+  onPress?: () => void;
+}) {
   const { palette } = useTheme();
-  return (
+  const row = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
       <View
         style={{
           width: 16, height: 0,
           borderTopWidth: 2,
-          borderTopColor: color,
+          borderTopColor: on ? color : palette.inkDisabled,
           borderStyle: dashed ? 'dashed' : 'solid',
           opacity: dashed ? 0.7 : 1,
         }}
       />
-      <Text variant="caption" color={palette.muted}>
+      <Text variant="caption" color={on ? palette.muted : palette.inkDisabled}>
         {label}
       </Text>
     </View>
+  );
+
+  if (!onPress) return row;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={label}
+      hitSlop={8}
+    >
+      {row}
+    </Pressable>
   );
 }
 

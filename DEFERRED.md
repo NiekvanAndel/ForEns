@@ -278,6 +278,29 @@ Two things to check on a device:
 2. Whether any label disappears. That would mean a layer whose `text-field` mentions
    a name but draws something else, and the fix is to exclude it by id.
 
+### A running rainfall total on 'Grafiek' (9 Sep 2026)
+
+- **Rainfall carries a cumulative line over its bars**, computed in
+  `core/model/series.ts` and drawn on top of them. It turns "it rained a bit most
+  hours" into "and that came to eleven millimetres", which is what a rainfall chart
+  is opened for. Only rainfall has one: a running total of temperatures is a number
+  with no meaning.
+- **The total starts at the left edge of the chosen window**, not at midnight or at
+  the start of the record — a total that began off screen is one the reader cannot
+  check. A gap carries the level forward rather than breaking the line: an unreported
+  hour is unknown, not an hour that undid what fell before it. At day resolution the
+  day's total is added once, after the bucketing.
+- **It shares the bars' axis, as asked**, rather than taking a second one down the
+  right-hand edge. Two scales on a phone is two things to hold in your head at a
+  glance, and the reason to want the total here is to see it against the showers that
+  produced it. The cost is real: a month's total dwarfs any single hour, so the bars
+  flatten under it.
+- **Which is why the legend entry is a switch.** Tapping it drops the line, and the
+  axis then fits the bars alone, because `SeriesChart` scales to what is actually
+  drawn. So the toggle is not a nicety but the other half of the decision to share
+  the axis. Switched off, the entry dims and keeps its place — a legend entry that
+  vanished when you used it would be a control you could turn off once.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an
