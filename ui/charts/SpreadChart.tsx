@@ -49,6 +49,10 @@ export interface SpreadChartProps {
   /** Unit suffix for the axis labels. Kept short: it rides the top gridline, where
    *  a long unit collides with the plot. */
   unit?: string;
+  /** Marks the secondary line in the cursor's readout, e.g. "⤴" for gusts. Without
+   *  it the secondary is drawn but not read out: two bare numbers in one label say
+   *  nothing about which line each came from. */
+  secondaryLabel?: string;
   /** Unit for the cursor's readout, where the axis abbreviates. Wind labels its axis
    *  with nothing and sunshine with "m", and neither is what a reader pointing at an
    *  hour wants to be told. Defaults to the axis unit. */
@@ -68,7 +72,8 @@ const PAD_BOTTOM = 18;
 const GRID_LINES = 3;
 
 export function SpreadChart({
-  labels, series, color, unit = '', valueUnit, height = 140, showZero, clampMin,
+  labels, series, color, unit = '', valueUnit, secondaryLabel,
+  height = 140, showZero, clampMin,
 }: SpreadChartProps) {
   const { palette } = useTheme();
   const [width, setWidth] = useState(0);
@@ -178,14 +183,19 @@ export function SpreadChart({
   const at = cursor != null && cursor < n ? cursor : null;
   const atValue = at != null ? series.values[at] ?? null : null;
   const atBand = at != null ? series.band?.[at] ?? null : null;
+  const atSecondary = at != null ? series.secondary?.[at] ?? null : null;
   const cursorX = at != null ? px(at) : 0;
   const cursorY = atValue != null ? py(atValue) : null;
+  const secondaryY = atSecondary != null ? py(atSecondary) : null;
 
   const readUnit = valueUnit ?? unit;
   const reading = [
     at != null ? `${labels[at]}:00` : '',
     atValue != null ? `${formatTick(atValue)}${readUnit}` : '—',
     atBand ? `${formatTick(atBand.lo)}–${formatTick(atBand.hi)}${readUnit}` : '',
+    secondaryLabel && atSecondary != null
+      ? `${secondaryLabel} ${formatTick(atSecondary)}${readUnit}`
+      : '',
   ].filter(Boolean).join(' · ');
 
   // Beside the point, and inside the chart: pinned above unless the point is too
@@ -286,6 +296,17 @@ export function SpreadChart({
                   strokeWidth={2}
                 />
               ) : null}
+              {/* Hollow, as the secondary line is dashed: the filled dot is the
+                  value the chart is about, this one is the line above it. */}
+              {secondaryLabel && secondaryY != null ? (
+                <Circle
+                  cx={cursorX} cy={secondaryY} r={3.5}
+                  fill={palette.appCard}
+                  stroke={color}
+                  strokeWidth={1.5}
+                  opacity={0.9}
+                />
+              ) : null}
             </G>
           ) : null}
         </Svg>
@@ -312,11 +333,14 @@ export function SpreadChart({
               borderRadius: radius.tile,
               paddingVertical: 4,
               paddingHorizontal: space[2],
+              // Wind reads out four parts with a unit on three of them. A second
+              // line is better than a clipped one on a narrow phone.
+              maxWidth: Math.max(0, width),
             },
             shadowFloat,
           ]}
         >
-          <Text variant="caption" weight="bold" color={palette.inkHeading} tabular numberOfLines={1}>
+          <Text variant="caption" weight="bold" color={palette.inkHeading} tabular numberOfLines={2}>
             {reading}
           </Text>
         </View>

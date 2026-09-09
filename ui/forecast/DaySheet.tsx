@@ -447,6 +447,7 @@ function LayerSection({
             color={palette.inkHeading}
             unit=""
             valueUnit={` ${windUnitLabel(prefs.windUnit)}`}
+            secondaryLabel="⤴"
             showZero
             clampMin={0}
             series={{
