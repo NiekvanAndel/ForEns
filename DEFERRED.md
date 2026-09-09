@@ -227,12 +227,17 @@ Tapping a block on 'Actueel' opens it for every saved location, as the web app's
   nowcast has nothing to say about the location while the radar loop is still
   perfectly good. `hasNowcastCurve` answers it in one place so the two pages cannot
   disagree with what the panel actually drew.
-- **On the map page the two trade places on the same gesture.** The slider's height
-  and opacity are the exact inverse of the curve's, off the same shared value, so the
-  panel keeps its height through the fold. It is `pointerEvents: none` while the
-  curve is up, or an invisible slider would swallow drags meant for the curve. With
-  no curve at all there is nothing to fold, so the grabber goes and the slider simply
-  stands.
+- **On the map page the two trade places on the same gesture.** Open, the panel is
+  the curve and its header — place, intensity, and a small play button beside the
+  name. Swiped down, all of it folds away and what is left is one row: a full-sized
+  play button and the slider beside it. Heights and opacities are exact inverses off
+  the same shared value, so the panel keeps its height through the fold. The row is
+  `pointerEvents: none` while the curve is up, or an invisible slider would swallow
+  drags meant for the curve. With no curve at all there is nothing to fold, so the
+  grabber goes and the row simply stands.
+- **The play button is in whichever control is on screen**, small in the panel's
+  header and full-sized at the head of the slider row. They are never both visible,
+  so neither duplicates the other.
 - **The playback timer moved into `useRadarFrames`.** It ran inside `Timeline`, which
   was fine while the scrubber was always on screen and is a bug now that it is not:
   playback would have stopped because its own progress bar was hidden. Whoever owns

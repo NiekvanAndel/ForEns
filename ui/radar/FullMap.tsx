@@ -29,22 +29,25 @@
  * that does it elsewhere belongs to the pages under the tab bar, and a map you can
  * pan is no place for a gesture that navigates.
  *
- * ## The curve folds away, and the slider takes its place
+ * ## The panel has two states, and each is one control
  *
- * Sometimes the map is the whole point and the panel is a band across the bottom of
- * it, so the profile can be swiped down. But the curve *is* the scrubber here —
- * dragging its handle moves the loop — so folding it away would leave the loop with
- * nothing to drag. The slider is folded in as the curve folds out: one control
- * replacing another, on the same gesture, so the panel keeps its height and the loop
- * stays scrubbable at both ends of the drag.
+ * Open, it is the curve with its header: the place, how hard it is raining at the
+ * frame on screen, and a small play button beside the name. The curve is the
+ * scrubber — dragging its handle moves the loop.
  *
- * The header never moves. It carries the place name and the play button, and a
- * control that disappears when you push the thing above it is a control you cannot
- * find again.
+ * Swiped down, all of that folds away and what is left is a single row: a full-sized
+ * play button and the slider beside it. Sometimes the map is the whole point and the
+ * panel should be a band across the bottom of it, and this is the smallest thing
+ * that still drives the loop.
+ *
+ * The two trade places on one gesture — the row unfolds by exactly what the curve
+ * gives up — so the panel keeps its height and the loop is scrubbable at both ends of
+ * the drag. Nothing is shown twice: the header's play button and the row's are never
+ * on screen together.
  *
  * Where there is no curve at all — a location the nowcast does not reach — there is
- * nothing to fold, so the grabber goes and the slider simply stands. The rule under
- * both cases is the same one: something on screen has to be draggable.
+ * nothing to fold, so the grabber goes and the row simply stands. The rule under
+ * every case is the same one: something on screen has to be draggable.
  */
 import { useState } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
@@ -57,7 +60,7 @@ import { duration, radius, shadowFloat, space, useTheme } from '../../theme';
 import { Icon } from '../Icon';
 import { RadarMap, MAP_CHROME_SIZE, type PlacePin } from './RadarMap';
 import { Timeline } from './Timeline';
-import { hasNowcastCurve, NowcastHeader, NowcastPanel } from './NowcastPanel';
+import { hasNowcastCurve, NowcastPanel } from './NowcastPanel';
 import { mapChrome } from './mapStyle';
 import { frameAtFraction } from './useRadarFrames';
 import {
@@ -66,12 +69,14 @@ import {
 import { usePrefs } from '../../state/prefs';
 import { ta } from '../../core/i18n';
 
-/** Enough for the curve and its axis — the header is not inside this, so it is not
- *  counted. Animating a fixed maximum is what lets the fold be a height rather than
- *  a measurement; set too high, the first part of it does nothing visible. */
-const PROFILE_MAX_HEIGHT = 150;
-/** The slider and the air around it, which is what unfolds as the curve folds. */
-const TIMELINE_HEIGHT = 52;
+/** The header, the curve and its axis. Animating a fixed maximum is what lets the
+ *  fold be a height rather than a measurement; set too high, the first part of it
+ *  does nothing visible. */
+const PROFILE_MAX_HEIGHT = 190;
+/** The play button, the slider and the air above them — what unfolds as the curve
+ *  folds. The 42pt button is the tallest thing in the row; set this higher and the
+ *  last part of the fold animates a height nothing occupies. */
+const TIMELINE_HEIGHT = 50;
 
 export interface FullMapProps {
   /** Leaves the page. The route hands in `router.back()`. */
@@ -223,20 +228,6 @@ export function FullMap({
               </Pressable>
             ) : null}
 
-            {/* Outside the collapse: the name says which place the loop is over and
-                the play button drives it, and neither stops mattering because the
-                curve has been pushed out of the way. */}
-            <View style={{ paddingHorizontal: space[5], paddingBottom: space[2] }}>
-              <NowcastHeader
-                profile={profile}
-                offsetMin={offsetMin}
-                locationName={locationName}
-                playing={playing}
-                onTogglePlay={onTogglePlay}
-                playDisabled={frames.length < 2}
-              />
-            </View>
-
             <Animated.View style={[{ overflow: 'hidden' }, profileStyle]}>
               <NowcastPanel
                 profile={profile}
@@ -246,7 +237,9 @@ export function FullMap({
                 locationName={locationName}
                 onScrubFraction={scrubTo}
                 boundaryFraction={forecastBoundary(frames, axis?.positions)}
-                showHeader={false}
+                playing={playing}
+                onTogglePlay={onTogglePlay}
+                playDisabled={frames.length < 2}
               />
             </Animated.View>
           </View>

@@ -12,28 +12,38 @@
  * the time axis — three more timestamps under it would be the same information
  * twice, in a place where height is what the map wants.
  *
- * ## What is left here, and where it is shown
+ * ## Where this row is shown, and what it carries
  *
- * Play and pause moved up beside the location name in `NowcastPanel`, and the timer
- * that drives them moved into `useRadarFrames` — whoever owns the index owns the
- * clock. What is left is the track, which is pure presentation.
+ * Not on screen most of the time. The chart above is the scrubber wherever there is
+ * a curve to drag: one control, read and moved in the same place. This row appears
+ * only where that curve is not there to be dragged — folded away on the map page, or
+ * absent on a location the nowcast has nothing to say about. Two causes, one rule:
+ * something on screen has to be draggable.
  *
- * It is not on screen most of the time. The chart above is the scrubber wherever
- * there is a curve to drag: one control, read and moved in the same place. This row
- * appears only where that curve is not there to be dragged — folded away on the map
- * page, or absent on a location the nowcast has nothing to say about. Two causes,
- * one rule: something on screen has to be draggable.
+ * Play and pause are optional here, and they belong to whichever of the two controls
+ * is actually on screen. The panel's header carries a small one beside the location
+ * name while the curve is up; on the map page, where the header folds away with the
+ * curve, this row carries a full-sized one at its head instead. They are never both
+ * visible, so neither is a duplicate of the other.
+ *
+ * The timer that steps the loop is in `useRadarFrames` rather than here — whoever
+ * owns the index owns the clock, and this row is not always mounted to keep one.
  */
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Scrubber } from './Scrubber';
-import { space, useTheme } from '../../theme';
+import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
+import { Icon } from '../Icon';
 import { forecastBoundary, frameClock, type RadarFrame } from '../../core/radar';
 
 export interface TimelineProps {
   frames: RadarFrame[];
   index: number;
   onIndexChange: (i: number) => void;
+  /** A full-sized play button at the head of the row. Omitted where the panel's own
+   *  header is on screen and already carries one. */
+  playing?: boolean;
+  onTogglePlay?: () => void;
   /** The from/at/to row above the slider. */
   showLabels?: boolean;
   /** Where each frame sits on the track, 0–1, when a chart above shares the axis. */
@@ -42,12 +52,29 @@ export interface TimelineProps {
 
 export function Timeline({
   frames, index, onIndexChange, showLabels = true, stepPositions,
+  playing, onTogglePlay,
 }: TimelineProps) {
   const { palette } = useTheme();
   const last = Math.max(0, frames.length - 1);
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+      {onTogglePlay ? (
+        <Pressable
+          onPress={onTogglePlay}
+          accessibilityRole="button"
+          accessibilityLabel={playing ? 'Animatie pauzeren' : 'Animatie afspelen'}
+          disabled={frames.length < 2}
+          style={{
+            width: 42, height: 42, borderRadius: radius.pill,
+            backgroundColor: frames.length < 2 ? palette.inkDisabled : palette.accent,
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Icon name={playing ? 'pause' : 'play'} size={18} color="#fff" weight="fill" />
+        </Pressable>
+      ) : null}
+
       <View style={{ flex: 1 }}>
         {showLabels ? (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>

@@ -34,10 +34,9 @@
  * they are next to the other thing this panel says about the loop as a whole, and
  * the track gets the full width it wants.
  *
- * That header is exported on its own, because on the map page the chart folds away
- * and the play button must not fold with it — a control that disappears when you
- * push the thing above it is a control you cannot find again. There, the header is
- * drawn outside the collapsing region and the panel is asked to leave its own out.
+ * It folds away with the curve on the map page, which is only safe because the row
+ * that replaces it there carries a full-sized play button of its own — see
+ * `FullMap`. The two are never on screen at once.
  *
  * The dashed rule at the observed/forecast boundary is the same mark the scrubber
  * puts on its track, from the same `forecastBoundary` — two drawings of one
@@ -103,11 +102,9 @@ export interface NowcastPanelProps {
   onTogglePlay?: () => void;
   /** Nothing to play: a loop of one frame, or none loaded. */
   playDisabled?: boolean;
-  /** False where the caller draws `NowcastHeader` itself, outside this panel. */
-  showHeader?: boolean;
 }
 
-export interface NowcastHeaderProps {
+interface NowcastHeaderProps {
   profile: NowcastProfile | null;
   /** Minutes from now the loop is showing, for the intensity on the right. */
   offsetMin: number;
@@ -125,7 +122,7 @@ export interface NowcastHeaderProps {
  * belongs to the radar loop, which may be perfectly good over a location the
  * nowcast has nothing to say about.
  */
-export function NowcastHeader({
+function NowcastHeader({
   profile, offsetMin, locationName, playing, onTogglePlay, playDisabled,
 }: NowcastHeaderProps) {
   const { palette } = useTheme();
@@ -183,7 +180,7 @@ export function NowcastHeader({
 
 export function NowcastPanel({
   profile, offsetMin, width, compact, domain, locationName, onScrubFraction,
-  boundaryFraction, playing, onTogglePlay, playDisabled, showHeader = true,
+  boundaryFraction, playing, onTogglePlay, playDisabled,
 }: NowcastPanelProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -243,7 +240,7 @@ export function NowcastPanel({
   // Ticks across the whole axis, not only where the curve is.
   const ticks = [0, 0.33, 0.66, 1].map((f) => from + f * spanMin);
 
-  const header = showHeader ? (
+  const header = (
     <NowcastHeader
       profile={profile}
       offsetMin={offsetMin}
@@ -252,12 +249,11 @@ export function NowcastPanel({
       onTogglePlay={onTogglePlay}
       playDisabled={playDisabled}
     />
-  ) : null;
+  );
 
   const frame = {
     paddingHorizontal: space[5],
-    // No header of its own means the caller has already left room above it.
-    paddingTop: showHeader ? (compact ? space[4] : space[3]) : 0,
+    paddingTop: compact ? space[4] : space[3],
     // On the radar card this is usually the last thing in it, so the axis labels
     // need air under them; on the map page a slider follows and would be pushed off.
     paddingBottom: compact ? space[4] : space[2],
