@@ -573,3 +573,27 @@ The design shows a one-tap "Verbinden met AgroExact" toggle, implying an account
 connection. The app asks for an API token instead, because that is what the API
 supports today. The token is stored in the keychain via `expo-secure-store`. If a real
 OAuth endpoint appears, the toggle can drive it without the settings layout changing.
+
+### The temperature scale, and where it stops
+
+Temperatures printed as a single number take their colour from the design's scale
+(`core/model/temperatureColor.ts`): the blocks on 'Actueel', the hour rows and the
+hour strip on 'Verwachting', the nowcast's hour slider, and the hero's current
+reading. The number and its ink then say the same thing, which a single amber never
+did.
+
+Three things deliberately stay out of it, decided with the client (9 Sep 2026):
+
+- **Lines and their labels keep the amber.** The temperature line in the meteogram,
+  the spread chart in the day sheet, and the series on 'Grafiek' — line, pill and
+  legend alike — each colour a whole run of values at once, and a pill has no
+  temperature. Colouring them would mean a gradient along the path, which is a
+  larger change than it looks and buys little on a chart that already has an axis.
+- **A day's high and low keep red and blue.** There the colour means "this is the top
+  of the day", not "this is warm"; putting both meanings in one channel loses the
+  first.
+- **The two tables are derived, not live.** Hue is the design's to a tenth of a
+  degree; only lightness moved, and only on the four stops that could not be read —
+  mint and yellow against a white card, dark blue and dark red against navy. The
+  derivation is a note in the module and a floor enforced by
+  `tests/temperatureColor.test.ts`, not code that recomputes it at draw time.

@@ -22,6 +22,7 @@ import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, fmtMm } from '../../core/i18n';
 import type { Hour } from '../../core/model/types';
 import { sunnyHourWmo } from '../../core/model/conditions';
+import { temperatureColor } from '../../core/model/temperatureColor';
 
 const BAR_HEIGHT = 34;
 const CELL_WIDTH = 74;
@@ -78,7 +79,12 @@ export function HourStrip({ hours, nowIndex = 0 }: HourStripProps) {
               <WeatherIcon wmo={sunnyHourWmo(h)} isDay={h.isDay} size={24} />
             </View>
 
-            <Text variant="bodySm" weight="bold" color={palette.valTemp} tabular>
+            <Text
+              variant="bodySm"
+              weight="bold"
+              color={temperatureColor(h.temp, appearance) ?? palette.valTemp}
+              tabular
+            >
               {convTemp(h.temp, prefs.tempUnit) ?? '—'}°
             </Text>
 

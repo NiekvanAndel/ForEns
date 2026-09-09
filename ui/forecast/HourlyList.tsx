@@ -43,6 +43,7 @@
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { space, useTheme } from '../../theme';
+import { temperatureColor } from '../../core/model/temperatureColor';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
@@ -221,8 +222,9 @@ function Col({
 
 /** The one number this list is about. */
 function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
-  const { palette } = useTheme();
+  const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
+  const tempInk = temperatureColor(hour.temp, appearance) ?? palette.valTemp;
 
   switch (layer) {
     case 'precip':
@@ -242,7 +244,7 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
           <Pair
             value={convTemp(hour.temp, prefs.tempUnit)}
             unit={tempUnitLabel(prefs.tempUnit)}
-            color={palette.valTemp}
+            color={tempInk}
           />
         </Col>
       );
@@ -298,7 +300,7 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
             <Pair
               value={convTemp(hour.temp, prefs.tempUnit)}
               unit={tempUnitLabel(prefs.tempUnit)}
-              color={palette.valTemp}
+              color={tempInk}
             />
           </Col>
           <Col flex={2.8} minWidth={56}>

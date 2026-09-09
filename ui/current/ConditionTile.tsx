@@ -33,6 +33,7 @@ import { Card } from '../Card';
 import { Text } from '../Text';
 import { usePrefs } from '../../state/prefs';
 import type { Tile } from '../../core/model/tiles';
+import { temperatureColor } from '../../core/model/temperatureColor';
 import {
   degToCompass, fmtMm, fmtTempValue, fmtWindValue, windUnitLabel,
 } from '../../core/i18n';
@@ -59,22 +60,22 @@ export function tileReading(
 }
 
 export function ConditionTile({ tile, onPress }: { tile: Tile; onPress?: () => void }) {
-  const { palette } = useTheme();
+  const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
   const { value, unit } = tileReading(tile, prefs);
 
   // Rainfall is the reading this app is opened for, so it keeps the colour it has
   // everywhere else — and a zero stays dimmed, so a real number stands out in a grid
-  // of them. Temperature carries the same three inks as 'Verwachting': amber for a
-  // reading, red for a day's high, blue for its low, so a number means the same thing
-  // on whichever page the reader meets it. Everything else is heading ink: a grid
-  // where every block shouts is a grid where nothing does.
+  // of them. A temperature takes its colour from the scale, so the number and its
+  // ink say the same thing; a day's high and low keep red and blue, because there the
+  // colour means 'this is the top of the day', not 'this is warm'. Everything else is
+  // heading ink: a grid where every block shouts is a grid where nothing does.
   const ink =
     tile.kind === 'mm'
       ? (tile.value ?? 0) > 0 ? palette.valPrecip : palette.valPrecipZero
       : tile.id === 'temp-max' ? palette.valHigh
         : tile.id === 'temp-min' ? palette.valLow
-          : tile.kind === 'temp' ? palette.valTemp
+          : tile.kind === 'temp' ? temperatureColor(tile.value, appearance) ?? palette.valTemp
             : palette.appValue;
 
   const body = (

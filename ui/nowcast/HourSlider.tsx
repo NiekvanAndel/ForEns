@@ -30,6 +30,7 @@ import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, fmtMm } from '../../core/i18n';
 import { hourWindow } from '../../core/model/hourWindow';
 import { sunnyHourWmo } from '../../core/model/conditions';
+import { temperatureColor } from '../../core/model/temperatureColor';
 import type { ForecastModel, Hour } from '../../core/model/types';
 
 /** Wide enough for "12,4" under a wind arrow without either touching the cell's
@@ -94,7 +95,7 @@ export function HourSlider({ model, onPressHour }: HourSliderProps) {
             <Text
               variant="bodySm"
               weight="bold"
-              color={palette.valTemp}
+              color={temperatureColor(h.temp, appearance) ?? palette.valTemp}
               tabular
               style={{ fontSize: TEMP_SIZE }}
             >

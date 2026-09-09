@@ -73,6 +73,7 @@ import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
 import { fmtMm, fmtTempValue, fmtWindValue, windUnitLabel, ta } from '../../core/i18n';
+import { temperatureColor } from '../../core/model/temperatureColor';
 import { recent24 } from '../../core/model/station';
 import type { ForecastModel } from '../../core/model/types';
 import type { SavedLocation } from '../../core/prefs';
@@ -99,7 +100,7 @@ export interface ConditionsHeroProps {
 export function ConditionsHero({
   model, location, sourceLabel, timeLabel, onPress,
 }: ConditionsHeroProps) {
-  const { palette } = useTheme();
+  const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
   const lang = prefs.lang;
 
@@ -195,7 +196,11 @@ export function ConditionsHero({
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-          <Text variant="stat" color={palette.appValue} tabular>
+          <Text
+            variant="stat"
+            color={temperatureColor(now.temp, appearance) ?? palette.appValue}
+            tabular
+          >
             {fmtTempValue(now.temp, prefs.tempUnit)}°
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
