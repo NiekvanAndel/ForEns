@@ -2,18 +2,18 @@
  * Radar provider registry.
  *
  * Screens resolve their provider through `activeProvider()` and never construct one,
- * so adding ExactCast's own radar and nowcast means registering an adapter here and
- * changing the default — nothing in the UI moves.
+ * so a different radar source means registering an adapter here and changing the
+ * default — nothing in the UI moves.
  */
 import type { RadarProvider } from './types';
-import { RainViewerProvider } from './rainviewer';
+import { ExactCastProvider } from './exactcast';
 
 export * from './types';
 export * from './labels';
-export { RainViewerProvider, buildProfile } from './rainviewer';
+export { ExactCastProvider, buildProfile, isWithinGrid, boundsFromMercator } from './exactcast';
 
 const providers = new Map<string, RadarProvider>();
-let activeId = 'rainviewer';
+let activeId = 'exactcast';
 
 export function registerProvider(provider: RadarProvider): void {
   providers.set(provider.id, provider);
@@ -38,4 +38,4 @@ export function listProviders(): RadarProvider[] {
   return [...providers.values()];
 }
 
-registerProvider(new RainViewerProvider());
+registerProvider(new ExactCastProvider());

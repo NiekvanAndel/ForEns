@@ -1,8 +1,8 @@
 /**
  * The radar preview card.
  *
- * Shows the real RainViewer tiles at the current location, with the "you are here"
- * pin and any nearby AgroExact station. Tapping opens the full Radar screen.
+ * Shows the live radar imagery at the current location, with the "you are here" pin
+ * and any nearby AgroExact station. Tapping opens the full Radar screen.
  *
  * Interaction is deliberately off here: this is a preview that opens a screen, so a
  * pan gesture inside it would fight the page scroll.
@@ -16,17 +16,18 @@
  * smoothness of the very gesture the preview is there to serve, and nobody reads a
  * radar image travelling across the screen.
  *
- * It does NOT set `maximumNativeZ`. That prop switches react-native-maps onto its
- * cached-overlay path, which refetches and rescales tiles itself — worth it on the
- * radar screen, where a reader can zoom past the provider's deepest level, and not
- * worth it here, where the region is fixed and cannot over-zoom. Setting it anyway
- * is what put "Zoom Level Not Supported" tiles across this card.
+ * It does NOT ask `RadarLayer` to cache tiles. That path switches react-native-maps
+ * onto its cached-overlay behaviour, which refetches and rescales tiles itself —
+ * worth it on the radar screen, where a reader can zoom past the provider's deepest
+ * level, and not worth it here, where the region is fixed and cannot over-zoom.
+ * Setting it anyway is what put "Zoom Level Not Supported" tiles across this card.
  */
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import MapView, { Marker, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { START_SPAN_DEG, mapChrome } from '../radar/mapStyle';
+import { RadarLayer, useWarmFrames } from '../radar/RadarLayer';
 import { Card, CardHeader } from '../Card';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
@@ -58,12 +59,13 @@ export interface RadarPreviewProps {
  *  played, and then steps through them.
  *
  *  A page being swiped past fetches nothing: it draws a still panel instead of a
- *  map, so the frames would be downloaded for something never shown. */
-export function useFrames(): RadarFrame[] {
+ *  map, so the frames would be downloaded for something never shown. Neither does a
+ *  location the radar does not reach, which has no frames to show. */
+export function useFrames(enabled = true): RadarFrame[] {
   const [frames, setFrames] = useState<RadarFrame[]>([]);
   const peeking = usePeeking();
   useEffect(() => {
-    if (peeking) return;
+    if (peeking || !enabled) return;
     let alive = true;
     activeProvider()
       .listFrames()
@@ -72,7 +74,7 @@ export function useFrames(): RadarFrame[] {
         // No frames: the map still renders, just without a radar overlay.
       });
     return () => { alive = false; };
-  }, [peeking]);
+  }, [peeking, enabled]);
   return frames;
 }
 
@@ -82,8 +84,11 @@ export function RadarPreview({
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
   const peeking = usePeeking();
-  const frames = useFrames();
   const provider = activeProvider();
+  // Outside the radar's coverage the card is still a useful map of where you are,
+  // but nothing on it may claim to be radar: no frames, no clock, no play button.
+  const covered = provider.coversPoint(lat, lon);
+  const frames = useFrames(covered);
   const chrome = mapChrome(palette, appearance);
 
   // Playing the loop here answers "which way is it moving?" without leaving the
@@ -126,6 +131,9 @@ export function RadarPreview({
 
   const frame = frames[index] ?? null;
 
+  // Warm the frames so pressing play steps rather than stutters.
+  useWarmFrames(provider, frames);
+
   const time = frame
     ? new Date(frame.timeMs).toLocaleTimeString(prefs.lang, { hour: '2-digit', minute: '2-digit' })
     : '—';
@@ -138,7 +146,7 @@ export function RadarPreview({
         action={ta('full', prefs.lang)}
         onAction={onOpen}
         adornment={
-          frames.length > 1 ? (
+          covered && frames.length > 1 ? (
             <Pressable
               onPress={togglePlaying}
               accessibilityRole="button"
@@ -182,16 +190,7 @@ export function RadarPreview({
             toolbarEnabled={false}
             userInterfaceStyle={appearance}
           >
-            {frame ? (
-              <UrlTile
-                key={frame.id}
-                urlTemplate={provider.tileTemplate({ frame })}
-                maximumZ={provider.maxZoom}
-                tileSize={provider.tileSize}
-                zIndex={1}
-                opacity={0.75}
-              />
-            ) : null}
+            {covered ? <RadarLayer provider={provider} frame={frame ?? undefined} /> : null}
             {/* A small dot, matching the radar page — MapKit's teardrop at pin size
                 covered a county on a card this scale. */}
             <Marker
@@ -218,21 +217,23 @@ export function RadarPreview({
           </MapView>
           )}
 
-          <View
-            style={[
-              {
-                position: 'absolute', right: 12, top: 12,
-                backgroundColor: chrome.bg,
-                borderRadius: radius.pill,
-                paddingVertical: 6, paddingHorizontal: space[3],
-              },
-              shadowFloat,
-            ]}
-          >
-            <Text variant="caption" weight="bold" color={chrome.ink} tabular>
-              {playing ? time : `nu · ${time}`}
-            </Text>
-          </View>
+          {covered ? (
+            <View
+              style={[
+                {
+                  position: 'absolute', right: 12, top: 12,
+                  backgroundColor: chrome.bg,
+                  borderRadius: radius.pill,
+                  paddingVertical: 6, paddingHorizontal: space[3],
+                },
+                shadowFloat,
+              ]}
+            >
+              <Text variant="caption" weight="bold" color={chrome.ink} tabular>
+                {playing ? time : `nu · ${time}`}
+              </Text>
+            </View>
+          ) : null}
         </View>
       </Pressable>
     </Card>

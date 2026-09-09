@@ -1,14 +1,8 @@
 /**
  * The radar map.
  *
- * Only the active frame is mounted, keyed so it remounts when the frame changes.
- *
- * An earlier version mounted every frame and drove visibility with `opacity`, to
- * avoid a flash between steps. On iOS that renders nothing at all: react-native-maps
- * does not honour per-overlay opacity on `UrlTile`, so all sixteen overlays stacked
- * and the map stayed blank. The radar preview on the Nowcast screen, which has
- * always mounted a single overlay, is what showed the difference. Correctness beats
- * the optimisation — MapKit's own tile cache makes replay smooth after one pass.
+ * The imagery itself is drawn by `RadarLayer`, which is shared with the preview card
+ * and holds the reasoning about mounting one frame at a time.
  *
  * Zoom limits and pin rendering are explained in ./mapStyle, which the preview on
  * 'Nu' shares.
@@ -23,11 +17,12 @@
  */
 import { useEffect, useRef } from 'react';
 import { View, Pressable } from 'react-native';
-import MapView, { Marker, UrlTile, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
-import { MAX_DISPLAY_Z, MIN_ZOOM, START_SPAN_DEG, mapChrome, maxZoomFor } from './mapStyle';
+import { MIN_ZOOM, START_SPAN_DEG, mapChrome, maxZoomFor } from './mapStyle';
+import { RadarLayer, useWarmFrames } from './RadarLayer';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import { usePeeking } from '../peek';
 import type { SavedLocation } from '../../core/prefs';
@@ -102,6 +97,10 @@ export function RadarMap({
 
   const active = frames[activeIndex] ?? frames[frames.length - 1];
 
+  // Fill the image cache so stepping through the loop does not re-download a frame
+  // each time; only the frame on screen is mounted.
+  useWarmFrames(provider, frames);
+
   const zoom = (factor: number) => {
     const r = region.current;
     const next = {
@@ -150,17 +149,7 @@ export function RadarMap({
         minZoomLevel={MIN_ZOOM}
         maxZoomLevel={maxZoomFor(provider.maxZoom)}
       >
-        {active ? (
-          <UrlTile
-            key={active.id}
-            urlTemplate={provider.tileTemplate({ frame: active })}
-            maximumNativeZ={provider.maxZoom}
-            maximumZ={MAX_DISPLAY_Z}
-            tileSize={provider.tileSize}
-            zIndex={1}
-            opacity={0.75}
-          />
-        ) : null}
+        <RadarLayer provider={provider} frame={active} cacheTiles />
 
         {/* A small dot rather than MapKit's teardrop, which at pin size covered a
             county. Drawn as a marker child with tracking left on: freezing the

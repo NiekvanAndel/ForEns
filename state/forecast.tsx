@@ -175,10 +175,17 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
       setPhase('ready');
 
       // The nowcast profile feeds the alert hero; it must not block the day list.
-      activeProvider()
-        .nowcastProfile(coords.lat, coords.lon, signal)
-        .then((p) => { if (live()) setNowcast(p); })
-        .catch(() => { /* the hero simply shows no bars */ });
+      // A location outside the radar's coverage is not asked at all — there is no
+      // answer to fetch, and the radar page says so in words.
+      const radar = activeProvider();
+      if (radar.coversPoint(coords.lat, coords.lon)) {
+        radar
+          .nowcastProfile(coords.lat, coords.lon, signal)
+          .then((p) => { if (live()) setNowcast(p); })
+          .catch(() => { /* the hero simply shows no bars */ });
+      } else if (live()) {
+        setNowcast(null);
+      }
 
       const s2 = await loadStage2(coords, { signal });
       if (!live()) return;

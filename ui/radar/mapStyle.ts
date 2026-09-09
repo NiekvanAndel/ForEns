@@ -21,21 +21,22 @@
  * what produced "Zoom Level Not Supported" — past it MapKit stopped drawing rather
  * than upscaling.
  *
- * Upscaling has a limit of its own, though: stretched far enough the tiles are mush,
- * and RainViewer serves a placeholder image rather than a tile at some levels. So the
- * map is clamped at *both* ends — `MIN_ZOOM` because the whole-world levels are the
- * ones most likely to be missing, `maxZoomFor` a little past the native maximum —
- * and every starting region is chosen to sit inside that band.
+ * Upscaling has a limit of its own, though: stretched far enough the imagery is
+ * mush. So the map is clamped at *both* ends — `MIN_ZOOM` because the whole-world
+ * levels are the ones a provider is most likely to be missing, `maxZoomFor` a little
+ * past the native maximum — and every starting region is chosen to sit inside that
+ * band.
  *
  * ## Why the map is told the tile size
  *
- * MapKit chooses which zoom level to fetch from the tile size it is given, not from
- * the zoom the map is displaying. Told 256, it asks for roughly two levels deeper on
- * a 3× screen — which is how a view of the whole country still managed to request
- * tiles past what RainViewer publishes and get its "zoom level not supported"
- * placeholder back, drawn across the map as if it were weather. The provider now
- * declares its tile size and serves retina tiles, so the level requested is close to
- * the level shown.
+ * This applies to a tile provider only; an overlay provider hands the map one image
+ * and never a pyramid. MapKit chooses which zoom level to fetch from the tile size it
+ * is given, not from the zoom the map is displaying. Told 256, it asks for roughly
+ * two levels deeper on a 3× screen — which is how a view of the whole country
+ * managed to request tiles past what a provider publishes and get a "zoom level not
+ * supported" placeholder back, drawn across the map as if it were weather. A tile
+ * provider therefore declares its tile size and serves retina tiles, so the level
+ * requested is close to the level shown.
  */
 import type { Appearance, Palette } from '../../theme';
 
