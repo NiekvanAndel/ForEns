@@ -61,12 +61,24 @@ export interface SeriesMeta {
    *  compass wants it: on a dynamic axis a day that blew between 170° and 190°
    *  fills the plot with what is very nearly one steady direction. */
   axisFixed?: boolean;
+  /**
+   * Whether the band's edges are worth naming and drawing on their own.
+   *
+   * Temperature and humidity: the day's coldest and warmest, the driest and dampest
+   * hour, are readings a grower acts on. Wind and radiation get a band too at day
+   * resolution, but it is the spread of hourly means rather than a reported extreme
+   * — a number to look at, not one to put a coloured line through and a word under.
+   */
+  edges?: boolean;
 }
 
 export const SERIES_META: Record<SeriesKey, SeriesMeta> = {
-  temp: { key: 'temp', shape: 'line', summary: 'range' },
+  temp: { key: 'temp', shape: 'line', summary: 'range', edges: true },
   precip: { key: 'precip', shape: 'bar', summary: 'total', axisMin: 0 },
-  humidity: { key: 'humidity', shape: 'line', summary: 'range', axisMin: 0, axisMax: 100 },
+  humidity: {
+    key: 'humidity', shape: 'line', summary: 'range',
+    axisMin: 0, axisMax: 100, edges: true,
+  },
   wind: { key: 'wind', shape: 'line', summary: 'wind', axisMin: 0 },
   // A bearing has no meaningful line between two readings: north-west followed by
   // north-east is not "via south", which is what a stroke between 315 and 45 draws.

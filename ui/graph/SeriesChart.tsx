@@ -80,6 +80,19 @@ export interface SeriesChartProps {
   cumulativeLabel?: string;
   /** Its own colour, so it reads apart from the bars it runs over. */
   cumulativeColor?: string;
+  /**
+   * The three lines a banded series can draw, each on its own.
+   *
+   * The band's edges are worth picking out in colour where they mean something —
+   * the day's coldest and warmest, the driest and dampest hour — and worth being
+   * able to put away again, because three lines and a fill over thirty days is a
+   * great deal of ink for a reader who came to look at one of them.
+   */
+  showValue?: boolean;
+  showBandLo?: boolean;
+  showBandHi?: boolean;
+  bandLoColor?: string;
+  bandHiColor?: string;
   /** Short unit riding the top gridline. */
   unit?: string;
   /** Hard floor and ceiling for the axis, where the quantity has them — humidity
@@ -104,6 +117,7 @@ export function SeriesChart({
   secondaryLabel, unit = '', height = 190, emptyLabel,
   showCumulative, cumulativeLabel, cumulativeColor, axisMin, axisMax, axisFixed,
   formatAxis, gridLines = GRID_LINES,
+  showValue = true, showBandLo, showBandHi, bandLoColor, bandHiColor,
 }: SeriesChartProps) {
   const { palette } = useTheme();
   const [width, setWidth] = useState(0);
@@ -337,7 +351,7 @@ export function SeriesChart({
  * makes the two halves touch rather than leaving a notch between them.
  */
 function Lines({
-  samples, px, py, color, drawSecondary, cardColor,
+  samples, px, py, color, drawSecondary, cardColor, showValue = true, lo, hi,
 }: {
   samples: Sample[];
   px: (i: number) => number;
@@ -345,6 +359,11 @@ function Lines({
   color: string;
   drawSecondary: boolean;
   cardColor: string;
+  /** False hides the central line, leaving the band and whichever edges are up. */
+  showValue?: boolean;
+  /** Colour for the band's lower and upper edge, or null to leave it undrawn. */
+  lo?: string | null;
+  hi?: string | null;
 }) {
   const bandPath = (() => {
     const top: Point[] = [];
@@ -359,12 +378,35 @@ function Lines({
     return `${smoothPath(top)} ${lower} Z`;
   })();
 
-  const main = splitRuns(samples, (s) => s.value, px, py);
+  const main = showValue ? splitRuns(samples, (s) => s.value, px, py) : [];
   const secondary = drawSecondary ? splitRuns(samples, (s) => s.secondary, px, py) : [];
+  // The band's own edges, drawn through the same run splitting as everything else so
+  // they break where the data does and dash on the same side of the boundary.
+  const edges = [
+    { colour: lo, runs: lo ? splitRuns(samples, (s) => s.band?.lo, px, py) : [] },
+    { colour: hi, runs: hi ? splitRuns(samples, (s) => s.band?.hi, px, py) : [] },
+  ];
 
   return (
     <G>
       {bandPath ? <Path d={bandPath} fill={color} opacity={0.16} /> : null}
+
+      {/* Under the central line: it is the one the chart is about, and an edge drawn
+          over it would cross it wherever the two meet. */}
+      {edges.map(({ colour, runs }, e) =>
+        runs.map((r, i) => (
+          <Path
+            key={`e${e}-${i}`}
+            d={smoothPath(r.points)}
+            stroke={colour as string}
+            strokeWidth={1.5}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={r.future ? '5 4' : undefined}
+            opacity={r.future ? 0.6 : 0.9}
+          />
+        ))
+      )}
 
       {secondary.map((r, i) => (
         <Path

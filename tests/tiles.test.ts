@@ -364,6 +364,19 @@ describe('the measured spread inside an hour', () => {
   });
 });
 
+describe('which series name their band\'s edges', () => {
+  it('is temperature and humidity, and nothing else', () => {
+    // Those two report a minimum and a maximum a grower acts on. Wind and radiation
+    // get a band at day resolution too, but it is the spread of hourly means — a
+    // number to look at, not one to put a coloured line through and a word under.
+    expect(SERIES_META.temp.edges).toBe(true);
+    expect(SERIES_META.humidity.edges).toBe(true);
+    for (const key of ['precip', 'wind', 'windDir', 'radiation'] as const) {
+      expect(SERIES_META[key].edges).toBeUndefined();
+    }
+  });
+});
+
 describe('the two quantities added last', () => {
   const window = { from: '2026-06-15', to: '2026-06-15' };
 

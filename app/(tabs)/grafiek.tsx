@@ -49,6 +49,19 @@
  * switches the line off, and the axis goes back to fitting the bars alone. So the
  * legend is a control here, not a caption.
  *
+ * ## The band's edges are lines of their own
+ *
+ * Temperature and humidity report a minimum and a maximum, and those are readings a
+ * grower acts on rather than a shaded area to squint at. Each is drawn as its own
+ * line and each has its own legend switch, alongside one for the central line; one
+ * of the three always stays on, because a chart of nothing is a card with an axis
+ * in it.
+ *
+ * The two do not share a colour scheme. Warm is red and cold is blue, so
+ * temperature's maximum is red — but humidity runs the other way, since it is the
+ * *dry* end that is the hot, parched one. Following the number rather than the word
+ * is what keeps a reader from checking the legend twice.
+ *
  * The line is drawn in heading ink rather than in a second blue. Design rule 2 gives
  * every quantity its own colour, so a rainfall total cannot borrow the amber that
  * means temperature or the green that means a station — and a darker shade of the
@@ -133,6 +146,9 @@ function GraphPage() {
   /** The running total over the rainfall bars. On by default — it is the reason the
    *  page can answer "how much fell in this period" at a glance. */
   const [showCumulative, setShowCumulative] = useState(true);
+  /** Which of a banded series' three lines are drawn. All of them, until the reader
+   *  says otherwise — the edges are the reason the band is worth having. */
+  const [lines, setLines] = useState({ value: true, lo: true, hi: true });
 
   const station = useLocationStation(location);
   // A single day gets the station's raw readings; anything longer, the hourly
@@ -166,6 +182,32 @@ function GraphPage() {
     radiation: palette.valSun,
   };
   const color = SERIES.find((s) => s.key === key)?.color(colors) ?? palette.accent;
+
+  /**
+   * The colours the band's edges take, which are not the same pair for both.
+   *
+   * Warm is red and cold is blue, so temperature's maximum is red. Humidity runs the
+   * other way: it is the *dry* end that is the hot, parched one, so its minimum
+   * takes the red. Following the number rather than the word is what keeps a reader
+   * from having to check the legend twice.
+   */
+  const edgeInk =
+    key === 'humidity'
+      ? { lo: palette.valHigh, hi: palette.valLow }
+      : { lo: palette.valLow, hi: palette.valHigh };
+
+  /** Only where the series has edges worth naming and something to draw them from. */
+  const hasEdges = !!meta.edges && series.samples.some((s) => s.band != null);
+
+  // One line has to stay: a chart of nothing is a card with an axis in it.
+  const toggleLine = (which: 'value' | 'lo' | 'hi') => {
+    setLines((l) => {
+      const next = { ...l, [which]: !l[which] };
+      if (!next.value && !next.lo && !next.hi) return l;
+      Haptics.selectionAsync().catch(() => {});
+      return next;
+    });
+  };
 
   const refreshControl = useRefreshControl(measurements.refetch);
 
@@ -354,6 +396,11 @@ function GraphPage() {
                 axisMin={meta.axisMin}
                 axisMax={meta.axisMax}
                 axisFixed={meta.axisFixed}
+                showValue={!hasEdges || lines.value}
+                showBandLo={hasEdges && lines.lo}
+                showBandHi={hasEdges && lines.hi}
+                bandLoColor={edgeInk.lo}
+                bandHiColor={edgeInk.hi}
                 // A bearing's axis reads N · O · Z · W · N, which needs four gaps to
                 // land on the cardinal points rather than between them.
                 formatAxis={key === 'windDir' ? degToCompass : undefined}
@@ -365,11 +412,11 @@ function GraphPage() {
               />
             </View>
 
-            {/* What the chart is made of — and, for the running total, the switch
-                for it. On a station-backed location the rest is a legend for the two
-                line styles; everywhere else it is the whole answer to "where do
-                these numbers come from", which is a sentence and needs the room to
-                wrap under the entries beside it. */}
+            {/* What the chart is made of, and mostly the switches for it: the
+                running total on rainfall, and on a banded series each of its three
+                lines. What is not a switch is the dashed style note, and the sentence
+                for a location with no instrument — which needs the room to wrap under
+                the entries beside it. */}
             <View
               style={{
                 flexDirection: 'row', alignItems: 'center',
@@ -389,12 +436,44 @@ function GraphPage() {
                 />
               ) : null}
 
-              {series.anyMeasured ? (
+              {/* The central line. Named for what it is on this location: an
+                  instrument's reading where one exists, and the model's own figure
+                  where it does not. */}
+              {hasEdges ? (
+                <Legend
+                  color={color}
+                  label={ta(series.anyMeasured ? 'measured' : 'computed', prefs.lang)}
+                  on={lines.value}
+                  onPress={() => toggleLine('value')}
+                />
+              ) : series.anyMeasured ? (
+                <Legend color={color} label={ta('measured', prefs.lang)} />
+              ) : null}
+
+              {hasEdges ? (
                 <>
-                  <Legend color={color} label={ta('measured', prefs.lang)} />
-                  <Legend color={color} label={ta('forecastPart', prefs.lang)} dashed />
+                  <Legend
+                    color={edgeInk.lo}
+                    label={ta('statMin', prefs.lang)}
+                    on={lines.lo}
+                    onPress={() => toggleLine('lo')}
+                  />
+                  <Legend
+                    color={edgeInk.hi}
+                    label={ta('statMax', prefs.lang)}
+                    on={lines.hi}
+                    onPress={() => toggleLine('hi')}
+                  />
                 </>
-              ) : (
+              ) : null}
+
+              {/* A style note, not a switch: it says which half of a line is which,
+                  and there is no half to turn off. */}
+              {series.forecastFrom >= 0 ? (
+                <Legend color={color} label={ta('forecastPart', prefs.lang)} dashed />
+              ) : null}
+
+              {series.anyMeasured ? null : (
                 <Text variant="caption" color={palette.muted} style={{ flexShrink: 1 }}>
                   {/* One sentence, whatever window is on screen. The reader's problem
                       is the same either way — this location has no instrument, so a

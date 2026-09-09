@@ -413,6 +413,30 @@ bounds. Harmless while nothing read the pair; it became a wrong assertion the mo
 something did. The fixture now defaults both to nothing and each test states the
 spread it is about.
 
+### The band's edges as lines you can switch (9 Sep 2026)
+
+Temperature and humidity draw three lines now — the central value and each edge of
+the band — and each has its own legend switch. A minimum and a maximum are readings
+a grower acts on, not a shaded area to squint at; and three lines with a fill over
+thirty days is a great deal of ink for someone who came to look at one of them, so
+each can be put away. One of the three always stays on: a chart of nothing is a card
+with an axis in it.
+
+- **The two do not share a colour scheme.** Warm is red and cold is blue, so
+  temperature's maximum is red — but humidity runs the other way, since it is the
+  *dry* end that is the hot, parched one, so its minimum takes the red. Following
+  the number rather than the word is what keeps a reader from checking the legend
+  twice.
+- **Only those two get named edges.** Wind and radiation do have a band at day
+  resolution, but it is the spread of hourly means rather than a reported extreme —
+  a number to look at, not one to put a coloured line through and a word under.
+- **The central line's label follows the location.** "Gemeten" where an instrument
+  answered, "Berekend" where the model did. The day-resolution band exists on a
+  modelled location too — it is bucketed from hourly values — so the old legend,
+  which only ever said "Gemeten", would have been wrong there.
+- The edges run through the same run splitting as everything else, so they break
+  where the data does and dash on the same side of the measured/forecast boundary.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an
