@@ -244,6 +244,40 @@ Tapping a block on 'Actueel' opens it for every saved location, as the web app's
   the index owns the clock, so `PLAY_INTERVAL_MS` lives there too and `Timeline` is
   pure presentation.
 
+### Basemap labels in the app's language (9 Sep 2026)
+
+MapLibre Native has no "set the map's language" call — `setLanguage` exists in the
+web build and in Mapbox's SDK, not here. The labels live in the style, so the style
+is what changes: `useMapStyle` fetches it, `localiseStyle` rewrites the `text-field`
+of the layers that draw names, and MapLibre is handed the object instead of the URL.
+
+- **The chain is language, then local name, then transliteration.** The middle step
+  is the point: the stock style prefers an international field, which is why a Dutch
+  app called the Belgian capital BRUSSELS. Falling back to `name` gives Brussel,
+  Köln and Liège — the names on the road signs — wherever nothing is translated,
+  which for the Netherlands, Belgium and western Germany is most of the map.
+- **Only layers whose `text-field` already mentions a name are touched.** A basemap
+  also labels motorway shields with `ref`, contours with `ele` and buildings with a
+  house number; rewriting those would blank them. The test is a blunt "does this
+  expression mention `name`", because the alternative is enumerating the layer ids
+  of a style this app does not own.
+- **It falls back to the URL on any failure**, so the map cannot end up worse than it
+  was. Cached through TanStack for a day and keyed by URL and language, since both
+  maps mount and unmount constantly and a style is a few hundred kilobytes.
+
+**Not verified against the live tiles.** The network policy in the build environment
+blocks `tiles.openfreemap.org` (as it did when the map was ported), so the style JSON
+could not be fetched and the rewrite is pinned against hand-written fixtures instead.
+Two things to check on a device:
+
+1. Whether OpenFreeMap's tiles carry `name:nl` and friends at all. The OpenMapTiles
+   schema guarantees `name`, `name_en`, `name_de` and the latin/nonlatin/int
+   variants; the rest depend on how the tiles were generated. If they are absent the
+   chain still falls through to `name`, which is the local name — so the map
+   improves either way, just not into Dutch exotic-country names.
+2. Whether any label disappears. That would mean a layer whose `text-field` mentions
+   a name but draws something else, and the fix is to exclude it by id.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an

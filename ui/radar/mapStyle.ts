@@ -27,7 +27,8 @@
  *
  * Bright in light, Fiord in dark. NOTE: `tiles.openfreemap.org` is unreachable from
  * the build environment (the network policy blocks it), so neither URL below could
- * be requested to confirm its exact slug.
+ * be requested to confirm its exact slug — nor could the style JSON that
+ * `localiseStyle` below rewrites.
  *
  * ## Why the map is clamped at both ends
  *
@@ -37,6 +38,7 @@
  * shower over Brabant either. So the camera is held inside a band and every starting
  * view is chosen to sit within it.
  */
+import type { LayerSpecification, StyleSpecification } from '@maplibre/maplibre-react-native';
 import type { Appearance, Palette } from '../../theme';
 
 /** The basemap, per appearance.
@@ -49,6 +51,75 @@ const STYLE_DARK = 'https://tiles.openfreemap.org/styles/fiord';
 
 export function mapStyleFor(appearance: Appearance): string {
   return appearance === 'dark' ? STYLE_DARK : STYLE_LIGHT;
+}
+
+// ── Labels in the reader's language ─────────────────────────────────────────────
+
+/**
+ * Rewrite a basemap's place labels to prefer one language.
+ *
+ * MapLibre Native has no "set the map's language" call — `setLanguage` is a thing in
+ * the web build and in Mapbox's SDK, not here. The labels live in the style, so the
+ * only way to change them is to change the style: fetch it, rewrite the `text-field`
+ * of the layers that draw names, and hand MapLibre the result instead of the URL.
+ *
+ * ## What it asks for, and in what order
+ *
+ * OpenStreetMap tags a place with `name` in its own local language, and with
+ * `name:<lang>` for whatever else has been translated. The OpenMapTiles schema
+ * OpenFreeMap uses carries `name`, `name:latin`, `name_int`, and — depending on how
+ * the tiles were generated — a set of `name:<lang>` fields.
+ *
+ * So the chain is: the reader's language, then the local name, then the Latin
+ * transliteration. The middle step is the important one and the reason this is worth
+ * doing at all: the stock style prefers an international field, which is why a Dutch
+ * app labelled the Belgian capital BRUSSELS. Falling back to `name` gives Brussel,
+ * Köln and Liège — the names on the road signs — even where no translation exists.
+ *
+ * ## Which layers are touched
+ *
+ * Only symbol layers whose `text-field` already mentions a name. A basemap also
+ * labels motorway shields with `ref`, contours with `ele` and buildings with a house
+ * number, and rewriting those to a name would blank them. The test is deliberately a
+ * blunt one — does this expression mention `name` at all — because the alternative is
+ * enumerating every layer id of a style this app does not own and cannot see change.
+ */
+export function localiseStyle(style: StyleSpecification, lang: string): StyleSpecification {
+  if (!Array.isArray(style?.layers)) return style;
+  return {
+    ...style,
+    layers: style.layers.map((layer) => localiseLayer(layer, lang)),
+  };
+}
+
+function localiseLayer(layer: LayerSpecification, lang: string): LayerSpecification {
+  if (layer.type !== 'symbol') return layer;
+  const field = layer.layout?.['text-field'];
+  if (field === undefined || !mentionsName(field)) return layer;
+
+  return {
+    ...layer,
+    layout: {
+      ...layer.layout,
+      // `name_<lang>` as well as `name:<lang>`: OpenMapTiles carries English and
+      // German under the underscored spelling and everything else under the colon,
+      // and a chain that asks for both costs nothing where one is absent.
+      'text-field': [
+        'coalesce',
+        ['get', `name:${lang}`],
+        ['get', `name_${lang}`],
+        ['get', 'name'],
+        ['get', 'name:latin'],
+        ['get', 'name_int'],
+        '',
+      ],
+    },
+  } as LayerSpecification;
+}
+
+/** Whether an expression or token string draws a name at all. See above. */
+function mentionsName(field: unknown): boolean {
+  return JSON.stringify(field)?.includes('name') ?? false;
 }
 
 /** How far out the map will go. Below this a radar frame covers a continent. */

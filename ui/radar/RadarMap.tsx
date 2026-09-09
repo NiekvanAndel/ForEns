@@ -22,7 +22,8 @@ import {
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
-import { MIN_ZOOM, START_ZOOM, ZOOM_STEP, mapChrome, mapStyleFor, maxZoomFor } from './mapStyle';
+import { MIN_ZOOM, START_ZOOM, ZOOM_STEP, mapChrome, maxZoomFor } from './mapStyle';
+import { useLocalisedMapStyle } from './useMapStyle';
 import { RadarLayer } from './RadarLayer';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import { usePeeking } from '../peek';
@@ -79,6 +80,9 @@ export function RadarMap({
   style,
 }: RadarMapProps) {
   const { palette, appearance } = useTheme();
+  // Labels in the app's language, falling back to the plain style URL. See
+  // `useMapStyle`.
+  const mapStyle = useLocalisedMapStyle();
   const peeking = usePeeking();
   const provider = activeProvider();
   const camera = useRef<CameraRef>(null);
@@ -126,7 +130,7 @@ export function RadarMap({
     <View style={[{ borderRadius: radius.appCard, overflow: 'hidden' }, style]}>
       <MapLibreMap
         style={{ flex: 1 }}
-        mapStyle={mapStyleFor(appearance)}
+        mapStyle={mapStyle}
         dragPan={interactive}
         touchZoom={interactive}
         doubleTapZoom={interactive}
