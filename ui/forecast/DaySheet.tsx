@@ -34,7 +34,6 @@ import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
 import { HourlyList } from './HourlyList';
 import { DayBar } from './DayBar';
-import { OverviewDayRow } from './OverviewDayRow';
 import { SpreadChart } from '../charts/SpreadChart';
 import { usePrefs } from '../../state/prefs';
 import { buildDayDetail, precipNarrative, spreadLabel } from '../../core/model/dayDetail';
@@ -306,15 +305,12 @@ function LayerSection({
   const pct = (x: number | null) => (x != null ? `${Math.round(x)}%` : '—');
 
   switch (layer) {
-    // The overview repeats the list row, then everything the day is made of — the
-    // same figures the per-measurand sections show one at a time.
+    // Everything the day is made of, as figures — the same numbers the
+    // per-measurand sections show one at a time. The list row this sheet opens from
+    // used to be repeated at the top, which said all of it a second time in a
+    // narrower form directly above the cells.
     case 'overview':
-      return (
-        <>
-          <OverviewDayRow day={day} dayIndex={detail.dayIndex} />
-          <SummaryCells day={day} dayIndex={detail.dayIndex} />
-        </>
-      );
+      return <SummaryCells day={day} dayIndex={detail.dayIndex} />;
 
     case 'precip':
       return (
