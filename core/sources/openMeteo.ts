@@ -158,6 +158,25 @@ export async function loadStage1(
   };
 }
 
+/**
+ * The observation feed alone — yesterday, today, and what it is doing now.
+ *
+ * `loadStage1` pairs this with an hourly forecast call and up to two HARMONIE
+ * attempts before it, which is the right shape for a page about the days ahead and
+ * the wrong one for a list that only wants the last day. `processAll` accepts it on
+ * its own: past hours come from here, and the future hours fall back to this
+ * response when there is no forecast call to prefer.
+ *
+ * One request, so a list of a dozen saved locations costs a dozen — which is what
+ * makes it affordable to answer "and what is it doing everywhere else" on a tap.
+ */
+export function loadObservations(
+  c: Coords,
+  opts: FetchOptions = {}
+): Promise<WeatherResponse | null> {
+  return tryFetchJson<WeatherResponse>(urls.observations(c), 'Obs', opts);
+}
+
 export interface Stage2 {
   /** IFS deterministic daily; also carries sunshine and ET0. */
   ifs: WeatherResponse | null;

@@ -168,6 +168,11 @@ export function processAll(
         wind: roundOrNull(at(oh.windspeed_10m, i)),
         windExact: round1OrNull(at(oh.windspeed_10m, i)),
         humidity: roundOrNull(at(oh.relativehumidity_2m, i)),
+        // The observation feed reports gusts and the web app never read them off a
+        // past hour, so they were dropped here. 'Actueel' asks what the strongest
+        // gust today was, which without this can only ever be answered on a
+        // location with a station on it.
+        gusts: roundOrNull(at(oh.windgusts_10m ?? oh.wind_gusts_10m, i)),
         wmo: (at(oh.weathercode, i) ?? 0) as number,
         isDay: isHourDay(time, lat, offsetSec),
         isPast: true,

@@ -20,8 +20,14 @@
  * A block with no answer prints a dash and keeps its place. The grid is a layout
  * someone chose; reflowing it because one sensor is quiet would move every block
  * under it.
+ *
+ * Every block is a button: it opens the same block for every saved location, which
+ * is the question a grid cannot answer. There is no caret on it — twelve carets in
+ * a grid this dense is a pattern, not an affordance — so the press feedback is what
+ * says it is pressable, and the sheet is one tap away from being discovered.
  */
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
 import { Card } from '../Card';
 import { Text } from '../Text';
@@ -52,7 +58,7 @@ export function tileReading(
   }
 }
 
-export function ConditionTile({ tile }: { tile: Tile }) {
+export function ConditionTile({ tile, onPress }: { tile: Tile; onPress?: () => void }) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const { value, unit } = tileReading(tile, prefs);
@@ -66,7 +72,7 @@ export function ConditionTile({ tile }: { tile: Tile }) {
       ? (tile.value ?? 0) > 0 ? palette.valPrecip : palette.valPrecipZero
       : palette.appValue;
 
-  return (
+  const body = (
     <Card pad={0} style={{ flex: 1 }}>
       <View style={{ padding: space[4], gap: 2, minHeight: 96, justifyContent: 'space-between' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -102,5 +108,23 @@ export function ConditionTile({ tile }: { tile: Tile }) {
         </Text>
       </View>
     </Card>
+  );
+
+  if (!onPress) return body;
+
+  return (
+    <Pressable
+      onPress={() => {
+        Haptics.selectionAsync().catch(() => {});
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${tile.title}, ${tile.timeLabel}: ${value} ${unit}`.trim()}
+      // The card carries its own shadow, so the press is a tint rather than a lift:
+      // one block rising out of a grid takes its row's alignment with it.
+      style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.72 : 1 })}
+    >
+      {body}
+    </Pressable>
   );
 }

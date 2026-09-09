@@ -22,6 +22,12 @@
  * fills in the rainfall and leaves the wind to the model, so the green dot lives on
  * the block.
  *
+ * ## Tapping a block
+ *
+ * It opens that one block for every saved location, which is the question a grid of
+ * one place cannot answer — is it colder here than at the other field, and by how
+ * much. See `TileSheet`; the rows are loaded only once the sheet is open.
+ *
  * ## The swipe
  *
  * `ScreenFrame` gives the page its top row and the sideways swipe between locations,
@@ -30,7 +36,7 @@
  * cached model, so a page sliding past draws a full grid without a single request —
  * no `usePeeking` guard needed, because there is nothing to guard.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,6 +50,7 @@ import { LocationTitle } from '../../ui/LocationTitle';
 import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
 import { ConditionTile } from '../../ui/current/ConditionTile';
+import { TileSheet } from '../../ui/current/TileSheet';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useLocationStation } from '../../state/stations';
@@ -62,6 +69,8 @@ function CurrentPage() {
   const router = useRouter();
 
   const station = useLocationStation(location);
+  /** The block being compared across locations, or null when the sheet is shut. */
+  const [compared, setCompared] = useState<Tile | null>(null);
 
   const labels: TileLabels = useMemo(
     () => ({
@@ -103,6 +112,7 @@ function CurrentPage() {
   const loading = !model;
 
   return (
+    <>
     <ScrollView
       contentContainerStyle={{
         paddingHorizontal: space[5],
@@ -158,7 +168,7 @@ function CurrentPage() {
             </Text>
           </View>
 
-          <Grid tiles={tiles} />
+          <Grid tiles={tiles} onOpen={setCompared} />
 
           {/* Only where there is nothing measuring this place. On a station-backed
               location the dots already say which blocks are instruments, and a
@@ -181,6 +191,9 @@ function CurrentPage() {
         </>
       )}
     </ScrollView>
+
+    <TileSheet tile={compared} labels={labels} onClose={() => setCompared(null)} />
+    </>
   );
 }
 
@@ -192,7 +205,7 @@ function CurrentPage() {
  * block at the bottom reads as a mistake. An odd count leaves a gap instead, which
  * reads as what it is.
  */
-function Grid({ tiles }: { tiles: Tile[] }) {
+function Grid({ tiles, onOpen }: { tiles: Tile[]; onOpen: (tile: Tile) => void }) {
   const rows: Tile[][] = [];
   for (let i = 0; i < tiles.length; i += COLUMNS) rows.push(tiles.slice(i, i + COLUMNS));
 
@@ -201,7 +214,7 @@ function Grid({ tiles }: { tiles: Tile[] }) {
       {rows.map((row, i) => (
         <View key={i} style={{ flexDirection: 'row', gap: space[3] }}>
           {row.map((tile) => (
-            <ConditionTile key={tile.id} tile={tile} />
+            <ConditionTile key={tile.id} tile={tile} onPress={() => onOpen(tile)} />
           ))}
           {/* Holds the missing half of an odd last row open. */}
           {row.length < COLUMNS

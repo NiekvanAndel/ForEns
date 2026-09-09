@@ -130,6 +130,25 @@ describe('modelTiles', () => {
     expect(byId.get('rain-24h')?.value).toBe(24);
   });
 
+  it("answers today's strongest gust without a station", () => {
+    // The observation feed reports gusts and `processAll` now keeps them on past
+    // hours, so this block is no longer answerable only where there is an
+    // instrument — which is what the comparison sheet needs of every location.
+    const byId = new Map(
+      modelTiles(
+        model({
+          pastHours: [
+            hour('2026-06-15T10:00', { gusts: 44 }),
+            hour('2026-06-15T11:00', { gusts: 61 }),
+          ],
+        }),
+        labels
+      ).map((t) => [t.id, t])
+    );
+    expect(byId.get('gust-max')?.value).toBe(61);
+    expect(byId.get('gust-max')?.measured).toBe(false);
+  });
+
   it('reads a wind direction as a bearing the page can turn into a compass point', () => {
     const byId = new Map(modelTiles(model(), labels).map((t) => [t.id, t]));
     expect(byId.get('wind-dir')?.kind).toBe('direction');

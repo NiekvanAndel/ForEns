@@ -140,6 +140,32 @@ Worth knowing:
   the short and long windows, which read as two different limitations when it is
   one — the weather model carries about a day of observations, not an archive.
 
+### Comparing a block across locations (9 Sep 2026)
+
+Tapping a block on 'Actueel' opens it for every saved location, as the web app's
+'Actueel' does for every station on the account.
+
+- **Each location is loaded from the observation feed alone** — one request per
+  place, covering yesterday and today, which is exactly the window the blocks are
+  computed over. `processAll` builds a model from it with no forecast call
+  (`loadObservations` + `useAllLocationConditions`), and a station location then has
+  its own measurements merged over the top, so a station reads the same number in
+  the sheet as on its own page.
+- **Not the forecast cache.** It holds three locations at most, and only ones the
+  reader has visited or swiped past — a list built from it would be mostly blank in
+  exactly the case the sheet exists for. Its models are also the full staged build,
+  which is a lot of work for twelve current readings.
+- **One query per location, not one for the list**, so a slow or failing place costs
+  its own row rather than the sheet. Nothing is fetched until the sheet opens.
+- **Rows are sorted highest first**, except a wind direction, which keeps the saved
+  order: 350° is not more than 10°, and sorting bearings by degrees puts north at
+  both ends of the list.
+- **`processAll` now keeps the gust on observed hours.** The observation feed
+  reports it and the web app never read one off a past hour, so it was dropped —
+  which meant "max. windstoot vandaag" could only ever be answered on a location
+  with a station. The parity suite projects the addition away and asserts separately
+  that it is populated, as it already does for `tempExact` and `windExact`.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an

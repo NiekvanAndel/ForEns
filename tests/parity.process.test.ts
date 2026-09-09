@@ -99,7 +99,11 @@ function comparable(m: ReturnType<typeof processAll>): ReturnType<typeof process
     ])
   );
   const whole = ({ tempExact, windExact, ...rest }: Hour) => rest;
-  const pastHours = m.pastHours.slice(-12).map(whole);
+  // Past hours carry the gust the observation feed reports, which the web app's did
+  // not — it never read one off a past hour. Another addition, projected away here
+  // and asserted below.
+  const past = ({ gusts, ...rest }: Hour) => whole(rest as Hour);
+  const pastHours = m.pastHours.slice(-12).map(past);
   const futureHours = m.futureHours.map(whole);
   return {
     ...m,
@@ -213,6 +217,8 @@ describe('processAll', () => {
     const fractional = (v: number | null | undefined) => v != null && v !== Math.round(v);
     expect(full!.pastHours.some((h) => fractional(h.tempExact))).toBe(true);
     expect(full!.pastHours.some((h) => fractional(h.windExact))).toBe(true);
+    // The gust extension is real, not merely projected away in `comparable`.
+    expect(full!.pastHours.some((h) => h.gusts != null)).toBe(true);
     expect(full!.futureHours.some((h) => fractional(h.tempExact))).toBe(true);
     expect(full!.futureHours.some((h) => fractional(h.windExact))).toBe(true);
     // A tenth, and no further: these are readings, not floating-point noise. And
