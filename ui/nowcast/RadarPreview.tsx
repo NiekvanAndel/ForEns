@@ -16,18 +16,15 @@
  * smoothness of the very gesture the preview is there to serve, and nobody reads a
  * radar image travelling across the screen.
  *
- * It does NOT ask `RadarLayer` to cache tiles. That path switches react-native-maps
- * onto its cached-overlay behaviour, which refetches and rescales tiles itself —
- * worth it on the radar screen, where a reader can zoom past the provider's deepest
- * level, and not worth it here, where the region is fixed and cannot over-zoom.
- * Setting it anyway is what put "Zoom Level Not Supported" tiles across this card.
+ * The frames are all mounted here too, exactly as on the radar screen — see
+ * `RadarLayer`. The card plays the same loop, so it needs the same instant step.
  */
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { Camera, Map as MapLibreMap, Marker } from '@maplibre/maplibre-react-native';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
-import { START_SPAN_DEG, mapChrome } from '../radar/mapStyle';
-import { RadarLayer, useWarmFrames } from '../radar/RadarLayer';
+import { START_ZOOM, mapChrome, mapStyleFor } from '../radar/mapStyle';
+import { RadarLayer } from '../radar/RadarLayer';
 import { Card, CardHeader } from '../Card';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
@@ -36,11 +33,10 @@ import { ta } from '../../core/i18n';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import { usePeeking } from '../peek';
 
-/** How much of the map the preview shows, in degrees. The card became square, which
- *  a preview of the weather heading toward you, not of your street: a shower an hour
- *  away has to be on screen for the card to be worth having. Wide enough to hold the
- *  country and its coast. */
-const PREVIEW_SPAN_DEG = START_SPAN_DEG;
+/** How far in the preview opens. The card is a preview of the weather heading
+ *  toward you, not of your street: a shower an hour away has to be on screen for the
+ *  card to be worth having. Wide enough to hold the country and its coast. */
+const PREVIEW_ZOOM = START_ZOOM;
 
 /** How long each frame is held while the loop plays. Slow enough to read a shower's
  *  direction, fast enough that the whole hour passes in a few seconds. */
@@ -131,9 +127,6 @@ export function RadarPreview({
 
   const frame = frames[index] ?? null;
 
-  // Warm the frames so pressing play steps rather than stutters.
-  useWarmFrames(provider, frames);
-
   const time = frame
     ? new Date(frame.timeMs).toLocaleTimeString(prefs.lang, { hour: '2-digit', minute: '2-digit' })
     : '—';
@@ -176,28 +169,26 @@ export function RadarPreview({
               <Icon name="broadcast" size={30} color={palette.inkDisabled} />
             </View>
           ) : (
-          <MapView
-            provider={PROVIDER_DEFAULT}
+          <MapLibreMap
             style={{ flex: 1 }}
-            initialRegion={{
-              latitude: lat, longitude: lon,
-              latitudeDelta: PREVIEW_SPAN_DEG, longitudeDelta: PREVIEW_SPAN_DEG,
-            }}
-            scrollEnabled={false}
-            zoomEnabled={false}
-            rotateEnabled={false}
-            pitchEnabled={false}
-            toolbarEnabled={false}
-            userInterfaceStyle={appearance}
+            mapStyle={mapStyleFor(appearance)}
+            dragPan={false}
+            touchZoom={false}
+            doubleTapZoom={false}
+            touchRotate={false}
+            touchPitch={false}
+            compass={false}
+            logo={false}
+            attribution
+            attributionPosition={{ bottom: 6, left: 6 }}
           >
-            {covered ? <RadarLayer provider={provider} frame={frame ?? undefined} /> : null}
-            {/* A small dot, matching the radar page — MapKit's teardrop at pin size
-                covered a county on a card this scale. */}
-            <Marker
-              coordinate={{ latitude: lat, longitude: lon }}
-              anchor={{ x: 0.5, y: 0.5 }}
-              zIndex={2}
-            >
+            <Camera initialViewState={{ center: [lon, lat], zoom: PREVIEW_ZOOM }} />
+            {covered ? (
+              <RadarLayer provider={provider} frames={frames} active={frame ?? undefined} />
+            ) : null}
+            {/* A small dot, matching the radar page — a default pin at this card's
+                scale covered a county. */}
+            <Marker lngLat={[lon, lat]} anchor="center">
               <View
                 style={{
                   width: 14, height: 14, borderRadius: 7,
@@ -207,14 +198,18 @@ export function RadarPreview({
               />
             </Marker>
             {stationLat != null && stationLon != null ? (
-              <Marker
-                coordinate={{ latitude: stationLat, longitude: stationLon }}
-                title={stationName}
-                pinColor={palette.agroBright}
-                zIndex={2}
-              />
+              <Marker lngLat={[stationLon, stationLat]} anchor="center">
+                <View
+                  accessibilityLabel={stationName}
+                  style={{
+                    width: 13, height: 13, borderRadius: 7,
+                    backgroundColor: palette.agroBright,
+                    borderWidth: 2.5, borderColor: '#fff',
+                  }}
+                />
+              </Marker>
             ) : null}
-          </MapView>
+          </MapLibreMap>
           )}
 
           {covered ? (

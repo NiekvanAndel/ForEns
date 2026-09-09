@@ -2,14 +2,13 @@
  * The radar map.
  *
  * The imagery itself is drawn by `RadarLayer`, which is shared with the preview card
- * and holds the reasoning about mounting one frame at a time.
+ * and holds the rule that makes the loop animate: every frame mounted, a step only
+ * flips opacity. Why the map is MapLibre rather than Apple Maps, and why the camera
+ * is clamped, are both in ./mapStyle.
  *
- * Zoom limits and pin rendering are explained in ./mapStyle, which the preview on
- * 'Nu' shares.
- *
- * On a page being swiped past it draws a still panel instead. A second MapView
- * allocated on the UI thread at the moment a finger starts moving costs the
- * smoothness of that gesture, and a map travelling across the screen is not read.
+ * On a page being swiped past it draws a still panel instead. A second map allocated
+ * on the UI thread at the moment a finger starts moving costs the smoothness of that
+ * gesture, and a map travelling across the screen is not read.
  *
  * There is no recentre button. The map already returns to the location whenever the
  * location changes, and the pin is on screen at every zoom the map allows, so the
@@ -17,12 +16,12 @@
  */
 import { useEffect, useRef } from 'react';
 import { View, Pressable } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
+import { Camera, Map as MapLibreMap, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
-import { MIN_ZOOM, START_SPAN_DEG, mapChrome, maxZoomFor } from './mapStyle';
-import { RadarLayer, useWarmFrames } from './RadarLayer';
+import { MIN_ZOOM, START_ZOOM, ZOOM_STEP, mapChrome, mapStyleFor, maxZoomFor } from './mapStyle';
+import { RadarLayer } from './RadarLayer';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import { usePeeking } from '../peek';
 import type { SavedLocation } from '../../core/prefs';
@@ -33,10 +32,6 @@ export interface PlacePin {
   /** Its slot in the saved list, which is what selecting it needs. */
   index: number;
 }
-
-/** The span band the zoom buttons work within, matching MIN_ZOOM and maxZoomFor. */
-const MIN_SPAN_DEG = 0.05;
-const MAX_SPAN_DEG = 24;
 
 /** Everything floating on the map is this tall, so the time badge, the zoom
  *  buttons and the full-screen back button sit on one line. */
@@ -78,17 +73,16 @@ export function RadarMap({
   const { palette, appearance } = useTheme();
   const peeking = usePeeking();
   const provider = activeProvider();
-  const mapRef = useRef<MapView>(null);
-  const region = useRef<Region>({
-    latitude: lat, longitude: lon,
-    latitudeDelta: START_SPAN_DEG, longitudeDelta: START_SPAN_DEG,
-  });
+  const camera = useRef<CameraRef>(null);
+  const maxZoom = maxZoomFor(provider.maxZoom);
+  // Tracked so a zoom button knows where it is starting from; the camera itself
+  // owns the live value once the reader pans.
+  const zoom = useRef(START_ZOOM);
 
   // Recentre when the chosen location changes, rather than stranding the user
   // looking at the previous city.
   useEffect(() => {
-    region.current = { ...region.current, latitude: lat, longitude: lon };
-    mapRef.current?.animateToRegion(region.current, 400);
+    camera.current?.flyTo({ center: [lon, lat], duration: 400 });
   }, [lat, lon]);
 
   const chrome = mapChrome(palette, appearance);
@@ -97,21 +91,10 @@ export function RadarMap({
 
   const active = frames[activeIndex] ?? frames[frames.length - 1];
 
-  // Fill the image cache so stepping through the loop does not re-download a frame
-  // each time; only the frame on screen is mounted.
-  useWarmFrames(provider, frames);
-
-  const zoom = (factor: number) => {
-    const r = region.current;
-    const next = {
-      ...r,
-      // Kept inside the same band the map itself is clamped to, so a button press
-      // cannot reach a zoom the provider has no tiles for.
-      latitudeDelta: Math.min(MAX_SPAN_DEG, Math.max(MIN_SPAN_DEG, r.latitudeDelta * factor)),
-      longitudeDelta: Math.min(MAX_SPAN_DEG, Math.max(MIN_SPAN_DEG, r.longitudeDelta * factor)),
-    };
-    region.current = next;
-    mapRef.current?.animateToRegion(next, 200);
+  const stepZoom = (by: number) => {
+    const next = Math.min(maxZoom, Math.max(MIN_ZOOM, zoom.current + by));
+    zoom.current = next;
+    camera.current?.zoomTo(next, { duration: 200 });
   };
 
   if (peeking) {
@@ -133,34 +116,33 @@ export function RadarMap({
 
   return (
     <View style={[{ borderRadius: radius.appCard, overflow: 'hidden' }, style]}>
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_DEFAULT}
+      <MapLibreMap
         style={{ flex: 1 }}
-        initialRegion={region.current}
-        onRegionChangeComplete={(r) => { region.current = r; }}
-        scrollEnabled={interactive}
-        zoomEnabled={interactive}
-        rotateEnabled={false}
-        pitchEnabled={false}
-        toolbarEnabled={false}
-        showsCompass={false}
-        userInterfaceStyle={appearance}
-        minZoomLevel={MIN_ZOOM}
-        maxZoomLevel={maxZoomFor(provider.maxZoom)}
+        mapStyle={mapStyleFor(appearance)}
+        dragPan={interactive}
+        touchZoom={interactive}
+        doubleTapZoom={interactive}
+        touchRotate={false}
+        touchPitch={false}
+        compass={false}
+        logo={false}
+        // OpenStreetMap's licence wants crediting, and the style carries the line;
+        // the button is the least intrusive way to show it on a map this size.
+        attribution
+        attributionPosition={{ bottom: 6, right: 6 }}
+        onRegionDidChange={(e) => { zoom.current = e.nativeEvent.zoom; }}
       >
-        <RadarLayer provider={provider} frame={active} cacheTiles />
+        <Camera
+          ref={camera}
+          initialViewState={{ center: [lon, lat], zoom: START_ZOOM }}
+          minZoom={MIN_ZOOM}
+          maxZoom={maxZoom}
+        />
 
-        {/* A small dot rather than MapKit's teardrop, which at pin size covered a
-            county. Drawn as a marker child with tracking left on: freezing the
-            snapshot is what previously left the annotation blank or stranded it
-            mid-pan, and one marker is cheap enough to re-rasterise. */}
-        <Marker
-          coordinate={{ latitude: lat, longitude: lon }}
-          anchor={{ x: 0.5, y: 0.5 }}
-          zIndex={2}
-          title="Jouw locatie"
-        >
+        <RadarLayer provider={provider} frames={frames} active={active} />
+
+        {/* A small dot rather than a teardrop, which at pin size covered a county. */}
+        <Marker lngLat={[lon, lat]} anchor="center">
           <View
             style={{
               width: 16, height: 16, borderRadius: 8,
@@ -176,10 +158,8 @@ export function RadarMap({
         {places.map((p) => (
           <Marker
             key={`${p.index}-${p.location.name}`}
-            coordinate={{ latitude: p.location.lat, longitude: p.location.lon }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            zIndex={2}
-            title={p.location.name}
+            lngLat={[p.location.lon, p.location.lat]}
+            anchor="center"
             onPress={() => onSelectPlace?.(p.index)}
           >
             <View
@@ -192,7 +172,7 @@ export function RadarMap({
             />
           </Marker>
         ))}
-      </MapView>
+      </MapLibreMap>
 
       <View
         style={[
@@ -213,8 +193,8 @@ export function RadarMap({
 
       {showControls ? (
         <View style={{ position: 'absolute', left: CHROME_INSET, top: chromeTop, gap: space[2] }}>
-          <ControlButton icon="plus" label="Inzoomen" bg={chromeBg} ink={chromeInk} onPress={() => zoom(0.5)} />
-          <ControlButton icon="minus" label="Uitzoomen" bg={chromeBg} ink={chromeInk} onPress={() => zoom(2)} />
+          <ControlButton icon="plus" label="Inzoomen" bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(ZOOM_STEP)} />
+          <ControlButton icon="minus" label="Uitzoomen" bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(-ZOOM_STEP)} />
         </View>
       ) : null}
 

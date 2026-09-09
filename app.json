@@ -56,6 +56,7 @@
         }
       ],
       "expo-background-task",
+      "@maplibre/maplibre-react-native",
       "@bacons/apple-targets"
     ],
     "experiments": {
