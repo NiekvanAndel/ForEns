@@ -9,6 +9,11 @@
  * Presented as a full-screen modal rather than a route so it dismisses back to the
  * same scroll position, and so the tab bar is genuinely out of the way.
  *
+ * Every other saved location is a pin here, where there is room for them: tapping
+ * one selects it, and the map, the profile and the pins all follow without leaving
+ * full screen. That is the only way to change location from here — the swipe that
+ * does it elsewhere belongs to the page underneath.
+ *
  * The profile can be swiped down out of the way, because sometimes the map is the
  * whole point and the panel is a band across the bottom of it. The timeline and its
  * play button never go: they are how the loop is driven, and a control that
@@ -23,14 +28,13 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { duration, radius, shadowFloat, space, useTheme } from '../../theme';
 import { Icon } from '../Icon';
-import { RadarMap, MAP_CHROME_SIZE } from './RadarMap';
+import { RadarMap, MAP_CHROME_SIZE, type PlacePin } from './RadarMap';
 import { Timeline } from './Timeline';
 import { NowcastPanel } from './NowcastPanel';
 import { mapChrome } from './mapStyle';
 import { frameClock, radarAxis, type NowcastProfile, type RadarFrame } from '../../core/radar';
 import { usePrefs } from '../../state/prefs';
 import { ta } from '../../core/i18n';
-import type { AgroStation } from '../../core/sources/agroexact';
 
 /** Enough for the headings, the curve and its axis. Animating a fixed maximum is
  *  what lets the timeline stay put while the profile above it folds away. */
@@ -46,7 +50,9 @@ export interface FullScreenRadarProps {
   onScrub: (index: number) => void;
   playing: boolean;
   onTogglePlay: () => void;
-  stations: AgroStation[];
+  /** The reader's other saved locations, as pins that switch to them. */
+  places: PlacePin[];
+  onSelectPlace: (index: number) => void;
   profile: NowcastProfile | null;
   /** Named in the profile's header, as on the radar page. */
   locationName?: string;
@@ -54,7 +60,7 @@ export interface FullScreenRadarProps {
 
 export function FullScreenRadar({
   visible, onClose, lat, lon, frames, activeIndex, onScrub,
-  playing, onTogglePlay, stations, profile, locationName,
+  playing, onTogglePlay, places, onSelectPlace, profile, locationName,
 }: FullScreenRadarProps) {
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
@@ -118,12 +124,16 @@ export function FullScreenRadar({
             lon={lon}
             frames={frames}
             activeIndex={activeIndex}
-            stations={stations}
+            places={places}
+            onSelectPlace={onSelectPlace}
             timeLabel={frameClock(active)}
             showControls={false}
             // The map runs under the status bar here, so its chrome starts below
             // the safe area: the time badge used to sit behind the battery.
             chromeTop={insets.top + space[2]}
+            // The panel below is pulled up over the map by one card radius, so the
+            // attribution has to clear that much or it is hidden behind it.
+            attributionPosition={{ bottom: radius.appCard + space[2], left: space[3] }}
             style={{ flex: 1, borderRadius: 0 }}
           />
 

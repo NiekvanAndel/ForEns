@@ -5,6 +5,7 @@
  * by endpoint and by which `models=` is requested; the named fields are the ones
  * the app actually reads.
  */
+import type { Measurement } from '../sources/agroexact';
 
 export type Num = number | null | undefined;
 export type NumArray = Num[];
@@ -147,6 +148,14 @@ export interface Day {
   [key: string]: unknown;
 }
 
+/** What a station-backed location adds to the model: who measured, and the latest
+ *  reading. Absent on every location the integration does not cover. */
+export interface StationOverlay {
+  id: string;
+  name: string | null;
+  current: Measurement | null;
+}
+
 export interface ForecastModel {
   pastHours: Hour[];
   futureHours: Hour[];
@@ -158,6 +167,8 @@ export interface ForecastModel {
   nMembers: number;
   hresRunLabel: string | null;
   hresHoursByDay: Record<string, HresHour[]>;
+  /** Set once AgroExact measurements have been merged in. */
+  station?: StationOverlay | null;
 }
 
 /** Everything `processAll` read from module globals in the web app. */

@@ -7,19 +7,32 @@
  * ## Why the rain is the card
  *
  * The layout follows the client's mock-up, and its argument is that this is a
- * rainfall app: what fell in the last hour and what has fallen over the day are the
- * two numbers a grower opens the page for, so they sit in a tinted strip of their
- * own with the condition glyph beside them, and everything else is one quiet line
- * underneath.
+ * rainfall app: what fell in the last hour and what has fallen over the last day are
+ * the two numbers a grower opens the page for, so they sit in a tinted strip of
+ * their own with the condition glyph beside them, and everything else is one quiet
+ * line underneath.
  *
  * That is a demotion for the temperature, which used to be a 58-point number filling
  * half the card with the reading least likely to be the reason anyone looked. It is
- * still the largest thing in the bottom row — it is what that row is anchored on —
+ * still the largest mark in the bottom row — it is what that row is anchored on —
  * but it no longer outweighs the strip above it.
  *
- * The three-cell divider row went with it. Temperature, its day range, wind and
- * humidity read as one sentence with bullets between them in the space the cells
- * took, and the rule-and-cell grid was carrying no information the spacing does not.
+ * The three-cell divider row went with it. Temperature, its range, wind and humidity
+ * read as one sentence with bullets between them in the space the cells took, and
+ * the rule-and-cell grid was carrying no information the spacing does not.
+ *
+ * ## Everything here looks backwards, on purpose
+ *
+ * The card's subject is what it is doing *now*, so its supporting figures are the
+ * last 24 hours rather than the rest of today: the maximum and the minimum since
+ * this time yesterday, and the rain that has actually fallen in them. The ▲/▼ pair
+ * used to be today's forecast extremes, which put a modelled afternoon next to a
+ * measured present — and on a station-backed location that mixed an instrument's
+ * reading with a model's opinion inside one row of numbers. Now every figure on the
+ * card is an observation, and where AgroExact covers the location, a measurement.
+ *
+ * The hourly slider is its own card below this one. It answers a different question
+ * — what happens next, rather than what it is doing now.
  *
  * Reading colours follow the quantity, not the card (design rule 2): ▲ is val-high,
  * ▼ is val-low, millimetres are val-precip, and a zero is dimmed to val-precip-zero
@@ -33,6 +46,7 @@ import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, fmtMm, windUnitLabel, t, ta } from '../../core/i18n';
+import { recent24 } from '../../core/model/station';
 import type { ForecastModel } from '../../core/model/types';
 import type { SavedLocation } from '../../core/prefs';
 
@@ -54,21 +68,26 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
   const { prefs } = usePrefs();
   const lang = prefs.lang;
 
-  const now = model.futureHours[0] ?? model.pastHours[model.pastHours.length - 1];
-  const today = model.days[0];
-  const station = !!location.stationId;
+  const modelled = model.futureHours[0] ?? model.pastHours[model.pastHours.length - 1];
+  const measured = model.station?.current ?? null;
+  // Measurements are merged per quantity, exactly as the hour strip merges them: a
+  // rain gauge fills in the rainfall and leaves the wind to the model.
+  const now = {
+    temp: measured?.temp ?? modelled?.temp ?? null,
+    wind: measured?.wind ?? modelled?.wind ?? null,
+    windDir: measured?.windDir ?? modelled?.windDir ?? null,
+    humidity: measured?.humidity ?? modelled?.humidity ?? null,
+    wmo: modelled?.wmo ?? 3,
+    isDay: modelled?.isDay ?? 1,
+  };
+  const station = !!model.station || !!location.stationId;
 
-  const hi = today?.hresTempMax ?? today?.tempHi ?? null;
-  const lo = today?.hresTempMin ?? today?.tempLo ?? null;
+  const { tempMin: lo, tempMax: hi, precip: precip24 } = recent24(model);
 
-  // The hour that has just finished, not the one running: a station's last full hour
-  // is a measurement, where the current hour is a total still being added to.
+  // The hour that has just finished, not the one running: a full hour is a total,
+  // where the current one is still being added to. `pastHours` already carries the
+  // station's own rainfall where there is a gauge — see `applyStationObservations`.
   const lastHour = model.pastHours[model.pastHours.length - 1]?.precip ?? 0;
-
-  // 24-hour precipitation: what has already fallen plus what is still to come today.
-  const precip24 =
-    model.pastHours.reduce((s, h) => s + (h.precip ?? 0), 0) +
-    model.futureHours.slice(0, 24).reduce((s, h) => s + (h.precip ?? 0), 0);
 
   return (
     <Card pad={0}>
@@ -91,7 +110,7 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
           </Text>
         </View>
 
-        {/* The strip: the two rainfall readings, and the weather it belongs to. */}
+        {/* The strip: the two rainfall readings, and the weather they belong to. */}
         <View
           style={{
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -107,11 +126,12 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
             <View style={{ width: 1, height: 30, backgroundColor: palette.hairline }} />
             <RainStat label={t('hRain24', lang)} mm={precip24} />
           </View>
-          <WeatherIcon wmo={now?.wmo ?? 3} isDay={now?.isDay ?? 1} size={44} />
+          {/* The icon stays modelled: a station measures quantities, not conditions. */}
+          <WeatherIcon wmo={now.wmo} isDay={now.isDay} size={44} />
         </View>
 
-        {/* Everything else, as one line: temperature and its day range, then wind,
-            then humidity, separated by bullets rather than by rules. */}
+        {/* Everything else, as one line: temperature and its range, then wind, then
+            humidity, separated by bullets rather than by rules. */}
         <View
           style={{
             flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap',
@@ -120,13 +140,8 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-            <Text
-              variant="stat"
-              color={palette.appValue}
-              tabular
-              style={{ fontSize: TEMP_SIZE }}
-            >
-              {now?.temp != null ? convTemp(now.temp, prefs.tempUnit) : '—'}°
+            <Text variant="stat" color={palette.appValue} tabular style={{ fontSize: TEMP_SIZE }}>
+              {now.temp != null ? convTemp(now.temp, prefs.tempUnit) : '—'}°
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
               <Text variant="caption" weight="bold" color={palette.valHigh} tabular>
@@ -144,9 +159,9 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
           <Bullet />
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <WindArrow deg={now?.windDir ?? null} size={14} />
+            <WindArrow deg={now.windDir} size={14} />
             <Text variant="label" color={palette.valWind} tabular>
-              {convWind(now?.wind ?? null, prefs.windUnit) ?? '—'}
+              {convWind(now.wind, prefs.windUnit) ?? '—'}
             </Text>
             <Unit>{windUnitLabel(prefs.windUnit)}</Unit>
           </View>
@@ -155,7 +170,7 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
 
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
             <Text variant="label" color={palette.inkHeading} tabular>
-              {now?.humidity ?? '—'}
+              {now.humidity ?? '—'}
             </Text>
             <Unit>%</Unit>
           </View>
@@ -179,11 +194,7 @@ function RainStat({ label, mm }: { label: string; mm: number }) {
         {label}
       </Text>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
-        <Text
-          variant="stat"
-          color={mm > 0 ? palette.valPrecip : palette.valPrecipZero}
-          tabular
-        >
+        <Text variant="stat" color={mm > 0 ? palette.valPrecip : palette.valPrecipZero} tabular>
           {fmtMm(mm)}
         </Text>
         <Unit>mm</Unit>

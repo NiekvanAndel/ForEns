@@ -34,7 +34,10 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { processAll } from '../core/model/process';
+import { applyStationObservations } from '../core/model/station';
+import { useStationObservations } from './stations';
 import { deriveAlert, type WeatherAlert } from '../core/model/alert';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -106,6 +109,8 @@ interface ForecastContextValue {
   error: string | null;
   /** True once days 8–14 have been fetched. */
   extendedLoaded: boolean;
+  /** True while the page's own measurements are being fetched from a station. */
+  stationLoading: boolean;
   refresh: () => void;
   loadExtendedDays: () => void;
   /** The last model built for a location, or null if it has not been visited.
@@ -124,6 +129,7 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
   const [extendedLoaded, setExtendedLoaded] = useState(false);
   const [nonce, setNonce] = useState(0);
 
+  const queryClient = useQueryClient();
   const abortRef = useRef<AbortController | null>(null);
   /** Finished models by location. See the note at the top of the file. */
   const cache = useRef(new Map<string, CacheEntry>());
@@ -169,10 +175,17 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
       setPhase('ready');
 
       // The nowcast profile feeds the alert hero; it must not block the day list.
-      activeProvider()
-        .nowcastProfile(coords.lat, coords.lon, signal)
-        .then((p) => { if (live()) setNowcast(p); })
-        .catch(() => { /* the hero simply shows no bars */ });
+      // A location outside the radar's coverage is not asked at all — there is no
+      // answer to fetch, and the radar page says so in words.
+      const radar = activeProvider();
+      if (radar.coversPoint(coords.lat, coords.lon)) {
+        radar
+          .nowcastProfile(coords.lat, coords.lon, signal)
+          .then((p) => { if (live()) setNowcast(p); })
+          .catch(() => { /* the hero simply shows no bars */ });
+      } else if (live()) {
+        setNowcast(null);
+      }
 
       const s2 = await loadStage2(coords, { signal });
       if (!live()) return;
@@ -219,7 +232,18 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extendedLoaded, coords.lat, coords.lon]);
 
-  const refresh = useCallback(() => setNonce((n) => n + 1), []);
+  /**
+   * Reload everything this page shows.
+   *
+   * The forecast reloads by re-running the staged fetch; the station measurements
+   * live in the query cache, so they reload by being invalidated. Pull-to-refresh
+   * has to move both, or a station-backed page would keep showing the reading it
+   * had while every modelled number around it updated.
+   */
+  const refresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['agroexact'] });
+    setNonce((n) => n + 1);
+  }, [queryClient]);
 
   const built = useMemo(
     () =>
@@ -259,10 +283,35 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
    * Only `built` is written back to the cache, so a cached model cannot re-stamp
    * itself as fresh and outlive its own expiry.
    */
-  const model = useMemo(
+  const baseModel = useMemo(
     () => built ?? cache.current.get(cacheKey(location.lat, location.lon))?.model ?? null,
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the point
     [built, location.lat, location.lon, cacheVersion]
+  );
+
+  /**
+   * Measurements for this location, where a station speaks for it.
+   *
+   * Keyed on the location's UTC offset because the measured hours have to land on
+   * the same local hours `processAll` built, so the query stays idle until stage one
+   * has reported one.
+   */
+  const stationQuery = useStationObservations(
+    location,
+    phase === 'idle' ? null : sources.offsetSec,
+    phase !== 'idle'
+  );
+
+  /**
+   * The page's model, with measurements over the model where there are any.
+   *
+   * Applied here rather than inside `processAll` because the two arrive on different
+   * schedules: the forecast is rebuilt when a stage lands, the station answers when
+   * it answers, and neither should have to wait for the other.
+   */
+  const model = useMemo(
+    () => (baseModel ? applyStationObservations(baseModel, stationQuery.data ?? null) : null),
+    [baseModel, stationQuery.data]
   );
 
   /** Put a model in the cache and let the pager know there is something new. */
@@ -398,11 +447,12 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
       model, alert, nowcast,
       harmonie: sources.harmonie,
       offsetSec: sources.offsetSec,
-      phase, error, extendedLoaded, refresh, loadExtendedDays, cachedModel,
+      phase, error, extendedLoaded, stationLoading: stationQuery.isFetching,
+      refresh, loadExtendedDays, cachedModel,
     }),
     [
       model, alert, nowcast, sources.harmonie, sources.offsetSec, phase, error,
-      extendedLoaded, refresh, loadExtendedDays, cachedModel,
+      extendedLoaded, stationQuery.isFetching, refresh, loadExtendedDays, cachedModel,
     ]
   );
 

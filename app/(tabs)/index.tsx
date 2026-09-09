@@ -32,12 +32,14 @@ import { useForecast } from '../../state/forecast';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
 import { t, ta } from '../../core/i18n';
+import { measurementTimeLabel } from '../../core/model/station';
 
 function NowcastPage() {
   const { palette } = useTheme();
   const { prefs, location } = usePrefs();
   const {
     model, alert, harmonie, phase, error, refresh, extendedLoaded, loadExtendedDays,
+    offsetSec,
   } = useForecast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -91,13 +93,22 @@ function NowcastPage() {
     if (next) loadExtendedDays();
   };
 
-  const sourceLabel = location.stationName
-    ? location.stationName
+  // Where a station speaks for this location, the hero says so by name: the reader
+  // should be able to tell an instrument down the road from a model over Europe.
+  const stationName = model?.station?.name ?? location.stationName ?? null;
+  const sourceLabel = model?.station
+    ? `AgroExact - ${stationName ?? 'station'}`
     : harmonie.model
       ? 'HARMONIE-AROME'
       : 'ECMWF IFS';
 
-  const timeLabel = model ? model.nowHour.slice(11, 16) : '';
+  // A measurement carries its own timestamp, to the minute; a modelled hour does not.
+  const measured = model?.station?.current;
+  const timeLabel = measured
+    ? measurementTimeLabel(measured.measTime, offsetSec)
+    : model
+      ? model.nowHour.slice(11, 16)
+      : '';
 
   return (
     <>

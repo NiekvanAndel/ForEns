@@ -28,7 +28,6 @@ import { FullScreenRadar } from '../../ui/radar/FullScreenRadar';
 import { NowcastPanel } from '../../ui/radar/NowcastPanel';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
-import { useStations, stationsNear } from '../../state/stations';
 import { activeProvider, frameClock, radarAxis, type RadarFrame } from '../../core/radar';
 import { mapChrome } from '../../ui/radar/mapStyle';
 import { usePeeking } from '../../ui/peek';
@@ -38,15 +37,12 @@ import { ta } from '../../core/i18n';
  *  track is usually read north-to-south here, and because the panel beneath it is
  *  short. */
 const MAP_ASPECT = 0.78;
-/** Station pins are drawn for this radius around the location. */
-const STATION_PIN_RADIUS_KM = 60;
 
 function RadarPage() {
   const { palette, appearance } = useTheme();
-  const { prefs, location } = usePrefs();
+  const { prefs, location, selectLocation } = usePrefs();
   const { nowcast } = useForecast();
   const insets = useSafeAreaInsets();
-  const { stations } = useStations(location.lat, location.lon);
   const peeking = usePeeking();
   const router = useRouter();
   const { full } = useLocalSearchParams<{ full?: string }>();
@@ -58,6 +54,11 @@ function RadarPage() {
   const [loading, setLoading] = useState(true);
   const [fullScreen, setFullScreen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(320);
+
+  // The radar run covers the Netherlands, Belgium and western Germany. A saved
+  // location outside it gets a sentence rather than an empty chart under a map
+  // whose pictures do not reach it.
+  const covered = activeProvider().coversPoint(location.lat, location.lon);
 
   /**
    * Fetch the loop.
@@ -118,9 +119,14 @@ function RadarPage() {
     useCallback(() => fetchFrames(undefined, false), [fetchFrames])
   );
 
-  const pins = useMemo(
-    () => stationsNear(stations, location.lat, location.lon, STATION_PIN_RADIUS_KM),
-    [stations, location.lat, location.lon]
+  // Every saved location except the one this page is about, which the map already
+  // marks. Carrying the index along is what lets a tap select it.
+  const places = useMemo(
+    () =>
+      prefs.locations
+        .map((l, index) => ({ location: l, index }))
+        .filter((p) => p.location !== location),
+    [prefs.locations, location]
   );
 
   // One axis for the chart and the scrubber, so the cursor and the thumb move
@@ -165,7 +171,6 @@ function RadarPage() {
           lon={location.lon}
           frames={frames}
           activeIndex={index}
-          stations={pins}
           timeLabel={frameClock(frames[index])}
           style={{ aspectRatio: MAP_ASPECT }}
         />
@@ -192,6 +197,12 @@ function RadarPage() {
         {loading ? (
           <View style={{ paddingVertical: space[6], alignItems: 'center' }}>
             <ActivityIndicator color={palette.accent} />
+          </View>
+        ) : !covered ? (
+          <View style={{ padding: space[6] }}>
+            <Text variant="bodySm" color={palette.muted} align="center">
+              {ta('radarOutside', prefs.lang)}
+            </Text>
           </View>
         ) : frames.length ? (
           <>
@@ -245,7 +256,8 @@ function RadarPage() {
       onScrub={setIndex}
       playing={playing}
       onTogglePlay={() => setPlaying((p) => !p)}
-      stations={pins}
+      places={places}
+      onSelectPlace={selectLocation}
       profile={nowcast}
       locationName={location.name}
     />

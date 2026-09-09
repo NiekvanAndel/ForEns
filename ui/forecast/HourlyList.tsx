@@ -13,12 +13,34 @@
  * Three-hourly samples beyond the deterministic run's hourly window are marked, so
  * a gap in the model is visible rather than implied.
  *
+ * The icon and the readings are sized as on the forecast page's day rows, and read
+ * from the same constants. A sheet opened from a row is the same table one level
+ * deeper; the hours were set two points smaller than the days above them for no
+ * reason a reader could see.
+ *
+ * The readings sit in proportional columns, and at one fixed size — nothing here
+ * shrinks to fit.
+ *
+ * They used to, and that is what made one hour's row smaller than the next. On iOS
+ * `adjustsFontSizeToFit` does not honour its floor on a text with a nested child,
+ * which every reading here has: the unit is nested inside the number so the two
+ * cannot be pulled apart. So an hour whose reading was a few points wider than its
+ * neighbour's — "0,1 mm" against "0 mm" — did not shrink by the 15% the floor
+ * promised, it shrank as far as iOS liked, and the row read as a different size from
+ * the ones above and below it.
+ *
+ * The columns are sized for the widest reading each can hold ("-12 °C", "24,8 mm",
+ * "120 km/u", "60 min") at the size they are set in, with room to spare on the
+ * narrowest phone the app runs on. Nothing has to shrink, so nothing does, and every
+ * hour reads at the same size as every other.
+ *
  * Precipitation, temperature and wind rows also carry the hour's ensemble, once it
  * has loaded: the p10–p90 range the members allow, and for precipitation the share
  * of them that are wet at all. That is the difference between "1 mm" and "1 mm, but
  * a third of the members say nothing" — and, on an afternoon a front might reach
  * early, between "18°" and "18°, give or take four".
  */
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
@@ -29,6 +51,16 @@ import { convTemp, convWind, fmtMm, t, tempUnitLabel, windUnitLabel } from '../.
 import type { LayerKey } from '../../core/model/layers';
 import type { DetailHour } from '../../core/model/dayDetail';
 import { sunnyHourWmo } from '../../core/model/conditions';
+
+/** As on the day rows: temperature and precipitation lead, the longer units follow
+ *  a size down. See `OverviewDayRow`, which these deliberately match. */
+const VALUE_SIZE = 17;
+const VALUE_SIZE_SMALL = 15;
+const UNIT_SIZE = 12;
+const UNIT_SIZE_SMALL = 11;
+const ICON_SIZE = 30;
+/** Room for "23:00" at the size above. */
+const TIME_WIDTH = 46;
 
 export interface HourlyListProps {
   layer: LayerKey;
@@ -66,18 +98,19 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
           }}
         >
           <Text
-            variant="label"
+            variant="bodySm"
             weight="semibold"
             color={palette.muted}
             tabular
-            style={{ width: 42 }}
+            numberOfLines={1}
+            style={{ width: TIME_WIDTH }}
           >
             {h.time.slice(11, 16)}
           </Text>
 
-          <WeatherIcon wmo={sunnyHourWmo(h)} isDay={hourIsDay(h)} size={20} />
+          <WeatherIcon wmo={sunnyHourWmo(h)} isDay={hourIsDay(h)} size={ICON_SIZE} />
 
-          <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline', gap: 6 }}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
             <HourValue layer={layer} hour={h} />
           </View>
 
@@ -161,6 +194,31 @@ function hourIsDay(h: DetailHour): 0 | 1 {
   return hour >= 6 && hour < 21 ? 1 : 0;
 }
 
+/**
+ * One reading's column.
+ *
+ * Proportional with a floor, as on the day rows. Fixed widths sized for the widest
+ * reading strand the narrow ones; no width at all is what let a long reading eat its
+ * neighbour's room. A column both bounds the text — so `adjustsFontSizeToFit` shrinks
+ * within its floor instead of collapsing — and puts every hour's reading under the
+ * one above it.
+ */
+function Col({
+  flex, minWidth, children,
+}: { flex: number; minWidth: number; children: ReactNode }) {
+  return (
+    <View
+      style={{
+        flex, minWidth,
+        flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end',
+        gap: 3,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
 /** The one number this list is about. */
 function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
   const { palette } = useTheme();
@@ -169,26 +227,30 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
   switch (layer) {
     case 'precip':
       return (
-        <Pair
-          value={fmtMm(hour.precip)}
-          unit="mm"
-          color={hour.precip > 0 ? palette.valPrecip : palette.valPrecipZero}
-        />
+        <Col flex={1} minWidth={0}>
+          <Pair
+            value={fmtMm(hour.precip)}
+            unit="mm"
+            color={hour.precip > 0 ? palette.valPrecip : palette.valPrecipZero}
+          />
+        </Col>
       );
 
     case 'temp':
       return (
-        <Pair
-          value={convTemp(hour.temp, prefs.tempUnit)}
-          unit={tempUnitLabel(prefs.tempUnit)}
-          color={palette.valTemp}
-        />
+        <Col flex={1} minWidth={0}>
+          <Pair
+            value={convTemp(hour.temp, prefs.tempUnit)}
+            unit={tempUnitLabel(prefs.tempUnit)}
+            color={palette.valTemp}
+          />
+        </Col>
       );
 
     case 'wind':
       return (
-        <>
-          <WindArrow deg={hour.windDir} size={11} color={palette.muted} />
+        <Col flex={1} minWidth={0}>
+          <WindArrow deg={hour.windDir} size={12} color={palette.muted} />
           <Pair
             value={convWind(hour.wind, prefs.windUnit)}
             unit={windUnitLabel(prefs.windUnit)}
@@ -199,70 +261,115 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
               ⤴ {convWind(hour.gusts, prefs.windUnit)}
             </Text>
           ) : null}
-        </>
+        </Col>
       );
 
     case 'sun':
       return (
-        <Pair
-          value={hour.sunMin != null ? Math.round(hour.sunMin) : null}
-          unit="min"
-          color={palette.valSun}
-        />
+        <Col flex={1} minWidth={0}>
+          <Pair
+            value={hour.sunMin != null ? Math.round(hour.sunMin) : null}
+            unit="min"
+            color={palette.valSun}
+          />
+        </Col>
       );
 
     case 'humidity':
       return (
-        <Pair
-          value={hour.humidity != null ? Math.round(hour.humidity) : null}
-          unit="%"
-          color={palette.accentDark}
-        />
+        <Col flex={1} minWidth={0}>
+          <Pair
+            value={hour.humidity != null ? Math.round(hour.humidity) : null}
+            unit="%"
+            color={palette.accentDark}
+          />
+        </Col>
       );
 
-    // The overview list carries the whole hour, since that is what it is for.
+    // The overview list carries the whole hour, since that is what it is for. The
+    // proportions follow the day row's: temperature and precipitation lead, wind
+    // takes the most room for the longest unit, sunshine closes. Each floor is the
+    // width of that column's widest reading, and the four together leave room to
+    // spare beside the time and the icon on the narrowest phone the app runs on.
     case 'overview':
       return (
         <>
-          <Pair
-            value={convTemp(hour.temp, prefs.tempUnit)}
-            unit={tempUnitLabel(prefs.tempUnit)}
-            color={palette.valTemp}
-          />
-          <Pair
-            value={fmtMm(hour.precip)}
-            unit="mm"
-            color={hour.precip > 0 ? palette.valPrecip : palette.valPrecipZero}
-          />
-          <Pair
-            value={convWind(hour.wind, prefs.windUnit)}
-            unit={windUnitLabel(prefs.windUnit)}
-            color={palette.muted}
-          />
+          <Col flex={2.6} minWidth={46}>
+            <Pair
+              value={convTemp(hour.temp, prefs.tempUnit)}
+              unit={tempUnitLabel(prefs.tempUnit)}
+              color={palette.valTemp}
+            />
+          </Col>
+          <Col flex={2.8} minWidth={56}>
+            <Pair
+              value={fmtMm(hour.precip)}
+              unit="mm"
+              color={hour.precip > 0 ? palette.valPrecip : palette.valPrecipZero}
+            />
+          </Col>
+          <Col flex={3} minWidth={56}>
+            <Pair
+              value={convWind(hour.wind, prefs.windUnit)}
+              unit={windUnitLabel(prefs.windUnit)}
+              color={palette.muted}
+              small
+            />
+          </Col>
+          <Col flex={2.4} minWidth={42}>
+            <Pair
+              value={hour.sunMin != null ? Math.round(hour.sunMin) : null}
+              unit="min"
+              color={palette.valSun}
+              small
+            />
+          </Col>
         </>
       );
   }
 }
 
+/**
+ * One reading and its unit, in a single text node.
+ *
+ * Nested rather than two boxes in a row, for the reason `OverviewDayRow` gives: two
+ * boxes are two independently shrinkable things, and a narrow column squeezes both
+ * until each wraps on its own.
+ *
+ * No `adjustsFontSizeToFit`: its column is wide enough for the widest reading it can
+ * hold, and on a text with a nested child the prop ignores its own floor. See the
+ * note at the top of the file.
+ */
 function Pair({
-  value, unit, color,
-}: { value: string | number | null; unit: string; color: string }) {
+  value, unit, color, small,
+}: { value: string | number | null; unit: string; color: string; small?: boolean }) {
   const { palette } = useTheme();
+  const size = small ? VALUE_SIZE_SMALL : VALUE_SIZE;
   if (value == null) {
     return (
-      <Text variant="label" color={palette.inkDisabled} tabular>
+      <Text variant="bodySm" color={palette.inkDisabled} tabular style={{ fontSize: size }}>
         —
       </Text>
     );
   }
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-      <Text variant="label" weight="bold" color={color} tabular>
-        {value}
-      </Text>
-      <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 10 }}>
+    <Text
+      variant="bodySm"
+      weight="bold"
+      color={color}
+      tabular
+      numberOfLines={1}
+      style={{ fontSize: size }}
+    >
+      {value}
+      <Text
+        variant="caption"
+        weight="semibold"
+        color={palette.muted}
+        style={{ fontSize: small ? UNIT_SIZE_SMALL : UNIT_SIZE }}
+      >
         {' '}{unit}
       </Text>
-    </View>
+    </Text>
   );
 }

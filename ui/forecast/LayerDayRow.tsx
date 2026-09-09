@@ -97,7 +97,16 @@ export function LayerDayRow({
       <WeatherIcon wmo={values.wmo ?? day.wmo} isDay={1} size={25} />
 
       {cols.lead > 0 ? (
-        <LeadingValue day={day} layer={layer} dayIndex={dayIndex} width={cols.lead} />
+        <View style={{ gap: 4 }}>
+          <LeadingValue day={day} layer={layer} dayIndex={dayIndex} width={cols.lead} />
+          {layer === 'temp' ? (
+            <RangeCaption width={cols.lead} color={palette.valLow}>
+              {hasEns
+                ? `${convTemp(day.tempMinP10, prefs.tempUnit)}–${convTemp(day.tempMinP90, prefs.tempUnit)}°`
+                : '—'}
+            </RangeCaption>
+          ) : null}
+        </View>
       ) : null}
 
       <View style={{ flex: 1, gap: 4 }}>
@@ -109,7 +118,16 @@ export function LayerDayRow({
         <SpreadCaption day={day} layer={layer} hasEns={hasEns} />
       </View>
 
-      <TrailingValue day={day} layer={layer} dayIndex={dayIndex} width={cols.trail} />
+      <View style={{ gap: 4 }}>
+        <TrailingValue day={day} layer={layer} dayIndex={dayIndex} width={cols.trail} />
+        {layer === 'temp' ? (
+          <RangeCaption width={cols.trail} color={palette.valHigh}>
+            {hasEns
+              ? `${convTemp(day.tempMaxP10, prefs.tempUnit)}–${convTemp(day.tempMaxP90, prefs.tempUnit)}°`
+              : '—'}
+          </RangeCaption>
+        ) : null}
+      </View>
     </View>
   );
 
@@ -221,34 +239,17 @@ function Bar({ fraction, color }: { fraction: number; color: string }) {
 /**
  * The members' range in words under the beam — the numbers the bands are showing.
  *
- * Temperature gets two of them. Its beam has always drawn two bands on one axis,
- * one for the night's minimum and one for the day's maximum, and a single caption
- * running from the coldest minimum to the warmest maximum described neither: it
- * spanned the gap between the bands, which no member ever occupies. The minimum's
- * spread and the maximum's spread are separate questions — how cold does it get,
- * how warm does it get — so they are separate numbers, placed under their own bands
- * and in their own colours.
+ * Temperature has none, because it has two: the minimum's spread and the maximum's
+ * spread are separate questions, and they are set under the two numbers they belong
+ * to rather than under the beam. See `RangeCaption`.
  */
 function SpreadCaption({ day, layer, hasEns }: { day: Day; layer: LayerKey; hasEns: boolean }) {
-  const { palette } = useTheme();
   const { prefs } = usePrefs();
 
   if (layer === 'sun') return null;
 
-  if (layer === 'temp') {
-    if (!hasEns) return <Caption>—</Caption>;
-    const t = (v: unknown) => convTemp(v as number, prefs.tempUnit);
-    return (
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Caption color={palette.valLow}>
-          {t(day.tempMinP10)}–{t(day.tempMinP90)}°
-        </Caption>
-        <Caption color={palette.valHigh}>
-          {t(day.tempMaxP10)}–{t(day.tempMaxP90)}°
-        </Caption>
-      </View>
-    );
-  }
+  // Temperature's two ranges sit under their own numbers. See `RangeCaption`.
+  if (layer === 'temp') return null;
 
   if (!hasEns) return <Caption>—</Caption>;
 
@@ -271,6 +272,37 @@ function SpreadCaption({ day, layer, hasEns }: { day: Day; layer: LayerKey; hasE
 
   if (!text) return null;
   return <Caption align="center">{text}</Caption>;
+}
+
+/**
+ * A member range, set under the number it qualifies.
+ *
+ * Under the beam these two described their bands by position alone — the reader had
+ * to work out which end of the axis each belonged to. Under the numbers they are
+ * beside what they are about.
+ *
+ * Held to the column's existing width, so the beam keeps every point of its length:
+ * a range too wide for the column shrinks to fit rather than pushing the track
+ * shorter. The floor is low because "-12–-10°" is the width being guarded against,
+ * and it is a rare day.
+ */
+function RangeCaption({
+  children, color, width,
+}: { children: ReactNode; color: string; width: number }) {
+  return (
+    <Text
+      variant="caption"
+      color={color}
+      tabular
+      align="right"
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.75}
+      style={{ width, fontSize: 11.5 }}
+    >
+      {children}
+    </Text>
+  );
 }
 
 function Caption({

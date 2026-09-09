@@ -9,8 +9,12 @@
  * a dot missing from the band entirely means it was overruled — which is when the
  * number beside it carries a `~`.
  *
- * Beneath, the same three ranges in figures, because a band is a shape and a farmer
- * planning a spray window wants a number.
+ * Beneath the track are its two ends, and under those the same three ranges in
+ * figures, because a band is a shape and a farmer planning a spray window wants a
+ * number. The p10–p90 range was printed twice — once between the two ends and again
+ * in the figures — so the ends now carry nothing between them but the notice that
+ * the members are still loading, which is the one thing that line can say that the
+ * figures cannot.
  */
 import { View } from 'react-native';
 import { radius, space, useTheme } from '../../theme';
@@ -98,18 +102,23 @@ export function DayBar({
         <Text variant="caption" color={palette.muted} tabular style={{ fontSize: 10 }}>
           {format(scale.lo)}
         </Text>
-        <Text variant="caption" color={palette.muted} tabular style={{ fontSize: 10 }}>
-          {hasEns
-            ? `P10–P90 ${format(p10)}–${format(p90)}`
-            : 'Modelleden laden…'}
-        </Text>
+        {!hasEns ? (
+          <Text variant="caption" color={palette.muted} style={{ fontSize: 10 }}>
+            Modelleden laden…
+          </Text>
+        ) : null}
         <Text variant="caption" color={palette.muted} tabular style={{ fontSize: 10 }}>
           {format(scale.hi)}
         </Text>
       </View>
 
+      {/* One line for the three, so they read across as one statement about the
+          members. The gap is small for the same reason: precipitation's ranges carry
+          their unit twice over, and at a wider gap the last of the three dropped to
+          a line of its own. Wrapping is left on as the fallback for a narrow phone —
+          a second line is better than a figure running off the card. */}
       {hasEns ? (
-        <View style={{ flexDirection: 'row', gap: space[4], flexWrap: 'wrap', marginTop: 2 }}>
+        <View style={{ flexDirection: 'row', gap: space[2], flexWrap: 'wrap', marginTop: 2 }}>
           <Figure label="P50" value={format(p50)} color={color} />
           <Figure label="P25–P75" value={`${format(p25)}–${format(p75)}`} color={palette.ink} />
           <Figure label="P10–P90" value={`${format(p10)}–${format(p90)}`} color={palette.ink} />
@@ -141,7 +150,7 @@ function Span({
 function Figure({ label, value, color }: { label: string; value: string; color: string }) {
   const { palette } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', gap: 5, alignItems: 'baseline' }}>
+    <View style={{ flexDirection: 'row', gap: 4, alignItems: 'baseline' }}>
       <Text variant="caption" color={palette.muted} style={{ fontSize: 11 }}>
         {label}
       </Text>

@@ -34,7 +34,6 @@ import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
 import { HourlyList } from './HourlyList';
 import { DayBar } from './DayBar';
-import { OverviewDayRow } from './OverviewDayRow';
 import { SpreadChart } from '../charts/SpreadChart';
 import { usePrefs } from '../../state/prefs';
 import { buildDayDetail, precipNarrative, spreadLabel } from '../../core/model/dayDetail';
@@ -182,50 +181,65 @@ function SheetBody({
           }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Precipitation leads with what the ensemble actually says, in a
-              sentence. Every other section — overview included — goes straight to
-              its own figures. */}
-          {layer === 'precip' && narrative ? (
-            <Card>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], marginBottom: space[2] }}>
-                <Text variant="eyebrow" color={palette.muted}>
-                  {/* The translated string already names the model and a member
-                      count, so prefixing nMembers produced "50 ECMWF ENS 51
-                      members". The live count is the honest one: ECMWF publishes
-                      50 perturbed members plus a control run. */}
-                  {day.nMembers} modelleden
-                </Text>
-                {agreement ? (
-                  <View
-                    style={{
-                      marginLeft: 'auto',
-                      paddingVertical: 3, paddingHorizontal: 10,
-                      borderRadius: radius.pill,
-                      backgroundColor:
-                        agreement === 'eens' ? palette.accentTint
-                          : agreement === 'oneens' ? palette.warnBg
-                            : palette.cream2,
-                    }}
-                  >
-                    <Text
-                      variant="caption"
-                      weight="bold"
-                      color={agreement === 'oneens' ? palette.valHigh : palette.accentDark}
-                    >
-                      Leden {agreement}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-              <Text variant="bodySm" color={palette.ink}>
-                {narrative}
-              </Text>
-            </Card>
-          ) : null}
-
           <Card>
             <SectionTabs active={layer} onChange={onLayer} />
             <Rule soft style={{ marginBottom: space[3] }} />
+
+            {/* Precipitation leads with what the ensemble actually says, in a
+                sentence. It belongs to the precipitation section rather than above
+                the tabs, where it pushed the tabs down the screen and read as
+                something the sheet was saying about every measurand. Every other
+                section — overview included — goes straight to its own figures. */}
+            {layer === 'precip' && narrative ? (
+              <View
+                style={{
+                  backgroundColor: palette.surfaceAlt,
+                  borderRadius: radius.tile,
+                  padding: space[4],
+                  marginBottom: space[4],
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    gap: space[2], marginBottom: space[2],
+                  }}
+                >
+                  <Text variant="eyebrow" color={palette.muted}>
+                    {/* The translated string already names the model and a member
+                        count, so prefixing nMembers produced "50 ECMWF ENS 51
+                        members". The live count is the honest one: ECMWF publishes
+                        50 perturbed members plus a control run. */}
+                    {day.nMembers} modelleden
+                  </Text>
+                  {agreement ? (
+                    <View
+                      style={{
+                        marginLeft: 'auto',
+                        paddingVertical: 3, paddingHorizontal: 10,
+                        borderRadius: radius.pill,
+                        backgroundColor:
+                          agreement === 'eens' ? palette.accentTint
+                            : agreement === 'oneens' ? palette.warnBg
+                              : palette.cream2,
+                      }}
+                    >
+                      <Text
+                        variant="caption"
+                        weight="bold"
+                        color={agreement === 'oneens' ? palette.valHigh : palette.accentDark}
+                      >
+                        Leden {agreement}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text variant="bodySm" color={palette.ink}>
+                  {narrative}
+                </Text>
+              </View>
+            ) : null}
+
             <LayerSection layer={layer} day={day} detail={detail} />
             {ensembleLoading && layer !== 'overview' ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], marginTop: space[2] }}>
@@ -306,15 +320,12 @@ function LayerSection({
   const pct = (x: number | null) => (x != null ? `${Math.round(x)}%` : '—');
 
   switch (layer) {
-    // The overview repeats the list row, then everything the day is made of — the
-    // same figures the per-measurand sections show one at a time.
+    // Everything the day is made of, as figures — the same numbers the
+    // per-measurand sections show one at a time. The list row this sheet opens from
+    // used to be repeated at the top, which said all of it a second time in a
+    // narrower form directly above the cells.
     case 'overview':
-      return (
-        <>
-          <OverviewDayRow day={day} dayIndex={detail.dayIndex} />
-          <SummaryCells day={day} dayIndex={detail.dayIndex} />
-        </>
-      );
+      return <SummaryCells day={day} dayIndex={detail.dayIndex} />;
 
     case 'precip':
       return (
@@ -435,6 +446,8 @@ function LayerSection({
             labels={labels}
             color={palette.inkHeading}
             unit=""
+            valueUnit={` ${windUnitLabel(prefs.windUnit)}`}
+            secondaryLabel="⤴"
             showZero
             clampMin={0}
             series={{
@@ -500,6 +513,7 @@ function LayerSection({
             labels={labels}
             color={palette.valSun}
             unit=" m"
+            valueUnit=" min"
             showZero
             clampMin={0}
             series={{ values: hours.map((h) => h.sunMin) }}

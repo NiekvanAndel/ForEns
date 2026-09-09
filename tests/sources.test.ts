@@ -10,8 +10,8 @@ import { parseDayEnsemble } from '../core/sources/ensembleHourly';
 import { fetchJson, tryFetchJson, SourceError } from '../core/sources/http';
 import { loadHourly, loadStage1, urls } from '../core/sources/openMeteo';
 import {
-  agroHeaders, agroBaseUrl, agroRecords, distanceKm, circularMean,
-  nearestStation, fetchStationData, AGRO_DEFAULT_BASE,
+  agroHeaders, distanceKm, nearestStation, stationsNear, localHourKey, withAgroToken,
+  fetchStations, fetchStationHours, fetchLatestMeasurement, AgroAuthError,
 } from '../core/sources/agroexact';
 import { searchPlaces } from '../core/sources/geocoding';
 
@@ -139,29 +139,41 @@ describe('url construction', () => {
 });
 
 describe('AgroExact', () => {
-  it('prefixes a bare token but leaves a scheme intact', () => {
-    expect(agroHeaders({ token: 'abc123' }).Authorization).toBe('Token abc123');
-    expect(agroHeaders({ token: 'Token abc123' }).Authorization).toBe('Token abc123');
-    expect(agroHeaders({ token: 'Bearer xyz' }).Authorization).toBe('Bearer xyz');
-    expect(agroHeaders({ token: '' }).Authorization).toBeUndefined();
+  it('sends the access token as a bearer token', () => {
+    expect(agroHeaders(' abc123 ').Authorization).toBe('Bearer abc123');
   });
 
-  it('falls back to the default base URL', () => {
-    expect(agroBaseUrl({ token: 't' })).toBe(AGRO_DEFAULT_BASE);
-    expect(agroBaseUrl({ token: 't', baseUrl: '  ' })).toBe(AGRO_DEFAULT_BASE);
-    expect(agroBaseUrl({ token: 't', baseUrl: 'https://x.test/api' })).toBe('https://x.test/api');
+  it('spends one request on a refused token, not two', async () => {
+    const seen: string[] = [];
+    const f = vi.fn(async (_url: string, init?: { headers?: Record<string, string> }) => {
+      seen.push(init?.headers?.Authorization ?? '');
+      return { ok: false, status: 401, json: async () => ({}) } as unknown as Response;
+    });
+    await expect(fetchStations('key', { fetchImpl: f as unknown as typeof fetch }))
+      .rejects.toBeInstanceOf(AgroAuthError);
+    expect(seen).toEqual(['Bearer key']);
   });
 
-  it('unwraps records from any of the shapes the API uses', () => {
-    expect(agroRecords([{ a: 1 }])).toHaveLength(1);
-    for (const key of ['records', 'data', 'results', 'stations', 'readings']) {
-      expect(agroRecords({ [key]: [{ a: 1 }, { b: 2 }] }), key).toHaveLength(2);
-    }
-    expect(agroRecords(null)).toEqual([]);
-    expect(agroRecords({ nope: 1 })).toEqual([]);
+  it('reports a rejected credential as an auth error, not as no data', async () => {
+    const f = vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }) as unknown as Response);
+    await expect(fetchStations('dead', { fetchImpl: f as unknown as typeof fetch }))
+      .rejects.toBeInstanceOf(AgroAuthError);
   });
 
-  // This is the function index.html referenced but never defined.
+  it('keeps rain gauges and drops stations without coordinates', async () => {
+    const body = [
+      { station_id: 'a', name: 'Weide', latitude: '51.70', longitude: '5.30', version_type: 'ATMO' },
+      { station_id: 'b', name: 'Regen', latitude: '51.80', longitude: '5.40', version_type: 'RAIN' },
+      { station_id: 'c', name: 'Kwijt', latitude: null, longitude: null, version_type: 'ATMO' },
+    ];
+    const f = mockFetch(() => ({ body }));
+    const stations = await fetchStations('t', { fetchImpl: f });
+    // A rain gauge answers with a full record once external data is substituted in,
+    // so it stays; a station with no position cannot become a location at all.
+    expect(stations.map((s) => s.id)).toEqual(['a', 'b']);
+    expect(stations[0]!.lat).toBeCloseTo(51.7, 4);
+  });
+
   it('measures distance correctly', () => {
     expect(distanceKm(51.6978, 5.3037, 51.6978, 5.3037)).toBe(0);
     // 's-Hertogenbosch to Eindhoven is about 32 km.
@@ -174,7 +186,7 @@ describe('AgroExact', () => {
     expect(distanceKm(60, 0, 60, 1)).toBeLessThan(distanceKm(0, 0, 0, 1) / 1.9);
   });
 
-  it('picks the nearest station', () => {
+  it('picks the nearest station, and lists the ones within a radius', () => {
     const stations = [
       { id: 'far', name: 'Far', lat: 52.4, lon: 4.9, type: 'ATMO' },
       { id: 'near', name: 'Near', lat: 51.70, lon: 5.31, type: 'ATMO' },
@@ -183,56 +195,79 @@ describe('AgroExact', () => {
     expect(n.id).toBe('near');
     expect(n.dist).toBeLessThan(1);
     expect(nearestStation([], 0, 0)).toBeNull();
+    expect(stationsNear(stations, 51.6978, 5.3037, 10).map((s) => s.id)).toEqual(['near']);
   });
 
-  it('averages bearings around the compass wrap', () => {
-    // 350 and 10 average to 0, not 180.
-    expect(circularMean([350, 10])).toBeCloseTo(0, 5);
-    expect(circularMean([90, 90])).toBeCloseTo(90, 5);
-    expect(circularMean([])).toBeNull();
+  it('buckets UTC instants into the location\'s own local hour', () => {
+    // +2h: 22:30Z is half past midnight the next day, locally.
+    expect(localHourKey('2026-06-15T22:30:00Z', 7200)).toBe('2026-06-16T00:00');
+    expect(localHourKey('2026-06-15T10:00:00Z', 3600)).toBe('2026-06-15T11:00');
+    expect(localHourKey('not a date', 0)).toBe('');
   });
 
-  it('folds readings into local hours, converting m/s to km/h', async () => {
-    const readings = [
-      // Two readings inside 12:00 local (offset +2h => 10:00Z and 10:30Z).
-      { timestamp: '2026-06-15T10:00:00Z', temperature_150: 18, windspeed: 5, wind_direction: 350, precipitation: 0.2, humidity_150: 60 },
-      { timestamp: '2026-06-15T10:30:00Z', temperature_150: 20, windspeed: 7, wind_direction: 10, precipitation: 0.4, humidity_150: 70 },
-      { timestamp: '2026-06-15T11:00:00Z', temperature_150: 22, windspeed: 3, gust: 12, wind_direction: 180, precipitation: 0, humidity_150: 55 },
+  it('maps hourly aggregates onto the hour they describe, in km/h', async () => {
+    // An aggregate is stamped at the END of its window: 12:00Z covers 11:00–12:00Z,
+    // which at +2h is the local hour starting at 13:00.
+    const body = [
+      {
+        timestamp: '2026-06-15T12:00:00Z', station_name: 'Weide',
+        temperature_150: 22, temperature_150_avg: 19, temperature_150_min: 17,
+        temperature_150_max: 21, humidity_150_avg: 65, dewpoint: 12,
+        windspeed_avg: 6, gust_max: 12, wind_direction: 240, precipitation: 0.62,
+      },
     ];
-    const f = mockFetch(() => ({ body: { readings } }));
-    const data = (await fetchStationData({ token: 't' }, 'st1', 7200, 51.7, {
-      fetchImpl: f,
-      wmoByHour: { '2026-06-15T12:00': 61 },
-    }))!;
+    const f = mockFetch(() => ({ body }));
+    const { hours, stationName } = await fetchStationHours('t', 'st1', 7200, 26, { fetchImpl: f });
 
-    expect(data.hours.map((h) => h.time)).toEqual(['2026-06-15T12:00', '2026-06-15T13:00']);
-
-    const noon = data.hours[0]!;
-    // Temperature and humidity are means over the hour.
-    expect(noon.temp).toBe(19);
-    expect(noon.humidity).toBe(65);
-    // Wind is a mean converted from m/s: mean(5,7) = 6 m/s = 21.6 km/h.
-    expect(noon.wind).toBe(22);
-    // Precipitation is a sum, not a mean.
-    expect(noon.precip).toBe(0.6);
-    // Bearings average around the wrap: 350 and 10 give 0, not 180.
-    expect(noon.windDir).toBe(0);
-    // The weather code comes from the model, since a station cannot measure one.
-    expect(noon.wmo).toBe(61);
-    expect(noon.agro).toBe(true);
-
-    // Gusts are the hour's maximum, not its mean: 12 m/s = 43.2 km/h.
-    expect(data.hours[1]!.gusts).toBe(43);
-
-    // "Current" is the newest reading, keeping its own sub-hour timestamp.
-    expect(data.current.measTime).toBe('2026-06-15T11:00:00Z');
-    expect(data.current.time).toBe('2026-06-15T13:00');
-    expect(data.current.temp).toBe(22);
+    expect(Object.keys(hours)).toEqual(['2026-06-15T13:00']);
+    const h = hours['2026-06-15T13:00']!;
+    // The hourly average, not the last measurement inside the hour.
+    expect(h.temp).toBe(19);
+    expect(h.tempMin).toBe(17);
+    expect(h.tempMax).toBe(21);
+    // 6 m/s = 21.6 km/h, 12 m/s = 43.2 km/h.
+    expect(h.wind).toBe(22);
+    expect(h.gusts).toBe(43);
+    expect(h.precip).toBe(0.6);
+    expect(stationName).toBe('Weide');
   });
 
-  it('returns null when the station has no readings', async () => {
-    const f = mockFetch(() => ({ body: { readings: [] } }));
-    expect(await fetchStationData({ token: 't' }, 'st1', 7200, 51.7, { fetchImpl: f })).toBeNull();
+  it('asks for the partial hour and for externally completed data', async () => {
+    let asked = '';
+    const f = mockFetch((url) => { asked = url; return { body: [] }; });
+    await fetchStationHours('t', 'st1', 0, 26, { fetchImpl: f });
+    expect(asked).toContain('/aggregates/st1/');
+    expect(asked).toContain('hours=26');
+    // Without this the live hour is withheld and reads as a station gone quiet.
+    expect(asked).toContain('include_partial=true');
+    // The app wants every quantity the station can answer for, substituted where
+    // its own sensors cannot: a rain gauge gets a full record, not a lone figure.
+    expect(asked).toContain('station_only=false');
+  });
+
+  it('reads the latest measurement with its own minute', async () => {
+    const body = [{
+      timestamp: '2026-06-15T11:42:00Z', station_name: 'Weide',
+      temperature_150: 21.4, humidity_150: 58, dewpoint: '12.5',
+      windspeed: 4, gust: 9, wind_direction: 200, precipitation: 0,
+    }];
+    let asked = '';
+    const f = mockFetch((url) => { asked = url; return { body }; });
+    const { current } = await fetchLatestMeasurement('t', 'st1', 7200, { fetchImpl: f });
+
+    expect(asked).toContain('latest=true');
+    expect(asked).toContain('station_only=false');
+    expect(current!.measTime).toBe('2026-06-15T11:42:00Z');
+    expect(current!.time).toBe('2026-06-15T13:00');
+    expect(current!.temp).toBe(21);
+    expect(current!.wind).toBe(14);
+    expect(current!.dewpoint).toBe(13);
+  });
+
+  it('reports no measurement rather than failing when the station is silent', async () => {
+    const f = mockFetch(() => ({ body: [] }));
+    const { current } = await fetchLatestMeasurement('t', 'st1', 0, { fetchImpl: f });
+    expect(current).toBeNull();
   });
 });
 
@@ -310,5 +345,63 @@ describe('parseDayEnsemble', () => {
     });
     expect(out[times[0]!]!.precipP50).toBe(3);
     expect(out[times[0]!]!.temp!.p50).toBe(17);
+  });
+});
+
+describe('withAgroToken', () => {
+  const refused = () => Promise.reject(new AgroAuthError('niet geautoriseerd', 401));
+
+  it('does not call at all without an account', async () => {
+    const call = vi.fn();
+    expect(await withAgroToken(async () => null, call)).toBeNull();
+    expect(call).not.toHaveBeenCalled();
+  });
+
+  it('passes the token straight through when the API is happy', async () => {
+    const call = vi.fn(async (t: string) => t.toUpperCase());
+    expect(await withAgroToken(async () => 'live', call)).toBe('LIVE');
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes and retries once when the API refuses a token the clock still trusts', async () => {
+    const getToken = vi.fn(async (spent?: string) => (spent ? 'fresh' : 'stale'));
+    const call = vi.fn(async (t: string) => (t === 'stale' ? refused() : 'data'));
+    expect(await withAgroToken(getToken, call)).toBe('data');
+    expect(getToken).toHaveBeenLastCalledWith('stale');
+    expect(call).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes a second refusal at face value, and says so', async () => {
+    const call = vi.fn(refused);
+    const refusedFresh = vi.fn();
+    await expect(withAgroToken(async (spent) => (spent ? 'fresh' : 'stale'), call, refusedFresh))
+      .rejects.toBeInstanceOf(AgroAuthError);
+    expect(call).toHaveBeenCalledTimes(2);
+    expect(refusedFresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays quiet when the retry fails for a reason other than the token', async () => {
+    const refusedFresh = vi.fn();
+    const call = vi.fn(async (t: string) => {
+      if (t === 'stale') return refused();
+      throw new SourceError('AgroExact', 'HTTP 503', 503);
+    });
+    await expect(withAgroToken(async (spent) => (spent ? 'fresh' : 'stale'), call, refusedFresh))
+      .rejects.toBeInstanceOf(SourceError);
+    expect(refusedFresh).not.toHaveBeenCalled();
+  });
+
+  it('gives up without a retry when there is nothing fresher to try', async () => {
+    const call = vi.fn(refused);
+    // A network failure during the refresh leaves the same token in hand; retrying
+    // with it would only spend a second request on the same answer.
+    await expect(withAgroToken(async () => 'stale', call)).rejects.toBeInstanceOf(AgroAuthError);
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves anything that is not an auth failure alone', async () => {
+    const call = vi.fn(async () => { throw new SourceError('AgroExact', 'HTTP 500', 500); });
+    await expect(withAgroToken(async () => 'live', call)).rejects.toBeInstanceOf(SourceError);
+    expect(call).toHaveBeenCalledTimes(1);
   });
 });

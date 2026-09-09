@@ -1,21 +1,14 @@
 /**
  * The radar map.
  *
- * Only the active frame is mounted, keyed so it remounts when the frame changes.
+ * The imagery itself is drawn by `RadarLayer`, which is shared with the preview card
+ * and holds the rule that makes the loop animate: every frame mounted, a step only
+ * flips opacity. Why the map is MapLibre rather than Apple Maps, and why the camera
+ * is clamped, are both in ./mapStyle.
  *
- * An earlier version mounted every frame and drove visibility with `opacity`, to
- * avoid a flash between steps. On iOS that renders nothing at all: react-native-maps
- * does not honour per-overlay opacity on `UrlTile`, so all sixteen overlays stacked
- * and the map stayed blank. The radar preview on the Nowcast screen, which has
- * always mounted a single overlay, is what showed the difference. Correctness beats
- * the optimisation — MapKit's own tile cache makes replay smooth after one pass.
- *
- * Zoom limits and pin rendering are explained in ./mapStyle, which the preview on
- * 'Nu' shares.
- *
- * On a page being swiped past it draws a still panel instead. A second MapView
- * allocated on the UI thread at the moment a finger starts moving costs the
- * smoothness of that gesture, and a map travelling across the screen is not read.
+ * On a page being swiped past it draws a still panel instead. A second map allocated
+ * on the UI thread at the moment a finger starts moving costs the smoothness of that
+ * gesture, and a map travelling across the screen is not read.
  *
  * There is no recentre button. The map already returns to the location whenever the
  * location changes, and the pin is on screen at every zoom the map allows, so the
@@ -23,18 +16,24 @@
  */
 import { useEffect, useRef } from 'react';
 import { View, Pressable } from 'react-native';
-import MapView, { Marker, UrlTile, PROVIDER_DEFAULT, type Region } from 'react-native-maps';
+import {
+  Camera, Map as MapLibreMap, Marker, type CameraRef, type MapProps,
+} from '@maplibre/maplibre-react-native';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
-import { MAX_DISPLAY_Z, MIN_ZOOM, START_SPAN_DEG, mapChrome, maxZoomFor } from './mapStyle';
+import { MIN_ZOOM, START_ZOOM, ZOOM_STEP, mapChrome, mapStyleFor, maxZoomFor } from './mapStyle';
+import { RadarLayer } from './RadarLayer';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import { usePeeking } from '../peek';
-import type { AgroStation } from '../../core/sources/agroexact';
+import type { SavedLocation } from '../../core/prefs';
 
-/** The span band the zoom buttons work within, matching MIN_ZOOM and maxZoomFor. */
-const MIN_SPAN_DEG = 0.05;
-const MAX_SPAN_DEG = 24;
+/** One of the reader's other saved locations, as the map draws it. */
+export interface PlacePin {
+  location: SavedLocation;
+  /** Its slot in the saved list, which is what selecting it needs. */
+  index: number;
+}
 
 /** Everything floating on the map is this tall, so the time badge, the zoom
  *  buttons and the full-screen back button sit on one line. */
@@ -48,7 +47,12 @@ export interface RadarMapProps {
   lon: number;
   frames: RadarFrame[];
   activeIndex: number;
-  stations: AgroStation[];
+  /** The reader's other saved locations, drawn as pins that select them. Left out
+   *  on the card, where the map answers "is it raining here" and every other dot is
+   *  a distraction from the one that matters. */
+  places?: PlacePin[];
+  /** Selects a place. Without it the pins are labels rather than controls. */
+  onSelectPlace?: (index: number) => void;
   /** Label for the time badge, e.g. "nu" or "+45 min". */
   timeLabel: string;
   interactive?: boolean;
@@ -60,28 +64,33 @@ export interface RadarMapProps {
    *  inset, so the time badge clears the clock and the battery rather than sitting
    *  behind them. */
   chromeTop?: number;
+  /** Where the basemap's attribution button sits. It is the map's own ornament, so
+   *  it can only be placed inside the map — which means the caller has to say where
+   *  it will not be covered. Full screen passes a raised position, because the
+   *  profile panel is pulled up over the bottom of the map there and swallowed it. */
+  attributionPosition?: MapProps['attributionPosition'];
   style?: object;
 }
 
 export function RadarMap({
-  lat, lon, frames, activeIndex, stations, timeLabel,
+  lat, lon, frames, activeIndex, places = [], onSelectPlace, timeLabel,
   interactive = true, showControls = true, showLegend = false,
-  chromeTop = CHROME_INSET, style,
+  chromeTop = CHROME_INSET, attributionPosition = { bottom: space[2], left: space[2] },
+  style,
 }: RadarMapProps) {
   const { palette, appearance } = useTheme();
   const peeking = usePeeking();
   const provider = activeProvider();
-  const mapRef = useRef<MapView>(null);
-  const region = useRef<Region>({
-    latitude: lat, longitude: lon,
-    latitudeDelta: START_SPAN_DEG, longitudeDelta: START_SPAN_DEG,
-  });
+  const camera = useRef<CameraRef>(null);
+  const maxZoom = maxZoomFor(provider.maxZoom);
+  // Tracked so a zoom button knows where it is starting from; the camera itself
+  // owns the live value once the reader pans.
+  const zoom = useRef(START_ZOOM);
 
   // Recentre when the chosen location changes, rather than stranding the user
   // looking at the previous city.
   useEffect(() => {
-    region.current = { ...region.current, latitude: lat, longitude: lon };
-    mapRef.current?.animateToRegion(region.current, 400);
+    camera.current?.flyTo({ center: [lon, lat], duration: 400 });
   }, [lat, lon]);
 
   const chrome = mapChrome(palette, appearance);
@@ -90,17 +99,10 @@ export function RadarMap({
 
   const active = frames[activeIndex] ?? frames[frames.length - 1];
 
-  const zoom = (factor: number) => {
-    const r = region.current;
-    const next = {
-      ...r,
-      // Kept inside the same band the map itself is clamped to, so a button press
-      // cannot reach a zoom the provider has no tiles for.
-      latitudeDelta: Math.min(MAX_SPAN_DEG, Math.max(MIN_SPAN_DEG, r.latitudeDelta * factor)),
-      longitudeDelta: Math.min(MAX_SPAN_DEG, Math.max(MIN_SPAN_DEG, r.longitudeDelta * factor)),
-    };
-    region.current = next;
-    mapRef.current?.animateToRegion(next, 200);
+  const stepZoom = (by: number) => {
+    const next = Math.min(maxZoom, Math.max(MIN_ZOOM, zoom.current + by));
+    zoom.current = next;
+    camera.current?.zoomTo(next, { duration: 200 });
   };
 
   if (peeking) {
@@ -122,44 +124,33 @@ export function RadarMap({
 
   return (
     <View style={[{ borderRadius: radius.appCard, overflow: 'hidden' }, style]}>
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_DEFAULT}
+      <MapLibreMap
         style={{ flex: 1 }}
-        initialRegion={region.current}
-        onRegionChangeComplete={(r) => { region.current = r; }}
-        scrollEnabled={interactive}
-        zoomEnabled={interactive}
-        rotateEnabled={false}
-        pitchEnabled={false}
-        toolbarEnabled={false}
-        showsCompass={false}
-        userInterfaceStyle={appearance}
-        minZoomLevel={MIN_ZOOM}
-        maxZoomLevel={maxZoomFor(provider.maxZoom)}
+        mapStyle={mapStyleFor(appearance)}
+        dragPan={interactive}
+        touchZoom={interactive}
+        doubleTapZoom={interactive}
+        touchRotate={false}
+        touchPitch={false}
+        compass={false}
+        logo={false}
+        // OpenStreetMap's licence wants crediting, and the style carries the line;
+        // the button is the least intrusive way to show it on a map this size.
+        attribution
+        attributionPosition={attributionPosition}
+        onRegionDidChange={(e) => { zoom.current = e.nativeEvent.zoom; }}
       >
-        {active ? (
-          <UrlTile
-            key={active.id}
-            urlTemplate={provider.tileTemplate({ frame: active })}
-            maximumNativeZ={provider.maxZoom}
-            maximumZ={MAX_DISPLAY_Z}
-            tileSize={provider.tileSize}
-            zIndex={1}
-            opacity={0.75}
-          />
-        ) : null}
+        <Camera
+          ref={camera}
+          initialViewState={{ center: [lon, lat], zoom: START_ZOOM }}
+          minZoom={MIN_ZOOM}
+          maxZoom={maxZoom}
+        />
 
-        {/* A small dot rather than MapKit's teardrop, which at pin size covered a
-            county. Drawn as a marker child with tracking left on: freezing the
-            snapshot is what previously left the annotation blank or stranded it
-            mid-pan, and one marker is cheap enough to re-rasterise. */}
-        <Marker
-          coordinate={{ latitude: lat, longitude: lon }}
-          anchor={{ x: 0.5, y: 0.5 }}
-          zIndex={2}
-          title="Jouw locatie"
-        >
+        <RadarLayer provider={provider} frames={frames} active={active} />
+
+        {/* A small dot rather than a teardrop, which at pin size covered a county. */}
+        <Marker lngLat={[lon, lat]} anchor="center">
           <View
             style={{
               width: 16, height: 16, borderRadius: 8,
@@ -169,16 +160,27 @@ export function RadarMap({
           />
         </Marker>
 
-        {stations.map((s) => (
+        {/* The other saved locations. Hollow, so the filled dot above stays the
+            place the page is about, and tappable, which is how full screen changes
+            location without leaving full screen. */}
+        {places.map((p) => (
           <Marker
-            key={s.id}
-            coordinate={{ latitude: s.lat, longitude: s.lon }}
-            title={s.name}
-            pinColor={palette.agroBright}
-            zIndex={2}
-          />
+            key={`${p.index}-${p.location.name}`}
+            lngLat={[p.location.lon, p.location.lat]}
+            anchor="center"
+            onPress={() => onSelectPlace?.(p.index)}
+          >
+            <View
+              style={{
+                width: 15, height: 15, borderRadius: 8,
+                backgroundColor: '#fff',
+                borderWidth: 3,
+                borderColor: p.location.stationId ? palette.agroBright : chrome.here,
+              }}
+            />
+          </Marker>
         ))}
-      </MapView>
+      </MapLibreMap>
 
       <View
         style={[
@@ -199,8 +201,8 @@ export function RadarMap({
 
       {showControls ? (
         <View style={{ position: 'absolute', left: CHROME_INSET, top: chromeTop, gap: space[2] }}>
-          <ControlButton icon="plus" label="Inzoomen" bg={chromeBg} ink={chromeInk} onPress={() => zoom(0.5)} />
-          <ControlButton icon="minus" label="Uitzoomen" bg={chromeBg} ink={chromeInk} onPress={() => zoom(2)} />
+          <ControlButton icon="plus" label="Inzoomen" bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(ZOOM_STEP)} />
+          <ControlButton icon="minus" label="Uitzoomen" bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(-ZOOM_STEP)} />
         </View>
       ) : null}
 
@@ -217,13 +219,13 @@ export function RadarMap({
             shadowFloat,
           ]}
         >
-          <LegendRow color={chrome.here} ring="#fff" label="Jouw locatie" textColor={chromeInk} />
-          {stations.length ? (
+          <LegendRow color={chrome.here} ring="#fff" label="Deze locatie" textColor={chromeInk} />
+          {places.length ? (
             <LegendRow
               color="#fff"
-              ring={palette.agroBright}
-              label="AgroExact-station"
-              textColor={palette.agroInk}
+              ring={chrome.here}
+              label="Andere locatie"
+              textColor={chromeInk}
             />
           ) : null}
         </View>

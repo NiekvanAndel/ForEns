@@ -1,60 +1,69 @@
 /**
  * Shared decisions for both maps — the preview on 'Nu' and the full radar screen.
  *
- * ## Why the pins are MapKit's own, not React views
+ * ## Why MapLibre and not Apple Maps
  *
- * A `Marker` with React children is rasterised by react-native-maps into an
- * annotation image. Two things went wrong with that here: the snapshot could be
- * taken before the child had laid out, leaving an empty annotation, and — reported
- * after the first fix — the annotation held its screen position while the map moved
- * underneath it, so the "you are here" dot drifted off the place it marks.
+ * The radar loop is an animation, and Apple Maps could not play one. react-native-maps
+ * draws a georeferenced image through AIRMapOverlay, whose image load ends in an
+ * `update` that does `[_map removeOverlay:self]; [_map addOverlay:self];`
+ * unconditionally. Two things follow from that, and both were visible in the app:
+ * a frame unmounted while its image was still loading re-added *itself* afterwards,
+ * so stepping the loop stacked every frame it had ever shown; and once a single
+ * overlay was reused instead, the remove/add on each step made MapKit re-rasterise
+ * the layer, which blanked the map for a beat. Neither has a prop to turn it off,
+ * and `Overlay`'s `opacity` — the way you would normally cross-fade frames — is
+ * documented as Google Maps only and is never read by the iOS renderer.
  *
- * Both are properties of the custom-view path, not of the pin's design. So the pins
- * are now plain `<Marker pinColor>` annotations, which MapKit positions itself and
- * which cannot come out blank. The cost is the pulse ring, which was decoration; a
- * dot that is in the wrong place is worse than a dot that does not breathe.
+ * MapLibre has the piece that was missing: real per-layer opacity. Every frame is
+ * mounted once as its own raster layer and a step only flips which one is opaque,
+ * so nothing is added, removed, refetched or re-rasterised while the loop plays.
+ * That is how the AgroExact RN client animates the same imagery.
  *
- * ## Why two zoom limits
+ * ## Why the basemap is OpenFreeMap
  *
- * `maximumNativeZ` is the deepest level tiles exist for; `maximumZ` is the deepest
- * level the overlay is drawn at. Setting only the latter to the provider's limit is
- * what produced "Zoom Level Not Supported" — past it MapKit stopped drawing rather
- * than upscaling.
+ * Leaving Apple Maps means bringing a basemap. OpenFreeMap serves OpenStreetMap
+ * vector tiles with no API key and no quota, which keeps the app free of a metered
+ * third-party account for what is only a backdrop to the radar.
  *
- * Upscaling has a limit of its own, though: stretched far enough the tiles are mush,
- * and RainViewer serves a placeholder image rather than a tile at some levels. So the
- * map is clamped at *both* ends — `MIN_ZOOM` because the whole-world levels are the
- * ones most likely to be missing, `maxZoomFor` a little past the native maximum —
- * and every starting region is chosen to sit inside that band.
+ * Bright in light, Fiord in dark. NOTE: `tiles.openfreemap.org` is unreachable from
+ * the build environment (the network policy blocks it), so neither URL below could
+ * be requested to confirm its exact slug.
  *
- * ## Why the map is told the tile size
+ * ## Why the map is clamped at both ends
  *
- * MapKit chooses which zoom level to fetch from the tile size it is given, not from
- * the zoom the map is displaying. Told 256, it asks for roughly two levels deeper on
- * a 3× screen — which is how a view of the whole country still managed to request
- * tiles past what RainViewer publishes and get its "zoom level not supported"
- * placeholder back, drawn across the map as if it were weather. The provider now
- * declares its tile size and serves retina tiles, so the level requested is close to
- * the level shown.
+ * The radar imagery is one image per frame at about a kilometre per pixel, so past
+ * the provider's own maximum the map is only scaling it up, and far enough in it is
+ * mush. Out at the whole-world levels the basemap has nothing useful to say about a
+ * shower over Brabant either. So the camera is held inside a band and every starting
+ * view is chosen to sit within it.
  */
 import type { Appearance, Palette } from '../../theme';
 
-/** How far the tile overlay is drawn. Past the provider's native limit MapKit
- *  upscales its deepest tiles rather than dropping the layer. */
-export const MAX_DISPLAY_Z = 19;
+/** The basemap, per appearance.
+ *
+ *  If either ever 404s the map comes up empty, and these two URLs are the thing to
+ *  change; CARTO's `https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json`
+ *  is the drop-in for dark. */
+const STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/bright';
+const STYLE_DARK = 'https://tiles.openfreemap.org/styles/fiord';
 
-/** How far the map itself will zoom in. Two levels past the provider's own maximum
- *  is as far as upscaled tiles stay readable. */
-export const maxZoomFor = (providerMaxZoom: number) => providerMaxZoom + 2;
+export function mapStyleFor(appearance: Appearance): string {
+  return appearance === 'dark' ? STYLE_DARK : STYLE_LIGHT;
+}
 
-/** How far out the map will go. Below this a radar tile covers a continent, which
- *  providers commonly do not serve at all. */
+/** How far out the map will go. Below this a radar frame covers a continent. */
 export const MIN_ZOOM = 4;
 
-/** The region a radar map opens on, in degrees. Around zoom 6–7 on a phone: the
- *  country and the weather heading for it, and far enough out that even a 3× screen
- *  asking for deeper tiles than it draws stays inside what the provider serves. */
-export const START_SPAN_DEG = 3.4;
+/** How far in. Two levels past the provider's own maximum is as far as an upscaled
+ *  radar image stays readable. */
+export const maxZoomFor = (providerMaxZoom: number) => providerMaxZoom + 2;
+
+/** The zoom a radar map opens on: the country and the weather heading for it, and
+ *  the same framing the map had before the move to MapLibre. */
+export const START_ZOOM = 7;
+
+/** The band the zoom buttons work within, matching MIN_ZOOM and maxZoomFor. */
+export const ZOOM_STEP = 1;
 
 export interface MapChrome {
   /** Background for anything floating on the map. */
