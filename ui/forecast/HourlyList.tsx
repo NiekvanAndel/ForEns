@@ -18,12 +18,21 @@
  * deeper; the hours were set two points smaller than the days above them for no
  * reason a reader could see.
  *
+ * The readings sit in proportional columns for the same reason the day rows do. They
+ * were right-packed into one row with a gap, which works for one reading and falls
+ * apart at four: `adjustsFontSizeToFit` only holds its floor inside a box with a
+ * width, so in an unbounded row the last readings were squeezed to whatever space
+ * the ones before them had left over — the wind and the sunshine came out half the
+ * size of the temperature, by an amount that changed from hour to hour, and nothing
+ * lined up down the list.
+ *
  * Precipitation, temperature and wind rows also carry the hour's ensemble, once it
  * has loaded: the p10–p90 range the members allow, and for precipitation the share
  * of them that are wet at all. That is the difference between "1 mm" and "1 mm, but
  * a third of the members say nothing" — and, on an afternoon a front might reach
  * early, between "18°" and "18°, give or take four".
  */
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
@@ -93,7 +102,7 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
 
           <WeatherIcon wmo={sunnyHourWmo(h)} isDay={hourIsDay(h)} size={ICON_SIZE} />
 
-          <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline', gap: 6 }}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
             <HourValue layer={layer} hour={h} />
           </View>
 
@@ -177,6 +186,31 @@ function hourIsDay(h: DetailHour): 0 | 1 {
   return hour >= 6 && hour < 21 ? 1 : 0;
 }
 
+/**
+ * One reading's column.
+ *
+ * Proportional with a floor, as on the day rows. Fixed widths sized for the widest
+ * reading strand the narrow ones; no width at all is what let a long reading eat its
+ * neighbour's room. A column both bounds the text — so `adjustsFontSizeToFit` shrinks
+ * within its floor instead of collapsing — and puts every hour's reading under the
+ * one above it.
+ */
+function Col({
+  flex, minWidth, children,
+}: { flex: number; minWidth: number; children: ReactNode }) {
+  return (
+    <View
+      style={{
+        flex, minWidth,
+        flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end',
+        gap: 3,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
 /** The one number this list is about. */
 function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
   const { palette } = useTheme();
@@ -185,25 +219,29 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
   switch (layer) {
     case 'precip':
       return (
-        <Pair
-          value={fmtMm(hour.precip)}
-          unit="mm"
-          color={hour.precip > 0 ? palette.valPrecip : palette.valPrecipZero}
-        />
+        <Col flex={1} minWidth={0}>
+          <Pair
+            value={fmtMm(hour.precip)}
+            unit="mm"
+            color={hour.precip > 0 ? palette.valPrecip : palette.valPrecipZero}
+          />
+        </Col>
       );
 
     case 'temp':
       return (
-        <Pair
-          value={convTemp(hour.temp, prefs.tempUnit)}
-          unit={tempUnitLabel(prefs.tempUnit)}
-          color={palette.valTemp}
-        />
+        <Col flex={1} minWidth={0}>
+          <Pair
+            value={convTemp(hour.temp, prefs.tempUnit)}
+            unit={tempUnitLabel(prefs.tempUnit)}
+            color={palette.valTemp}
+          />
+        </Col>
       );
 
     case 'wind':
       return (
-        <>
+        <Col flex={1} minWidth={0}>
           <WindArrow deg={hour.windDir} size={12} color={palette.muted} />
           <Pair
             value={convWind(hour.wind, prefs.windUnit)}
@@ -215,53 +253,68 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
               ⤴ {convWind(hour.gusts, prefs.windUnit)}
             </Text>
           ) : null}
-        </>
+        </Col>
       );
 
     case 'sun':
       return (
-        <Pair
-          value={hour.sunMin != null ? Math.round(hour.sunMin) : null}
-          unit="min"
-          color={palette.valSun}
-        />
-      );
-
-    case 'humidity':
-      return (
-        <Pair
-          value={hour.humidity != null ? Math.round(hour.humidity) : null}
-          unit="%"
-          color={palette.accentDark}
-        />
-      );
-
-    // The overview list carries the whole hour, since that is what it is for.
-    case 'overview':
-      return (
-        <>
-          <Pair
-            value={convTemp(hour.temp, prefs.tempUnit)}
-            unit={tempUnitLabel(prefs.tempUnit)}
-            color={palette.valTemp}
-          />
-          <Pair
-            value={fmtMm(hour.precip)}
-            unit="mm"
-            color={hour.precip > 0 ? palette.valPrecip : palette.valPrecipZero}
-          />
-          <Pair
-            value={convWind(hour.wind, prefs.windUnit)}
-            unit={windUnitLabel(prefs.windUnit)}
-            color={palette.muted}
-            small
-          />
+        <Col flex={1} minWidth={0}>
           <Pair
             value={hour.sunMin != null ? Math.round(hour.sunMin) : null}
             unit="min"
             color={palette.valSun}
-            small
           />
+        </Col>
+      );
+
+    case 'humidity':
+      return (
+        <Col flex={1} minWidth={0}>
+          <Pair
+            value={hour.humidity != null ? Math.round(hour.humidity) : null}
+            unit="%"
+            color={palette.accentDark}
+          />
+        </Col>
+      );
+
+    // The overview list carries the whole hour, since that is what it is for. The
+    // proportions follow the day row's: temperature and precipitation lead, wind
+    // takes the most room for the longest unit, sunshine closes. The floors are set
+    // so all four still fit side by side on the narrowest phone the app supports.
+    case 'overview':
+      return (
+        <>
+          <Col flex={2.6} minWidth={40}>
+            <Pair
+              value={convTemp(hour.temp, prefs.tempUnit)}
+              unit={tempUnitLabel(prefs.tempUnit)}
+              color={palette.valTemp}
+            />
+          </Col>
+          <Col flex={2.8} minWidth={44}>
+            <Pair
+              value={fmtMm(hour.precip)}
+              unit="mm"
+              color={hour.precip > 0 ? palette.valPrecip : palette.valPrecipZero}
+            />
+          </Col>
+          <Col flex={3} minWidth={48}>
+            <Pair
+              value={convWind(hour.wind, prefs.windUnit)}
+              unit={windUnitLabel(prefs.windUnit)}
+              color={palette.muted}
+              small
+            />
+          </Col>
+          <Col flex={2.4} minWidth={40}>
+            <Pair
+              value={hour.sunMin != null ? Math.round(hour.sunMin) : null}
+              unit="min"
+              color={palette.valSun}
+              small
+            />
+          </Col>
         </>
       );
   }
