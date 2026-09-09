@@ -17,16 +17,13 @@
  *
  * A dashboard is a choice someone made about their own farm; there is nowhere to
  * make that choice for a town in Zeeland the reader searched for last week. So the
- * modelled set is the eight figures the rest of the app already leads with — what it
- * is doing now, what it has done since this time yesterday — rather than an
- * arbitrary subset of everything Open-Meteo returns.
+ * modelled set is a fixed twelve, chosen once by the client — see `modelTiles`.
  *
  * Pure: no formatting, no units conversion, no translation beyond the labels handed
  * in. The page converts to the reader's units where it draws, exactly as every other
  * card in the app does.
  */
 import type { ForecastModel } from './types';
-import { recent24 } from './station';
 
 /** Which unit family a tile's value belongs to, so the page can convert it. */
 export type TileKind = 'temp' | 'wind' | 'mm' | 'percent' | 'direction' | 'raw';
@@ -107,41 +104,73 @@ export function dashboardTiles(entries: readonly DashboardEntry[]): Tile[] {
 /** The words the modelled grid needs, handed in so this module stays pure. */
 export interface TileLabels {
   temperature: string;
+  humidity: string;
+  windSpeed: string;
+  windGust: string;
+  windDirection: string;
+  gustMax: string;
+  rain: string;
   tempMax: string;
   tempMin: string;
-  rainLastHour: string;
-  rain24h: string;
-  wind: string;
-  gusts: string;
-  humidity: string;
-  dewpoint: string;
-  /** Window label for "now", e.g. "nu". */
+  /** Window labels. */
   now: string;
-  /** Window label for the rolling day, e.g. "laatste 24 uur". */
+  today: string;
+  last6h: string;
+  last12h: string;
   last24h: string;
-  /** Window label for the hour that has just finished. */
-  lastHour: string;
 }
 
+/** How many of the trailing observed hours a rolling window covers. */
+const ROLLING = { six: 6, twelve: 12, day: 24 } as const;
+
 /**
- * The same grid, built from the forecast model.
+ * The grid for a location no station speaks for, built from the forecast model.
  *
- * Every figure here is an observation or the hour in progress — never an afternoon
- * the model has not reached yet. 'Actueel' means actual, and a page that mixed
- * tomorrow's maximum into a grid of current readings would be answering a question
- * nobody on it asked. The forecast has two tabs of its own.
+ * Twelve blocks, chosen by the client: what it is doing now, what the wind has done
+ * today, and rainfall over four windows. Every figure is an observation or the hour
+ * in progress — never an afternoon the model has not reached yet. 'Actueel' means
+ * actual, and a grid of current readings with tomorrow's maximum in it would be
+ * answering a question nobody on this page asked. The forecast has two tabs of its
+ * own.
  *
- * Where a station has merged its measurements into `pastHours`, those tiles are
+ * ## Rolling windows and calendar days are both here, and they are not the same
+ *
+ * "Laatste 24 uur" counts back from now; "vandaag" starts at midnight. At four in
+ * the afternoon they are different numbers, and a grower reading a spray window
+ * cares which — so both are shown, each labelled with the window it covers, rather
+ * than one standing in for the other.
+ *
+ * Where a station has merged its measurements into `pastHours`, these tiles are
  * measured and say so — a rain gauge fills in the rainfall and leaves the wind to
  * the model, exactly as the conditions hero already shows it.
  */
 export function modelTiles(model: ForecastModel, labels: TileLabels): Tile[] {
-  const { tempMin, tempMax, precip } = recent24(model);
   const measured = model.station?.current ?? null;
   const now = model.futureHours[0] ?? model.pastHours[model.pastHours.length - 1] ?? null;
-  const lastFull = model.pastHours[model.pastHours.length - 1] ?? null;
   /** True where a station has any say over this location at all. */
   const hasStation = !!model.station;
+  // The location's own local day, from the model's own clock — not the device's,
+  // which may be in another zone entirely.
+  const todayKey = model.nowHour.slice(0, 10);
+  const today = model.pastHours.filter((h) => h.time.slice(0, 10) === todayKey);
+
+  const sum = (hours: readonly { precip: number | null }[]) =>
+    Math.round(hours.reduce((total, h) => total + (h.precip ?? 0), 0) * 10) / 10;
+
+  const peak = (hours: readonly { gusts?: number | null }[]): number | null => {
+    const values = hours.map((h) => h.gusts).filter((v): v is number => v != null);
+    // The reading from the hour in progress belongs in "today" as much as the
+    // completed ones do.
+    if (measured?.gusts != null) values.push(measured.gusts);
+    return values.length ? Math.max(...values) : null;
+  };
+
+  const window = model.pastHours.slice(-ROLLING.day);
+  const temps = window
+    .map((h) => h.tempExact ?? h.temp)
+    .filter((v): v is number => v != null);
+  const nowTemp = measured?.temp ?? now?.tempExact ?? now?.temp ?? null;
+  if (nowTemp != null) temps.push(nowTemp);
 
   const tile = (
     id: string,
@@ -158,21 +187,23 @@ export function modelTiles(model: ForecastModel, labels: TileLabels): Tile[] {
   });
 
   return [
-    tile('temp', labels.temperature, labels.now,
-      measured?.temp ?? now?.tempExact ?? now?.temp, 'temp', '°', measured?.temp != null),
-    tile('temp-max', labels.tempMax, labels.last24h, tempMax, 'temp', '°', hasStation),
-    tile('temp-min', labels.tempMin, labels.last24h, tempMin, 'temp', '°', hasStation),
-    // The hour that has just finished, not the one running: a full hour is a total,
-    // where the current one is still being added to.
-    tile('rain-hour', labels.rainLastHour, labels.lastHour, lastFull?.precip ?? 0, 'mm', 'mm', hasStation),
-    tile('rain-24h', labels.rain24h, labels.last24h, precip, 'mm', 'mm', hasStation),
-    tile('wind', labels.wind, labels.now,
-      measured?.wind ?? now?.windExact ?? now?.wind, 'wind', '', measured?.wind != null),
-    tile('gusts', labels.gusts, labels.now,
-      measured?.gusts ?? now?.gusts, 'wind', '', measured?.gusts != null),
+    tile('temp', labels.temperature, labels.now, nowTemp, 'temp', '°', measured?.temp != null),
     tile('humidity', labels.humidity, labels.now,
       measured?.humidity ?? now?.humidity, 'percent', '%', measured?.humidity != null),
-    tile('dewpoint', labels.dewpoint, labels.now,
-      measured?.dewpoint ?? now?.dewpoint, 'temp', '°', measured?.dewpoint != null),
+    tile('wind', labels.windSpeed, labels.now,
+      measured?.wind ?? now?.windExact ?? now?.wind, 'wind', '', measured?.wind != null),
+    tile('gust', labels.windGust, labels.now,
+      measured?.gusts ?? now?.gusts, 'wind', '', measured?.gusts != null),
+    tile('wind-dir', labels.windDirection, labels.now,
+      measured?.windDir ?? now?.windDir, 'direction', '', measured?.windDir != null),
+    tile('gust-max', labels.gustMax, labels.today, peak(today), 'wind', '', hasStation),
+    tile('rain-6h', labels.rain, labels.last6h, sum(model.pastHours.slice(-ROLLING.six)), 'mm', 'mm', hasStation),
+    tile('rain-12h', labels.rain, labels.last12h, sum(model.pastHours.slice(-ROLLING.twelve)), 'mm', 'mm', hasStation),
+    tile('rain-today', labels.rain, labels.today, sum(today), 'mm', 'mm', hasStation),
+    tile('rain-24h', labels.rain, labels.last24h, sum(window), 'mm', 'mm', hasStation),
+    tile('temp-max', labels.tempMax, labels.last24h,
+      temps.length ? Math.max(...temps) : null, 'temp', '°', hasStation),
+    tile('temp-min', labels.tempMin, labels.last24h,
+      temps.length ? Math.min(...temps) : null, 'temp', '°', hasStation),
   ];
 }

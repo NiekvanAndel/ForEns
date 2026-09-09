@@ -45,6 +45,15 @@
  * The hourly slider is its own card below this one. It answers a different question
  * — what happens next, rather than what it is doing now.
  *
+ * ## The whole card is a button
+ *
+ * It opens 'Actueel', which is this card's own subject at full length: the same
+ * readings, plus the ones there was no room for here and the windows this card
+ * summarises into two. A reader who wants more of what the hero is showing should
+ * not have to find the tab that has it. The caret in the corner is the only mark
+ * that says so — a tappable card that looks exactly like an untappable one is a
+ * feature nobody finds.
+ *
  * Reading colours follow the quantity, not the card (design rule 2): ▲ is val-high,
  * ▼ is val-low, millimetres are val-precip, and a zero is dimmed to val-precip-zero
  * so real numbers stand out.
@@ -54,10 +63,12 @@
  * it does not, so nothing here reads "17,0". See `fmtDecimal`. This is the card with
  * the room for that precision; the dense rows elsewhere still round.
  */
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
 import { Card, Rule } from '../Card';
 import { Text } from '../Text';
+import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
@@ -80,9 +91,14 @@ export interface ConditionsHeroProps {
   sourceLabel: string;
   /** Local time string for the header. */
   timeLabel: string;
+  /** Opens 'Actueel'. Optional, so a caller with nowhere to send the reader gets the
+   *  plain card — without it there is no caret and nothing to press. */
+  onPress?: () => void;
 }
 
-export function ConditionsHero({ model, location, sourceLabel, timeLabel }: ConditionsHeroProps) {
+export function ConditionsHero({
+  model, location, sourceLabel, timeLabel, onPress,
+}: ConditionsHeroProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const lang = prefs.lang;
@@ -110,7 +126,7 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
   // station's own rainfall where there is a gauge — see `applyStationObservations`.
   const lastHour = model.pastHours[model.pastHours.length - 1]?.precip ?? 0;
 
-  return (
+  const body = (
     <Card pad={0}>
       <View style={{ paddingHorizontal: space[5], paddingTop: space[4], paddingBottom: space[4] }}>
         {/* No location name: the page already carries it above, and repeating it
@@ -126,9 +142,19 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
               style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.agroBright }}
             />
           ) : null}
-          <Text variant="caption" color={station ? palette.agroInk : palette.muted}>
+          <Text
+            variant="caption"
+            color={station ? palette.agroInk : palette.muted}
+            numberOfLines={1}
+            style={{ flexShrink: 1 }}
+          >
             {sourceLabel}
           </Text>
+          {onPress ? (
+            <View style={{ marginLeft: 'auto' }}>
+              <Icon name="caret-right" size={14} color={palette.muted} weight="bold" />
+            </View>
+          ) : null}
         </View>
 
         {/* The rainfall band: the two readings, then the weather they belong to at
@@ -205,6 +231,24 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
         </View>
       </View>
     </Card>
+  );
+
+  if (!onPress) return body;
+
+  return (
+    <Pressable
+      onPress={() => {
+        Haptics.selectionAsync().catch(() => {});
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${ta('tabCurrent', lang)} — ${sourceLabel}`}
+      // The card carries its own shadow, so the press is a tint rather than a lift:
+      // a card that moves under a finger takes its neighbours' alignment with it.
+      style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+    >
+      {body}
+    </Pressable>
   );
 }
 

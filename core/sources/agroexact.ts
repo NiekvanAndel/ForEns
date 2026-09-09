@@ -504,6 +504,23 @@ export interface AggregationBlock {
   index: number;
 }
 
+/**
+ * The app's language code as an `Accept-Language` header the API will match.
+ *
+ * The app stores a bare code — `nl`, `de` — and content negotiation against a bare
+ * code is at the server's discretion: it may match, or it may fall through to the
+ * default and answer in English. A region-qualified tag with the bare one behind it
+ * asks for the specific thing and names the acceptable fallback, which is the
+ * difference between a Dutch dashboard and an English one on a Dutch phone.
+ */
+function acceptLanguage(lang: string): string {
+  const region: Record<string, string> = {
+    nl: 'nl-NL', en: 'en-GB', de: 'de-DE', fr: 'fr-FR', es: 'es-ES',
+  };
+  const tag = region[lang];
+  return tag ? `${tag},${lang};q=0.9` : lang;
+}
+
 interface AggregationRow {
   id?: number;
   title?: string;
@@ -528,7 +545,7 @@ export async function fetchAggregationBlocks(
 ): Promise<AggregationBlock[]> {
   const rows = await agroFetch<AggregationRow[]>(token, '/aggregations/', {
     ...opts,
-    headers: { 'Accept-Language': lang, ...(opts.headers ?? {}) },
+    headers: { 'Accept-Language': acceptLanguage(lang), ...(opts.headers ?? {}) },
   });
   if (!Array.isArray(rows)) throw new SourceError('AgroExact', 'onverwacht antwoord');
   return rows
@@ -577,9 +594,18 @@ export async function fetchAggregationValues(
 
 // ── A measured series over a period ─────────────────────────────────────────────
 
-/** A day as the API's `start_date`/`end_date` want it: `dd-mm-YYYY`. */
-export function apiDate(d: Date): string {
-  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
+/**
+ * A calendar day as the API's `start_date`/`end_date` want it.
+ *
+ * The app works in `YYYY-MM-DD` throughout — it sorts, it compares as a string, and
+ * it is the first ten characters of an hour key. The API wants `dd-mm-YYYY`. The
+ * conversion is one line and it is here rather than at the call site because getting
+ * it wrong is silent: `2026-09-08` is not rejected as a date, it is simply not the
+ * window that was asked for, and the chart comes back empty with no error to show.
+ */
+export function apiDay(isoDay: string): string {
+  const [y, m, d] = isoDay.split('-');
+  return `${d}-${m}-${y}`;
 }
 
 /**
@@ -598,14 +624,15 @@ export async function fetchStationRange(
   token: string,
   stationId: string,
   offsetSec: number,
-  startDate: string,
-  endDate: string,
+  /** Both `YYYY-MM-DD`; converted to the API's own format on the way out. */
+  startDay: string,
+  endDay: string,
   opts: FetchOptions = {}
 ): Promise<MeasuredHour[]> {
   const rows = await agroFetch<AggregateRow[]>(
     token,
     `/aggregates/${encodeURIComponent(stationId)}/` +
-      `?start_date=${startDate}&end_date=${endDate}` +
+      `?start_date=${apiDay(startDay)}&end_date=${apiDay(endDay)}` +
       `&include_partial=true&station_only=false&limit=5000`,
     opts
   );

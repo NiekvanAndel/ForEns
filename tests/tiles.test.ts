@@ -9,15 +9,17 @@
  */
 import { describe, it, expect } from 'vitest';
 import { dashboardTiles, modelTiles, tileKind, type TileLabels } from '../core/model/tiles';
-import { buildSeries, daySpan, hourKeys } from '../core/model/series';
+import { buildSeries, daySpan, forecastHorizon, hourKeys } from '../core/model/series';
 import type { ForecastModel, Hour } from '../core/model/types';
 import type { MeasuredHour } from '../core/sources/agroexact';
 
 const labels: TileLabels = {
-  temperature: 'Temperatuur', tempMax: 'Maximum', tempMin: 'Minimum',
-  rainLastHour: 'Neerslag', rain24h: 'Neerslag', wind: 'Wind', gusts: 'Windstoten',
-  humidity: 'Luchtvochtigheid', dewpoint: 'Dauwpunt',
-  now: 'nu', last24h: 'laatste 24 uur', lastHour: 'laatste uur',
+  temperature: 'Temperatuur', humidity: 'Luchtvochtigheid',
+  windSpeed: 'Windsnelheid', windGust: 'Windstoot', windDirection: 'Windrichting',
+  gustMax: 'Max. windstoot', rain: 'Neerslag',
+  tempMax: 'Max. temperatuur', tempMin: 'Min. temperatuur',
+  now: 'nu', today: 'vandaag',
+  last6h: 'laatste 6 uur', last12h: 'laatste 12 uur', last24h: 'laatste 24 uur',
 };
 
 const hour = (time: string, over: Partial<Hour> = {}): Hour => ({
@@ -124,8 +126,50 @@ describe('modelTiles', () => {
     const byId = new Map(tiles.map((t) => [t.id, t]));
     expect(byId.get('temp-min')?.value).toBe(8);
     expect(byId.get('rain-24h')?.value).toBe(1.5);
-    // The hour that has just finished, not the running one.
-    expect(byId.get('rain-hour')?.value).toBe(0.3);
+  });
+
+  it('is the twelve blocks the client asked for, in their order', () => {
+    expect(modelTiles(model(), labels).map((t) => t.id)).toEqual([
+      'temp', 'humidity', 'wind', 'gust', 'wind-dir', 'gust-max',
+      'rain-6h', 'rain-12h', 'rain-today', 'rain-24h', 'temp-max', 'temp-min',
+    ]);
+  });
+
+  it('tells a rolling window from a calendar day', () => {
+    const tiles = modelTiles(
+      model({
+        pastHours: [
+          // Yesterday evening: inside the rolling 24 hours, outside "today".
+          hour('2026-06-14T22:00', { precip: 5, gusts: 90 }),
+          hour('2026-06-15T02:00', { precip: 1, gusts: 40 }),
+          hour('2026-06-15T11:00', { precip: 2, gusts: 30 }),
+        ],
+      }),
+      labels
+    );
+    const byId = new Map(tiles.map((t) => [t.id, t]));
+    expect(byId.get('rain-24h')?.value).toBe(8);
+    expect(byId.get('rain-today')?.value).toBe(3);
+    // The 90 km/h gust was yesterday's, so today's peak is not it.
+    expect(byId.get('gust-max')?.value).toBe(40);
+  });
+
+  it('sums each rolling rainfall window over its own trailing hours', () => {
+    const pastHours = Array.from({ length: 24 }, (_, i) =>
+      hour(`2026-06-15T${String(i).padStart(2, '0')}:00`, { precip: 1 })
+    );
+    const byId = new Map(
+      modelTiles(model({ pastHours, nowHour: '2026-06-15T23:00' }), labels).map((t) => [t.id, t])
+    );
+    expect(byId.get('rain-6h')?.value).toBe(6);
+    expect(byId.get('rain-12h')?.value).toBe(12);
+    expect(byId.get('rain-24h')?.value).toBe(24);
+  });
+
+  it('reads a wind direction as a bearing the page can turn into a compass point', () => {
+    const byId = new Map(modelTiles(model(), labels).map((t) => [t.id, t]));
+    expect(byId.get('wind-dir')?.kind).toBe('direction');
+    expect(byId.get('wind-dir')?.value).toBe(180);
   });
 });
 
@@ -176,7 +220,7 @@ describe('buildSeries', () => {
 
   it('never lets a measurement speak for an hour that has not happened', () => {
     const s = buildSeries({
-      key: 'temp', ...window,
+      key: 'temp', ...window, includeForecast: true,
       // A stray row stamped in the future must not become a measured sample.
       measured: [measured('2026-06-15T14:00', { temp: 99 })],
       model: model({
@@ -193,7 +237,9 @@ describe('buildSeries', () => {
   });
 
   it('reports where the forecast starts, so the line can be split', () => {
-    const s = buildSeries({ key: 'temp', ...window, measured: [], model: model() });
+    const s = buildSeries({
+      key: 'temp', ...window, measured: [], model: model(), includeForecast: true,
+    });
     expect(s.samples[s.forecastFrom]?.key).toBe('2026-06-15T13:00');
     expect(s.samples[s.forecastFrom - 1]?.future).toBe(false);
   });
@@ -201,6 +247,53 @@ describe('buildSeries', () => {
   it('leaves a gap where nothing can answer for the hour', () => {
     const s = buildSeries({ key: 'temp', ...window, measured: [], model: model() });
     expect(s.samples.find((x) => x.key === '2026-06-15T03:00')?.value).toBeNull();
+  });
+
+  it('stops at the current hour unless the forecast is asked for', () => {
+    const off = buildSeries({ key: 'temp', ...window, measured: [], model: model() });
+    expect(off.samples[off.samples.length - 1]?.key).toBe('2026-06-15T12:00');
+    expect(off.samples.some((x) => x.future)).toBe(false);
+    expect(off.forecastFrom).toBe(-1);
+
+    const on = buildSeries({
+      key: 'temp', ...window, measured: [], model: model(), includeForecast: true,
+    });
+    expect(on.samples[on.samples.length - 1]?.key).toBe('2026-06-15T23:00');
+  });
+
+  it('reaches past the 48-hour strip into the IFS series', () => {
+    const s = buildSeries({
+      key: 'temp', from: '2026-06-20', to: '2026-06-20',
+      measured: [],
+      model: model({
+        hresHoursByDay: {
+          '2026-06-20': [
+            { time: '2026-06-20T12:00', hour: 12, precip: 0, wmo: 3, is3h: true,
+              temp: 24, dewpoint: 12, humidity: 55, wind: 14, windDir: 200,
+              gusts: 30, sunMin: 60, et0h: 0.2 },
+          ],
+        },
+      }),
+      includeForecast: true,
+    });
+    const at12 = s.samples.find((x) => x.key === '2026-06-20T12:00');
+    expect(at12?.value).toBe(24);
+    expect(at12?.future).toBe(true);
+  });
+
+  it('reports how far ahead the model can be asked about', () => {
+    expect(forecastHorizon(null)).toBeNull();
+    expect(
+      forecastHorizon(
+        model({
+          futureHours: [hour('2026-06-16T00:00', { isPast: false })],
+          hresHoursByDay: {
+            '2026-06-16': [],
+            '2026-06-24': [],
+          },
+        })
+      )
+    ).toBe('2026-06-24');
   });
 
   it('buckets a long window into days, summing rain and averaging the rest', () => {
@@ -226,7 +319,7 @@ describe('buildSeries', () => {
 
   it('calls a day measured only when every hour in it was', () => {
     const s = buildSeries({
-      key: 'temp', from: '2026-06-14', to: '2026-06-20',
+      key: 'temp', from: '2026-06-14', to: '2026-06-20', includeForecast: true,
       measured: [measured('2026-06-15T10:00', { temp: 20 })],
       model: model({
         pastHours: [hour('2026-06-15T10:00'), hour('2026-06-15T11:00', { tempExact: 11 })],

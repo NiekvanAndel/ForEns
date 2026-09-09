@@ -113,6 +113,43 @@ Worth knowing:
   real response through this app's bearer token. If the grid comes up empty on a
   station that has blocks on the web, that pair of calls is the first suspect.
 
+### Follow-up round (9 Sep 2026)
+
+- **The conditions hero opens 'Actueel'.** The whole card is a button, with a caret
+  in its corner so it looks like one. 'Actueel' is that card's own subject at full
+  length.
+- **Two bugs, both silent.** The `/aggregates/` range call was sending
+  `YYYY-MM-DD` where the API wants `dd-mm-YYYY`, so every window the graph page
+  asked for came back empty and only the axis moved — `apiDay` now converts it.
+  And 'Actueel' asked for the account's dashboard catalog on *every* location:
+  the catalog belongs to the account, so a connected account answered with its
+  blocks even where there was no station to compute them against, and the grid
+  filled with dashes that a refresh could not fix. The catalog is only fetched
+  where there is a station now.
+- **`Accept-Language` is a region-qualified tag** (`nl-NL,nl;q=0.9`). A bare code
+  is matched at the server's discretion, which is how a Dutch phone got English
+  block titles.
+- **The modelled grid is a fixed twelve, chosen by the client:** temperature,
+  humidity, wind speed, gust, wind direction, max gust today, rainfall over 6h,
+  12h, today and 24h, and max/min temperature. Rolling windows and calendar days
+  are both there and are labelled apart — at four in the afternoon "vandaag" and
+  "laatste 24 uur" are different numbers. Max/min temperature is the rolling 24
+  hours, matching the hero on 'Nu'; say the word if it should be the calendar day
+  like the max gust.
+- **The forecast on 'Grafiek' is a switch, off by default.** Turned on, the line
+  carries past the current hour and the date fields reach as far ahead as the model
+  does — `futureHours` stops at 48 hours, so the series falls back to the IFS hourly
+  set behind the day sheets for anything further, which is the full horizon. Past
+  its ninetieth hour that set is three-hourly, and the chart draws a line through
+  gaps of up to two forecast samples: a coarsely sampled series is still one series.
+  Measured gaps are never bridged.
+- **The "no station" wording was replaced.** It said "berekend voor deze plaats —
+  geen meetreeks zonder station", which named a limitation without saying what it
+  meant for the reader. There are two messages now: a short window with no station
+  is simply modelled data, and a long one is a window the model cannot fill (it
+  carries about a day of observations, not an archive) — which is the reader's
+  actual problem and now says so.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an

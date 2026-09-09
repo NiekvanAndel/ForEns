@@ -9,11 +9,23 @@
  *
  * ## What it plots
  *
- * On a location an AgroExact station speaks for, the station's own hourly record,
- * running on into the forecast past the current hour. Everywhere else the same
- * chart from the weather model alone. `core/model/series` assembles that and marks
- * every sample with where it came from; the chart draws measurement solid and
- * forecast dashed, and never joins the two into one line. See `SeriesChart`.
+ * On a location an AgroExact station speaks for, the station's own hourly record.
+ * Everywhere else the weather model's own observed hours, which reach about a day
+ * back and no further — the model is a forecast, not an archive, so on a location
+ * with no station a thirty-day window is mostly empty and the page says so rather
+ * than drawing an empty grid and leaving the reader to work out why.
+ *
+ * `core/model/series` assembles it and marks every sample with where it came from;
+ * the chart draws measurement solid and forecast dashed, and never joins the two
+ * into one line. See `SeriesChart`.
+ *
+ * ## The forecast is a switch, and it moves the calendar
+ *
+ * Off by default: the page's first question is what has happened, and a chart that
+ * ran into tomorrow by default would put a model's opinion in front of a reader
+ * checking how much rain actually fell. Turned on, the line carries past the current
+ * hour — dashed — and the date fields reach into the future as far as the model
+ * does, so the coming days can be read the same way as the past ones.
  *
  * A window longer than a few days is bucketed into days there too — the line becomes
  * each day's mean with its range behind it, and rainfall becomes each day's total.
@@ -34,6 +46,7 @@ import * as Haptics from 'expo-haptics';
 import { radius, space, useTheme } from '../../theme';
 import { Card, CardHeader } from '../../ui/Card';
 import { Text } from '../../ui/Text';
+import { Icon } from '../../ui/Icon';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
@@ -48,7 +61,9 @@ import {
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useLocationStation, useStationRange } from '../../state/stations';
-import { buildSeries, SERIES_META, type Sample, type SeriesKey } from '../../core/model/series';
+import {
+  buildSeries, dayKey, forecastHorizon, SERIES_META, type Sample, type SeriesKey,
+} from '../../core/model/series';
 import {
   fmtMm, fmtTempValue, fmtWindValue, tempUnitLabel, windUnitLabel, ta,
   type AppStringKey,
@@ -57,7 +72,7 @@ import {
 /** The four measurements the selector offers, in the order it shows them. */
 const SERIES: { key: SeriesKey; labelKey: AppStringKey; color: (p: PageColors) => string }[] = [
   { key: 'temp', labelKey: 'temperature', color: (p) => p.temp },
-  { key: 'precip', labelKey: 'rainLastHour', color: (p) => p.precip },
+  { key: 'precip', labelKey: 'rain', color: (p) => p.precip },
   { key: 'humidity', labelKey: 'humidity', color: (p) => p.humidity },
   { key: 'wind', labelKey: 'windNow', color: (p) => p.wind },
 ];
@@ -74,6 +89,7 @@ function GraphPage() {
   const [preset, setPreset] = useState<PresetDays | null>(DEFAULT_PRESET);
   const [range, setRange] = useState<DateRange>(() => presetRange(DEFAULT_PRESET));
   const [key, setKey] = useState<SeriesKey>('temp');
+  const [showForecast, setShowForecast] = useState(false);
 
   const station = useLocationStation(location);
   // A page sliding past does not fetch a month of measurements for a location the
@@ -82,9 +98,27 @@ function GraphPage() {
   const measurements = useStationRange(station?.id ?? null, offsetSec, range, !peeking);
 
   const series = useMemo(
-    () => buildSeries({ key, from: range.from, to: range.to, measured: measurements.data ?? [], model }),
-    [key, range.from, range.to, measurements.data, model]
+    () =>
+      buildSeries({
+        key, from: range.from, to: range.to,
+        measured: measurements.data ?? [], model, includeForecast: showForecast,
+      }),
+    [key, range.from, range.to, measurements.data, model, showForecast]
   );
+
+  // How far the calendar may reach. Today while the chart is only showing what has
+  // happened; the end of the model's horizon once the forecast is on.
+  const today = dayKey(new Date());
+  const maxDay = showForecast ? forecastHorizon(model) ?? today : today;
+
+  // Turning the forecast off must not leave the window pointing at days the chart
+  // will now refuse to draw, or the page would go blank with no explanation.
+  const clampForecast = (on: boolean) => {
+    setShowForecast(on);
+    if (on || range.to <= today) return;
+    setPreset(null);
+    setRange({ from: range.from > today ? today : range.from, to: today });
+  };
 
   const meta = SERIES_META[key];
   const colors: PageColors = {
@@ -141,6 +175,7 @@ function GraphPage() {
           <RangeSelector
             range={range}
             preset={preset}
+            maxDay={maxDay}
             onPreset={(days) => {
               setPreset(days);
               setRange(presetRange(days));
@@ -152,6 +187,32 @@ function GraphPage() {
               setRange(next);
             }}
           />
+
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync().catch(() => {});
+              clampForecast(!showForecast);
+            }}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: showForecast }}
+            accessibilityLabel={ta('showForecast', prefs.lang)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}
+          >
+            <View
+              style={{
+                width: 20, height: 20, borderRadius: 6,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: showForecast ? palette.accent : palette.surfaceAlt,
+              }}
+            >
+              {showForecast ? (
+                <Icon name="check" size={13} color={palette.appCard} weight="bold" />
+              ) : null}
+            </View>
+            <Text variant="bodySm" color={palette.inkHeading}>
+              {ta('showForecast', prefs.lang)}
+            </Text>
+          </Pressable>
         </View>
 
         <View style={{ gap: space[3] }}>
@@ -263,7 +324,13 @@ function GraphPage() {
                 </>
               ) : (
                 <Text variant="caption" color={palette.muted} style={{ flexShrink: 1 }}>
-                  {ta('graphModelled', prefs.lang)}
+                  {/* Two different things to say, and they were being said with one
+                      sentence. A short window with no station is simply modelled
+                      data; a long one is a window the model cannot fill, which is
+                      the reader's actual problem and needs naming. */}
+                  {station || series.resolution === 'hour'
+                    ? ta('graphModelled', prefs.lang)
+                    : ta('graphNoStation', prefs.lang)}
                 </Text>
               )}
             </View>

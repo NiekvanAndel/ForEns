@@ -42,6 +42,9 @@ const PAD_BOTTOM = 18;
 const GRID_LINES = 3;
 /** About this many labels along the bottom, whatever the sample count. */
 const X_LABELS = 6;
+/** How many empty forecast samples a line may be drawn straight through. Two, so a
+ *  three-hourly series joins up and a genuinely absent afternoon does not. */
+const FORECAST_GAP_BRIDGE = 2;
 
 export interface SeriesChartProps {
   samples: Sample[];
@@ -276,13 +279,24 @@ function Lines({
     const out: { points: Point[]; future: boolean }[] = [];
     let run: Point[] = [];
     let future = false;
+    /** Consecutive empty samples seen since the last point in the open run. */
+    let missing = 0;
     samples.forEach((s, i) => {
       const v = read(s);
       if (v == null) {
-        if (run.length) out.push({ points: run, future });
-        run = [];
+        missing += 1;
+        // A gap in the forecast is usually the model itself going three-hourly past
+        // its ninetieth hour: one series sampled coarsely, not three separate
+        // opinions with silence between them, so the line is drawn through it. A gap
+        // in measurement is a station that stopped reporting, and that stays a gap —
+        // the whole point of a measured line is that it only claims what it saw.
+        if (run.length && (!s.future || missing > FORECAST_GAP_BRIDGE)) {
+          out.push({ points: run, future });
+          run = [];
+        }
         return;
       }
+      missing = 0;
       const point = { x: px(i), y: py(v) };
       if (run.length && s.future !== future) {
         // Close the solid run on this point too, so the dashes start where the

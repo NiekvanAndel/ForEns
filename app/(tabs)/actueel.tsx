@@ -14,8 +14,14 @@
  * an opinion about which of them matter.
  *
  * Everywhere else there is no dashboard to read, so the same grid is built from the
- * weather model instead: the nine figures the rest of the app already leads with.
- * See `core/model/tiles`.
+ * weather model instead: twelve figures, fixed. See `core/model/tiles`.
+ *
+ * The catalog is only *asked for* where there is a station, which is the difference
+ * between a grid and twelve dashes. It is a property of the account, not of the
+ * location, so a connected account answers with its blocks wherever it is asked —
+ * and on a location with no station there is nothing to compute them against, so
+ * every one of them came back empty. A pull to refresh fetched the same nothing
+ * again, which is what made it look broken rather than merely blank.
  *
  * The two are told apart by the dot, not by the layout. A location can also be both
  * at once — a rain gauge fills in the rainfall and leaves the wind to the model — so
@@ -63,22 +69,25 @@ function CurrentPage() {
   const router = useRouter();
 
   const station = useLocationStation(location);
-  const dashboard = useDashboardBlocks(station?.id ?? null, !peeking);
+  // No station, no request: see the note at the top of the file.
+  const dashboard = useDashboardBlocks(station?.id ?? null, !peeking && !!station);
 
   const labels: TileLabels = useMemo(
     () => ({
       temperature: ta('temperature', prefs.lang),
+      humidity: ta('humidity', prefs.lang),
+      windSpeed: ta('windNow', prefs.lang),
+      windGust: ta('gusts', prefs.lang),
+      windDirection: ta('windDirection', prefs.lang),
+      gustMax: ta('gustMax', prefs.lang),
+      rain: ta('rain', prefs.lang),
       tempMax: ta('tempMax', prefs.lang),
       tempMin: ta('tempMin', prefs.lang),
-      rainLastHour: ta('rainLastHour', prefs.lang),
-      rain24h: ta('rain24h', prefs.lang),
-      wind: ta('windNow', prefs.lang),
-      gusts: ta('gusts', prefs.lang),
-      humidity: ta('humidity', prefs.lang),
-      dewpoint: ta('dewpoint', prefs.lang),
       now: ta('now', prefs.lang),
+      today: ta('today', prefs.lang),
+      last6h: ta('last6h', prefs.lang),
+      last12h: ta('last12h', prefs.lang),
       last24h: ta('last24h', prefs.lang).toLowerCase(),
-      lastHour: ta('lastHour', prefs.lang).toLowerCase(),
     }),
     [prefs.lang]
   );
@@ -88,7 +97,7 @@ function CurrentPage() {
   // with nothing selected on it is a settings problem, and an empty grid would say
   // the station had stopped reporting.
   const tiles: Tile[] = useMemo(() => {
-    if (dashboard.blocks.length) {
+    if (station && dashboard.blocks.length) {
       return dashboardTiles(
         dashboard.blocks.map((b) => ({
           id: b.id, title: b.title, attribute: b.attribute,
@@ -97,7 +106,7 @@ function CurrentPage() {
       );
     }
     return model ? modelTiles(model, labels) : [];
-  }, [dashboard.blocks, model, labels]);
+  }, [station, dashboard.blocks, model, labels]);
 
   // The forecast is refreshed by the control itself; the dashboard is this page's
   // own, so the pull has to ask for it too.

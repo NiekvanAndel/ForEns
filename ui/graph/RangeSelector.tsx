@@ -14,10 +14,15 @@
  * A month grid in a sheet, rather than the platform picker. The app carries no
  * native picker and adding one would mean a new native module and a rebuild for two
  * fields; more to the point, the wheel picker's own idiom is a birthday, and this is
- * a reader tapping "the fourteenth" on a calendar they can see. Days past today are
- * unpickable — there is nothing measured there — and the two fields keep themselves
- * in order, so a "from" dragged past the "to" moves the "to" with it rather than
- * producing an empty chart.
+ * a reader tapping "the fourteenth" on a calendar they can see. The two fields keep
+ * themselves in order, so a "from" dragged past the "to" moves the "to" with it
+ * rather than producing an empty chart.
+ *
+ * How far ahead the calendar reaches is the page's to decide, through `maxDay`: today
+ * while the chart is only showing what has happened, and the end of the forecast
+ * horizon once the reader turns the forecast on. Days past that are drawn but
+ * unpickable — a date the model cannot reach would draw an empty chart and blame the
+ * reader for asking.
  */
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, View } from 'react-native';
@@ -63,9 +68,13 @@ export interface RangeSelectorProps {
   preset: PresetDays | null;
   onPreset: (days: PresetDays) => void;
   onRange: (range: DateRange) => void;
+  /** Latest pickable day, `YYYY-MM-DD`. See the note at the top of the file. */
+  maxDay: string;
 }
 
-export function RangeSelector({ range, preset, onPreset, onRange }: RangeSelectorProps) {
+export function RangeSelector({
+  range, preset, onPreset, onRange, maxDay,
+}: RangeSelectorProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const [editing, setEditing] = useState<'from' | 'to' | null>(null);
@@ -123,6 +132,7 @@ export function RangeSelector({ range, preset, onPreset, onRange }: RangeSelecto
       <DaySheet
         visible={editing !== null}
         day={editing === 'to' ? range.to : range.from}
+        maxDay={maxDay}
         onPick={pick}
         onClose={() => setEditing(null)}
       />
@@ -187,10 +197,11 @@ function longDate(day: string, lang: string): string {
  * saving decide which day a cell is would put one day of the year in two cells.
  */
 function DaySheet({
-  visible, day, onPick, onClose,
+  visible, day, maxDay, onPick, onClose,
 }: {
   visible: boolean;
   day: string;
+  maxDay: string;
   onPick: (day: string) => void;
   onClose: () => void;
 }) {
@@ -207,7 +218,6 @@ function DaySheet({
     if (visible) setMonth(day.slice(0, 7));
   }, [visible, day]);
 
-  const today = dayKey(new Date());
   const [year, mon] = month.split('-').map(Number);
   const first = new Date(Date.UTC(year ?? 2026, (mon ?? 1) - 1, 1, 12));
   const daysInMonth = new Date(Date.UTC(year ?? 2026, mon ?? 1, 0, 12)).getUTCDate();
@@ -284,8 +294,8 @@ function DaySheet({
             {Array.from({ length: daysInMonth }, (_, i) => {
               const cell = `${month}-${String(i + 1).padStart(2, '0')}`;
               const on = cell === day;
-              // There is nothing measured tomorrow.
-              const ahead = cell > today;
+              // Past what the page said it can draw.
+              const ahead = cell > maxDay;
               return (
                 <Pressable
                   key={cell}

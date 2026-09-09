@@ -153,6 +153,8 @@ function NowcastPage() {
             location={location}
             sourceLabel={sourceLabel}
             timeLabel={timeLabel}
+            // The card's own subject at full length. See `ConditionsHero`.
+            onPress={() => router.push('/actueel')}
           />
 
           {/* The next hours, as their own block: the hero says what it is doing

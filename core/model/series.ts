@@ -29,7 +29,7 @@
  * app's own internal units — and the page converts at the point it draws, as every
  * other card does.
  */
-import type { ForecastModel, Hour } from './types';
+import type { ForecastModel, Hour, HresHour } from './types';
 import type { MeasuredHour } from '../sources/agroexact';
 
 /** Which quantity a chart is about. */
@@ -141,6 +141,42 @@ function fromModel(key: SeriesKey, h: Hour): { value: number | null; secondary?:
   }
 }
 
+/**
+ * The same again, from the IFS hourly series behind the day sheets.
+ *
+ * `futureHours` stops at 48, which is two days of looking ahead; the IFS series runs
+ * the full forecast horizon and carries all four of these quantities, so it is what
+ * lets the reader ask for next Thursday. Past its ninetieth hour it drops to
+ * three-hourly and only every third hour exists — which the chart draws as a line
+ * through the samples it has rather than as a row of dots, because a three-hourly
+ * forecast is one series sampled coarsely, not a handful of unrelated hours.
+ */
+function fromHres(key: SeriesKey, h: HresHour): { value: number | null; secondary?: number | null } {
+  switch (key) {
+    case 'temp': return { value: h.temp };
+    case 'precip': return { value: h.precip };
+    case 'humidity': return { value: h.humidity };
+    case 'wind': return { value: h.wind, secondary: h.gusts };
+  }
+}
+
+/**
+ * The last calendar day the model can say anything about.
+ *
+ * The graph page uses it as the ceiling on its date picker: with the forecast turned
+ * on the reader may look ahead, but only as far as there is something to look at.
+ * Offering a date the model has not reached would draw an empty chart and blame the
+ * reader for asking.
+ */
+export function forecastHorizon(model: ForecastModel | null): string | null {
+  if (!model) return null;
+  let last = model.futureHours[model.futureHours.length - 1]?.time.slice(0, 10) ?? null;
+  for (const day of Object.keys(model.hresHoursByDay)) {
+    if (!last || day > last) last = day;
+  }
+  return last;
+}
+
 export interface BuildSeriesInput {
   key: SeriesKey;
   /** The window, as local calendar days. */
@@ -150,6 +186,15 @@ export interface BuildSeriesInput {
   measured: readonly MeasuredHour[];
   /** The forecast, for the hours no measurement covers and for everything ahead. */
   model: ForecastModel | null;
+  /**
+   * Whether to carry the chart past the current hour.
+   *
+   * Off, the window is cut at now: what is on screen is then only what has happened,
+   * which is the honest answer for a reader checking how much rain actually fell.
+   * On, the forecast continues the line — dashed, and never joined to the measured
+   * part — and the page lets its date picker reach into the future.
+   */
+  includeForecast?: boolean;
 }
 
 /**
@@ -159,28 +204,42 @@ export interface BuildSeriesInput {
  * way round, because the whole promise of a station-backed location is that what it
  * reported wins over what was computed for it.
  */
-export function buildSeries({ key, from, to, measured, model }: BuildSeriesInput): Series {
+export function buildSeries({
+  key, from, to, measured, model, includeForecast = false,
+}: BuildSeriesInput): Series {
   const byMeasured = new Map(measured.map((h) => [h.time, h]));
   const byModel = new Map((model?.allHours ?? []).map((h) => [h.time, h]));
+  const byHres = new Map(
+    Object.values(model?.hresHoursByDay ?? {}).flat().map((h) => [h.time, h])
+  );
   const nowHour = model?.nowHour ?? '';
 
-  const hours: Sample[] = hourKeys(from, to).map((time) => {
-    const m = byMeasured.get(time);
-    const future = nowHour !== '' && time > nowHour;
-    // Measurements end at now by definition, so a future hour never consults them.
-    if (m && !future) {
-      const { value, secondary } = fromMeasured(key, m);
-      // A station that reported the hour but not this quantity leaves the model to
-      // answer for it: the merge is per quantity everywhere else in the app too.
-      if (value != null) return { key: time, value, secondary, measured: true, future };
-    }
-    const h = byModel.get(time);
-    if (!h) return { key: time, value: null, measured: false, future };
-    const { value, secondary } = fromModel(key, h);
-    return { key: time, value, secondary, measured: false, future };
-  });
+  const hours: Sample[] = hourKeys(from, to)
+    .filter((time) => includeForecast || nowHour === '' || time <= nowHour)
+    .map((time) => {
+      const m = byMeasured.get(time);
+      const future = nowHour !== '' && time > nowHour;
+      // Measurements end at now by definition, so a future hour never consults them.
+      if (m && !future) {
+        const { value, secondary } = fromMeasured(key, m);
+        // A station that reported the hour but not this quantity leaves the model to
+        // answer for it: the merge is per quantity everywhere else in the app too.
+        if (value != null) return { key: time, value, secondary, measured: true, future };
+      }
+      const h = byModel.get(time);
+      if (h) {
+        const { value, secondary } = fromModel(key, h);
+        // `allHours` stops 48 hours out, so a value is only accepted from it when
+        // there is one; past that the IFS series below carries the line.
+        if (value != null) return { key: time, value, secondary, measured: false, future };
+      }
+      const p = byHres.get(time);
+      if (!p) return { key: time, value: null, measured: false, future };
+      const { value, secondary } = fromHres(key, p);
+      return { key: time, value, secondary, measured: false, future };
+    });
 
-  const span = daySpan(from, to);
+  const span = daySpan(hours[0]?.key.slice(0, 10) ?? from, hours[hours.length - 1]?.key.slice(0, 10) ?? to);
   const samples = span > DAY_RESOLUTION_FROM ? bucketByDay(key, hours) : hours;
 
   return {
