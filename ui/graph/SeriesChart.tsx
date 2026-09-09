@@ -253,8 +253,15 @@ export function SeriesChart({
               <Dots samples={samples} px={px} py={py} color={color} cardColor={palette.appCard} />
             ) : (
               <Lines
-                  samples={samples} px={px} py={py} color={color}
-                drawSecondary={!!secondaryLabel} cardColor={palette.appCard}
+                samples={samples}
+                px={px}
+                py={py}
+                color={color}
+                drawSecondary={!!secondaryLabel}
+                cardColor={palette.appCard}
+                showValue={showValue}
+                lo={showBandLo ? bandLoColor ?? color : null}
+                hi={showBandHi ? bandHiColor ?? color : null}
               />
             )}
 
@@ -351,7 +358,7 @@ export function SeriesChart({
  * makes the two halves touch rather than leaving a notch between them.
  */
 function Lines({
-  samples, px, py, color, drawSecondary, cardColor, showValue = true, lo, hi,
+  samples, px, py, color, drawSecondary, cardColor, showValue, lo, hi,
 }: {
   samples: Sample[];
   px: (i: number) => number;
@@ -359,11 +366,15 @@ function Lines({
   color: string;
   drawSecondary: boolean;
   cardColor: string;
+  // Required, not optional with a default. Three separate edits in this file have
+  // silently dropped a new optional prop at the call site — the code typechecks, the
+  // legend still draws, and the lines simply never appear. Required props make that
+  // a compile error instead of something you find by looking at the chart.
   /** False hides the central line, leaving the band and whichever edges are up. */
-  showValue?: boolean;
+  showValue: boolean;
   /** Colour for the band's lower and upper edge, or null to leave it undrawn. */
-  lo?: string | null;
-  hi?: string | null;
+  lo: string | null;
+  hi: string | null;
 }) {
   const bandPath = (() => {
     const top: Point[] = [];
