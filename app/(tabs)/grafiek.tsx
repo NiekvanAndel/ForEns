@@ -88,7 +88,10 @@
  * the screen's edges — and a single card left floating over a page of bare content
  * is a box round one paragraph. Both rows are `PillSwitcher`, the same control
  * 'Verwachting' picks its layer with, so the whole page is one row of pills under a
- * heading, twice.
+ * heading, twice, and then the chart under a third.
+ *
+ * What separates the three is space, and there is plenty of it here: see
+ * `SECTION_GAP`.
  *
  * ## The gesture
  *
@@ -150,6 +153,21 @@ const SERIES: {
   { key: 'windDir', labelKey: 'windDirection', icon: 'compass', color: (p) => p.wind },
   { key: 'radiation', labelKey: 'radiation', icon: 'sun', color: (p) => p.radiation },
 ];
+
+/**
+ * The page's vertical rhythm.
+ *
+ * A heading belongs to what is under it, so it sits close; the parts belong to each
+ * other only in that they are on one page, so they sit far. Two numbers, used
+ * everywhere, rather than a padding invented per element.
+ *
+ * `CardHeader` brings its own twelve points of room underneath, which is where the
+ * inner figure comes from — a section is the heading and then its content, with no
+ * gap of its own, or the two paddings stack into a step as big as the one that is
+ * meant to separate whole sections.
+ */
+const SECTION_GAP = space[9];
+const CONTENT_GAP = space[3];
 
 interface PageColors {
   temp: string; precip: string; humidity: string; wind: string; radiation: string;
@@ -302,18 +320,22 @@ function GraphPage() {
         paddingHorizontal: space[5],
         paddingTop: TOP_BAR_CLEARANCE + insets.top,
         paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
-        gap: space[4],
+        // The step between the page's three parts. It was 14 against an internal 12,
+        // which is not a step at all: a heading sat as far from the section above it
+        // as from its own content, and the three read as one long column. Twice the
+        // internal gap is what makes them three.
+        gap: SECTION_GAP,
       }}
       showsVerticalScrollIndicator={false}
       refreshControl={refreshControl}
     >
       <LocationTitle />
 
-      {/* On the page, like everything under it. Two cards held the page's two
-          questions apart, and then the second one came out to give the chart its
-          width — which left one card floating over a page of bare content. The
-          headings do the separating now, which is what headings are for. */}
-      <View style={{ gap: space[3] }}>
+      {/* On the page, like everything under it. Two cards held the page's questions
+          apart, and then the second came out to give the chart its width — which left
+          one card floating over a page of bare content. The headings and the space
+          between them do the separating now, which is what both are for. */}
+      <View>
         <CardHeader label={ta('period', prefs.lang)} />
         <RangeSelector
           range={range}
@@ -332,29 +354,28 @@ function GraphPage() {
         />
       </View>
 
+      {/* Its own part of the page, not an appendage of the chart: what to plot is a
+          question of the same weight as over what period. */}
+      <View>
+        <CardHeader label={ta('measurement', prefs.lang)} />
+        <PillSwitcher items={pills} active={key} onChange={setKey} />
+      </View>
+
       {/* Not a card. A chart inside one is inset three times over — the page's own
           margin, the card's, and the room the chart keeps for its axis labels — and
           on a phone that is a fifth of the width spent on nothing. Out here it uses
           the page, and the plot itself reaches the screen's edges. */}
       <View>
-        {/* The measurement lives with its chart, not in the card above: that one is
-            about *when*, this one about *what*, and the switcher belongs to the thing
-            it changes. No heading over it — six labelled pills are not a list that
-            needs to be told what it is. */}
-        <PillSwitcher items={pills} active={key} onChange={setKey} />
-
-        <View style={{ paddingTop: space[4] }}>
-          <CardHeader label={ta(RESOLUTION_LABEL[series.resolution], prefs.lang)} />
-        </View>
+        <CardHeader label={ta(RESOLUTION_LABEL[series.resolution], prefs.lang)} />
 
         {phase === 'loading' && loading ? (
           <View style={{ paddingVertical: space[8], alignItems: 'center' }}>
             <ActivityIndicator color={palette.accent} />
           </View>
         ) : (
-          <>
+          <View style={{ gap: CONTENT_GAP }}>
             {series.stats && meta.summary !== 'none' ? (
-              <View style={{ flexDirection: 'row', gap: space[5], paddingBottom: space[3] }}>
+              <View style={{ flexDirection: 'row', gap: space[5] }}>
                 {meta.summary === 'total' ? (
                   <>
                     <Stat label={ta('total', prefs.lang)} value={format(series.stats.total)} />
@@ -394,7 +415,7 @@ function GraphPage() {
             {/* Out past the page's own margin, to the screen's edges. The chart
                 keeps its own room for the axis labels and needs no second margin
                 inside a third; every point given back here is a point of plot. */}
-            <View style={{ marginHorizontal: -space[5], paddingBottom: space[3] }}>
+            <View style={{ marginHorizontal: -space[5] }}>
               <SeriesChart
                 samples={series.samples}
                 shape={meta.shape}
@@ -496,7 +517,7 @@ function GraphPage() {
                 </Text>
               )}
             </View>
-          </>
+          </View>
         )}
       </View>
     </ScrollView>

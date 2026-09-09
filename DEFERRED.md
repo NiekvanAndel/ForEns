@@ -463,10 +463,16 @@ spent on nothing.
   outlines. Filled with the card colour on a cream page they would have been solid
   white marks. It takes a `background` now, defaulting to the card colour it was
   born on.
-- **The period selector followed.** Two cards held the page's two questions apart;
-  once the second came out to give the chart its width, the one left was a box round
-  a single paragraph. The headings do the separating now, which is what headings are
-  for.
+- **The period selector followed.** Two cards held the page's questions apart; once
+  the second came out to give the chart its width, the one left was a box round a
+  single paragraph. Headings and space do the separating now.
+- **The rhythm is two numbers, not a padding per element.** 28 between the page's
+  three parts, 12 inside one. It had been 14 against 12, which is not a step at all —
+  a heading sat as far from the section above it as from its own content, and the
+  three read as one long column. `CardHeader` brings its own 12 underneath, so a
+  section is a heading followed by its content with no gap of its own; adding one
+  stacked the two paddings into a step as large as the one meant to separate whole
+  sections.
 - **Both pill rows are `PillSwitcher`**, so the page is one row of pills under a
   heading, twice. `icon` became optional for it: a row of four periods would have
   carried the same calendar four times over, and an `active` matching no key leaves
