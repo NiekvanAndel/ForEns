@@ -18,13 +18,21 @@
  * deeper; the hours were set two points smaller than the days above them for no
  * reason a reader could see.
  *
- * The readings sit in proportional columns for the same reason the day rows do. They
- * were right-packed into one row with a gap, which works for one reading and falls
- * apart at four: `adjustsFontSizeToFit` only holds its floor inside a box with a
- * width, so in an unbounded row the last readings were squeezed to whatever space
- * the ones before them had left over — the wind and the sunshine came out half the
- * size of the temperature, by an amount that changed from hour to hour, and nothing
- * lined up down the list.
+ * The readings sit in proportional columns, and at one fixed size — nothing here
+ * shrinks to fit.
+ *
+ * They used to, and that is what made one hour's row smaller than the next. On iOS
+ * `adjustsFontSizeToFit` does not honour its floor on a text with a nested child,
+ * which every reading here has: the unit is nested inside the number so the two
+ * cannot be pulled apart. So an hour whose reading was a few points wider than its
+ * neighbour's — "0,1 mm" against "0 mm" — did not shrink by the 15% the floor
+ * promised, it shrank as far as iOS liked, and the row read as a different size from
+ * the ones above and below it.
+ *
+ * The columns are sized for the widest reading each can hold ("-12 °C", "24,8 mm",
+ * "120 km/u", "60 min") at the size they are set in, with room to spare on the
+ * narrowest phone the app runs on. Nothing has to shrink, so nothing does, and every
+ * hour reads at the same size as every other.
  *
  * Precipitation, temperature and wind rows also carry the hour's ensemble, once it
  * has loaded: the p10–p90 range the members allow, and for precipitation the share
@@ -280,26 +288,27 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
 
     // The overview list carries the whole hour, since that is what it is for. The
     // proportions follow the day row's: temperature and precipitation lead, wind
-    // takes the most room for the longest unit, sunshine closes. The floors are set
-    // so all four still fit side by side on the narrowest phone the app supports.
+    // takes the most room for the longest unit, sunshine closes. Each floor is the
+    // width of that column's widest reading, and the four together leave room to
+    // spare beside the time and the icon on the narrowest phone the app runs on.
     case 'overview':
       return (
         <>
-          <Col flex={2.6} minWidth={40}>
+          <Col flex={2.6} minWidth={46}>
             <Pair
               value={convTemp(hour.temp, prefs.tempUnit)}
               unit={tempUnitLabel(prefs.tempUnit)}
               color={palette.valTemp}
             />
           </Col>
-          <Col flex={2.8} minWidth={44}>
+          <Col flex={2.8} minWidth={56}>
             <Pair
               value={fmtMm(hour.precip)}
               unit="mm"
               color={hour.precip > 0 ? palette.valPrecip : palette.valPrecipZero}
             />
           </Col>
-          <Col flex={3} minWidth={48}>
+          <Col flex={3} minWidth={56}>
             <Pair
               value={convWind(hour.wind, prefs.windUnit)}
               unit={windUnitLabel(prefs.windUnit)}
@@ -307,7 +316,7 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
               small
             />
           </Col>
-          <Col flex={2.4} minWidth={40}>
+          <Col flex={2.4} minWidth={42}>
             <Pair
               value={hour.sunMin != null ? Math.round(hour.sunMin) : null}
               unit="min"
@@ -325,8 +334,11 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
  *
  * Nested rather than two boxes in a row, for the reason `OverviewDayRow` gives: two
  * boxes are two independently shrinkable things, and a narrow column squeezes both
- * until each wraps on its own. `adjustsFontSizeToFit` then buys the overview row —
- * four readings wide — a couple of points on a small screen instead of a truncation.
+ * until each wraps on its own.
+ *
+ * No `adjustsFontSizeToFit`: its column is wide enough for the widest reading it can
+ * hold, and on a text with a nested child the prop ignores its own floor. See the
+ * note at the top of the file.
  */
 function Pair({
   value, unit, color, small,
@@ -347,8 +359,6 @@ function Pair({
       color={color}
       tabular
       numberOfLines={1}
-      adjustsFontSizeToFit
-      minimumFontScale={0.85}
       style={{ fontSize: size }}
     >
       {value}
