@@ -30,7 +30,14 @@ import { Icon } from '../Icon';
 import { MAX_DISPLAY_Z, MIN_ZOOM, START_SPAN_DEG, mapChrome, maxZoomFor } from './mapStyle';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import { usePeeking } from '../peek';
-import type { AgroStation } from '../../core/sources/agroexact';
+import type { SavedLocation } from '../../core/prefs';
+
+/** One of the reader's other saved locations, as the map draws it. */
+export interface PlacePin {
+  location: SavedLocation;
+  /** Its slot in the saved list, which is what selecting it needs. */
+  index: number;
+}
 
 /** The span band the zoom buttons work within, matching MIN_ZOOM and maxZoomFor. */
 const MIN_SPAN_DEG = 0.05;
@@ -48,9 +55,12 @@ export interface RadarMapProps {
   lon: number;
   frames: RadarFrame[];
   activeIndex: number;
-  /** Extra places to mark. Left out on the card, where the map answers "is it
-   *  raining here" and every other dot is a distraction from the one that matters. */
-  stations?: AgroStation[];
+  /** The reader's other saved locations, drawn as pins that select them. Left out
+   *  on the card, where the map answers "is it raining here" and every other dot is
+   *  a distraction from the one that matters. */
+  places?: PlacePin[];
+  /** Selects a place. Without it the pins are labels rather than controls. */
+  onSelectPlace?: (index: number) => void;
   /** Label for the time badge, e.g. "nu" or "+45 min". */
   timeLabel: string;
   interactive?: boolean;
@@ -66,7 +76,7 @@ export interface RadarMapProps {
 }
 
 export function RadarMap({
-  lat, lon, frames, activeIndex, stations = [], timeLabel,
+  lat, lon, frames, activeIndex, places = [], onSelectPlace, timeLabel,
   interactive = true, showControls = true, showLegend = false,
   chromeTop = CHROME_INSET, style,
 }: RadarMapProps) {
@@ -171,14 +181,27 @@ export function RadarMap({
           />
         </Marker>
 
-        {stations.map((s) => (
+        {/* The other saved locations. Hollow, so the filled dot above stays the
+            place the page is about, and tappable, which is how full screen changes
+            location without leaving full screen. */}
+        {places.map((p) => (
           <Marker
-            key={s.id}
-            coordinate={{ latitude: s.lat, longitude: s.lon }}
-            title={s.name}
-            pinColor={palette.agroBright}
+            key={`${p.index}-${p.location.name}`}
+            coordinate={{ latitude: p.location.lat, longitude: p.location.lon }}
+            anchor={{ x: 0.5, y: 0.5 }}
             zIndex={2}
-          />
+            title={p.location.name}
+            onPress={() => onSelectPlace?.(p.index)}
+          >
+            <View
+              style={{
+                width: 15, height: 15, borderRadius: 8,
+                backgroundColor: '#fff',
+                borderWidth: 3,
+                borderColor: p.location.stationId ? palette.agroBright : chrome.here,
+              }}
+            />
+          </Marker>
         ))}
       </MapView>
 
@@ -219,13 +242,13 @@ export function RadarMap({
             shadowFloat,
           ]}
         >
-          <LegendRow color={chrome.here} ring="#fff" label="Jouw locatie" textColor={chromeInk} />
-          {stations.length ? (
+          <LegendRow color={chrome.here} ring="#fff" label="Deze locatie" textColor={chromeInk} />
+          {places.length ? (
             <LegendRow
               color="#fff"
-              ring={palette.agroBright}
-              label="AgroExact-station"
-              textColor={palette.agroInk}
+              ring={chrome.here}
+              label="Andere locatie"
+              textColor={chromeInk}
             />
           ) : null}
         </View>

@@ -27,8 +27,6 @@ import { FullScreenRadar } from '../../ui/radar/FullScreenRadar';
 import { NowcastPanel } from '../../ui/radar/NowcastPanel';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
-import { useAgroStations } from '../../state/stations';
-import { stationsNear } from '../../core/sources/agroexact';
 import { activeProvider, frameClock, radarAxis, type RadarFrame } from '../../core/radar';
 import { mapChrome } from '../../ui/radar/mapStyle';
 import { usePeeking } from '../../ui/peek';
@@ -38,15 +36,12 @@ import { ta } from '../../core/i18n';
  *  track is usually read north-to-south here, and because the panel beneath it is
  *  short. */
 const MAP_ASPECT = 0.78;
-/** Station pins are drawn for this radius around the location. */
-const STATION_PIN_RADIUS_KM = 60;
 
 function RadarPage() {
   const { palette, appearance } = useTheme();
-  const { prefs, location } = usePrefs();
+  const { prefs, location, selectLocation } = usePrefs();
   const { nowcast } = useForecast();
   const insets = useSafeAreaInsets();
-  const { data: stations = [] } = useAgroStations();
   const peeking = usePeeking();
   const chrome = mapChrome(palette, appearance);
 
@@ -102,9 +97,14 @@ function RadarPage() {
     useCallback(() => fetchFrames(undefined, false), [fetchFrames])
   );
 
-  const pins = useMemo(
-    () => stationsNear(stations, location.lat, location.lon, STATION_PIN_RADIUS_KM),
-    [stations, location.lat, location.lon]
+  // Every saved location except the one this page is about, which the map already
+  // marks. Carrying the index along is what lets a tap select it.
+  const places = useMemo(
+    () =>
+      prefs.locations
+        .map((l, index) => ({ location: l, index }))
+        .filter((p) => p.location !== location),
+    [prefs.locations, location]
   );
 
   // One axis for the chart and the scrubber, so the cursor and the thumb move
@@ -228,7 +228,8 @@ function RadarPage() {
       onScrub={setIndex}
       playing={playing}
       onTogglePlay={() => setPlaying((p) => !p)}
-      stations={pins}
+      places={places}
+      onSelectPlace={selectLocation}
       profile={nowcast}
       locationName={location.name}
     />
