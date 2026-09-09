@@ -47,9 +47,10 @@ Decisions worth knowing about:
   does not measure itself and a RainExact location gets a complete page. Whatever
   still comes back empty stays modelled. The weather icon is never replaced — a
   station measures quantities, not conditions.
-- **Sunshine minutes stay modelled.** The API reports global radiation (J/cm²),
-  which is a different quantity; deriving bright-sunshine minutes from it would be a
-  guess presented as a measurement. Say the word if an approximation is preferred.
+- **Sunshine minutes stay modelled.** The API reports global radiation, which is a
+  different quantity; deriving bright-sunshine minutes from it would be a guess
+  presented as a measurement. Say the word if an approximation is preferred. The
+  radiation itself is now plotted on 'Grafiek' — see the unit note below.
 - **The hero's figures are now a rolling 24 hours** — minimum, maximum and rainfall
   total — for *every* location, station-backed or not. They were today's forecast
   extremes, which mixed a measured present with a modelled afternoon. `pastHours` is
@@ -348,14 +349,10 @@ Two things to check on a device:
   day that blew between 170° and 190° fills the plot with what is very nearly one
   steady direction. Bucketing a day of bearings uses a circular mean — 350° and 10°
   come to 0°, where the arithmetic mean says due south.
-- **Radiation comes from the weather model only.** Open-Meteo's
-  `shortwave_radiation` is W/m²; this repository carries two conflicting notes about
-  whether AgroExact answers in W/m² or J/cm², and a chart that mixed them would put
-  two quantities on one axis without saying so. One source, one unit, until the
-  station's is settled against the live API — say the word and the station is wired
-  in. `processAll` now keeps radiation on every hour (the field was already fetched
-  for the sunshine estimate and thrown away); the parity suite projects the addition
-  away and asserts separately that it is populated, as it does for the gust.
+- **Radiation is plotted in W/m², from the station where there is one.**
+  `processAll` now keeps radiation on every hour (the field was already fetched for
+  the sunshine estimate and thrown away); the parity suite projects the addition away
+  and asserts separately that it is populated, as it does for the gust.
 - **Axis bounds are per quantity.** Humidity stays dynamic but cannot leave 0–100;
   rainfall, wind and radiation cannot go below zero; temperature has neither bound,
   because below zero is a real reading.
@@ -368,6 +365,27 @@ Two things to check on a device:
   to two lines each and the row grew taller than the summary under it.
 - **The chart's own left padding came down from 42 to 30**, and the card's from 12 to
   4. Three nested margins for one chart, and the width belongs to the data.
+
+### `global_radiation` means two different things (9 Sep 2026)
+
+**Settled against the live API**, which resolves the contradiction between this
+file's old note (J/cm²) and the AgroExactRN client's comment (W/m²). Both were
+right, about different endpoints:
+
+| Endpoint | Unit | Hedikhuizen, 21 Jun 2026 |
+| --- | --- | --- |
+| `/aggregates/` | J/cm², the hour's energy | 309.96 for the hour ending 13:00Z |
+| `/readings/` | W/m², the irradiance then | 828–892 across that same hour |
+
+861 W/m² averaged over 3600 s is 3.10 MJ/m², which is 310 J/cm². The same quantity,
+twice, under one field name — exactly the kind of thing that produces a chart nobody
+can tell is wrong.
+
+So the conversion sits at the edge, in `JCM2_PER_HOUR_TO_WM2`: an aggregate is
+multiplied by 10⁴/3600, a reading is taken as it stands, and Open-Meteo's
+`shortwave_radiation` joins them unchanged. Everything above `core/sources` is W/m²
+and nothing downstream has to know. Pinned in `tests/sources.test.ts` against the
+two figures above.
 
 ### Two things to verify against the live API
 

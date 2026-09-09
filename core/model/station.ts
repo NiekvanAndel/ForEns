@@ -14,7 +14,7 @@
  *    coming from the model.
  *  - Sunshine minutes. The API reports global radiation, which is not the same
  *    quantity — deriving minutes of bright sunshine from it would be a guess wearing
- *    a measurement's clothes.
+ *    a measurement's clothes. The radiation itself *is* merged, in W/m².
  *  - Anything in the future. Measurements end at now, by definition.
  *
  * Pure, and separate from `processAll`, because the station data arrives on its own
@@ -51,6 +51,9 @@ export function mergeHour(hour: Hour, measured: StationObservations['hours'][str
     windDir: pick(measured.windDir, hour.windDir ?? null),
     humidity: pick(measured.humidity, hour.humidity),
     dewpoint: pick(measured.dewpoint, hour.dewpoint ?? null),
+    // Both sides are W/m² by the time they meet here — the aggregate's joules per
+    // square centimetre are converted at the edge. See `JCM2_PER_HOUR_TO_WM2`.
+    radiation: pick(measured.radiation, hour.radiation ?? null),
     // The icon, the sunshine minutes and every ensemble figure stay as they were.
   };
 }

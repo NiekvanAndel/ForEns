@@ -11,7 +11,7 @@ import { fetchJson, tryFetchJson, SourceError } from '../core/sources/http';
 import { loadHourly, loadStage1, urls } from '../core/sources/openMeteo';
 import {
   agroHeaders, distanceKm, nearestStation, stationsNear, localHourKey, withAgroToken,
-  fetchStations, fetchStationHours, fetchLatestMeasurement, AgroAuthError,
+  fetchStations, fetchStationHours, fetchStationReadings, fetchLatestMeasurement, AgroAuthError,
 } from '../core/sources/agroexact';
 import { searchPlaces } from '../core/sources/geocoding';
 
@@ -411,5 +411,36 @@ describe('withAgroToken', () => {
     const call = vi.fn(async () => { throw new SourceError('AgroExact', 'HTTP 500', 500); });
     await expect(withAgroToken(async () => 'live', call)).rejects.toBeInstanceOf(SourceError);
     expect(call).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AgroExact radiation', () => {
+  // The two endpoints report `global_radiation` in different units, and this is the
+  // conversion that hides it. Checked against the live API on Hedikhuizen, 21 June
+  // 2026: the hour ending 13:00Z reads 309.96 from the aggregate, and the readings
+  // inside it average 861 W/m² — the same quantity, twice.
+  it('converts an hour of joules per square centimetre into watts per square metre', async () => {
+    const f = mockFetch(() => ({
+      body: [
+        {
+          timestamp: '2026-06-21T13:00:00Z',
+          station_name: 'Hedikhuizen',
+          global_radiation: 309.96,
+        },
+      ],
+    }));
+    const out = await fetchStationHours('t', 'st1', 0, 26, { fetchImpl: f });
+    const hour = Object.values(out.hours)[0];
+    expect(hour?.radiation).toBe(861);
+  });
+
+  it('takes a raw reading as it stands, because that one is already watts', async () => {
+    const f = mockFetch(() => ({
+      body: [{ timestamp: '2026-06-21T12:11:03Z', global_radiation: 892 }],
+    }));
+    const rows = await fetchStationReadings('t', 'st1', 0, '2026-06-21', '2026-06-21', {
+      fetchImpl: f,
+    });
+    expect(rows[0]?.radiation).toBe(892);
   });
 });

@@ -186,7 +186,7 @@ function GraphPage() {
     key === 'temp' ? tempUnitLabel(prefs.tempUnit)
     : key === 'precip' ? 'mm'
     : key === 'humidity' ? '%'
-    : key === 'windDir' ? '°'
+    : key === 'windDir' ? ''
     : key === 'radiation' ? 'W'
     : '';
 
@@ -354,6 +354,10 @@ function GraphPage() {
                 axisMin={meta.axisMin}
                 axisMax={meta.axisMax}
                 axisFixed={meta.axisFixed}
+                // A bearing's axis reads N · O · Z · W · N, which needs four gaps to
+                // land on the cardinal points rather than between them.
+                formatAxis={key === 'windDir' ? degToCompass : undefined}
+                gridLines={key === 'windDir' ? 4 : undefined}
                 showCumulative={meta.shape === 'bar' && showCumulative}
                 cumulativeLabel={ta('cumulative', prefs.lang)}
                 cumulativeColor={palette.inkHeading}

@@ -46,7 +46,7 @@ const model = (over: Partial<ForecastModel> = {}): ForecastModel => {
 
 const measured = (time: string, over: Partial<MeasuredHour> = {}): MeasuredHour => ({
   time, temp: 20, tempMin: 19, tempMax: 21, humidity: 60, dewpoint: 8,
-  wind: 8, gusts: 15, windDir: 90, precip: 0, ...over,
+  wind: 8, gusts: 15, windDir: 90, precip: 0, radiation: null, ...over,
 });
 
 describe('modelTiles', () => {
@@ -322,17 +322,24 @@ describe('the two quantities added last', () => {
     expect(s.samples.find((x) => x.key === '2026-06-11')?.band).toBeNull();
   });
 
-  it('takes radiation from the model and never from a station', () => {
+  it('prefers the station\'s radiation, in the one unit both sides use', () => {
     const s = buildSeries({
       key: 'radiation', ...window,
-      // The station claims a value; the two sources disagree about the unit, so it
-      // is not taken. See `fromModel`.
-      measured: [measured('2026-06-15T10:00')],
+      measured: [measured('2026-06-15T10:00', { radiation: 861 })],
       model: model({ pastHours: [hour('2026-06-15T10:00', { radiation: 420 })] }),
     });
     const at = s.samples.find((x) => x.key === '2026-06-15T10:00');
-    expect(at?.value).toBe(420);
-    expect(at?.measured).toBe(false);
+    expect(at?.value).toBe(861);
+    expect(at?.measured).toBe(true);
+  });
+
+  it('falls back to the model where the station has no sensor for it', () => {
+    const s = buildSeries({
+      key: 'radiation', ...window,
+      measured: [measured('2026-06-15T10:00', { radiation: null })],
+      model: model({ pastHours: [hour('2026-06-15T10:00', { radiation: 420 })] }),
+    });
+    expect(s.samples.find((x) => x.key === '2026-06-15T10:00')?.value).toBe(420);
   });
 
   it('keeps humidity inside nought and a hundred', () => {

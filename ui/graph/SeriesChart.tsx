@@ -88,6 +88,12 @@ export interface SeriesChartProps {
   axisMax?: number;
   /** Pin the axis to those bounds rather than fitting the data inside them. */
   axisFixed?: boolean;
+  /** How the axis labels read, where a number is not the answer. A bearing wants
+   *  its compass point: 90 is not a quantity, it is east. */
+  formatAxis?: (value: number) => string;
+  /** How many gaps the gridlines divide the axis into. Four puts a pinned compass
+   *  axis on N, O, Z, W and N again; three would land it on ZO and WNW. */
+  gridLines?: number;
   height?: number;
   /** Text for an empty window, so the page's wording stays in one place. */
   emptyLabel: string;
@@ -97,6 +103,7 @@ export function SeriesChart({
   samples, shape, color, axisLabel, readLabel, format,
   secondaryLabel, unit = '', height = 190, emptyLabel,
   showCumulative, cumulativeLabel, cumulativeColor, axisMin, axisMax, axisFixed,
+  formatAxis, gridLines = GRID_LINES,
 }: SeriesChartProps) {
   const { palette } = useTheme();
   const [width, setWidth] = useState(0);
@@ -141,7 +148,10 @@ export function SeriesChart({
   const px = (i: number) => scaleX(i, n, PAD_LEFT, plotW);
   const py = (v: number) => scaleY(Math.min(Math.max(v, lo), hi), lo, hi, PAD_TOP, plotH);
 
-  const gridValues = Array.from({ length: GRID_LINES + 1 }, (_, i) => lo + ((hi - lo) * i) / GRID_LINES);
+  const gridValues = Array.from(
+    { length: gridLines + 1 },
+    (_, i) => lo + ((hi - lo) * i) / gridLines
+  );
   const labelStep = Math.max(1, Math.ceil(n / X_LABELS));
 
   /** Where the measured half ends, in plot coordinates. */
@@ -206,8 +216,11 @@ export function SeriesChart({
                   fontFamily="Figtree_500Medium"
                 >
                   {/* The unit rides only the top tick: on every gridline the labels
-                      collide at this size. */}
-                  {formatTick(v)}{i === gridValues.length - 1 ? unit : ''}
+                      collide at this size. A label that is a word rather than a
+                      number carries its own meaning and takes no unit at all. */}
+                  {formatAxis
+                    ? formatAxis(v)
+                    : `${formatTick(v)}${i === gridValues.length - 1 ? unit : ''}`}
                 </SvgText>
               </G>
             ))}

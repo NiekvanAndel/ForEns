@@ -166,19 +166,18 @@ function fromMeasured(key: SeriesKey, h: MeasuredHour): { value: number | null; 
     case 'humidity': return { value: h.humidity };
     case 'wind': return { value: h.wind, secondary: h.gusts };
     case 'windDir': return { value: h.windDir };
-    // Deliberately not answered from a station: see `fromModel`.
-    case 'radiation': return { value: null };
+    case 'radiation': return { value: h.radiation };
   }
 }
 
 /**
  * The same, from a modelled or observed hour of the forecast.
  *
- * Radiation comes only from here, never from a station. The two sources disagree
- * about the unit — Open-Meteo's `shortwave_radiation` is W/m², and this repository
- * carries two conflicting notes about whether AgroExact answers in W/m² or J/cm² —
- * and a chart that mixed them would put two quantities on one axis without saying
- * so. One source, one unit, until the station's is settled against the live API.
+ * Radiation is W/m² on every side of this: Open-Meteo's `shortwave_radiation` says
+ * so, a station's raw reading says so, and a station's hourly aggregate is converted
+ * from joules per square centimetre before it ever reaches here. That the API uses
+ * one field name for two units is the whole reason the conversion sits at the edge —
+ * see `JCM2_PER_HOUR_TO_WM2`.
  */
 function fromModel(key: SeriesKey, h: Hour): { value: number | null; secondary?: number | null } {
   switch (key) {

@@ -83,6 +83,8 @@ export interface MeasuredHour {
   gusts: number | null;
   windDir: number | null;
   precip: number | null;
+  /** Shortwave radiation, W/m² — see `JCM2_PER_HOUR_TO_WM2`. */
+  radiation: number | null;
 }
 
 /** The latest reading, which is what "nu" means on a station-backed location. */
@@ -273,6 +275,26 @@ const roundOrNull = (v: number | null): number | null => (v == null ? null : Mat
  *  precisely. See `core/model/types` on `tempExact`. */
 const round1OrNull = (v: number | null): number | null => (v == null ? null : round1(v));
 
+/**
+ * Radiation from an aggregate, in the W/m² the app plots.
+ *
+ * The two endpoints report the same field name in different units, which is the
+ * kind of thing that produces a chart nobody can tell is wrong. `/aggregates/` sums
+ * the hour's energy in joules per square centimetre; `/readings/` reports the
+ * irradiance at that instant in watts per square metre. Checked against the live API
+ * on Hedikhuizen, 21 June 2026: the hour ending 13:00Z reads 309.96 from the
+ * aggregate, and the six readings inside it average 861 W/m² — 861 × 3600 s is
+ * 3.10 MJ/m², which is 310 J/cm². The same quantity, twice.
+ *
+ * One joule per square centimetre is 10⁴ J/m²; spread over an hour that is
+ * 10⁴/3600 W/m². So an aggregate is converted and a reading is taken as it stands,
+ * and the model's own `shortwave_radiation` — already W/m² — joins them without a
+ * second axis.
+ */
+const JCM2_PER_HOUR_TO_WM2 = 10_000 / 3600;
+const radiationFromAggregate = (v: number | null): number | null =>
+  v == null ? null : Math.round(v * JCM2_PER_HOUR_TO_WM2);
+
 // ── Stations ────────────────────────────────────────────────────────────────────
 
 interface StationRow {
@@ -384,6 +406,8 @@ interface AggregateRow {
   humidity_150?: number | null;
   humidity_150_avg?: number | null;
   dewpoint?: number | null;
+  /** The hour's energy, J/cm². Converted on the way in. */
+  global_radiation?: number | null;
 }
 
 /** An aggregate row is stamped at the end of the hour it covers. */
@@ -418,6 +442,7 @@ function mapAggregateRow(key: string, r: AggregateRow): MeasuredHour {
     gusts: msToKmh(num(r.gust_max)),
     windDir: roundOrNull(num(r.wind_direction)),
     precip: num(r.precipitation) != null ? round1(num(r.precipitation) as number) : null,
+    radiation: radiationFromAggregate(num(r.global_radiation)),
   };
 }
 
@@ -474,6 +499,8 @@ interface ReadingRow {
   windspeed?: number | null;
   wind_direction?: number | null;
   gust?: number | null;
+  /** The irradiance at that instant, W/m² — already the app's own unit. */
+  global_radiation?: number | null;
 }
 
 /**
@@ -655,6 +682,8 @@ export async function fetchStationReadings(
       gusts: msToKmh(num(r.gust)),
       windDir: roundOrNull(num(r.wind_direction)),
       precip: num(r.precipitation) != null ? round1(num(r.precipitation) as number) : null,
+      // Already W/m²: a reading is an irradiance, not an hour's energy.
+      radiation: roundOrNull(num(r.global_radiation)),
     });
   }
 
