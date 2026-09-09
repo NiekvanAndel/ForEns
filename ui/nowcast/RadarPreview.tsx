@@ -180,7 +180,7 @@ export function RadarPreview({
             compass={false}
             logo={false}
             attribution
-            attributionPosition={{ bottom: 6, left: 6 }}
+            attributionPosition={{ bottom: space[2], left: space[2] }}
           >
             <Camera initialViewState={{ center: [lon, lat], zoom: PREVIEW_ZOOM }} />
             {covered ? (

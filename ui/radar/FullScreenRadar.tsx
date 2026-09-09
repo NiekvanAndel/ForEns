@@ -131,6 +131,9 @@ export function FullScreenRadar({
             // The map runs under the status bar here, so its chrome starts below
             // the safe area: the time badge used to sit behind the battery.
             chromeTop={insets.top + space[2]}
+            // The panel below is pulled up over the map by one card radius, so the
+            // attribution has to clear that much or it is hidden behind it.
+            attributionPosition={{ bottom: radius.appCard + space[2], left: space[3] }}
             style={{ flex: 1, borderRadius: 0 }}
           />
 

@@ -16,7 +16,9 @@
  */
 import { useEffect, useRef } from 'react';
 import { View, Pressable } from 'react-native';
-import { Camera, Map as MapLibreMap, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
+import {
+  Camera, Map as MapLibreMap, Marker, type CameraRef, type MapProps,
+} from '@maplibre/maplibre-react-native';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
@@ -62,13 +64,19 @@ export interface RadarMapProps {
    *  inset, so the time badge clears the clock and the battery rather than sitting
    *  behind them. */
   chromeTop?: number;
+  /** Where the basemap's attribution button sits. It is the map's own ornament, so
+   *  it can only be placed inside the map — which means the caller has to say where
+   *  it will not be covered. Full screen passes a raised position, because the
+   *  profile panel is pulled up over the bottom of the map there and swallowed it. */
+  attributionPosition?: MapProps['attributionPosition'];
   style?: object;
 }
 
 export function RadarMap({
   lat, lon, frames, activeIndex, places = [], onSelectPlace, timeLabel,
   interactive = true, showControls = true, showLegend = false,
-  chromeTop = CHROME_INSET, style,
+  chromeTop = CHROME_INSET, attributionPosition = { bottom: space[2], left: space[2] },
+  style,
 }: RadarMapProps) {
   const { palette, appearance } = useTheme();
   const peeking = usePeeking();
@@ -129,7 +137,7 @@ export function RadarMap({
         // OpenStreetMap's licence wants crediting, and the style carries the line;
         // the button is the least intrusive way to show it on a map this size.
         attribution
-        attributionPosition={{ bottom: 6, right: 6 }}
+        attributionPosition={attributionPosition}
         onRegionDidChange={(e) => { zoom.current = e.nativeEvent.zoom; }}
       >
         <Camera

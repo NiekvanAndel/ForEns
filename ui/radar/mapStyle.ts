@@ -25,11 +25,9 @@
  * vector tiles with no API key and no quota, which keeps the app free of a metered
  * third-party account for what is only a backdrop to the radar.
  *
- * NOTE: `tiles.openfreemap.org` is unreachable from the build environment (the
- * network policy blocks it), so the dark style below is named from its documented
- * set but could not be requested. If the map comes up blank in dark mode, that URL
- * is the thing to change — CARTO's `dark-matter` is the drop-in alternative, noted
- * beside it.
+ * Bright in light, Fiord in dark. NOTE: `tiles.openfreemap.org` is unreachable from
+ * the build environment (the network policy blocks it), so neither URL below could
+ * be requested to confirm its exact slug.
  *
  * ## Why the map is clamped at both ends
  *
@@ -41,14 +39,13 @@
  */
 import type { Appearance, Palette } from '../../theme';
 
-/** The basemap, per appearance. Light and dark are the same cartography in two
- *  palettes, so the map does not change character with the theme.
+/** The basemap, per appearance.
  *
- *  If dark ever 404s, CARTO's equivalent is
- *  `https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json` — it needs an
- *  attribution line, which OpenFreeMap's own styles already carry. */
-const STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/positron';
-const STYLE_DARK = 'https://tiles.openfreemap.org/styles/dark';
+ *  If either ever 404s the map comes up empty, and these two URLs are the thing to
+ *  change; CARTO's `https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json`
+ *  is the drop-in for dark. */
+const STYLE_LIGHT = 'https://tiles.openfreemap.org/styles/bright';
+const STYLE_DARK = 'https://tiles.openfreemap.org/styles/fiord';
 
 export function mapStyleFor(appearance: Appearance): string {
   return appearance === 'dark' ? STYLE_DARK : STYLE_LIGHT;
