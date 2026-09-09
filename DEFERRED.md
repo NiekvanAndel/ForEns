@@ -437,6 +437,19 @@ with an axis in it.
 - The edges run through the same run splitting as everything else, so they break
   where the data does and dash on the same side of the measured/forecast boundary.
 
+### One pill row, two pages (9 Sep 2026)
+
+The measurement switcher moved out of the period card and into the chart card: one
+card is about *when*, the other about *what*, and a switcher belongs to the thing it
+changes. Its heading went with it — six labelled pills are not a list that needs to
+be told what it is — and the period card, now holding one section, is that section.
+
+The row itself is `ui/PillSwitcher`, extracted from 'Verwachting''s layer switcher
+and now used by both: same gradient, same icons for the quantities the two pages
+share, so a reader moving between them meets the same picture for the same thing.
+The quantity's own colour stays on the *line*; the pill carries the accent gradient
+like every other switcher in the app.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an

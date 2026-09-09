@@ -9,7 +9,7 @@
 import {
   ArrowDown, ArrowUp, ArrowsClockwise, ArrowsOut, Broadcast, CalendarBlank, CaretRight,
   CaretLeft, ChartLine, Check, CircleHalf, Clock, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun,
-  CloudSnow, Crosshair, DotsSixVertical, Drop, DropHalf, GearSix, Info, MagnifyingGlass,
+  CloudSnow, Compass, Crosshair, DotsSixVertical, Drop, DropHalf, GearSix, Info, MagnifyingGlass,
   MapTrifold, Minus, PencilSimple, SquaresFour,
   Moon, MoonStars, Pause, Play, PlugsConnected, Plus, Ruler, Sun, TextAa,
   ThermometerSimple, Translate, Trash, Wind, X,
@@ -39,6 +39,7 @@ const ICONS = {
   'cloud-rain': CloudRain,
   'cloud-snow': CloudSnow,
   'cloud-sun': CloudSun,
+  compass: Compass,
   crosshair: Crosshair,
   'dots-six-vertical': DotsSixVertical,
   drop: Drop,

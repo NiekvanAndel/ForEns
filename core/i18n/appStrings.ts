@@ -92,8 +92,7 @@ export const APP_STRINGS = {
     last24h: 'Laatste 24 uur',
     mapShortcut: 'Kaart',
     searchLocations: 'Zoek een plaats',
-    // 'Actueel' and 'Grafiek'. A station-backed location titles its own blocks from
-    // the account's dashboard; these name the ones built from the weather model, and
+    // 'Actueel' and 'Grafiek': the twelve blocks the grid is built from, and
     // everything the graph page says about itself.
     tabCurrent: 'Actueel',
     tabGraph: 'Grafiek',
@@ -119,7 +118,6 @@ export const APP_STRINGS = {
     blocksHidden: 'Verborgen',
     modelledBlocks: 'Berekend voor deze plaats. Koppel een station voor gemeten waarden.',
     period: 'Periode',
-    measurement: 'Meetwaarde',
     from: 'Van',
     to: 'Tot',
     days1: '1 dag',
@@ -199,7 +197,7 @@ export const APP_STRINGS = {
     editBlocks: 'Blocks', editBlocksHint: 'Hold a block to change the order',
     blocksShown: 'Shown', blocksHidden: 'Hidden',
     modelledBlocks: 'Computed for this place. Connect a station for measured values.',
-    period: 'Period', measurement: 'Measurement', from: 'From', to: 'To',
+    period: 'Period', from: 'From', to: 'To',
     days1: '1 day', days2: '2 days', days7: '7 days', days30: '30 days',
     measured: 'Measured', computed: 'Computed', forecastPart: 'Forecast', average: 'Average',
     total: 'Total', peakHour: 'Peak hour', peakDay: 'Peak day',
@@ -260,7 +258,7 @@ export const APP_STRINGS = {
     editBlocks: 'Blöcke', editBlocksHint: 'Halte einen Block, um die Reihenfolge zu ändern',
     blocksShown: 'Angezeigt', blocksHidden: 'Ausgeblendet',
     modelledBlocks: 'Für diesen Ort berechnet. Verbinde eine Station für Messwerte.',
-    period: 'Zeitraum', measurement: 'Messwert', from: 'Von', to: 'Bis',
+    period: 'Zeitraum', from: 'Von', to: 'Bis',
     days1: '1 Tag', days2: '2 Tage', days7: '7 Tage', days30: '30 Tage',
     measured: 'Gemessen', computed: 'Berechnet', forecastPart: 'Vorhersage', average: 'Durchschnitt',
     total: 'Gesamt', peakHour: 'Spitzenstunde', peakDay: 'Spitzentag',
@@ -321,7 +319,7 @@ export const APP_STRINGS = {
     editBlocks: 'Blocs', editBlocksHint: "Maintiens un bloc pour changer l'ordre",
     blocksShown: 'Affichés', blocksHidden: 'Masqués',
     modelledBlocks: 'Calculé pour ce lieu. Connecte une station pour des valeurs mesurées.',
-    period: 'Période', measurement: 'Mesure', from: 'Du', to: 'Au',
+    period: 'Période', from: 'Du', to: 'Au',
     days1: '1 jour', days2: '2 jours', days7: '7 jours', days30: '30 jours',
     measured: 'Mesuré', computed: 'Calculé', forecastPart: 'Prévu', average: 'Moyenne',
     total: 'Total', peakHour: 'Heure de pointe', peakDay: 'Jour de pointe',
@@ -382,7 +380,7 @@ export const APP_STRINGS = {
     editBlocks: 'Bloques', editBlocksHint: 'Mantén un bloque para cambiar el orden',
     blocksShown: 'Mostrados', blocksHidden: 'Ocultos',
     modelledBlocks: 'Calculado para este lugar. Conecta una estación para valores medidos.',
-    period: 'Periodo', measurement: 'Medición', from: 'Desde', to: 'Hasta',
+    period: 'Periodo', from: 'Desde', to: 'Hasta',
     days1: '1 día', days2: '2 días', days7: '7 días', days30: '30 días',
     measured: 'Medido', computed: 'Calculado', forecastPart: 'Previsto', average: 'Media',
     total: 'Total', peakHour: 'Hora punta', peakDay: 'Día punta',

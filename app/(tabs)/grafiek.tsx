@@ -73,6 +73,14 @@
  * The heading says which of the two is on screen, because "3,4 mm" means different
  * things per hour and per day.
  *
+ * ## Where the two controls live
+ *
+ * The period is a card of its own, above; the measurement sits with its chart, in
+ * the card below. One is about *when* and the other about *what*, and a switcher
+ * belongs to the thing it changes. Both rows are `PillSwitcher`, the same control
+ * 'Verwachting' picks its layer with — same icons for the quantities the two pages
+ * share, so a reader moving between them meets the same picture for the same thing.
+ *
  * ## The gesture
  *
  * Two horizontal drags live on this page: the pager's, which changes location, and
@@ -84,7 +92,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { radius, space, useTheme } from '../../theme';
+import { space, useTheme } from '../../theme';
 import { Card, CardHeader } from '../../ui/Card';
 import { Text } from '../../ui/Text';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
@@ -94,6 +102,8 @@ import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
 import { usePeeking } from '../../ui/peek';
 import { SeriesChart } from '../../ui/graph/SeriesChart';
+import { PillSwitcher, type PillItem } from '../../ui/PillSwitcher';
+import type { IconName } from '../../ui/Icon';
 import {
   DEFAULT_PRESET, presetRange, RangeSelector,
   type DateRange, type PresetDays,
@@ -110,14 +120,26 @@ import {
   type AppStringKey,
 } from '../../core/i18n';
 
-/** The measurements the selector offers, in the order it shows them. */
-const SERIES: { key: SeriesKey; labelKey: AppStringKey; color: (p: PageColors) => string }[] = [
-  { key: 'temp', labelKey: 'temperature', color: (p) => p.temp },
-  { key: 'precip', labelKey: 'rain', color: (p) => p.precip },
-  { key: 'humidity', labelKey: 'humidity', color: (p) => p.humidity },
-  { key: 'wind', labelKey: 'windNow', color: (p) => p.wind },
-  { key: 'windDir', labelKey: 'windDirection', color: (p) => p.wind },
-  { key: 'radiation', labelKey: 'radiation', color: (p) => p.radiation },
+/**
+ * The measurements the selector offers, in the order it shows them.
+ *
+ * The icons are 'Verwachting''s, for the quantities the two pages share: a reader
+ * moving between them should meet the same picture for the same thing. The colour is
+ * the *line's*, not the pill's — the pill carries the accent gradient like every
+ * other switcher in the app, and the quantity's own colour belongs to the data.
+ */
+const SERIES: {
+  key: SeriesKey;
+  labelKey: AppStringKey;
+  icon: IconName;
+  color: (p: PageColors) => string;
+}[] = [
+  { key: 'temp', labelKey: 'temperature', icon: 'thermometer-simple', color: (p) => p.temp },
+  { key: 'precip', labelKey: 'rain', icon: 'drop', color: (p) => p.precip },
+  { key: 'humidity', labelKey: 'humidity', icon: 'drop-half', color: (p) => p.humidity },
+  { key: 'wind', labelKey: 'windNow', icon: 'wind', color: (p) => p.wind },
+  { key: 'windDir', labelKey: 'windDirection', icon: 'compass', color: (p) => p.wind },
+  { key: 'radiation', labelKey: 'radiation', icon: 'sun', color: (p) => p.radiation },
 ];
 
 interface PageColors {
@@ -209,6 +231,12 @@ function GraphPage() {
     });
   };
 
+  const pills: PillItem<SeriesKey>[] = SERIES.map((entry) => ({
+    key: entry.key,
+    icon: entry.icon,
+    label: ta(entry.labelKey, prefs.lang),
+  }));
+
   const refreshControl = useRefreshControl(measurements.refetch);
 
   /** The reader's own units, for the axis and the cursor alike. */
@@ -257,74 +285,36 @@ function GraphPage() {
     >
       <LocationTitle />
 
-      <Card style={{ gap: space[4] }}>
-        <View style={{ gap: space[3] }}>
-          <CardHeader label={ta('period', prefs.lang)} />
-          <RangeSelector
-            range={range}
-            preset={preset}
-            maxDay={maxDay}
-            onPreset={(days) => {
-              setPreset(days);
-              setRange(presetRange(days));
-            }}
-            onRange={(next) => {
-              // Dates of the reader's own choosing: the preset row lets go of its
-              // highlight rather than claiming to describe a window it did not set.
-              setPreset(null);
-              setRange(next);
-            }}
-          />
-
-        </View>
-
-        <View style={{ gap: space[3] }}>
-          <CardHeader label={ta('measurement', prefs.lang)} />
-          {/* A scroller, not six pills squeezed across the width: at six the labels
-              wrapped to two lines each and the row became taller than the chart's
-              own summary. Sliding is the honest answer to a list that outgrew the
-              screen, and the first four — the ones read most — still land in view
-              without moving anything. */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: space[2], paddingRight: space[4] }}
-          >
-            {SERIES.map((s) => {
-              const on = s.key === key;
-              return (
-                <Pressable
-                  key={s.key}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    setKey(s.key);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  style={{
-                    paddingVertical: 9,
-                    paddingHorizontal: space[4],
-                    borderRadius: radius.pill,
-                    alignItems: 'center',
-                    backgroundColor: on ? s.color(colors) : palette.surfaceAlt,
-                  }}
-                >
-                  <Text
-                    variant="caption"
-                    weight="bold"
-                    color={on ? palette.appCard : palette.inkHeading}
-                    numberOfLines={1}
-                  >
-                    {ta(s.labelKey, prefs.lang)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+      {/* Only the period now, so the card is the section rather than holding two
+          of them. */}
+      <Card style={{ gap: space[3] }}>
+        <CardHeader label={ta('period', prefs.lang)} />
+        <RangeSelector
+          range={range}
+          preset={preset}
+          maxDay={maxDay}
+          onPreset={(days) => {
+            setPreset(days);
+            setRange(presetRange(days));
+          }}
+          onRange={(next) => {
+            // Dates of the reader's own choosing: the preset row lets go of its
+            // highlight rather than claiming to describe a window it did not set.
+            setPreset(null);
+            setRange(next);
+          }}
+        />
       </Card>
 
       <Card pad={0}>
+        {/* The measurement lives with its chart, not in the card above: that one is
+            about *when*, this one about *what*, and the switcher belongs to the thing
+            it changes. No heading over it — six labelled pills are not a list that
+            needs to be told what it is. */}
+        <View style={{ paddingHorizontal: space[4], paddingTop: space[4] }}>
+          <PillSwitcher items={pills} active={key} onChange={setKey} />
+        </View>
+
         <View style={{ padding: space[4], paddingBottom: 0 }}>
           <CardHeader label={ta(RESOLUTION_LABEL[series.resolution], prefs.lang)} />
         </View>
