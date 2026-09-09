@@ -247,28 +247,35 @@ export function FullMap({
 
         {curve ? (
           <Animated.View
-              // Invisible is also untouchable: a slider at zero opacity behind the
-              // curve would still swallow the drag meant for the curve.
-              pointerEvents={profileOpen ? 'none' : 'auto'}
-              style={[{ overflow: 'hidden', paddingHorizontal: space[5] }, timelineStyle]}
+            // Invisible is also untouchable: a slider at zero opacity behind the
+            // curve would still swallow the drag meant for the curve.
+            pointerEvents={profileOpen ? 'none' : 'auto'}
+            style={[
+              { overflow: 'hidden', paddingHorizontal: space[5], paddingTop: space[2] },
+              timelineStyle,
+            ]}
           >
-              <Timeline
-                frames={frames}
-                index={activeIndex}
-                onIndexChange={onScrub}
-                showLabels={false}
-                stepPositions={axis?.positions}
-              />
+            <Timeline
+              frames={frames}
+              index={activeIndex}
+              onIndexChange={onScrub}
+              playing={playing}
+              onTogglePlay={onTogglePlay}
+              showLabels={false}
+              stepPositions={axis?.positions}
+            />
           </Animated.View>
         ) : (
-          <View style={{ paddingHorizontal: space[5] }}>
-              <Timeline
-                frames={frames}
-                index={activeIndex}
-                onIndexChange={onScrub}
-                showLabels={false}
-                stepPositions={axis?.positions}
-              />
+          <View style={{ paddingHorizontal: space[5], paddingTop: space[2] }}>
+            <Timeline
+              frames={frames}
+              index={activeIndex}
+              onIndexChange={onScrub}
+              playing={playing}
+              onTogglePlay={onTogglePlay}
+              showLabels={false}
+              stepPositions={axis?.positions}
+            />
           </View>
         )}
       </View>
