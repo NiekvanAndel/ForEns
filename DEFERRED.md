@@ -217,6 +217,28 @@ Tapping a block on 'Actueel' opens it for every saved location, as the web app's
   location the nowcast covers no part of lost its play button along with its curve —
   the radar loop over it is perfectly good.
 
+### The slider only where there is nothing else to drag (9 Sep 2026)
+
+- **The radar card's slider is gone.** The curve above it is the scrubber — drag its
+  handle and the loop follows — so the slider was the same control twice, in the
+  height the map wanted.
+- **It comes back where there is no curve to drag**, and that is one rule with two
+  causes: on the map page, when the profile is folded down; on either page, when the
+  nowcast has nothing to say about the location while the radar loop is still
+  perfectly good. `hasNowcastCurve` answers it in one place so the two pages cannot
+  disagree with what the panel actually drew.
+- **On the map page the two trade places on the same gesture.** The slider's height
+  and opacity are the exact inverse of the curve's, off the same shared value, so the
+  panel keeps its height through the fold. It is `pointerEvents: none` while the
+  curve is up, or an invisible slider would swallow drags meant for the curve. With
+  no curve at all there is nothing to fold, so the grabber goes and the slider simply
+  stands.
+- **The playback timer moved into `useRadarFrames`.** It ran inside `Timeline`, which
+  was fine while the scrubber was always on screen and is a bug now that it is not:
+  playback would have stopped because its own progress bar was hidden. Whoever owns
+  the index owns the clock, so `PLAY_INTERVAL_MS` lives there too and `Timeline` is
+  pure presentation.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an

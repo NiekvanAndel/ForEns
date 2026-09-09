@@ -12,27 +12,27 @@
  * the time axis — three more timestamps under it would be the same information
  * twice, in a place where height is what the map wants.
  *
- * Play and pause used to sit here, at the head of the row. It has moved up beside
- * the location name in `NowcastPanel`: this row is one control, and a button glued
- * to the end of a track reads as part of the track. Up there it sits with the other
- * thing the panel says about the loop as a whole, and the track gets the full width
- * — which is what a scrubber wants, since its precision is its length.
+ * ## What is left here, and where it is shown
+ *
+ * Play and pause moved up beside the location name in `NowcastPanel`, and the timer
+ * that drives them moved into `useRadarFrames` — whoever owns the index owns the
+ * clock. What is left is the track, which is pure presentation.
+ *
+ * It is not on screen most of the time. The chart above is the scrubber wherever
+ * there is a curve to drag: one control, read and moved in the same place. This row
+ * appears only where that curve is not there to be dragged — folded away on the map
+ * page, or absent on a location the nowcast has nothing to say about. Two causes,
+ * one rule: something on screen has to be draggable.
  */
-import { useEffect } from 'react';
 import { View } from 'react-native';
 import { Scrubber } from './Scrubber';
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { forecastBoundary, frameClock, type RadarFrame } from '../../core/radar';
 
-/** One step per this many milliseconds during playback, matching the design's 450ms. */
-export const PLAY_INTERVAL_MS = 450;
-
 export interface TimelineProps {
   frames: RadarFrame[];
   index: number;
-  /** Whether the loop is running — the interval lives here, the button does not. */
-  playing: boolean;
   onIndexChange: (i: number) => void;
   /** The from/at/to row above the slider. */
   showLabels?: boolean;
@@ -41,16 +41,10 @@ export interface TimelineProps {
 }
 
 export function Timeline({
-  frames, index, playing, onIndexChange, showLabels = true, stepPositions,
+  frames, index, onIndexChange, showLabels = true, stepPositions,
 }: TimelineProps) {
   const { palette } = useTheme();
   const last = Math.max(0, frames.length - 1);
-
-  useEffect(() => {
-    if (!playing || frames.length < 2) return;
-    const id = setInterval(() => onIndexChange((index + 1) % frames.length), PLAY_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [playing, index, frames.length, onIndexChange]);
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>

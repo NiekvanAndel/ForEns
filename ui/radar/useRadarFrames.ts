@@ -10,9 +10,20 @@
  * about. So each page owns its own copy of this hook and its own index, and what
  * they share is the code that decides where a loop opens — on the latest observation,
  * never on the oldest frame or on a forecast.
+ *
+ * ## The play head runs here, not in the scrubber
+ *
+ * It used to run inside `Timeline`, on the reasonable-looking grounds that the
+ * scrubber is what shows it. But the scrubber is not always on screen now — the
+ * chart above it is the usual way to scrub, and the slider only appears where there
+ * is no curve to drag — and playback that stops because its own progress bar was
+ * hidden is a bug waiting in the wings. Whoever owns the index owns the timer.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { activeProvider, type RadarFrame } from '../../core/radar';
+
+/** One step per this many milliseconds during playback, matching the design's 450ms. */
+export const PLAY_INTERVAL_MS = 450;
 
 export interface RadarFrames {
   frames: RadarFrame[];
@@ -37,6 +48,15 @@ export function useRadarFrames(): RadarFrames {
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!playing || frames.length < 2) return;
+    const id = setInterval(
+      () => setIndex((i) => (i + 1) % frames.length),
+      PLAY_INTERVAL_MS
+    );
+    return () => clearInterval(id);
+  }, [playing, frames.length]);
 
   const fetch = useCallback((signal?: AbortSignal, showSpinner = true) => {
     if (showSpinner) setLoading(true);

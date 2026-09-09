@@ -29,11 +29,22 @@
  * that does it elsewhere belongs to the pages under the tab bar, and a map you can
  * pan is no place for a gesture that navigates.
  *
- * The profile can be swiped down out of the way, because sometimes the map is the
- * whole point and the panel is a band across the bottom of it. What never goes is
- * how the loop is driven: the timeline, and the header above it carrying the place
- * name and the play button. A control that disappears when you push the thing above
- * it is a control you cannot find again, so the curve alone folds away.
+ * ## The curve folds away, and the slider takes its place
+ *
+ * Sometimes the map is the whole point and the panel is a band across the bottom of
+ * it, so the profile can be swiped down. But the curve *is* the scrubber here —
+ * dragging its handle moves the loop — so folding it away would leave the loop with
+ * nothing to drag. The slider is folded in as the curve folds out: one control
+ * replacing another, on the same gesture, so the panel keeps its height and the loop
+ * stays scrubbable at both ends of the drag.
+ *
+ * The header never moves. It carries the place name and the play button, and a
+ * control that disappears when you push the thing above it is a control you cannot
+ * find again.
+ *
+ * Where there is no curve at all — a location the nowcast does not reach — there is
+ * nothing to fold, so the grabber goes and the slider simply stands. The rule under
+ * both cases is the same one: something on screen has to be draggable.
  */
 import { useState } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
@@ -46,7 +57,7 @@ import { duration, radius, shadowFloat, space, useTheme } from '../../theme';
 import { Icon } from '../Icon';
 import { RadarMap, MAP_CHROME_SIZE, type PlacePin } from './RadarMap';
 import { Timeline } from './Timeline';
-import { NowcastHeader, NowcastPanel } from './NowcastPanel';
+import { hasNowcastCurve, NowcastHeader, NowcastPanel } from './NowcastPanel';
 import { mapChrome } from './mapStyle';
 import { frameAtFraction } from './useRadarFrames';
 import {
@@ -55,11 +66,12 @@ import {
 import { usePrefs } from '../../state/prefs';
 import { ta } from '../../core/i18n';
 
-/** Enough for the curve and its axis — the header is no longer inside this, so it
- *  is not counted. Animating a fixed maximum is what lets the timeline stay put
- *  while the profile above it folds away; set too high, the first part of the fold
- *  does nothing visible. */
+/** Enough for the curve and its axis — the header is not inside this, so it is not
+ *  counted. Animating a fixed maximum is what lets the fold be a height rather than
+ *  a measurement; set too high, the first part of it does nothing visible. */
 const PROFILE_MAX_HEIGHT = 150;
+/** The slider and the air around it, which is what unfolds as the curve folds. */
+const TIMELINE_HEIGHT = 52;
 
 export interface FullMapProps {
   /** Leaves the page. The route hands in `router.back()`. */
@@ -93,6 +105,9 @@ export function FullMap({
   const [profileOpen, setProfileOpen] = useState(true);
   const reduceMotion = useReducedMotion();
   const collapse = useSharedValue(0);
+  // Nothing to fold away, and nothing to drag: the slider stands rather than
+  // trading places with a curve that was never drawn.
+  const curve = hasNowcastCurve(profile);
 
   const setOpen = (open: boolean) => {
     setProfileOpen(open);
@@ -111,8 +126,14 @@ export function FullMap({
 
   const profileStyle = useAnimatedStyle(() => ({
     opacity: 1 - collapse.value,
-    // Collapsing height rather than translating keeps the timeline where it is.
+    // Collapsing height rather than translating keeps everything below it in place.
     maxHeight: (1 - collapse.value) * PROFILE_MAX_HEIGHT,
+  }));
+
+  // The exact inverse: what the curve gives up, the slider takes.
+  const timelineStyle = useAnimatedStyle(() => ({
+    opacity: collapse.value,
+    maxHeight: collapse.value * TIMELINE_HEIGHT,
   }));
 
   const active = frames[activeIndex];
@@ -182,22 +203,25 @@ export function FullMap({
         <GestureDetector gesture={drag}>
           <View>
             {/* The grabber says the panel moves, and taps as a shortcut for the
-                reader who would rather not drag. */}
-            <Pressable
-              onPress={() => setOpen(!profileOpen)}
-              accessibilityRole="button"
-              accessibilityLabel={profileOpen ? 'Neerslaggrafiek verbergen' : 'Neerslaggrafiek tonen'}
-              accessibilityState={{ expanded: profileOpen }}
-              hitSlop={10}
-              style={{ alignItems: 'center', paddingTop: space[3], paddingBottom: space[2] }}
-            >
-              <View
-                style={{
-                  width: 38, height: 4, borderRadius: 2,
-                  backgroundColor: palette.hairline,
-                }}
-              />
-            </Pressable>
+                reader who would rather not drag. Without a curve there is nothing
+                to fold, so it is not drawn. */}
+            {curve ? (
+              <Pressable
+                onPress={() => setOpen(!profileOpen)}
+                accessibilityRole="button"
+                accessibilityLabel={profileOpen ? 'Neerslaggrafiek verbergen' : 'Neerslaggrafiek tonen'}
+                accessibilityState={{ expanded: profileOpen }}
+                hitSlop={10}
+                style={{ alignItems: 'center', paddingTop: space[3], paddingBottom: space[2] }}
+              >
+                <View
+                  style={{
+                    width: 38, height: 4, borderRadius: 2,
+                    backgroundColor: palette.hairline,
+                  }}
+                />
+              </Pressable>
+            ) : null}
 
             {/* Outside the collapse: the name says which place the loop is over and
                 the play button drives it, and neither stops mattering because the
@@ -228,16 +252,32 @@ export function FullMap({
           </View>
         </GestureDetector>
 
-        <View style={{ paddingHorizontal: space[5], paddingTop: space[2] }}>
-          <Timeline
-            frames={frames}
-            index={activeIndex}
-            playing={playing}
-            onIndexChange={onScrub}
-            showLabels={false}
-            stepPositions={axis?.positions}
-          />
-        </View>
+        {curve ? (
+          <Animated.View
+              // Invisible is also untouchable: a slider at zero opacity behind the
+              // curve would still swallow the drag meant for the curve.
+              pointerEvents={profileOpen ? 'none' : 'auto'}
+              style={[{ overflow: 'hidden', paddingHorizontal: space[5] }, timelineStyle]}
+          >
+              <Timeline
+                frames={frames}
+                index={activeIndex}
+                onIndexChange={onScrub}
+                showLabels={false}
+                stepPositions={axis?.positions}
+              />
+          </Animated.View>
+        ) : (
+          <View style={{ paddingHorizontal: space[5] }}>
+              <Timeline
+                frames={frames}
+                index={activeIndex}
+                onIndexChange={onScrub}
+                showLabels={false}
+                stepPositions={axis?.positions}
+              />
+          </View>
+        )}
       </View>
     </View>
   );

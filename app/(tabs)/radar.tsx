@@ -2,9 +2,13 @@
  * Radar — the map, its profile, and its timeline.
  *
  * Almost all of the page is map, because the map is the reason to be here. What sits
- * under it is one card, not three: the precipitation profile at this location and
- * the scrubber that drives the loop, with the chart's cursor tracking the scrubber
- * so the two read as one control.
+ * under it is one card: the precipitation profile at this location, whose curve is
+ * itself the scrubber — drag the handle and the loop follows.
+ *
+ * The separate slider under it is gone. It said the same thing the curve already
+ * said, in a second control, in the height the map wanted. It comes back only where
+ * there is no curve to drag: a location the nowcast has nothing to say about, where
+ * the radar loop is still perfectly good and still has to be scrubbable.
  *
  * The prose summary, the legend, the location title and the timeline's own labels
  * are all gone from this page. Each was a line of text where the map wanted height,
@@ -34,7 +38,7 @@ import { useRefreshControl } from '../../ui/useRefreshControl';
 import { RadarMap } from '../../ui/radar/RadarMap';
 import { Timeline } from '../../ui/radar/Timeline';
 import { frameAtFraction, useRadarFrames } from '../../ui/radar/useRadarFrames';
-import { NowcastPanel } from '../../ui/radar/NowcastPanel';
+import { hasNowcastCurve, NowcastPanel } from '../../ui/radar/NowcastPanel';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { activeProvider, forecastBoundary, frameClock, radarAxis } from '../../core/radar';
@@ -160,16 +164,18 @@ function RadarPage() {
               playDisabled={frames.length < 2}
               compact
             />
-            <View style={{ paddingHorizontal: space[5], paddingBottom: space[4] }}>
-              <Timeline
-                frames={frames}
-                index={index}
-                playing={playing}
-                onIndexChange={setIndex}
-                showLabels={false}
-                stepPositions={axis?.positions}
-              />
-            </View>
+            {/* Only where the curve above is not there to be dragged. */}
+            {hasNowcastCurve(nowcast) ? null : (
+              <View style={{ paddingHorizontal: space[5], paddingBottom: space[4] }}>
+                <Timeline
+                  frames={frames}
+                  index={index}
+                  onIndexChange={setIndex}
+                  showLabels={false}
+                  stepPositions={axis?.positions}
+                />
+              </View>
+            )}
           </>
         ) : (
           <View style={{ padding: space[6] }}>

@@ -70,6 +70,17 @@ const CHART_HEIGHT_FULL = 118;
  *  curve it sits on — which is why it is a ring rather than a filled disc. */
 const HANDLE_RADIUS = 9;
 
+/**
+ * Whether this profile has a curve to draw — and therefore to drag.
+ *
+ * The chart is the scrubber wherever there is one, and the slider below is shown
+ * only where there is not. Both pages ask this rather than reaching into the shape
+ * of a profile themselves, so the answer cannot drift from what the panel draws.
+ */
+export function hasNowcastCurve(profile: NowcastProfile | null): boolean {
+  return !!(profile?.series?.length || profile?.bars?.length);
+}
+
 export interface NowcastPanelProps {
   profile: NowcastProfile | null;
   /** Minutes from now the loop is currently showing, so the panel tracks the scrub. */
@@ -247,7 +258,9 @@ export function NowcastPanel({
     paddingHorizontal: space[5],
     // No header of its own means the caller has already left room above it.
     paddingTop: showHeader ? (compact ? space[4] : space[3]) : 0,
-    paddingBottom: space[2],
+    // On the radar card this is usually the last thing in it, so the axis labels
+    // need air under them; on the map page a slider follows and would be pushed off.
+    paddingBottom: compact ? space[4] : space[2],
   };
 
   if (!samples.length) {
