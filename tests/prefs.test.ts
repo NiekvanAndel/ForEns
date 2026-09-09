@@ -144,3 +144,15 @@ describe('withCurrentLocation', () => {
     expect(currentLocationIndex(DEFAULT_PREFS)).toBe(-1);
   });
 });
+
+describe('the stored grid arrangement', () => {
+  it('survives a stored value that lost half of itself', () => {
+    const merged = mergePrefs({ tiles: { order: ['temp', 7, null], hidden: 'nope' } });
+    expect(merged.tiles).toEqual({ order: ['temp'], hidden: [] });
+  });
+
+  it('falls back to the default when there is nothing stored', () => {
+    expect(mergePrefs({}).tiles).toEqual({ order: [], hidden: [] });
+    expect(mergePrefs({ tiles: 'broken' }).tiles).toEqual({ order: [], hidden: [] });
+  });
+});

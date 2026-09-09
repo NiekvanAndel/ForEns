@@ -12,7 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   DEFAULT_PREFS, mergePrefs, activeLocation, withCurrentLocation,
-  type Prefs, type SavedLocation,
+  type Prefs, type SavedLocation, type TileLayout,
 } from '../core/prefs';
 
 const PREFS_KEY = 'exactcast.prefs.v1';
@@ -38,6 +38,9 @@ interface PrefsContextValue {
   removeLocation: (index: number) => void;
   /** Move a location to an arbitrary slot, for drag-and-drop reordering. */
   reorderLocation: (from: number, to: number) => void;
+  /** Rewrite the 'Actueel' grid's arrangement. Takes the current one, so a caller
+   *  never has to read and write it in two steps. */
+  setTileLayout: (next: (layout: TileLayout) => TileLayout) => void;
   selectLocation: (index: number) => void;
   /** Record where the device is as the first page, replacing any earlier fix. */
   setCurrentLocation: (loc: SavedLocation) => void;
@@ -163,6 +166,10 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setTileLayout = useCallback((next: (layout: TileLayout) => TileLayout) => {
+    setState((p) => ({ ...p, tiles: next(p.tiles) }));
+  }, []);
+
   const setCurrentLocation = useCallback((loc: SavedLocation) => {
     setState((p) => withCurrentLocation(p, loc));
   }, []);
@@ -178,11 +185,11 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
       prefs, ready, setPref, setPrefs, mutate,
       location: activeLocation(prefs),
       addLocation, removeLocation, reorderLocation, selectLocation,
-      setCurrentLocation,
+      setCurrentLocation, setTileLayout,
     }),
     [
       prefs, ready, setPref, setPrefs, mutate, addLocation, removeLocation,
-      reorderLocation, selectLocation, setCurrentLocation,
+      reorderLocation, selectLocation, setCurrentLocation, setTileLayout,
     ]
   );
 

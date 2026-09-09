@@ -12,7 +12,7 @@
  * That cache holds three locations at most and only ones the reader has been to or
  * swiped past, so a list built from it would be mostly blank in exactly the case
  * this sheet exists for. And the models in it are the full staged build — fourteen
- * days of ensemble percentiles — which is a great deal of work for twelve current
+ * days of ensemble percentiles — which is a great deal of work for a dozen current
  * readings.
  *
  * So each location is loaded from the observation feed alone: one request, covering
@@ -31,6 +31,7 @@
  */
 import { useQueries } from '@tanstack/react-query';
 import { processAll } from '../core/model/process';
+import { activeProvider, type NowcastProfile } from '../core/radar';
 import { applyStationObservations, stationForLocation } from '../core/model/station';
 import { loadObservations } from '../core/sources/openMeteo';
 import {
@@ -113,4 +114,39 @@ export function useAllLocationConditions(enabled: boolean): LocationConditions[]
       loading: !!q?.isLoading,
     };
   });
+}
+
+
+/**
+ * The radar nowcast for every saved location.
+ *
+ * Its own hook, and its own set of queries, because it is only ever wanted for one
+ * of the fourteen blocks. Two hours of five-minutely data per place is heavier than
+ * the observation feed above, so it is not fetched alongside it and paid for by
+ * every other block's comparison — the sheet turns it on only when the block being
+ * compared is the one that reads it.
+ *
+ * A location outside the radar run's coverage gets null, which the block draws as a
+ * dash. Falling back to the weather model's own rainfall for that hour would be a
+ * quieter answer and the wrong one: the whole point of this block is that the
+ * nowcast is a sharper source over the next hour, so a row that silently swapped in
+ * the model would be comparing two different forecasts down one column.
+ */
+export function useAllLocationNowcasts(enabled: boolean): (NowcastProfile | null)[] {
+  const { prefs } = usePrefs();
+
+  const results = useQueries({
+    queries: prefs.locations.map((l) => ({
+      queryKey: ['nowcast', l.lat.toFixed(4), l.lon.toFixed(4)] as const,
+      enabled,
+      staleTime: CONDITIONS_STALE_MS,
+      retry: 1,
+      queryFn: ({ signal }: { signal: AbortSignal }): Promise<NowcastProfile | null> =>
+        activeProvider()
+          .nowcastProfile(l.lat, l.lon, signal)
+          .catch(() => null),
+    })),
+  });
+
+  return prefs.locations.map((_, i) => results[i]?.data ?? null);
 }

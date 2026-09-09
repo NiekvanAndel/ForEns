@@ -27,6 +27,7 @@
  * the app does.
  */
 import type { ForecastModel } from './types';
+import type { NowcastBar } from '../radar/types';
 
 /** Which unit family a tile's value belongs to, so the page can convert it. */
 export type TileKind = 'temp' | 'wind' | 'mm' | 'percent' | 'direction';
@@ -55,16 +56,40 @@ export interface TileLabels {
   rain: string;
   tempMax: string;
   tempMin: string;
+  rainNext: string;
   /** Window labels. */
   now: string;
   today: string;
   last6h: string;
   last12h: string;
   last24h: string;
+  next1h: string;
+  next24h: string;
 }
 
 /** How many of the trailing observed hours a rolling window covers. */
 const ROLLING = { six: 6, twelve: 12, day: 24 } as const;
+
+/** The nowcast is sampled once per radar frame, and a frame stands for five minutes. */
+const FRAME_MINUTES = 5;
+
+/**
+ * How much rain the nowcast expects in the next `minutes`.
+ *
+ * Each sample is a rate in mm/h, so it becomes a depth by the slice of an hour it
+ * stands for — the same conversion `buildProfile` uses for its own total, kept
+ * identical so the block and the radar page cannot disagree about the same run.
+ *
+ * Samples already past are dropped: the profile carries the observed frames behind
+ * now for the chart's benefit, and they are not a forecast of anything.
+ */
+export function nowcastDepth(series: readonly NowcastBar[] | undefined, minutes: number): number | null {
+  if (!series?.length) return null;
+  const window = series.filter((b) => b.offsetMin >= 0 && b.offsetMin <= minutes);
+  if (!window.length) return null;
+  const mm = window.reduce((sum, b) => sum + (b.mmPerHour * FRAME_MINUTES) / 60, 0);
+  return Math.round(mm * 10) / 10;
+}
 
 /**
  * The twelve blocks, from the model — which already carries the station's own
@@ -94,8 +119,27 @@ const ROLLING = { six: 6, twelve: 12, day: 24 } as const;
  * Marking every block on a station-backed location as measured would have been the
  * easy version and the wrong one: it would put an instrument's authority behind a
  * number the model supplied.
+ *
+ * ## The two forecast blocks
+ *
+ * 'Actueel' is otherwise strictly about what has happened. The two rainfall
+ * forecasts are a deliberate exception, asked for because a grower deciding on the
+ * next hour wants that answer beside the last one rather than a tab away. They are
+ * named for what they are and carry a forward window, and they can never be
+ * measured — no instrument reports the future, so the green dot is off on both
+ * whatever station stands at the location.
+ *
+ * The one-hour block comes from the nowcast run behind the radar page, which is a
+ * different and much sharper source than the weather model over the same hour; where
+ * there is no run — outside the radar's coverage, or before it has landed — the
+ * block reads as a dash rather than quietly falling back to the model.
  */
-export function modelTiles(model: ForecastModel, labels: TileLabels): Tile[] {
+export function modelTiles(
+  model: ForecastModel,
+  labels: TileLabels,
+  /** The radar nowcast for this location, where there is one. */
+  nowcast?: { series: NowcastBar[] } | null
+): Tile[] {
   const measured = model.station?.current ?? null;
   const now = model.futureHours[0] ?? model.pastHours[model.pastHours.length - 1] ?? null;
   // The location's own local day, from the model's own clock — not the device's,
@@ -163,5 +207,9 @@ export function modelTiles(model: ForecastModel, labels: TileLabels): Tile[] {
       temps.length ? Math.max(...temps) : null, 'temp', measures.temp),
     tile('temp-min', labels.tempMin, labels.last24h,
       temps.length ? Math.min(...temps) : null, 'temp', measures.temp),
+    tile('rain-next-1h', labels.rainNext, labels.next1h,
+      nowcastDepth(nowcast?.series, 60), 'mm', false),
+    tile('rain-next-24h', labels.rainNext, labels.next24h,
+      sum(model.futureHours.slice(0, ROLLING.day)), 'mm', false),
   ];
 }

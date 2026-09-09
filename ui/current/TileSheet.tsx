@@ -25,7 +25,7 @@ import { radius, shadowCard, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Rule } from '../Card';
 import { usePrefs } from '../../state/prefs';
-import { useAllLocationConditions } from '../../state/allLocations';
+import { useAllLocationConditions, useAllLocationNowcasts } from '../../state/allLocations';
 import { modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
 import { ta } from '../../core/i18n';
 import { tileReading } from './ConditionTile';
@@ -49,14 +49,18 @@ export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const insets = useSafeAreaInsets();
-  // Nothing is fetched until the sheet is actually open.
+  // Nothing is fetched until the sheet is actually open — and the nowcast, which is
+  // the heavier of the two, only for the one block that reads it.
   const conditions = useAllLocationConditions(tile != null);
+  const nowcasts = useAllLocationNowcasts(tile?.id === 'rain-next-1h');
 
-  const rows: Row[] = conditions.map(({ location, model, loading }) => {
-    // The same twelve blocks the grid behind is drawing, for this location; the one
+  const rows: Row[] = conditions.map(({ location, model, loading }, i) => {
+    // The same blocks the grid behind is drawing, for this location; the one
     // being compared is picked out by id, so the two cannot describe different
     // windows of the same quantity.
-    const match = model ? modelTiles(model, labels).find((t) => t.id === tile?.id) : undefined;
+    const match = model
+      ? modelTiles(model, labels, nowcasts[i]).find((t) => t.id === tile?.id)
+      : undefined;
     return {
       name: location.name,
       value: match?.value ?? null,

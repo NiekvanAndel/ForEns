@@ -166,6 +166,35 @@ Tapping a block on 'Actueel' opens it for every saved location, as the web app's
   with a station. The parity suite projects the addition away and asserts separately
   that it is populated, as it already does for `tempExact` and `windExact`.
 
+### Two rainfall forecasts, and an arrangeable grid (9 Sep 2026)
+
+- **Two blocks added:** rainfall expected in the next hour, from the DGMR nowcast run
+  behind the radar page, and in the next 24 hours, from the weather model. The
+  one-hour block integrates the nowcast series the same way `buildProfile` computes
+  its own total, so the block and the radar page cannot disagree about one run.
+  Outside the radar's coverage it reads as a dash rather than falling back to the
+  model — the point of the block is that the nowcast is the sharper source over that
+  hour, and a silent swap would compare two different forecasts down one column.
+- **This bends 'Actueel' on purpose.** The page was strictly about what has happened;
+  these two are forecasts, asked for because a grower deciding on the next hour wants
+  that answer beside the last one. They are named for what they are, carry a forward
+  window, and can never be measured — the green dot is off on both whatever station
+  stands at the location.
+- **The grid can be arranged.** A pencil beside the source line opens `TileEditor`:
+  long-press to drag, tap to switch a block off. The drag is `LocationList`'s,
+  reused rather than reinvented, since those are the app's only two reorderable
+  lists. A hidden block dims and keeps its place instead of dropping to a second
+  section, so switching it back leaves it where the reader expects. The last visible
+  block cannot be switched off.
+- **`prefs.tiles` is new persisted state**, stored as an order plus a hidden set
+  rather than as "these blocks, in this order". The difference only shows later: a
+  block added in a future version is in neither list, so it appears, in its natural
+  place, for someone who arranged their grid last month — where the obvious shape
+  would have silently hidden every future block from exactly the people who bothered
+  to arrange it. `mergePrefs` takes the two halves independently and drops anything
+  that is not a string, so a malformed stored value costs the arrangement and not
+  the launch. Additive: no existing preference key changed.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an

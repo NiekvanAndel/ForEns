@@ -8,7 +8,10 @@
  * from — per quantity, because a rain gauge measures some of them and not others.
  */
 import { describe, it, expect } from 'vitest';
-import { modelTiles, type TileLabels } from '../core/model/tiles';
+import { modelTiles, nowcastDepth, type TileLabels } from '../core/model/tiles';
+import {
+  arrangeAllTiles, arrangeTiles, DEFAULT_TILE_LAYOUT, reorderTiles, toggleTile,
+} from '../core/prefs';
 import { buildSeries, daySpan, forecastHorizon, hourKeys } from '../core/model/series';
 import type { ForecastModel, Hour } from '../core/model/types';
 import type { MeasuredHour } from '../core/sources/agroexact';
@@ -16,10 +19,11 @@ import type { MeasuredHour } from '../core/sources/agroexact';
 const labels: TileLabels = {
   temperature: 'Temperatuur', humidity: 'Luchtvochtigheid',
   windSpeed: 'Windsnelheid', windGust: 'Windstoot', windDirection: 'Windrichting',
-  gustMax: 'Max. windstoot', rain: 'Neerslag',
+  gustMax: 'Max. windstoot', rain: 'Neerslag', rainNext: 'Neerslagverwachting',
   tempMax: 'Max. temperatuur', tempMin: 'Min. temperatuur',
   now: 'nu', today: 'vandaag',
   last6h: 'laatste 6 uur', last12h: 'laatste 12 uur', last24h: 'laatste 24 uur',
+  next1h: 'komend uur', next24h: 'komende 24 uur',
 };
 
 const hour = (time: string, over: Partial<Hour> = {}): Hour => ({
@@ -96,6 +100,7 @@ describe('modelTiles', () => {
     expect(modelTiles(model(), labels).map((t) => t.id)).toEqual([
       'temp', 'humidity', 'wind', 'gust', 'wind-dir', 'gust-max',
       'rain-6h', 'rain-12h', 'rain-today', 'rain-24h', 'temp-max', 'temp-min',
+      'rain-next-1h', 'rain-next-24h',
     ]);
   });
 
@@ -153,6 +158,106 @@ describe('modelTiles', () => {
     const byId = new Map(modelTiles(model(), labels).map((t) => [t.id, t]));
     expect(byId.get('wind-dir')?.kind).toBe('direction');
     expect(byId.get('wind-dir')?.value).toBe(180);
+  });
+});
+
+describe('the two forecast blocks', () => {
+  const bars = (rates: [number, number][]) =>
+    rates.map(([offsetMin, mmPerHour]) => ({ offsetMin, mmPerHour, height: 0 }));
+
+  it('turns the nowcast rates into a depth over the hour', () => {
+    // Five minutes at 12 mm/h is 1 mm, so six such samples are 6 mm.
+    const series = bars([[0, 12], [5, 12], [10, 12], [15, 12], [20, 12], [25, 12]]);
+    expect(nowcastDepth(series, 60)).toBe(6);
+  });
+
+  it('ignores the observed frames behind now, and anything past the window', () => {
+    const series = bars([[-10, 60], [-5, 60], [0, 12], [90, 60]]);
+    // Only the sample at 0 counts: the two behind now are observations, and 90
+    // minutes is outside the hour asked for.
+    expect(nowcastDepth(series, 60)).toBe(1);
+  });
+
+  it('says nothing rather than zero where there is no run at all', () => {
+    expect(nowcastDepth(undefined, 60)).toBeNull();
+    expect(nowcastDepth([], 60)).toBeNull();
+  });
+
+  it('never marks a forecast as measured, station or not', () => {
+    const byId = new Map(
+      modelTiles(
+        model({
+          station: {
+            id: 'st1', name: 'Rosmalen',
+            current: {
+              time: '2026-06-15T12:00', measTime: '2026-06-15T12:10:00Z',
+              temp: 21.3, humidity: 60, dewpoint: 8, wind: 9, gusts: 15,
+              windDir: 90, precip: 0.4,
+            },
+          },
+        }),
+        labels,
+        { series: bars([[0, 12]]) }
+      ).map((t) => [t.id, t])
+    );
+    expect(byId.get('rain-next-1h')?.value).toBe(1);
+    expect(byId.get('rain-next-1h')?.measured).toBe(false);
+    expect(byId.get('rain-next-24h')?.measured).toBe(false);
+  });
+
+  it('sums the model\'s own hours for the day ahead', () => {
+    const byId = new Map(
+      modelTiles(
+        model({
+          futureHours: [
+            hour('2026-06-15T12:00', { isPast: false, precip: 0.5 }),
+            hour('2026-06-15T13:00', { isPast: false, precip: 1.5 }),
+          ],
+        }),
+        labels
+      ).map((t) => [t.id, t])
+    );
+    expect(byId.get('rain-next-24h')?.value).toBe(2);
+    // No nowcast handed in: a dash, not a zero.
+    expect(byId.get('rain-next-1h')?.value).toBeNull();
+  });
+});
+
+describe('the grid arrangement', () => {
+  const tiles = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+
+  it('leaves the natural order alone until the reader changes it', () => {
+    expect(arrangeTiles(tiles, DEFAULT_TILE_LAYOUT).map((t) => t.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('drops the hidden blocks from the grid but not from the editor', () => {
+    const layout = toggleTile(DEFAULT_TILE_LAYOUT, 'b');
+    expect(arrangeTiles(tiles, layout).map((t) => t.id)).toEqual(['a', 'c']);
+    expect(arrangeAllTiles(tiles, layout).map((t) => t.id)).toEqual(['a', 'b', 'c']);
+    // And back off again.
+    expect(toggleTile(layout, 'b').hidden).toEqual([]);
+  });
+
+  it('shows a block the layout has never heard of, in its natural place', () => {
+    // Someone who arranged their grid before 'c' existed must still get 'c'.
+    const layout = { order: ['b', 'a'], hidden: [] };
+    expect(arrangeTiles(tiles, layout).map((t) => t.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('forgets an id the app no longer draws', () => {
+    const layout = { order: ['gone', 'c', 'a'], hidden: ['also-gone'] };
+    expect(arrangeTiles(tiles, layout).map((t) => t.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('writes the whole order back when a block is moved', () => {
+    const moved = reorderTiles(DEFAULT_TILE_LAYOUT, ['a', 'b', 'c'], 2, 0);
+    expect(moved.order).toEqual(['c', 'a', 'b']);
+    expect(arrangeTiles(tiles, moved).map((t) => t.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('ignores a move that goes nowhere or off the end', () => {
+    expect(reorderTiles(DEFAULT_TILE_LAYOUT, ['a', 'b'], 1, 1)).toBe(DEFAULT_TILE_LAYOUT);
+    expect(reorderTiles(DEFAULT_TILE_LAYOUT, ['a', 'b'], 0, 5)).toBe(DEFAULT_TILE_LAYOUT);
   });
 });
 

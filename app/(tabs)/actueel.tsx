@@ -28,6 +28,17 @@
  * one place cannot answer — is it colder here than at the other field, and by how
  * much. See `TileSheet`; the rows are loaded only once the sheet is open.
  *
+ * ## Arranging the grid
+ *
+ * The pencil beside the source line opens `TileEditor`: drag to reorder, tap to
+ * switch a block off. Fourteen blocks is not one grower's grid — which three matter
+ * enough to be at the top is a question only the reader can answer — and the answer
+ * is stored in preferences, so it survives a relaunch and applies to every location.
+ *
+ * `arrangeTiles` applies it. What the editor stores is an order plus a hidden set
+ * rather than "these blocks, like this", which is what lets a block added in a later
+ * version appear for someone who arranged their grid before it existed.
+ *
  * ## The swipe
  *
  * `ScreenFrame` gives the page its top row and the sideways swipe between locations,
@@ -51,9 +62,11 @@ import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
 import { ConditionTile } from '../../ui/current/ConditionTile';
 import { TileSheet } from '../../ui/current/TileSheet';
+import { TileEditor } from '../../ui/current/TileEditor';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useLocationStation } from '../../state/stations';
+import { arrangeTiles } from '../../core/prefs';
 import { modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
 import { measurementTimeLabel } from '../../core/model/station';
 import { ta } from '../../core/i18n';
@@ -64,18 +77,20 @@ const COLUMNS = 2;
 function CurrentPage() {
   const { palette } = useTheme();
   const { prefs, location } = usePrefs();
-  const { model, phase, error, refresh, offsetSec } = useForecast();
+  const { model, nowcast, phase, error, refresh, offsetSec } = useForecast();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const station = useLocationStation(location);
   /** The block being compared across locations, or null when the sheet is shut. */
   const [compared, setCompared] = useState<Tile | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const labels: TileLabels = useMemo(
     () => ({
       temperature: ta('temperature', prefs.lang),
       humidity: ta('humidity', prefs.lang),
+      rainNext: ta('rainNext', prefs.lang),
       windSpeed: ta('windNow', prefs.lang),
       windGust: ta('gusts', prefs.lang),
       windDirection: ta('windDirection', prefs.lang),
@@ -88,14 +103,19 @@ function CurrentPage() {
       last6h: ta('last6h', prefs.lang),
       last12h: ta('last12h', prefs.lang),
       last24h: ta('last24h', prefs.lang).toLowerCase(),
+      next1h: ta('next1h', prefs.lang),
+      next24h: ta('next24h', prefs.lang),
     }),
     [prefs.lang]
   );
 
-  const tiles: Tile[] = useMemo(
-    () => (model ? modelTiles(model, labels) : []),
-    [model, labels]
+  // Every block the app can draw, before the reader's arrangement is applied. The
+  // editor lists these; the grid draws the arrangement of them.
+  const allTiles: Tile[] = useMemo(
+    () => (model ? modelTiles(model, labels, nowcast) : []),
+    [model, labels, nowcast]
   );
+  const tiles = useMemo(() => arrangeTiles(allTiles, prefs.tiles), [allTiles, prefs.tiles]);
 
   // Everything on this page comes out of the forecast, which the control refreshes
   // by itself — including the station readings merged into it.
@@ -166,6 +186,19 @@ function CurrentPage() {
                 ? `AgroExact - ${station.name ?? location.stationName ?? 'station'}`
                 : ta('yourLocation', prefs.lang)}
             </Text>
+
+            {/* At the end of the line that says what the grid is, because arranging
+                it is a thing you do to the grid — not another destination in the top
+                row, which is for moving between places. */}
+            <Pressable
+              onPress={() => setEditing(true)}
+              accessibilityRole="button"
+              accessibilityLabel={ta('editBlocks', prefs.lang)}
+              hitSlop={10}
+              style={{ marginLeft: 'auto', paddingLeft: space[3] }}
+            >
+              <Icon name="pencil-simple" size={16} color={palette.muted} />
+            </Pressable>
           </View>
 
           <Grid tiles={tiles} onOpen={setCompared} />
@@ -193,6 +226,8 @@ function CurrentPage() {
     </ScrollView>
 
     <TileSheet tile={compared} labels={labels} onClose={() => setCompared(null)} />
+
+    <TileEditor visible={editing} onClose={() => setEditing(false)} all={allTiles} />
     </>
   );
 }
