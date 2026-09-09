@@ -71,11 +71,12 @@ Decisions worth knowing about:
    sign-in returns 401 on `/stations/` with a token that was just minted, the scheme
    is the suspect: `agroHeaders` in `core/sources/agroexact.ts` is the one line to
    change.
-2. **Switching accounts.** Signing out now revokes the grant at WorkOS, but the
-   AuthKit browser cookie is untouched, so reconnecting may land straight back on the
-   same account without an account picker. The fix is `prompt=login` on the authorize
-   request; it is not in yet because an authorize parameter WorkOS might reject would
-   break sign-in altogether, and that has to be seen working live first.
+2. **Switching accounts.** Signing out revokes the grant at WorkOS, but the browser
+   cookie outlives it, so the authorize request asks for `prompt=login`. WorkOS
+   accepts the parameter — checked against the live endpoint — but AgroExact hosts
+   its own login page at `app.agroexact.com/login/`, and whether that page honours
+   the request or shows a signed-in user straight through is a question only a real
+   sign-out-and-reconnect answers.
 3. **The redirect URI.** `exactcast://oauth/agroexact` must be registered on the
    AuthKit application, verbatim. It is `REDIRECT_URI` in `state/auth.tsx`.
 

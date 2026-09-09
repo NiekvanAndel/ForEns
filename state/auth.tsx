@@ -177,6 +177,11 @@ export function AgroAuthProvider({ children }: { children: ReactNode }) {
         scopes: OAUTH_SCOPES,
         responseType: AuthSession.ResponseType.Code,
         usePKCE: true,
+        // Ask for the login screen rather than whatever session the browser still
+        // holds. Signing out revokes the tokens, but the cookie on the AuthKit
+        // domain outlives them, and without this someone reconnecting lands back on
+        // the account they just left with no way to choose another.
+        extraParams: { prompt: 'login' },
       });
 
       const result = await request.promptAsync(AUTHKIT_ENDPOINTS);
