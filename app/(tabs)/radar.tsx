@@ -149,7 +149,6 @@ function RadarPage() {
           lon={location.lon}
           frames={frames}
           activeIndex={index}
-          stations={pins}
           timeLabel={frameClock(frames[index])}
           style={{ aspectRatio: MAP_ASPECT }}
         />

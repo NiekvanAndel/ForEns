@@ -48,7 +48,9 @@ export interface RadarMapProps {
   lon: number;
   frames: RadarFrame[];
   activeIndex: number;
-  stations: AgroStation[];
+  /** Extra places to mark. Left out on the card, where the map answers "is it
+   *  raining here" and every other dot is a distraction from the one that matters. */
+  stations?: AgroStation[];
   /** Label for the time badge, e.g. "nu" or "+45 min". */
   timeLabel: string;
   interactive?: boolean;
@@ -64,7 +66,7 @@ export interface RadarMapProps {
 }
 
 export function RadarMap({
-  lat, lon, frames, activeIndex, stations, timeLabel,
+  lat, lon, frames, activeIndex, stations = [], timeLabel,
   interactive = true, showControls = true, showLegend = false,
   chromeTop = CHROME_INSET, style,
 }: RadarMapProps) {
