@@ -8,32 +8,27 @@
  *
  * ## Where the blocks come from
  *
- * On a location an AgroExact station speaks for, they are the blocks on that
- * account's dashboard — the ones the grower chose on the web, in their order, with
- * their titles and their time windows, translated by the API. The app does not have
- * an opinion about which of them matter.
+ * The same twelve everywhere, from the forecast model — which on a location an
+ * AgroExact station speaks for has already had that station's readings merged into
+ * it, per quantity. So a station location shows measured numbers without this page
+ * asking the account anything. See `core/model/tiles`.
  *
- * Everywhere else there is no dashboard to read, so the same grid is built from the
- * weather model instead: twelve figures, fixed. See `core/model/tiles`.
+ * It did ask, at first: the account's own dashboard catalog decided the blocks, and
+ * the API translated their titles. That fell to two things at once — the set is
+ * meant to be these twelve, and the page has to speak the language set in
+ * Instellingen rather than the one the server picks.
  *
- * The catalog is only *asked for* where there is a station, which is the difference
- * between a grid and twelve dashes. It is a property of the account, not of the
- * location, so a connected account answers with its blocks wherever it is asked —
- * and on a location with no station there is nothing to compute them against, so
- * every one of them came back empty. A pull to refresh fetched the same nothing
- * again, which is what made it look broken rather than merely blank.
- *
- * The two are told apart by the dot, not by the layout. A location can also be both
- * at once — a rain gauge fills in the rainfall and leaves the wind to the model — so
- * the distinction has to live on the block rather than on the page.
+ * Which blocks are measured is a per-block matter, not a per-page one: a rain gauge
+ * fills in the rainfall and leaves the wind to the model, so the green dot lives on
+ * the block.
  *
  * ## The swipe
  *
  * `ScreenFrame` gives the page its top row and the sideways swipe between locations,
- * as on every other tab. The copies either side are drawn from the cached forecast
- * and ask `usePeeking` before fetching anything: a page sliding past does not need a
- * round trip to the account, and the modelled grid it draws instead is the same
- * shape, so the swipe lands on a grid rather than on a spinner.
+ * as on every other tab. The copies either side cost nothing extra now that the grid
+ * is read straight out of the forecast: the pager already hands each neighbour its
+ * cached model, so a page sliding past draws a full grid without a single request —
+ * no `usePeeking` guard needed, because there is nothing to guard.
  */
 import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
@@ -48,12 +43,11 @@ import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
 import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
-import { usePeeking } from '../../ui/peek';
 import { ConditionTile } from '../../ui/current/ConditionTile';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
-import { useDashboardBlocks, useLocationStation } from '../../state/stations';
-import { dashboardTiles, modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
+import { useLocationStation } from '../../state/stations';
+import { modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
 import { measurementTimeLabel } from '../../core/model/station';
 import { ta } from '../../core/i18n';
 
@@ -65,12 +59,9 @@ function CurrentPage() {
   const { prefs, location } = usePrefs();
   const { model, phase, error, refresh, offsetSec } = useForecast();
   const insets = useSafeAreaInsets();
-  const peeking = usePeeking();
   const router = useRouter();
 
   const station = useLocationStation(location);
-  // No station, no request: see the note at the top of the file.
-  const dashboard = useDashboardBlocks(station?.id ?? null, !peeking && !!station);
 
   const labels: TileLabels = useMemo(
     () => ({
@@ -92,25 +83,14 @@ function CurrentPage() {
     [prefs.lang]
   );
 
-  // The account's own blocks where there are any, the model's where there are not.
-  // A station whose dashboard is empty or unreachable still gets a page: an account
-  // with nothing selected on it is a settings problem, and an empty grid would say
-  // the station had stopped reporting.
-  const tiles: Tile[] = useMemo(() => {
-    if (station && dashboard.blocks.length) {
-      return dashboardTiles(
-        dashboard.blocks.map((b) => ({
-          id: b.id, title: b.title, attribute: b.attribute,
-          timeLabel: b.timeLabel, unit: b.unit, value: b.value,
-        }))
-      );
-    }
-    return model ? modelTiles(model, labels) : [];
-  }, [station, dashboard.blocks, model, labels]);
+  const tiles: Tile[] = useMemo(
+    () => (model ? modelTiles(model, labels) : []),
+    [model, labels]
+  );
 
-  // The forecast is refreshed by the control itself; the dashboard is this page's
-  // own, so the pull has to ask for it too.
-  const refreshControl = useRefreshControl(dashboard.refetch);
+  // Everything on this page comes out of the forecast, which the control refreshes
+  // by itself — including the station readings merged into it.
+  const refreshControl = useRefreshControl();
 
   // A measurement carries its own timestamp, to the minute; a modelled hour does not.
   const measured = model?.station?.current;
@@ -120,7 +100,7 @@ function CurrentPage() {
       ? model.nowHour.slice(11, 16)
       : '';
 
-  const loading = !model || (dashboard.loading && !!station);
+  const loading = !model;
 
   return (
     <ScrollView

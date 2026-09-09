@@ -21,9 +21,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AgroAuthError, fetchAggregationBlocks, fetchAggregationValues, fetchStationObservations,
-  fetchStationRange, fetchStations, withAgroToken,
-  type AggregationBlock, type AgroStation, type MeasuredHour, type StationObservations,
+  AgroAuthError, fetchStationObservations, fetchStationRange, fetchStations, withAgroToken,
+  type AgroStation, type MeasuredHour, type StationObservations,
 } from '../core/sources/agroexact';
 import { stationForLocation } from '../core/model/station';
 import { NOMINATIM_MIN_INTERVAL_MS, reverseGeocode } from '../core/sources/geocoding';
@@ -220,90 +219,14 @@ export function useStationObservations(
   return query;
 }
 
-// ── The dashboard, and a measured series ────────────────────────────────────────
+// ── A measured series over a period ─────────────────────────────────────────────
 
-/** The account's dashboard changes when someone edits it on the web, not while the
- *  app is open; an hour between refetches is generous. */
-const BLOCKS_STALE_MS = 60 * 60_000;
-/** A finished hour does not change, so a chosen window is reused for an hour too —
+/** A finished hour does not change, so a chosen window is reused for a few minutes —
  *  except the one running, which `include_partial` keeps returning fresh. */
 const RANGE_STALE_MS = 5 * 60_000;
 
-export const blocksKey = (lang: string) => ['agroexact', 'aggregations', lang] as const;
-export const valuesKey = (stationId: string) => ['agroexact', 'aggregation-values', stationId] as const;
 export const rangeKey = (stationId: string, offsetSec: number, from: string, to: string) =>
   ['agroexact', 'range', stationId, offsetSec, from, to] as const;
-
-export interface DashboardBlock extends AggregationBlock {
-  /** What the block reads for this station, or null where it has no answer. */
-  value: number | null;
-}
-
-/**
- * The account's own "Actueel" blocks, filled in for one station.
- *
- * Two queries rather than one, because they age differently: the catalog is a
- * dashboard layout and the values are weather. Splitting them means a refresh costs
- * the numbers and not the wording, and every station on the account shares one copy
- * of the catalog — so swiping between two station locations fetches values alone.
- *
- * The catalog is keyed by language because the API translates the titles and the
- * time labels, and the app's language is a preference rather than the phone's.
- */
-export function useDashboardBlocks(stationId: string | null, enabled = true) {
-  const { prefs } = usePrefs();
-  const auth = useAgroAuth();
-  const connected = auth.status === 'connected';
-
-  const catalog = useQuery({
-    queryKey: blocksKey(prefs.lang),
-    enabled: enabled && connected,
-    staleTime: BLOCKS_STALE_MS,
-    queryFn: async ({ signal }): Promise<AggregationBlock[]> => {
-      const rows = await withAgroToken(
-        auth.getAccessToken,
-        (token) => fetchAggregationBlocks(token, prefs.lang, { signal }),
-        auth.reportUnauthorized
-      );
-      return rows ?? [];
-    },
-    retry: (count, error) => !(error instanceof AgroAuthError) && count < 2,
-  });
-
-  const values = useQuery({
-    queryKey: valuesKey(stationId ?? ''),
-    enabled: enabled && connected && !!stationId,
-    staleTime: OBSERVATIONS_STALE_MS,
-    queryFn: async ({ signal }): Promise<Record<number, number | null>> => {
-      if (!stationId) return {};
-      const rows = await withAgroToken(
-        auth.getAccessToken,
-        (token) => fetchAggregationValues(token, stationId, { signal }),
-        auth.reportUnauthorized
-      );
-      return rows ?? {};
-    },
-    retry: (count, error) => !(error instanceof AgroAuthError) && count < 1,
-  });
-
-  const blocks: DashboardBlock[] = useMemo(
-    () => (catalog.data ?? []).map((b) => ({ ...b, value: values.data?.[b.id] ?? null })),
-    [catalog.data, values.data]
-  );
-
-  const refetch = useCallback(() => {
-    catalog.refetch();
-    values.refetch();
-  }, [catalog, values]);
-
-  return {
-    blocks,
-    /** Only the first load is a spinner; a refresh keeps the numbers on screen. */
-    loading: catalog.isLoading || values.isLoading,
-    failed: catalog.isError || values.isError,
-    refetch,
-  };
-}
 
 /**
  * The hours a station measured between two dates.

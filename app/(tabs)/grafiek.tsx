@@ -324,13 +324,11 @@ function GraphPage() {
                 </>
               ) : (
                 <Text variant="caption" color={palette.muted} style={{ flexShrink: 1 }}>
-                  {/* Two different things to say, and they were being said with one
-                      sentence. A short window with no station is simply modelled
-                      data; a long one is a window the model cannot fill, which is
-                      the reader's actual problem and needs naming. */}
-                  {station || series.resolution === 'hour'
-                    ? ta('graphModelled', prefs.lang)
-                    : ta('graphNoStation', prefs.lang)}
+                  {/* One sentence, whatever window is on screen. The reader's problem
+                      is the same either way — this location has no instrument, so a
+                      day is as far back as the chart can go — and saying it two
+                      different ways made it read as two different limitations. */}
+                  {ta('graphNoStation', prefs.lang)}
                 </Text>
               )}
             </View>

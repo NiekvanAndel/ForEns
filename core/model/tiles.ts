@@ -1,104 +1,47 @@
 /**
  * The blocks on 'Actueel'.
  *
- * Two sources, one shape. Where a location has an AgroExact station, the blocks are
- * the ones on that account's dashboard — the API says what they are called, over
- * which window they are computed and in which unit, and the app draws them in the
- * order the grower put them in. Where it has no station, the same grid is built from
- * the weather model instead, so every location has a page rather than a page and an
- * apology.
+ * Twelve of them, fixed, in the app's own words. Every one is read out of the
+ * forecast model — which, on a location an AgroExact station speaks for, has already
+ * had that station's measurements merged into it per quantity by
+ * `applyStationObservations`. So the same twelve blocks serve both kinds of location,
+ * and on a station they are the station's own numbers.
  *
- * The two are deliberately not made to look identical. A measured block carries
- * `measured: true`, and the grid gives it the station dot — design rule 1 says green
- * names a station, and the whole difference between the two halves of this file is
- * whether an instrument or a model is speaking.
+ * ## Why the account's dashboard is not read here
  *
- * ## Why the model blocks are fixed and the station blocks are not
+ * It was, at first: `/aggregations/` is the catalog behind the web app's dashboard,
+ * and the blocks a grower picks there are a real statement about their own farm. Two
+ * things ruled it out. The set is meant to be these twelve and no others, which a
+ * catalog someone edits on the web cannot promise; and its titles and time labels
+ * are translated server-side, so the page spoke whatever language the API chose
+ * rather than the one set in Instellingen. Those two together leave nothing for the
+ * catalog to do that the merged model does not already do better.
  *
- * A dashboard is a choice someone made about their own farm; there is nowhere to
- * make that choice for a town in Zeeland the reader searched for last week. So the
- * modelled set is a fixed twelve, chosen once by the client — see `modelTiles`.
+ * The station is still what makes the numbers measurements. A block carries
+ * `measured: true` and gets the green dot — design rule 1 — and the flag is decided
+ * per quantity, because a rain gauge measures the rainfall and leaves the wind to
+ * the model.
  *
- * Pure: no formatting, no units conversion, no translation beyond the labels handed
- * in. The page converts to the reader's units where it draws, exactly as every other
- * card in the app does.
+ * Pure: no formatting, no unit conversion, no translation beyond the labels handed
+ * in. The page converts to the reader's units where it draws, as every other card in
+ * the app does.
  */
 import type { ForecastModel } from './types';
 
 /** Which unit family a tile's value belongs to, so the page can convert it. */
-export type TileKind = 'temp' | 'wind' | 'mm' | 'percent' | 'direction' | 'raw';
+export type TileKind = 'temp' | 'wind' | 'mm' | 'percent' | 'direction';
 
 export interface Tile {
   /** Stable within a grid, for React's key. */
   id: string;
-  /** What the block is called. From the API on a station, from `appStrings` here. */
   title: string;
-  /** The window the value covers, e.g. "laatste 24 uur". Blank where there is none. */
+  /** The window the value covers, e.g. "laatste 24 uur". */
   timeLabel: string;
   /** Null draws a dash: a block with no answer still holds its place in the grid. */
   value: number | null;
-  /** Only used for `raw`; the other kinds carry the unit their formatter prints. */
-  unit: string;
   kind: TileKind;
   /** True where an instrument reported this rather than a model. */
   measured: boolean;
-}
-
-/** Attributes the API names for a wind *direction*, which reads as a compass point
- *  rather than as a number of degrees. */
-const DIRECTION = /direction/i;
-
-/**
- * Which unit family an API block belongs to, from the attribute it is computed over.
- *
- * The unit string alone would be tempting and is not enough: the API sends wind in
- * m/s and the app works in km/h, so a block matched on "m/s" would be converted
- * twice on a phone set to metres per second and not at all on one set to knots. The
- * attribute says what the quantity *is*, which is the thing that decides.
- */
-export function tileKind(attribute: string, unit: string): TileKind {
-  if (DIRECTION.test(attribute)) return 'direction';
-  if (/temperature|dewpoint|windchill|wet_bulb/i.test(attribute)) return 'temp';
-  if (/wind|gust/i.test(attribute)) return 'wind';
-  if (/precipitation|rain/i.test(attribute)) return 'mm';
-  if (/humidity/i.test(attribute) || unit === '%') return 'percent';
-  return 'raw';
-}
-
-export interface DashboardEntry {
-  id: number;
-  title: string;
-  attribute: string;
-  timeLabel: string;
-  unit: string;
-  value: number | null;
-}
-
-/**
- * The account's dashboard blocks, as tiles.
- *
- * The API's own wind figures are metres per second, like everywhere else it speaks,
- * so they are converted to the km/h the app works in before the page converts again
- * to whatever the reader asked for. Getting that wrong is silent: 4 m/s and 4 km/h
- * are both plausible wind speeds.
- */
-export function dashboardTiles(entries: readonly DashboardEntry[]): Tile[] {
-  return entries.map((e) => {
-    const kind = tileKind(e.attribute, e.unit);
-    const value =
-      kind === 'wind' && e.value != null
-        ? Math.round(e.value * 3.6 * 10) / 10
-        : e.value;
-    return {
-      id: `agro-${e.id}`,
-      title: e.title,
-      timeLabel: e.timeLabel,
-      value,
-      unit: e.unit,
-      kind,
-      measured: true,
-    };
-  });
 }
 
 /** The words the modelled grid needs, handed in so this module stays pure. */
@@ -124,14 +67,14 @@ export interface TileLabels {
 const ROLLING = { six: 6, twelve: 12, day: 24 } as const;
 
 /**
- * The grid for a location no station speaks for, built from the forecast model.
+ * The twelve blocks, from the model — which already carries the station's own
+ * readings on a location that has one.
  *
- * Twelve blocks, chosen by the client: what it is doing now, what the wind has done
- * today, and rainfall over four windows. Every figure is an observation or the hour
- * in progress — never an afternoon the model has not reached yet. 'Actueel' means
- * actual, and a grid of current readings with tomorrow's maximum in it would be
- * answering a question nobody on this page asked. The forecast has two tabs of its
- * own.
+ * What it is doing now, what the wind has done today, rainfall over four windows,
+ * and the day's extremes. Every figure is an observation or the hour in progress —
+ * never an afternoon the model has not reached yet. 'Actueel' means actual, and a
+ * grid of current readings with tomorrow's maximum in it would be answering a
+ * question nobody on this page asked. The forecast has two tabs of its own.
  *
  * ## Rolling windows and calendar days are both here, and they are not the same
  *
@@ -140,19 +83,33 @@ const ROLLING = { six: 6, twelve: 12, day: 24 } as const;
  * cares which — so both are shown, each labelled with the window it covers, rather
  * than one standing in for the other.
  *
- * Where a station has merged its measurements into `pastHours`, these tiles are
- * measured and say so — a rain gauge fills in the rainfall and leaves the wind to
- * the model, exactly as the conditions hero already shows it.
+ * ## Which blocks get the green dot
+ *
+ * Per quantity, decided by whether the station's latest reading carries that
+ * quantity at all. A station either has an anemometer or it does not, so a rain
+ * gauge answering with rainfall and nulls for the wind marks its rainfall blocks
+ * measured and leaves the wind blocks plain — which is exactly what the hero on 'Nu'
+ * already does with the same readings.
+ *
+ * Marking every block on a station-backed location as measured would have been the
+ * easy version and the wrong one: it would put an instrument's authority behind a
+ * number the model supplied.
  */
 export function modelTiles(model: ForecastModel, labels: TileLabels): Tile[] {
   const measured = model.station?.current ?? null;
   const now = model.futureHours[0] ?? model.pastHours[model.pastHours.length - 1] ?? null;
-  /** True where a station has any say over this location at all. */
-  const hasStation = !!model.station;
   // The location's own local day, from the model's own clock — not the device's,
   // which may be in another zone entirely.
   const todayKey = model.nowHour.slice(0, 10);
   const today = model.pastHours.filter((h) => h.time.slice(0, 10) === todayKey);
+  const measures = {
+    temp: measured?.temp != null,
+    humidity: measured?.humidity != null,
+    wind: measured?.wind != null,
+    gusts: measured?.gusts != null,
+    windDir: measured?.windDir != null,
+    precip: measured?.precip != null,
+  };
 
   const sum = (hours: readonly { precip: number | null }[]) =>
     Math.round(hours.reduce((total, h) => total + (h.precip ?? 0), 0) * 10) / 10;
@@ -178,32 +135,33 @@ export function modelTiles(model: ForecastModel, labels: TileLabels): Tile[] {
     timeLabel: string,
     value: number | null | undefined,
     kind: TileKind,
-    unit: string,
     isMeasured: boolean
   ): Tile => ({
     id, title, timeLabel,
     value: value == null || !Number.isFinite(value) ? null : value,
-    unit, kind, measured: isMeasured,
+    kind, measured: isMeasured,
   });
 
   return [
-    tile('temp', labels.temperature, labels.now, nowTemp, 'temp', '°', measured?.temp != null),
+    tile('temp', labels.temperature, labels.now, nowTemp, 'temp', measures.temp),
     tile('humidity', labels.humidity, labels.now,
-      measured?.humidity ?? now?.humidity, 'percent', '%', measured?.humidity != null),
+      measured?.humidity ?? now?.humidity, 'percent', measures.humidity),
     tile('wind', labels.windSpeed, labels.now,
-      measured?.wind ?? now?.windExact ?? now?.wind, 'wind', '', measured?.wind != null),
+      measured?.wind ?? now?.windExact ?? now?.wind, 'wind', measures.wind),
     tile('gust', labels.windGust, labels.now,
-      measured?.gusts ?? now?.gusts, 'wind', '', measured?.gusts != null),
+      measured?.gusts ?? now?.gusts, 'wind', measures.gusts),
     tile('wind-dir', labels.windDirection, labels.now,
-      measured?.windDir ?? now?.windDir, 'direction', '', measured?.windDir != null),
-    tile('gust-max', labels.gustMax, labels.today, peak(today), 'wind', '', hasStation),
-    tile('rain-6h', labels.rain, labels.last6h, sum(model.pastHours.slice(-ROLLING.six)), 'mm', 'mm', hasStation),
-    tile('rain-12h', labels.rain, labels.last12h, sum(model.pastHours.slice(-ROLLING.twelve)), 'mm', 'mm', hasStation),
-    tile('rain-today', labels.rain, labels.today, sum(today), 'mm', 'mm', hasStation),
-    tile('rain-24h', labels.rain, labels.last24h, sum(window), 'mm', 'mm', hasStation),
+      measured?.windDir ?? now?.windDir, 'direction', measures.windDir),
+    tile('gust-max', labels.gustMax, labels.today, peak(today), 'wind', measures.gusts),
+    tile('rain-6h', labels.rain, labels.last6h,
+      sum(model.pastHours.slice(-ROLLING.six)), 'mm', measures.precip),
+    tile('rain-12h', labels.rain, labels.last12h,
+      sum(model.pastHours.slice(-ROLLING.twelve)), 'mm', measures.precip),
+    tile('rain-today', labels.rain, labels.today, sum(today), 'mm', measures.precip),
+    tile('rain-24h', labels.rain, labels.last24h, sum(window), 'mm', measures.precip),
     tile('temp-max', labels.tempMax, labels.last24h,
-      temps.length ? Math.max(...temps) : null, 'temp', '°', hasStation),
+      temps.length ? Math.max(...temps) : null, 'temp', measures.temp),
     tile('temp-min', labels.tempMin, labels.last24h,
-      temps.length ? Math.min(...temps) : null, 'temp', '°', hasStation),
+      temps.length ? Math.min(...temps) : null, 'temp', measures.temp),
   ];
 }

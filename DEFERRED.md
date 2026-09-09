@@ -68,14 +68,12 @@ Decisions worth knowing about:
 
 Two pages added and one relationship inverted.
 
-- **Actueel** is the account's own dashboard where a location has an AgroExact
-  station: the blocks come from `/aggregations/` and their values from
-  `/aggregations/values/`, with the API's own titles, units and time labels, in the
-  order the grower set on the web. The app has no opinion about which blocks matter.
-  Where there is no station — or where the account has selected none — the same grid
-  is built from the weather model instead (`core/model/tiles.ts`), so every location
-  has a page. The two are told apart by the station dot, per block, because a rain
-  gauge measures some of them and not others.
+- **Actueel** is a fixed grid of twelve blocks built from the forecast model
+  (`core/model/tiles.ts`), which on a station-backed location already carries that
+  station's readings. It first read the account's dashboard catalog instead; see the
+  follow-up round below for why that came out again. The two kinds of value are told
+  apart by the station dot, per block, because a rain gauge measures some of them
+  and not others.
 - **Grafiek** plots one quantity over a chosen period. On a station-backed location
   it is the station's own hourly record from `/aggregates/{id}/`, running on into
   the forecast past the current hour; elsewhere it is the model alone. Measurement
@@ -99,43 +97,37 @@ Two pages added and one relationship inverted.
 
 Worth knowing:
 
-- The `/aggregations/` catalog is fetched per language, because the API translates
-  the titles and the time labels and the app's language is a preference rather than
-  the phone's. `agroFetch` sends `Accept-Language` for that call only.
-- Wind from `/aggregations/values/` is metres per second like everywhere else the
-  API speaks, and is converted to km/h in `dashboardTiles` before the page converts
-  again to the reader's own unit. Pinned in `tests/tiles.test.ts`.
-- Both pages skip their network calls while the pager is peeking at them, and draw
-  the modelled version instead, so a swipe does not cost a month of measurements for
-  a location the reader may not stop on.
-- **Not verified against a live account:** the shape of `/aggregations/` and
-  `/aggregations/values/` is taken from the AgroExactRN app's client, not from a
-  real response through this app's bearer token. If the grid comes up empty on a
-  station that has blocks on the web, that pair of calls is the first suspect.
+- 'Grafiek' skips its network call while the pager is peeking at it, so a swipe does
+  not cost a month of measurements for a location the reader may not stop on.
+  'Actueel' has no call of its own to skip.
 
-### Follow-up round (9 Sep 2026)
+### Follow-up rounds (9 Sep 2026)
 
 - **The conditions hero opens 'Actueel'.** The whole card is a button, with a caret
-  in its corner so it looks like one. 'Actueel' is that card's own subject at full
-  length.
-- **Two bugs, both silent.** The `/aggregates/` range call was sending
-  `YYYY-MM-DD` where the API wants `dd-mm-YYYY`, so every window the graph page
-  asked for came back empty and only the axis moved — `apiDay` now converts it.
-  And 'Actueel' asked for the account's dashboard catalog on *every* location:
-  the catalog belongs to the account, so a connected account answered with its
-  blocks even where there was no station to compute them against, and the grid
-  filled with dashes that a refresh could not fix. The catalog is only fetched
-  where there is a station now.
-- **`Accept-Language` is a region-qualified tag** (`nl-NL,nl;q=0.9`). A bare code
-  is matched at the server's discretion, which is how a Dutch phone got English
-  block titles.
-- **The modelled grid is a fixed twelve, chosen by the client:** temperature,
-  humidity, wind speed, gust, wind direction, max gust today, rainfall over 6h,
-  12h, today and 24h, and max/min temperature. Rolling windows and calendar days
-  are both there and are labelled apart — at four in the afternoon "vandaag" and
-  "laatste 24 uur" are different numbers. Max/min temperature is the rolling 24
-  hours, matching the hero on 'Nu'; say the word if it should be the calendar day
-  like the max gust.
+  in its corner so it looks like one.
+- **'Actueel' no longer reads the account's dashboard catalog.** `/aggregations/`
+  and `/aggregations/values/` are gone from the app. Two requirements killed them
+  together: the block set is meant to be a fixed twelve, which a catalog someone
+  edits on the web cannot promise, and the page has to speak the language set in
+  Instellingen rather than the one the API's content negotiation picks. Nothing was
+  lost by dropping them — `applyStationObservations` already merges a station's
+  readings into `pastHours` and `station.current`, so the same twelve blocks show
+  measured numbers on a station location without asking the account anything.
+  (`fetchAggregationBlocks`, `fetchAggregationValues` and `useDashboardBlocks` are
+  in the git history if the dashboard is ever wanted as a separate surface.)
+- **The twelve, in order:** temperature, humidity, wind speed, gust, wind direction,
+  max gust today, rainfall over 6h / 12h / today / 24h, and max/min temperature.
+  Rolling windows and calendar days are both there and labelled apart — at four in
+  the afternoon "vandaag" and "laatste 24 uur" are different numbers. Max/min
+  temperature is the rolling 24 hours, matching the hero on 'Nu'; say the word if it
+  should be the calendar day like the max gust.
+- **The green dot is decided per quantity**, from whether the station's latest
+  reading carries that quantity at all — a station either has an anemometer or it
+  does not. Marking every block on a station-backed location as measured would have
+  put an instrument's authority behind a number the model supplied.
+- **A silent date bug.** The `/aggregates/` range call was sending `YYYY-MM-DD`
+  where the API wants `dd-mm-YYYY`, so every window the graph page asked for came
+  back empty and only the axis moved. `apiDay` converts it now.
 - **The forecast on 'Grafiek' is a switch, off by default.** Turned on, the line
   carries past the current hour and the date fields reach as far ahead as the model
   does — `futureHours` stops at 48 hours, so the series falls back to the IFS hourly
@@ -143,12 +135,10 @@ Worth knowing:
   its ninetieth hour that set is three-hourly, and the chart draws a line through
   gaps of up to two forecast samples: a coarsely sampled series is still one series.
   Measured gaps are never bridged.
-- **The "no station" wording was replaced.** It said "berekend voor deze plaats —
-  geen meetreeks zonder station", which named a limitation without saying what it
-  meant for the reader. There are two messages now: a short window with no station
-  is simply modelled data, and a long one is a window the model cannot fill (it
-  carries about a day of observations, not an archive) — which is the reader's
-  actual problem and now says so.
+- **One sentence for a location with no station:** "Voor deze locatie is alleen de
+  laatste 24 uur beschikbaar als historie". It replaced two different messages for
+  the short and long windows, which read as two different limitations when it is
+  one — the weather model carries about a day of observations, not an archive.
 
 ### Two things to verify against the live API
 

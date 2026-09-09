@@ -129,8 +129,7 @@ export const APP_STRINGS = {
     perDay: 'Per dag',
     perHour: 'Per uur',
     showForecast: 'Verwachting tonen',
-    graphModelled: 'Zonder gekoppeld station zijn dit berekende waarden: de laatste 24 uur, plus de verwachting als je die aanzet.',
-    graphNoStation: 'Deze plaats heeft geen station, dus er is geen langere meetreeks. Zet de verwachting aan om vooruit te kijken.',
+    graphNoStation: 'Voor deze locatie is alleen de laatste 24 uur beschikbaar als historie',
   },
   en: {
     tabNow: 'Now', tabRadar: 'Radar', tabForecast: 'Forecast', tabSettings: 'Settings',
@@ -186,8 +185,7 @@ export const APP_STRINGS = {
     total: 'Total', peakHour: 'Peak hour', peakDay: 'Peak day',
     noSeries: 'No data for this period.', perDay: 'Per day', perHour: 'Per hour',
     showForecast: 'Show forecast',
-    graphModelled: 'Without a connected station these are computed values: the last 24 hours, plus the forecast if you switch it on.',
-    graphNoStation: 'This place has no station, so there is no longer measured series. Switch the forecast on to look ahead.',
+    graphNoStation: 'Only the last 24 hours are available as history for this location',
   },
   de: {
     tabNow: 'Jetzt', tabRadar: 'Radar', tabForecast: 'Vorhersage', tabSettings: 'Einstellungen',
@@ -243,8 +241,7 @@ export const APP_STRINGS = {
     total: 'Gesamt', peakHour: 'Spitzenstunde', peakDay: 'Spitzentag',
     noSeries: 'Keine Daten für diesen Zeitraum.', perDay: 'Pro Tag', perHour: 'Pro Stunde',
     showForecast: 'Vorhersage anzeigen',
-    graphModelled: 'Ohne verbundene Station sind dies berechnete Werte: die letzten 24 Stunden, plus die Vorhersage, wenn du sie einschaltest.',
-    graphNoStation: 'Dieser Ort hat keine Station, also gibt es keine längere Messreihe. Schalte die Vorhersage ein, um vorauszuschauen.',
+    graphNoStation: 'Für diesen Standort sind nur die letzten 24 Stunden als Historie verfügbar',
   },
   fr: {
     tabNow: 'Maintenant', tabRadar: 'Radar', tabForecast: 'Prévisions', tabSettings: 'Réglages',
@@ -300,8 +297,7 @@ export const APP_STRINGS = {
     total: 'Total', peakHour: 'Heure de pointe', peakDay: 'Jour de pointe',
     noSeries: 'Aucune donnée pour cette période.', perDay: 'Par jour', perHour: 'Par heure',
     showForecast: 'Afficher les prévisions',
-    graphModelled: "Sans station connectée, ce sont des valeurs calculées : les dernières 24 heures, plus les prévisions si tu les actives.",
-    graphNoStation: "Ce lieu n'a pas de station, donc pas de série mesurée plus longue. Active les prévisions pour regarder devant.",
+    graphNoStation: "Pour ce lieu, seules les dernières 24 heures sont disponibles en historique",
   },
   es: {
     tabNow: 'Ahora', tabRadar: 'Radar', tabForecast: 'Previsión', tabSettings: 'Ajustes',
@@ -357,8 +353,7 @@ export const APP_STRINGS = {
     total: 'Total', peakHour: 'Hora punta', peakDay: 'Día punta',
     noSeries: 'No hay datos para este periodo.', perDay: 'Por día', perHour: 'Por hora',
     showForecast: 'Mostrar previsión',
-    graphModelled: 'Sin estación conectada estos son valores calculados: las últimas 24 horas, más la previsión si la activas.',
-    graphNoStation: 'Este lugar no tiene estación, así que no hay una serie medida más larga. Activa la previsión para mirar hacia delante.',
+    graphNoStation: 'Para esta ubicación solo están disponibles las últimas 24 horas como histórico',
   },
 } as const;
 

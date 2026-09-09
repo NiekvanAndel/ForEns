@@ -9,6 +9,8 @@
  * preference and 18 is a fact. `core/model/tiles` hands over the app's own internal
  * units — °C, km/h, mm — and every tile turns those into whatever the reader asked
  * for at the moment it draws, exactly as the conditions hero and the day rows do.
+ * Which is also why the unit is not carried on the tile: the quantity decides it,
+ * and the quantity is what `kind` names.
  *
  * A measured block carries the station dot. Design rule 1: green names a station,
  * never a place — and on this page half the blocks can be an instrument's reading
@@ -26,7 +28,7 @@ import { Text } from '../Text';
 import { usePrefs } from '../../state/prefs';
 import type { Tile } from '../../core/model/tiles';
 import {
-  degToCompass, fmtDecimal, fmtMm, fmtTempValue, fmtWindValue, windUnitLabel,
+  degToCompass, fmtMm, fmtTempValue, fmtWindValue, windUnitLabel,
 } from '../../core/i18n';
 
 /** The reading and the unit it is printed in, in the reader's own units. */
@@ -47,8 +49,6 @@ export function tileReading(
     // A bearing in degrees is a number nobody reads as a direction.
     case 'direction':
       return { value: degToCompass(tile.value), unit: '' };
-    case 'raw':
-      return { value: fmtDecimal(tile.value), unit: tile.unit };
   }
 }
 

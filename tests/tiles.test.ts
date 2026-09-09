@@ -1,14 +1,14 @@
 /**
  * The 'Actueel' grid and the 'Grafiek' series.
  *
- * Both are places where a wrong answer looks like a right one. A tile can print a
- * station's wind in the wrong unit and still read as a plausible wind speed; a chart
- * can run a forecast on into a measured line and still read as a chart. So the two
- * things pinned hardest here are which source a value came from, and whether it was
- * converted on the way.
+ * Both are places where a wrong answer looks like a right one. A block can put an
+ * instrument's authority behind a number a model supplied and still read as a
+ * plausible reading; a chart can run a forecast on into a measured line and still
+ * read as a chart. So the thing pinned hardest here is which source a value came
+ * from — per quantity, because a rain gauge measures some of them and not others.
  */
 import { describe, it, expect } from 'vitest';
-import { dashboardTiles, modelTiles, tileKind, type TileLabels } from '../core/model/tiles';
+import { modelTiles, type TileLabels } from '../core/model/tiles';
 import { buildSeries, daySpan, forecastHorizon, hourKeys } from '../core/model/series';
 import type { ForecastModel, Hour } from '../core/model/types';
 import type { MeasuredHour } from '../core/sources/agroexact';
@@ -42,54 +42,13 @@ const measured = (time: string, over: Partial<MeasuredHour> = {}): MeasuredHour 
   wind: 8, gusts: 15, windDir: 90, precip: 0, ...over,
 });
 
-describe('tileKind', () => {
-  it('reads a direction as a compass point, not as its unit', () => {
-    expect(tileKind('wind_direction', '°')).toBe('direction');
-    // "°" is also the temperature unit, so the attribute has to decide.
-    expect(tileKind('temperature_150', '°C')).toBe('temp');
-  });
-
-  it('classifies by what the quantity is, not by how the API writes it', () => {
-    expect(tileKind('windspeed', 'm/s')).toBe('wind');
-    expect(tileKind('gust_max', 'm/s')).toBe('wind');
-    expect(tileKind('precipitation', 'mm')).toBe('mm');
-    expect(tileKind('humidity_150', '%')).toBe('percent');
-    expect(tileKind('global_radiation', 'J/cm²')).toBe('raw');
-  });
-});
-
-describe('dashboardTiles', () => {
-  it("converts the API's metres per second into the app's km/h, once", () => {
-    const tile = dashboardTiles([
-      { id: 4, title: 'Wind', attribute: 'windspeed', timeLabel: 'nu', unit: 'm/s', value: 10 },
-    ])[0]!;
-    expect(tile.value).toBe(36);
-    expect(tile.kind).toBe('wind');
-    expect(tile.measured).toBe(true);
-  });
-
-  it('leaves every other quantity exactly as the API sent it', () => {
-    const temp = dashboardTiles([
-      { id: 1, title: 'Temp', attribute: 'temperature_150', timeLabel: 'nu', unit: '°C', value: 17.4 },
-    ])[0]!;
-    expect(temp.value).toBe(17.4);
-  });
-
-  it('keeps a block with no answer, so the grid does not reflow', () => {
-    const tile = dashboardTiles([
-      { id: 9, title: 'Straling', attribute: 'global_radiation', timeLabel: 'vandaag', unit: 'J/cm²', value: null },
-    ])[0]!;
-    expect(tile.value).toBeNull();
-  });
-});
-
 describe('modelTiles', () => {
   it('marks nothing as measured on a location with no station', () => {
     const tiles = modelTiles(model(), labels);
     expect(tiles.every((t) => !t.measured)).toBe(true);
   });
 
-  it("prefers the station's reading and says which figures it covers", () => {
+  it("prefers the station's reading and marks only what it measured", () => {
     const tiles = modelTiles(
       model({
         station: {
@@ -107,10 +66,15 @@ describe('modelTiles', () => {
     const byId = new Map(tiles.map((t) => [t.id, t]));
     expect(byId.get('temp')?.value).toBe(21.3);
     expect(byId.get('temp')?.measured).toBe(true);
-    // Nothing measured the wind, so the model answers and the tile does not claim
-    // otherwise.
+    // The gauge measured the rainfall, so its four windows carry the dot even
+    // though each is summed out of the merged hours rather than read off `current`.
+    expect(byId.get('rain-24h')?.measured).toBe(true);
+    expect(byId.get('temp-max')?.measured).toBe(true);
+    // Nothing measured the wind, so the model answers and the block does not put an
+    // instrument's authority behind it.
     expect(byId.get('wind')?.value).toBe(12);
     expect(byId.get('wind')?.measured).toBe(false);
+    expect(byId.get('gust-max')?.measured).toBe(false);
   });
 
   it('summarises the last 24 hours rather than the rest of today', () => {
