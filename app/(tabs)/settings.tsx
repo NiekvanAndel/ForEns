@@ -165,7 +165,7 @@ export default function SettingsScreen() {
         <Text variant="caption" color={palette.muted} align="center" style={{ lineHeight: 18 }}>
           ExactCast AI · versie {APP_VERSION} (iOS){'\n'}
           Weerdata: Open-Meteo · ECMWF · KNMI HARMONIE-AROME{'\n'}
-          Radar: RainViewer
+          Radar: ExactCast AI nowcast (DGMR) · KNMI-radar
         </Text>
       </ScrollView>
 

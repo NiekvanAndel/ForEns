@@ -52,6 +52,11 @@ function RadarPage() {
   const [fullScreen, setFullScreen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(320);
 
+  // The radar run covers the Netherlands, Belgium and western Germany. A saved
+  // location outside it gets a sentence rather than an empty chart under a map
+  // whose pictures do not reach it.
+  const covered = activeProvider().coversPoint(location.lat, location.lon);
+
   /**
    * Fetch the loop.
    *
@@ -175,6 +180,12 @@ function RadarPage() {
         {loading ? (
           <View style={{ paddingVertical: space[6], alignItems: 'center' }}>
             <ActivityIndicator color={palette.accent} />
+          </View>
+        ) : !covered ? (
+          <View style={{ padding: space[6] }}>
+            <Text variant="bodySm" color={palette.muted} align="center">
+              {ta('radarOutside', prefs.lang)}
+            </Text>
           </View>
         ) : frames.length ? (
           <>

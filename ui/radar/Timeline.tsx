@@ -2,10 +2,11 @@
  * The radar timeline: play/pause and a scrubber across the frames.
  *
  * The design's slider runs "nu · +1 uur · +2 uur", but a real frame list is not
- * evenly split that way — RainViewer returns roughly two hours of past frames and
- * half an hour of forecast. So the labels are derived from the frames themselves
- * rather than hard-coded, and the "now" boundary is marked, since the difference
- * between observed and forecast radar is the thing a reader most needs to see.
+ * evenly split that way — the ExactCast run is a quarter of an hour of observation
+ * and an hour and a half of forecast. So the labels are derived from the frames
+ * themselves rather than hard-coded, and the "now" boundary is marked, since the
+ * difference between observed and forecast radar is the thing a reader most needs
+ * to see.
  *
  * `showLabels` turns that row off where a chart above the slider already carries
  * the time axis — three more timestamps under it would be the same information

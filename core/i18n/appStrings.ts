@@ -82,6 +82,7 @@ export const APP_STRINGS = {
     barsExplain:
       'Balken lopen van de dagminimum- naar de dagmaximumtemperatuur. Na dag 7 groeit de spreiding tussen de modelleden snel.',
     noData: 'Weerdata is tijdelijk niet beschikbaar. Probeer het later opnieuw.',
+    radarOutside: 'Radarbeelden zijn niet beschikbaar op deze locatie.',
     retry: 'Opnieuw proberen',
     useMyLocation: 'Mijn locatie gebruiken',
     units: 'Eenheden',
@@ -125,6 +126,7 @@ export const APP_STRINGS = {
     barsExplain:
       'Bars run from the daily minimum to the daily maximum temperature. After day 7 the spread between model members grows quickly.',
     noData: 'Weather data is temporarily unavailable. Please try again later.',
+    radarOutside: 'Radar imagery is not available for this location.',
     retry: 'Try again',
     useMyLocation: 'Use my location', units: 'Units', tabPrecipShort: 'Precipitation', fullScreen: 'Full screen',
   },
@@ -165,6 +167,7 @@ export const APP_STRINGS = {
     barsExplain:
       'Die Balken reichen vom Tagesminimum bis zum Tagesmaximum. Ab Tag 7 wächst die Streuung zwischen den Modellläufen schnell.',
     noData: 'Wetterdaten sind vorübergehend nicht verfügbar. Bitte später erneut versuchen.',
+    radarOutside: 'Für diesen Standort sind keine Radarbilder verfügbar.',
     retry: 'Erneut versuchen',
     useMyLocation: 'Meinen Standort verwenden', units: 'Einheiten', tabPrecipShort: 'Niederschlag', fullScreen: 'Vollbild',
   },
@@ -205,6 +208,7 @@ export const APP_STRINGS = {
     barsExplain:
       'Les barres vont du minimum au maximum de la journée. Après le jour 7, la dispersion entre les membres du modèle augmente rapidement.',
     noData: 'Les données météo sont temporairement indisponibles. Réessayez plus tard.',
+    radarOutside: "Les images radar ne sont pas disponibles pour ce lieu.",
     retry: 'Réessayer',
     useMyLocation: 'Utiliser ma position', units: 'Unités', tabPrecipShort: 'Précipitations', fullScreen: 'Plein écran',
   },
@@ -245,6 +249,7 @@ export const APP_STRINGS = {
     barsExplain:
       'Las barras van del mínimo al máximo del día. A partir del día 7 la dispersión entre los miembros del modelo crece rápidamente.',
     noData: 'Los datos meteorológicos no están disponibles temporalmente. Inténtalo más tarde.',
+    radarOutside: 'Las imágenes de radar no están disponibles en esta ubicación.',
     retry: 'Reintentar',
     useMyLocation: 'Usar mi ubicación', units: 'Unidades', tabPrecipShort: 'Precipitación', fullScreen: 'Pantalla completa',
   },
