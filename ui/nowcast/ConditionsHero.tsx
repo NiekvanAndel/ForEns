@@ -61,6 +61,13 @@ import { recent24 } from '../../core/model/station';
 import type { ForecastModel } from '../../core/model/types';
 import type { SavedLocation } from '../../core/prefs';
 
+/** The rainfall readings run a fifth larger than a `stat`, and the glyph beside them
+ *  with them: this card is read for the millimetres, so they are the one place on the
+ *  page where a number is allowed to be bigger than the type scale's own step. */
+const RAIN_SIZE = 25;
+const RAIN_UNIT_SIZE = 14;
+const RAIN_GLYPH_SIZE = 55;
+
 export interface ConditionsHeroProps {
   model: ForecastModel;
   location: SavedLocation;
@@ -127,11 +134,11 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
             a phone's width. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[5], marginTop: space[4] }}>
           <RainStat label={ta('lastHour', lang)} mm={lastHour} />
-          <View style={{ width: 1, height: 34, backgroundColor: palette.hairline }} />
+          <View style={{ width: 1, height: 40, backgroundColor: palette.hairline }} />
           <RainStat label={t('hRain24', lang)} mm={precip24} />
           {/* The icon stays modelled: a station measures quantities, not conditions. */}
           <View style={{ marginLeft: 'auto' }}>
-            <WeatherIcon wmo={now.wmo} isDay={now.isDay} size={46} />
+            <WeatherIcon wmo={now.wmo} isDay={now.isDay} size={RAIN_GLYPH_SIZE} />
           </View>
         </View>
       </View>
@@ -209,10 +216,18 @@ function RainStat({ label, mm }: { label: string; mm: number }) {
           color={mm > 0 ? palette.valPrecip : palette.valPrecipZero}
           numberOfLines={1}
           tabular
+          style={{ fontSize: RAIN_SIZE }}
         >
           {fmtMm(mm)}
         </Text>
-        <Unit>mm</Unit>
+        <Text
+          variant="caption"
+          weight="semibold"
+          color={palette.muted}
+          style={{ fontSize: RAIN_UNIT_SIZE }}
+        >
+          mm
+        </Text>
       </View>
     </View>
   );
