@@ -56,7 +56,7 @@ import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
-import { convTemp, convWind, fmtMm, windUnitLabel, t, ta } from '../../core/i18n';
+import { convTemp, convWind, fmtMm, windUnitLabel, ta } from '../../core/i18n';
 import { recent24 } from '../../core/model/station';
 import type { ForecastModel } from '../../core/model/types';
 import type { SavedLocation } from '../../core/prefs';
@@ -128,14 +128,19 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
             the end of the row.
 
             Each reading takes the width its own words need. Splitting the row into
-            equal halves instead broke "Neerslag 24u" over three lines and its value
-            over two, with the glyph sitting on top of the millimetres: a label that
-            is two words in Dutch and one in English cannot be given a fixed share of
-            a phone's width. */}
+            equal halves instead broke the second label over three lines and its value
+            over two, with the glyph sitting on top of the millimetres: a label whose
+            length changes with the language cannot be given a fixed share of a
+            phone's width.
+
+            "Laatste 24 uur" rather than the `hRain24` string the rest of the app
+            uses: beside "Laatste uur" the pair reads as two windows onto the same
+            gauge, where "Neerslag 24u" named the quantity a second time. It is an
+            app string, so `strings.ts` stays a faithful port of index.html. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[5], marginTop: space[4] }}>
           <RainStat label={ta('lastHour', lang)} mm={lastHour} />
           <View style={{ width: 1, height: 40, backgroundColor: palette.hairline }} />
-          <RainStat label={t('hRain24', lang)} mm={precip24} />
+          <RainStat label={ta('last24h', lang)} mm={precip24} />
           {/* The icon stays modelled: a station measures quantities, not conditions. */}
           <View style={{ marginLeft: 'auto' }}>
             <WeatherIcon wmo={now.wmo} isDay={now.isDay} size={RAIN_GLYPH_SIZE} />

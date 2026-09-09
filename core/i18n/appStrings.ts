@@ -89,6 +89,7 @@ export const APP_STRINGS = {
     tabPrecipShort: 'Neerslag',
     fullScreen: 'Volledig scherm',
     lastHour: 'Laatste uur',
+    last24h: 'Laatste 24 uur',
     mapShortcut: 'Kaart',
     searchLocations: 'Zoek een plaats',
   },
@@ -132,7 +133,8 @@ export const APP_STRINGS = {
     radarOutside: 'Radar imagery is not available for this location.',
     retry: 'Try again',
     useMyLocation: 'Use my location', units: 'Units', tabPrecipShort: 'Precipitation', fullScreen: 'Full screen',
-    lastHour: 'Last hour', mapShortcut: 'Map', searchLocations: 'Search for a place',
+    lastHour: 'Last hour', last24h: 'Last 24 hours', mapShortcut: 'Map',
+    searchLocations: 'Search for a place',
   },
   de: {
     tabNow: 'Jetzt', tabRadar: 'Radar', tabForecast: 'Vorhersage', tabSettings: 'Einstellungen',
@@ -174,7 +176,8 @@ export const APP_STRINGS = {
     radarOutside: 'Für diesen Standort sind keine Radarbilder verfügbar.',
     retry: 'Erneut versuchen',
     useMyLocation: 'Meinen Standort verwenden', units: 'Einheiten', tabPrecipShort: 'Niederschlag', fullScreen: 'Vollbild',
-    lastHour: 'Letzte Stunde', mapShortcut: 'Karte', searchLocations: 'Ort suchen',
+    lastHour: 'Letzte Stunde', last24h: 'Letzte 24 Stunden', mapShortcut: 'Karte',
+    searchLocations: 'Ort suchen',
   },
   fr: {
     tabNow: 'Maintenant', tabRadar: 'Radar', tabForecast: 'Prévisions', tabSettings: 'Réglages',
@@ -216,7 +219,8 @@ export const APP_STRINGS = {
     radarOutside: "Les images radar ne sont pas disponibles pour ce lieu.",
     retry: 'Réessayer',
     useMyLocation: 'Utiliser ma position', units: 'Unités', tabPrecipShort: 'Précipitations', fullScreen: 'Plein écran',
-    lastHour: 'Dernière heure', mapShortcut: 'Carte', searchLocations: 'Rechercher un lieu',
+    lastHour: 'Dernière heure', last24h: 'Dernières 24 heures', mapShortcut: 'Carte',
+    searchLocations: 'Rechercher un lieu',
   },
   es: {
     tabNow: 'Ahora', tabRadar: 'Radar', tabForecast: 'Previsión', tabSettings: 'Ajustes',
@@ -258,7 +262,8 @@ export const APP_STRINGS = {
     radarOutside: 'Las imágenes de radar no están disponibles en esta ubicación.',
     retry: 'Reintentar',
     useMyLocation: 'Usar mi ubicación', units: 'Unidades', tabPrecipShort: 'Precipitación', fullScreen: 'Pantalla completa',
-    lastHour: 'Última hora', mapShortcut: 'Mapa', searchLocations: 'Buscar un lugar',
+    lastHour: 'Última hora', last24h: 'Últimas 24 horas', mapShortcut: 'Mapa',
+    searchLocations: 'Buscar un lugar',
   },
 } as const;
 
