@@ -93,19 +93,23 @@ import {
   type Sample, type SeriesKey,
 } from '../../core/model/series';
 import {
-  fmtMm, fmtTempValue, fmtWindValue, tempUnitLabel, windUnitLabel, ta,
+  degToCompass, fmtMm, fmtTempValue, fmtWindValue, tempUnitLabel, windUnitLabel, ta,
   type AppStringKey,
 } from '../../core/i18n';
 
-/** The four measurements the selector offers, in the order it shows them. */
+/** The measurements the selector offers, in the order it shows them. */
 const SERIES: { key: SeriesKey; labelKey: AppStringKey; color: (p: PageColors) => string }[] = [
   { key: 'temp', labelKey: 'temperature', color: (p) => p.temp },
   { key: 'precip', labelKey: 'rain', color: (p) => p.precip },
   { key: 'humidity', labelKey: 'humidity', color: (p) => p.humidity },
   { key: 'wind', labelKey: 'windNow', color: (p) => p.wind },
+  { key: 'windDir', labelKey: 'windDirection', color: (p) => p.wind },
+  { key: 'radiation', labelKey: 'radiation', color: (p) => p.radiation },
 ];
 
-interface PageColors { temp: string; precip: string; humidity: string; wind: string }
+interface PageColors {
+  temp: string; precip: string; humidity: string; wind: string; radiation: string;
+}
 
 /** What the card is headed, and what the summary calls its highest sample — both
  *  follow the grain the chart ended up at. */
@@ -159,6 +163,7 @@ function GraphPage() {
   const colors: PageColors = {
     temp: palette.valTemp, precip: palette.valPrecip,
     humidity: palette.accentDark, wind: palette.valWind,
+    radiation: palette.valSun,
   };
   const color = SERIES.find((s) => s.key === key)?.color(colors) ?? palette.accent;
 
@@ -171,6 +176,9 @@ function GraphPage() {
       case 'precip': return `${fmtMm(v)} mm`;
       case 'humidity': return `${Math.round(v)}%`;
       case 'wind': return `${fmtWindValue(v, prefs.windUnit)} ${windUnitLabel(prefs.windUnit)}`;
+      // A bearing reads as the compass point it is, not as a number of degrees.
+      case 'windDir': return degToCompass(v);
+      case 'radiation': return `${Math.round(v)} W/m²`;
     }
   };
 
@@ -178,6 +186,8 @@ function GraphPage() {
     key === 'temp' ? tempUnitLabel(prefs.tempUnit)
     : key === 'precip' ? 'mm'
     : key === 'humidity' ? '%'
+    : key === 'windDir' ? '°'
+    : key === 'radiation' ? 'W'
     : '';
 
   // Clock times where a sample is a moment, dates where it is a day: a thirty-day
@@ -228,7 +238,16 @@ function GraphPage() {
 
         <View style={{ gap: space[3] }}>
           <CardHeader label={ta('measurement', prefs.lang)} />
-          <View style={{ flexDirection: 'row', gap: space[2] }}>
+          {/* A scroller, not six pills squeezed across the width: at six the labels
+              wrapped to two lines each and the row became taller than the chart's
+              own summary. Sliding is the honest answer to a list that outgrew the
+              screen, and the first four — the ones read most — still land in view
+              without moving anything. */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: space[2], paddingRight: space[4] }}
+          >
             {SERIES.map((s) => {
               const on = s.key === key;
               return (
@@ -241,8 +260,8 @@ function GraphPage() {
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   style={{
-                    flex: 1,
                     paddingVertical: 9,
+                    paddingHorizontal: space[4],
                     borderRadius: radius.pill,
                     alignItems: 'center',
                     backgroundColor: on ? s.color(colors) : palette.surfaceAlt,
@@ -259,7 +278,7 @@ function GraphPage() {
                 </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
         </View>
       </Card>
 
@@ -274,7 +293,7 @@ function GraphPage() {
           </View>
         ) : (
           <>
-            {series.stats ? (
+            {series.stats && meta.summary !== 'none' ? (
               <View
                 style={{
                   flexDirection: 'row', gap: space[5],
@@ -291,17 +310,36 @@ function GraphPage() {
                       value={format(series.stats.max)}
                     />
                   </>
+                ) : meta.summary === 'wind' ? (
+                  <>
+                    {/* A minimum wind speed is a number nobody acts on; the strongest
+                        gust is the one a grower spraying tomorrow reads for. */}
+                    <Stat label={ta('average', prefs.lang)} value={format(series.stats.avg)} />
+                    <Stat label={ta('maxWind', prefs.lang)} value={format(series.stats.max)} />
+                    {series.stats.secondaryMax != null ? (
+                      <Stat
+                        label={ta('maxGust', prefs.lang)}
+                        value={format(series.stats.secondaryMax)}
+                      />
+                    ) : null}
+                  </>
                 ) : (
                   <>
-                    <Stat label={ta('tempMin', prefs.lang)} value={format(series.stats.min)} />
+                    {/* Just "Min" and "Max": the quantity is named on the pill above
+                        and again on the axis, and "Min temperatuur" over a chart of
+                        temperatures says it a third time. */}
+                    <Stat label={ta('statMin', prefs.lang)} value={format(series.stats.min)} />
                     <Stat label={ta('average', prefs.lang)} value={format(series.stats.avg)} />
-                    <Stat label={ta('tempMax', prefs.lang)} value={format(series.stats.max)} />
+                    <Stat label={ta('statMax', prefs.lang)} value={format(series.stats.max)} />
                   </>
                 )}
               </View>
             ) : null}
 
-            <View style={{ paddingHorizontal: space[3], paddingBottom: space[3] }}>
+            {/* Barely inset: the card is already held off the screen edge, the chart
+                keeps its own room for the axis labels, and a third margin between
+                the two was width taken from the data. */}
+            <View style={{ paddingHorizontal: space[1], paddingBottom: space[3] }}>
               <SeriesChart
                 samples={series.samples}
                 shape={meta.shape}
@@ -313,6 +351,9 @@ function GraphPage() {
                 // Gusts belong above the wind line and nowhere else: on temperature
                 // the secondary would be an unlabelled second reading.
                 secondaryLabel={key === 'wind' ? '⤴' : undefined}
+                axisMin={meta.axisMin}
+                axisMax={meta.axisMax}
+                axisFixed={meta.axisFixed}
                 showCumulative={meta.shape === 'bar' && showCumulative}
                 cumulativeLabel={ta('cumulative', prefs.lang)}
                 cumulativeColor={palette.inkHeading}

@@ -12,7 +12,9 @@ import { modelTiles, nowcastDepth, type TileLabels } from '../core/model/tiles';
 import {
   arrangeAllTiles, arrangeTiles, DEFAULT_TILE_LAYOUT, reorderTiles, toggleTile,
 } from '../core/prefs';
-import { buildSeries, daySpan, forecastHorizon, hourKeys, timeKeys } from '../core/model/series';
+import {
+  buildSeries, daySpan, forecastHorizon, hourKeys, SERIES_META, timeKeys,
+} from '../core/model/series';
 import { localMinuteKey, parseRows } from '../core/sources/agroexact';
 import type { ForecastModel, Hour } from '../core/model/types';
 import type { MeasuredHour } from '../core/sources/agroexact';
@@ -290,6 +292,82 @@ describe('reading a station\'s raw measurements', () => {
   it('skips a record it cannot read rather than losing the series', () => {
     // A station that wrote one bad line should cost that line and not the chart.
     expect(parseRows<{ a: number }>('{"a":1}\nnot json\n{"a":3}')).toEqual([{ a: 1 }, { a: 3 }]);
+  });
+});
+
+describe('the two quantities added last', () => {
+  const window = { from: '2026-06-15', to: '2026-06-15' };
+
+  it('plots a bearing as points on a pinned compass axis', () => {
+    expect(SERIES_META.windDir.shape).toBe('dots');
+    // A stroke between two bearings would draw the wind swinging the long way round,
+    // and a dynamic axis would turn 170°–190° into a plot full of wild swings.
+    expect(SERIES_META.windDir.axisFixed).toBe(true);
+    expect(SERIES_META.windDir.axisMin).toBe(0);
+    expect(SERIES_META.windDir.axisMax).toBe(360);
+  });
+
+  it('averages bearings the long way round, not the arithmetic way', () => {
+    const s = buildSeries({
+      key: 'windDir', from: '2026-06-10', to: '2026-06-20',
+      measured: [
+        measured('2026-06-11T10:00', { windDir: 350 }),
+        measured('2026-06-11T11:00', { windDir: 10 }),
+      ],
+      model: null,
+    });
+    // The arithmetic mean is 180 — due south, the one direction it never blew from.
+    expect(s.samples.find((x) => x.key === '2026-06-11')?.value).toBe(0);
+    // And no band: it would run the wrong way round the compass half the time.
+    expect(s.samples.find((x) => x.key === '2026-06-11')?.band).toBeNull();
+  });
+
+  it('takes radiation from the model and never from a station', () => {
+    const s = buildSeries({
+      key: 'radiation', ...window,
+      // The station claims a value; the two sources disagree about the unit, so it
+      // is not taken. See `fromModel`.
+      measured: [measured('2026-06-15T10:00')],
+      model: model({ pastHours: [hour('2026-06-15T10:00', { radiation: 420 })] }),
+    });
+    const at = s.samples.find((x) => x.key === '2026-06-15T10:00');
+    expect(at?.value).toBe(420);
+    expect(at?.measured).toBe(false);
+  });
+
+  it('keeps humidity inside nought and a hundred', () => {
+    expect(SERIES_META.humidity.axisMin).toBe(0);
+    expect(SERIES_META.humidity.axisMax).toBe(100);
+    // Rainfall, wind and radiation cannot go negative; none of them has a ceiling.
+    for (const key of ['precip', 'wind', 'radiation'] as const) {
+      expect(SERIES_META[key].axisMin).toBe(0);
+      expect(SERIES_META[key].axisMax).toBeUndefined();
+    }
+    // Temperature has neither: below zero is a real reading.
+    expect(SERIES_META.temp.axisMin).toBeUndefined();
+  });
+
+  it('reports the strongest gust beside the strongest mean wind', () => {
+    const s = buildSeries({
+      key: 'wind', ...window,
+      measured: [
+        measured('2026-06-15T10:00', { wind: 12, gusts: 31 }),
+        measured('2026-06-15T11:00', { wind: 18, gusts: 24 }),
+      ],
+      model: null,
+    });
+    expect(s.stats?.max).toBe(18);
+    expect(s.stats?.secondaryMax).toBe(31);
+    expect(SERIES_META.wind.summary).toBe('wind');
+  });
+
+  it('has no gust to report where nothing measured one', () => {
+    const s = buildSeries({
+      key: 'temp', ...window,
+      measured: [measured('2026-06-15T10:00', { temp: 12 })],
+      model: null,
+    });
+    expect(s.stats?.secondaryMax).toBeNull();
   });
 });
 

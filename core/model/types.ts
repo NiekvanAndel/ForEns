@@ -87,6 +87,8 @@ export interface Hour {
   dewpoint?: number | null;
   sunMin?: number;
   windDir?: number | null;
+  /** Shortwave radiation at the surface, W/m². */
+  radiation?: number | null;
   pChance?: number | null;
   p2mm?: number | null;
   p10mm?: number | null;

@@ -41,23 +41,41 @@ import type { ForecastModel, Hour, HresHour } from './types';
 import type { MeasuredHour } from '../sources/agroexact';
 
 /** Which quantity a chart is about. */
-export type SeriesKey = 'temp' | 'precip' | 'humidity' | 'wind';
+export type SeriesKey = 'temp' | 'precip' | 'humidity' | 'wind' | 'windDir' | 'radiation';
 
-/** Bars for a total that accumulates, a line for a level that moves. */
-export type SeriesShape = 'line' | 'bar';
+/** Bars for a total that accumulates, a line for a level that moves, dots for a
+ *  reading that has no in-between — see `windDir`. */
+export type SeriesShape = 'line' | 'bar' | 'dots';
 
 export interface SeriesMeta {
   key: SeriesKey;
   shape: SeriesShape;
-  /** Which of the two summaries the page prints: a range, or a total and a peak. */
-  summary: 'range' | 'total';
+  /** Which summary the page prints above the chart. */
+  summary: 'range' | 'total' | 'wind' | 'none';
+  /** Hard floor and ceiling for the axis, where the quantity has them. Humidity is
+   *  a percentage and cannot leave 0–100; rainfall, wind and radiation cannot go
+   *  negative, and a padded "nice" range would otherwise label an axis -0,2 mm. */
+  axisMin?: number;
+  axisMax?: number;
+  /** Pin the axis to those bounds instead of fitting the data inside them. A
+   *  compass wants it: on a dynamic axis a day that blew between 170° and 190°
+   *  fills the plot with what is very nearly one steady direction. */
+  axisFixed?: boolean;
 }
 
 export const SERIES_META: Record<SeriesKey, SeriesMeta> = {
   temp: { key: 'temp', shape: 'line', summary: 'range' },
-  precip: { key: 'precip', shape: 'bar', summary: 'total' },
-  humidity: { key: 'humidity', shape: 'line', summary: 'range' },
-  wind: { key: 'wind', shape: 'line', summary: 'range' },
+  precip: { key: 'precip', shape: 'bar', summary: 'total', axisMin: 0 },
+  humidity: { key: 'humidity', shape: 'line', summary: 'range', axisMin: 0, axisMax: 100 },
+  wind: { key: 'wind', shape: 'line', summary: 'wind', axisMin: 0 },
+  // A bearing has no meaningful line between two readings: north-west followed by
+  // north-east is not "via south", which is what a stroke between 315 and 45 draws.
+  // So it is plotted as points, on the compass's own fixed axis.
+  windDir: {
+    key: 'windDir', shape: 'dots', summary: 'none',
+    axisMin: 0, axisMax: 360, axisFixed: true,
+  },
+  radiation: { key: 'radiation', shape: 'line', summary: 'range', axisMin: 0 },
 };
 
 /** Beyond this many days the samples are days rather than hours. */
@@ -83,8 +101,12 @@ export interface Sample {
 export interface Series {
   resolution: 'minute' | 'hour' | 'day';
   samples: Sample[];
-  /** Null where the window contains no readable value at all. */
-  stats: { min: number; max: number; avg: number; total: number } | null;
+  /** Null where the window contains no readable value at all. `secondaryMax` is the
+   *  highest gust, for the wind summary; null where nothing reported one. */
+  stats: {
+    min: number; max: number; avg: number; total: number;
+    secondaryMax: number | null;
+  } | null;
   /** True where any sample came from a station. */
   anyMeasured: boolean;
   /** Index of the first forecast sample, or -1 where the window is all in the past.
@@ -143,16 +165,29 @@ function fromMeasured(key: SeriesKey, h: MeasuredHour): { value: number | null; 
     case 'precip': return { value: h.precip };
     case 'humidity': return { value: h.humidity };
     case 'wind': return { value: h.wind, secondary: h.gusts };
+    case 'windDir': return { value: h.windDir };
+    // Deliberately not answered from a station: see `fromModel`.
+    case 'radiation': return { value: null };
   }
 }
 
-/** The same, from a modelled or observed hour of the forecast. */
+/**
+ * The same, from a modelled or observed hour of the forecast.
+ *
+ * Radiation comes only from here, never from a station. The two sources disagree
+ * about the unit — Open-Meteo's `shortwave_radiation` is W/m², and this repository
+ * carries two conflicting notes about whether AgroExact answers in W/m² or J/cm² —
+ * and a chart that mixed them would put two quantities on one axis without saying
+ * so. One source, one unit, until the station's is settled against the live API.
+ */
 function fromModel(key: SeriesKey, h: Hour): { value: number | null; secondary?: number | null } {
   switch (key) {
     case 'temp': return { value: h.tempExact ?? h.temp };
     case 'precip': return { value: h.precip ?? null };
     case 'humidity': return { value: h.humidity };
     case 'wind': return { value: h.windExact ?? h.wind, secondary: h.gusts ?? null };
+    case 'windDir': return { value: h.windDir ?? null };
+    case 'radiation': return { value: h.radiation ?? null };
   }
 }
 
@@ -172,6 +207,9 @@ function fromHres(key: SeriesKey, h: HresHour): { value: number | null; secondar
     case 'precip': return { value: h.precip };
     case 'humidity': return { value: h.humidity };
     case 'wind': return { value: h.wind, secondary: h.gusts };
+    case 'windDir': return { value: h.windDir };
+    // The IFS hourly set does not carry it, so the far forecast has no radiation.
+    case 'radiation': return { value: null };
   }
 }
 
@@ -337,10 +375,16 @@ function bucketByDay(key: SeriesKey, hours: readonly Sample[]): Sample[] {
 
     return {
       key: day,
-      value: key === 'precip' ? round1(total) : round1(total / values.length),
+      value:
+        key === 'precip' ? round1(total)
+        // A bearing has no arithmetic mean: north-west and north-east average to
+        // due south, which is the one direction the wind was never blowing from.
+        : key === 'windDir' ? circularMean(values)
+        : round1(total / values.length),
       // A total has no spread to show, and a band drawn round one would suggest the
-      // day rained somewhere between its own two ends.
-      band: key === 'precip' || lo === hi ? null : { lo, hi },
+      // day rained somewhere between its own two ends. Neither has a bearing: the
+      // band would run the wrong way round the compass half the time.
+      band: key === 'precip' || key === 'windDir' || lo === hi ? null : { lo, hi },
       secondary: gusts.length ? Math.max(...gusts) : null,
       // Every hour that had a value had a measured one — see the note at the top.
       measured: withValue.every((s) => s.measured),
@@ -351,14 +395,40 @@ function bucketByDay(key: SeriesKey, hours: readonly Sample[]): Sample[] {
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
+/**
+ * The mean of a set of bearings, in degrees.
+ *
+ * Averaging them as numbers is the classic wrong answer: 350° and 10° come to 180°,
+ * which is the one direction the wind was never blowing from. Each bearing becomes a
+ * unit vector, the vectors are summed, and the result is read back as an angle — so
+ * the two above come to 0°, as they should.
+ */
+function circularMean(degrees: readonly number[]): number | null {
+  if (!degrees.length) return null;
+  const rad = Math.PI / 180;
+  let x = 0;
+  let y = 0;
+  for (const d of degrees) {
+    x += Math.cos(d * rad);
+    y += Math.sin(d * rad);
+  }
+  // Opposing bearings that cancel exactly leave no direction to report.
+  if (Math.abs(x) < 1e-9 && Math.abs(y) < 1e-9) return null;
+  return Math.round(((Math.atan2(y, x) / rad) + 360) % 360);
+}
+
 function summarise(samples: readonly Sample[]): Series['stats'] {
   const values = samples.map((s) => s.value).filter((v): v is number => v != null);
   if (!values.length) return null;
   const total = values.reduce((a, b) => a + b, 0);
+  const gusts = samples.map((s) => s.secondary).filter((v): v is number => v != null);
   return {
     min: round1(Math.min(...values)),
     max: round1(Math.max(...values)),
     avg: round1(total / values.length),
     total: round1(total),
+    // The wind summary reads out the strongest gust beside the strongest mean, and
+    // the gust is the second line rather than the first.
+    secondaryMax: gusts.length ? round1(Math.max(...gusts)) : null,
   };
 }

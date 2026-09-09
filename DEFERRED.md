@@ -340,6 +340,35 @@ Two things to check on a device:
   aggregate's use of it imply, and it is what the cumulative line and the summary
   total depend on. A day whose total reads far too high is the sign it is wrong.
 
+### Six quantities on 'Grafiek' (9 Sep 2026)
+
+- **Wind direction and radiation added.** A bearing is plotted as points, not a
+  line: a stroke from 315° to 45° draws the wind swinging through south, which is
+  the one thing it did not do. Its axis is pinned to 0–360 rather than fitted, or a
+  day that blew between 170° and 190° fills the plot with what is very nearly one
+  steady direction. Bucketing a day of bearings uses a circular mean — 350° and 10°
+  come to 0°, where the arithmetic mean says due south.
+- **Radiation comes from the weather model only.** Open-Meteo's
+  `shortwave_radiation` is W/m²; this repository carries two conflicting notes about
+  whether AgroExact answers in W/m² or J/cm², and a chart that mixed them would put
+  two quantities on one axis without saying so. One source, one unit, until the
+  station's is settled against the live API — say the word and the station is wired
+  in. `processAll` now keeps radiation on every hour (the field was already fetched
+  for the sunshine estimate and thrown away); the parity suite projects the addition
+  away and asserts separately that it is populated, as it does for the gust.
+- **Axis bounds are per quantity.** Humidity stays dynamic but cannot leave 0–100;
+  rainfall, wind and radiation cannot go below zero; temperature has neither bound,
+  because below zero is a real reading.
+- **Summaries follow the quantity.** Min / gemiddeld / max for temperature, humidity
+  and radiation — just "Min" and "Max", since the quantity is already named on the
+  pill and on the axis. Wind reads gemiddeld / max wind / max windstoot, because a
+  minimum wind speed is a number nobody acts on. Rainfall keeps total and peak, and
+  a bearing has no summary at all.
+- **The selector is a horizontal scroller.** At six, pills across the width wrapped
+  to two lines each and the row grew taller than the summary under it.
+- **The chart's own left padding came down from 42 to 30**, and the card's from 12 to
+  4. Three nested margins for one chart, and the width belongs to the data.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an

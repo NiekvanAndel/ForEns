@@ -47,8 +47,11 @@ import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { niceRange, scaleX, scaleY, smoothPath, type Point } from '../../core/model/smooth';
 import type { Sample, SeriesShape } from '../../core/model/series';
 
-const PAD_LEFT = 42;
-const PAD_RIGHT = 8;
+// Just enough for a three-figure axis label and its air. It was 42, which put the
+// plot a finger's width in from a card that is already inset from the screen — three
+// nested margins for one chart, and the width belongs to the data.
+const PAD_LEFT = 30;
+const PAD_RIGHT = 4;
 const PAD_TOP = 10;
 const PAD_BOTTOM = 18;
 const GRID_LINES = 3;
@@ -79,6 +82,12 @@ export interface SeriesChartProps {
   cumulativeColor?: string;
   /** Short unit riding the top gridline. */
   unit?: string;
+  /** Hard floor and ceiling for the axis, where the quantity has them — humidity
+   *  cannot leave 0–100, and rainfall cannot go below zero. */
+  axisMin?: number;
+  axisMax?: number;
+  /** Pin the axis to those bounds rather than fitting the data inside them. */
+  axisFixed?: boolean;
   height?: number;
   /** Text for an empty window, so the page's wording stays in one place. */
   emptyLabel: string;
@@ -87,7 +96,7 @@ export interface SeriesChartProps {
 export function SeriesChart({
   samples, shape, color, axisLabel, readLabel, format,
   secondaryLabel, unit = '', height = 190, emptyLabel,
-  showCumulative, cumulativeLabel, cumulativeColor,
+  showCumulative, cumulativeLabel, cumulativeColor, axisMin, axisMax, axisFixed,
 }: SeriesChartProps) {
   const { palette } = useTheme();
   const [width, setWidth] = useState(0);
@@ -117,9 +126,15 @@ export function SeriesChart({
 
   const range = niceRange(Math.min(...all), Math.max(...all));
   // Bars stand on zero; a bar chart with a floating baseline misreads every height
-  // on it. A line keeps the padded range, so a flat day is not a flat line.
-  const lo = shape === 'bar' ? 0 : Math.min(range.lo, Math.min(...all));
-  const hi = Math.max(range.hi, lo + 0.1);
+  // on it. A line keeps the padded range, so a flat day is not a flat line — but
+  // never past a bound the quantity itself has: a padded range around a humid
+  // afternoon would otherwise label the axis 104%.
+  const fixed = axisFixed && axisMin != null && axisMax != null;
+  const padded = shape === 'bar' ? 0 : Math.min(range.lo, Math.min(...all));
+  const lo = fixed ? axisMin : axisMin != null ? Math.max(padded, axisMin) : padded;
+  const hi = fixed
+    ? axisMax
+    : Math.max(axisMax != null ? Math.min(range.hi, axisMax) : range.hi, lo + 0.1);
 
   const plotW = Math.max(1, width - PAD_LEFT - PAD_RIGHT);
   const plotH = height - PAD_TOP - PAD_BOTTOM;
@@ -205,12 +220,16 @@ export function SeriesChart({
               />
             ) : null}
 
-            {shape === 'bar'
-              ? <Bars samples={samples} px={px} py={py} n={n} plotW={plotW} zeroY={py(lo)} color={color} />
-              : <Lines
+            {shape === 'bar' ? (
+              <Bars samples={samples} px={px} py={py} n={n} plotW={plotW} zeroY={py(lo)} color={color} />
+            ) : shape === 'dots' ? (
+              <Dots samples={samples} px={px} py={py} color={color} cardColor={palette.appCard} />
+            ) : (
+              <Lines
                   samples={samples} px={px} py={py} color={color}
-                  drawSecondary={!!secondaryLabel} cardColor={palette.appCard}
-                />}
+                drawSecondary={!!secondaryLabel} cardColor={palette.appCard}
+              />
+            )}
 
             {/* Over the bars, not under them: the total is read against the showers
                 that made it, and a line behind them would be hidden by the tallest
@@ -363,6 +382,41 @@ function Lines({
             fill={r.future ? cardColor : color} stroke={color} strokeWidth={1.5}
           />
         ) : null
+      )}
+    </G>
+  );
+}
+
+/**
+ * A reading with nothing in between two of them: one mark per sample.
+ *
+ * A wind direction is the case this exists for. A stroke from 315° to 45° draws the
+ * wind swinging through south, which is the one thing it did not do — so there is no
+ * stroke, and each reading stands on its own. Forecast points are hollow, as a
+ * forecast is everywhere else on this chart.
+ */
+function Dots({
+  samples, px, py, color, cardColor,
+}: {
+  samples: Sample[];
+  px: (i: number) => number;
+  py: (v: number) => number;
+  color: string;
+  cardColor: string;
+}) {
+  return (
+    <G>
+      {samples.map((s, i) =>
+        s.value == null ? null : (
+          <Circle
+            key={`d${i}`}
+            cx={px(i)} cy={py(s.value)} r={2.6}
+            fill={s.future ? cardColor : color}
+            stroke={color}
+            strokeWidth={s.future ? 1.2 : 0}
+            opacity={s.future ? 0.85 : 1}
+          />
+        )
       )}
     </G>
   );

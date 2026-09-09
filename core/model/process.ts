@@ -173,6 +173,10 @@ export function processAll(
         // gust today was, which without this can only ever be answered on a
         // location with a station on it.
         gusts: roundOrNull(at(oh.windgusts_10m ?? oh.wind_gusts_10m, i)),
+        windDir: roundOrNull(at(oh.winddirection_10m, i)),
+        // Already fetched for the method-6 sunshine estimate; the graph page plots
+        // it directly.
+        radiation: roundOrNull(at(oh.shortwave_radiation, i)),
         wmo: (at(oh.weathercode, i) ?? 0) as number,
         isDay: isHourDay(time, lat, offsetSec),
         isPast: true,
@@ -218,6 +222,7 @@ export function processAll(
         isDay: isHourDay(time, lat, offsetSec),
         sunMin,
         windDir: roundOrNull(at(hh.winddirection_10m, i)),
+        radiation: roundOrNull(at(hh.shortwave_radiation, i)),
         isPast: false,
         // Per-hour ensemble figures are computed lazily when a day sheet opens.
         pChance: null, p2mm: null, p10mm: null,
