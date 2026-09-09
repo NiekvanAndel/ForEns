@@ -49,7 +49,7 @@ describe('mergeHour', () => {
     const merged = mergeHour(hour('2026-06-15T10:00'), {
       time: '2026-06-15T10:00',
       temp: 18, tempMin: null, tempMax: null,
-      humidity: null, dewpoint: null,
+      humidity: null, humidityMin: null, humidityMax: null, dewpoint: null,
       wind: null, gusts: null, windDir: null, radiation: null, precip: 1.2,
     });
     expect(merged.temp).toBe(18);
@@ -64,7 +64,7 @@ describe('mergeHour', () => {
   it('keeps a measured zero, which is a measurement like any other', () => {
     const merged = mergeHour(hour('2026-06-15T10:00', { precip: 2.5 }), {
       time: '2026-06-15T10:00',
-      temp: null, tempMin: null, tempMax: null, humidity: null, dewpoint: null,
+      temp: null, tempMin: null, tempMax: null, humidity: null, humidityMin: null, humidityMax: null, dewpoint: null,
       wind: null, gusts: null, windDir: null, radiation: null, precip: 0,
     });
     // A dry hour the gauge actually recorded must beat a modelled 2.5 mm.
@@ -85,7 +85,7 @@ describe('applyStationObservations', () => {
         hours: {
           '2026-06-15T11:00': {
             time: '2026-06-15T11:00', temp: 21, tempMin: 20, tempMax: 22,
-            humidity: 55, dewpoint: 11, wind: 25, gusts: 40, windDir: 200, precip: 0.3, radiation: null,
+            humidity: 55, humidityMin: null, humidityMax: null, dewpoint: 11, wind: 25, gusts: 40, windDir: 200, precip: 0.3, radiation: null,
           },
         },
         current: {

@@ -44,8 +44,12 @@ const model = (over: Partial<ForecastModel> = {}): ForecastModel => {
   };
 };
 
+// The spreads default to nothing: a test that overrode `temp` and left a min and a
+// max behind was describing an hour whose mean sat outside its own bounds, and the
+// day-bucketing then read those bounds as real.
 const measured = (time: string, over: Partial<MeasuredHour> = {}): MeasuredHour => ({
-  time, temp: 20, tempMin: 19, tempMax: 21, humidity: 60, dewpoint: 8,
+  time, temp: 20, tempMin: null, tempMax: null,
+  humidity: 60, humidityMin: null, humidityMax: null, dewpoint: 8,
   wind: 8, gusts: 15, windDir: 90, precip: 0, radiation: null, ...over,
 });
 
@@ -292,6 +296,71 @@ describe('reading a station\'s raw measurements', () => {
   it('skips a record it cannot read rather than losing the series', () => {
     // A station that wrote one bad line should cost that line and not the chart.
     expect(parseRows<{ a: number }>('{"a":1}\nnot json\n{"a":3}')).toEqual([{ a: 1 }, { a: 3 }]);
+  });
+});
+
+describe('the measured spread inside an hour', () => {
+  const window = { from: '2026-06-15', to: '2026-06-15' };
+
+  it('carries the hour\'s own minimum and maximum for temperature', () => {
+    const s = buildSeries({
+      key: 'temp', ...window,
+      measured: [measured('2026-06-15T10:00', { temp: 11, tempMin: 8, tempMax: 14 })],
+      model: null,
+    });
+    const at = s.samples.find((x) => x.key === '2026-06-15T10:00');
+    expect(at?.value).toBe(11);
+    // An hour that ran from 8° to 14° and an hour that sat at 11° are the same line
+    // and very different weather.
+    expect(at?.band).toEqual({ lo: 8, hi: 14 });
+  });
+
+  it('does the same for humidity, and for nothing else', () => {
+    const hour = measured('2026-06-15T10:00', {
+      humidity: 80, humidityMin: 71, humidityMax: 92,
+      tempMin: 8, tempMax: 14,
+    });
+    const band = (key: 'humidity' | 'wind' | 'radiation' | 'precip') =>
+      buildSeries({ key, ...window, measured: [hour], model: null })
+        .samples.find((x) => x.key === '2026-06-15T10:00')?.band;
+
+    expect(band('humidity')).toEqual({ lo: 71, hi: 92 });
+    // Wind's spread is the gust line above it; radiation's aggregate is one figure;
+    // rainfall is a total and has no spread to show.
+    expect(band('wind')).toBeUndefined();
+    expect(band('radiation')).toBeUndefined();
+    expect(band('precip')).toBeUndefined();
+  });
+
+  it('has no band where the source reports one figure, or two the same', () => {
+    const flat = buildSeries({
+      key: 'temp', ...window,
+      measured: [measured('2026-06-15T10:00', { temp: 11, tempMin: 11, tempMax: 11 })],
+      model: null,
+    });
+    expect(flat.samples.find((x) => x.key === '2026-06-15T10:00')?.band).toBeNull();
+
+    // A raw ten-minute reading has no spread inside itself.
+    const reading = buildSeries({
+      key: 'temp', ...window, stepMinutes: 10,
+      measured: [measured('2026-06-15T10:20', { temp: 11 })],
+      model: null,
+    });
+    expect(reading.samples.find((x) => x.key === '2026-06-15T10:20')?.band).toBeNull();
+  });
+
+  it("stretches a bucketed day to the edges of its hours' own spreads", () => {
+    const s = buildSeries({
+      key: 'temp', from: '2026-06-10', to: '2026-06-20',
+      measured: [
+        measured('2026-06-11T10:00', { temp: 12, tempMin: 6, tempMax: 15 }),
+        measured('2026-06-11T11:00', { temp: 14, tempMin: 13, tempMax: 19 }),
+      ],
+      model: null,
+    });
+    // The coldest minute of the day was inside some hour's minimum, not at the
+    // lowest hourly mean.
+    expect(s.samples.find((x) => x.key === '2026-06-11')?.band).toEqual({ lo: 6, hi: 19 });
   });
 });
 

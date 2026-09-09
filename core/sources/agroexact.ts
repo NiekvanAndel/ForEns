@@ -73,9 +73,13 @@ export interface MeasuredHour {
   /** Local wall-clock hour, `YYYY-MM-DDTHH:00` — the app's own hour key. */
   time: string;
   temp: number | null;
+  /** The spread inside the hour, where the source reports one. An aggregate does;
+   *  a single raw reading has neither. */
   tempMin: number | null;
   tempMax: number | null;
   humidity: number | null;
+  humidityMin: number | null;
+  humidityMax: number | null;
   dewpoint: number | null;
   /** km/h. */
   wind: number | null;
@@ -405,6 +409,8 @@ interface AggregateRow {
   wind_direction?: number | null;
   humidity_150?: number | null;
   humidity_150_avg?: number | null;
+  humidity_150_min?: number | null;
+  humidity_150_max?: number | null;
   dewpoint?: number | null;
   /** The hour's energy, J/cm². Converted on the way in. */
   global_radiation?: number | null;
@@ -437,6 +443,8 @@ function mapAggregateRow(key: string, r: AggregateRow): MeasuredHour {
     tempMin: round1OrNull(num(r.temperature_150_min)),
     tempMax: round1OrNull(num(r.temperature_150_max)),
     humidity: roundOrNull(humidity),
+    humidityMin: roundOrNull(num(r.humidity_150_min)),
+    humidityMax: roundOrNull(num(r.humidity_150_max)),
     dewpoint: roundOrNull(num(r.dewpoint)),
     wind: msToKmh(wind),
     gusts: msToKmh(num(r.gust_max)),
@@ -674,9 +682,12 @@ export async function fetchStationReadings(
       // A reading is stamped at the instant it was taken, so unlike an aggregate it
       // is not shifted back by a window it covers.
       temp: round1OrNull(num(r.temperature_150)),
+      // A single measurement has no spread inside itself.
       tempMin: null,
       tempMax: null,
       humidity: roundOrNull(num(r.humidity_150)),
+      humidityMin: null,
+      humidityMax: null,
       dewpoint: roundOrNull(num(r.dewpoint)),
       wind: msToKmh(num(r.windspeed)),
       gusts: msToKmh(num(r.gust)),

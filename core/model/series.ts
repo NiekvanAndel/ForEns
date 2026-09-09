@@ -158,12 +158,31 @@ export function daySpan(from: string, to: string): number {
   return Math.floor((b - a) / 86_400_000) + 1;
 }
 
-/** What one hour reads for a quantity, from a station's record of it. */
-function fromMeasured(key: SeriesKey, h: MeasuredHour): { value: number | null; secondary?: number | null } {
+/** A pair of bounds, or nothing where either is missing or they are the same. */
+function span(lo: number | null, hi: number | null): { lo: number; hi: number } | null {
+  return lo == null || hi == null || lo === hi ? null : { lo, hi };
+}
+
+/**
+ * What one hour reads for a quantity, from a station's record of it.
+ *
+ * Temperature and humidity come with the spread inside the hour, because the hourly
+ * aggregate reports a minimum and a maximum alongside the mean and it would be a
+ * waste to plot the mean alone: an hour that ran from 8° to 14° and an hour that sat
+ * at 11° are the same line and very different weather.
+ *
+ * Nothing else has one. Radiation's aggregate is a single figure — the hour's energy,
+ * which converted *is* the hourly mean — and wind's spread is already drawn as the
+ * gust line above it rather than as a band around it.
+ */
+function fromMeasured(
+  key: SeriesKey,
+  h: MeasuredHour
+): { value: number | null; secondary?: number | null; band?: { lo: number; hi: number } | null } {
   switch (key) {
-    case 'temp': return { value: h.temp };
+    case 'temp': return { value: h.temp, band: span(h.tempMin, h.tempMax) };
     case 'precip': return { value: h.precip };
-    case 'humidity': return { value: h.humidity };
+    case 'humidity': return { value: h.humidity, band: span(h.humidityMin, h.humidityMax) };
     case 'wind': return { value: h.wind, secondary: h.gusts };
     case 'windDir': return { value: h.windDir };
     case 'radiation': return { value: h.radiation };
@@ -282,10 +301,10 @@ export function buildSeries({
       const future = nowHour !== '' && time > nowHour;
       // Measurements end at now by definition, so a future hour never consults them.
       if (m && !future) {
-        const { value, secondary } = fromMeasured(key, m);
+        const { value, secondary, band } = fromMeasured(key, m);
         // A station that reported the hour but not this quantity leaves the model to
         // answer for it: the merge is per quantity everywhere else in the app too.
-        if (value != null) return { key: time, value, secondary, measured: true, future };
+        if (value != null) return { key: time, value, secondary, band, measured: true, future };
       }
       // A modelled value is stamped on the hour, so on a finer grid the hour a
       // sample falls inside is what answers for it — the model has nothing to say
@@ -363,14 +382,19 @@ function bucketByDay(key: SeriesKey, hours: readonly Sample[]): Sample[] {
     const withValue = list.filter((s) => s.value != null);
     const values = withValue.map((s) => s.value as number);
     const gusts = list.map((s) => s.secondary).filter((v): v is number => v != null);
+    // Where the samples carry their own spread, the day's reaches as far as theirs
+    // do — the coldest minute of the day was inside some hour's minimum, not at the
+    // lowest hourly mean.
+    const los = list.map((s) => s.band?.lo).filter((v): v is number => v != null);
+    const his = list.map((s) => s.band?.hi).filter((v): v is number => v != null);
 
     if (!values.length) {
       return { key: day, value: null, band: null, measured: false, future: list.every((s) => s.future) };
     }
 
     const total = values.reduce((a, b) => a + b, 0);
-    const lo = Math.min(...values);
-    const hi = Math.max(...values);
+    const lo = Math.min(...values, ...los);
+    const hi = Math.max(...values, ...his);
 
     return {
       key: day,

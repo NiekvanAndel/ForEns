@@ -387,6 +387,32 @@ multiplied by 10⁴/3600, a reading is taken as it stands, and Open-Meteo's
 and nothing downstream has to know. Pinned in `tests/sources.test.ts` against the
 two figures above.
 
+### The measured spread inside an hour (9 Sep 2026)
+
+`/aggregates/` reports a minimum and a maximum alongside the mean, and only for two
+quantities: `temperature_150` and `humidity_150`. Both are now drawn as a band behind
+the line on 'Grafiek', where before the page plotted the mean alone — an hour that ran
+from 8° to 14° and an hour that sat at 11° are the same line and very different
+weather. The humidity pair was not even being fetched; the temperature pair was
+fetched, mapped and then read by nobody.
+
+- **Only where a station reports it.** The weather model gives one figure per hour,
+  so a modelled sample has no band and does not pretend to.
+- **Nothing else has one.** Radiation's aggregate is a single figure — the hour's
+  energy, which converted *is* the hourly mean — and wind's spread is already drawn
+  as the gust line above it rather than as a band around it.
+- **A bucketed day now reaches as far as its hours' own spreads**, not merely to the
+  highest and lowest hourly mean: the coldest minute of the day was inside some
+  hour's minimum.
+- A raw ten-minute reading has no spread inside itself, so the one-day chart draws
+  the line alone.
+
+The test fixture used to hand every measured hour a minimum of 19 and a maximum of
+21 while tests overrode the mean to 10 — an hour whose mean sat outside its own
+bounds. Harmless while nothing read the pair; it became a wrong assertion the moment
+something did. The fixture now defaults both to nothing and each test states the
+spread it is about.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an
