@@ -65,17 +65,26 @@ export function ConditionTile({ tile, onPress }: { tile: Tile; onPress?: () => v
 
   // Rainfall is the reading this app is opened for, so it keeps the colour it has
   // everywhere else — and a zero stays dimmed, so a real number stands out in a grid
-  // of them. Everything else is heading ink: a grid where every block shouts is a
-  // grid where nothing does.
+  // of them. Temperature carries the same three inks as 'Verwachting': amber for a
+  // reading, red for a day's high, blue for its low, so a number means the same thing
+  // on whichever page the reader meets it. Everything else is heading ink: a grid
+  // where every block shouts is a grid where nothing does.
   const ink =
     tile.kind === 'mm'
       ? (tile.value ?? 0) > 0 ? palette.valPrecip : palette.valPrecipZero
-      : palette.appValue;
+      : tile.id === 'temp-max' ? palette.valHigh
+        : tile.id === 'temp-min' ? palette.valLow
+          : tile.kind === 'temp' ? palette.valTemp
+            : palette.appValue;
 
   const body = (
     <Card pad={0} style={{ flex: 1 }}>
       <View style={{ padding: space[4], gap: 2, minHeight: 96, justifyContent: 'space-between' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        <View
+          style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+          }}
+        >
           {tile.measured ? (
             <View
               style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright }}
@@ -86,13 +95,20 @@ export function ConditionTile({ tile, onPress }: { tile: Tile; onPress?: () => v
             weight="bold"
             color={palette.muted}
             numberOfLines={2}
-            style={{ flexShrink: 1, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: 10.5 }}
+            style={{
+              flexShrink: 1, letterSpacing: 0.5, textTransform: 'uppercase', fontSize: 10.5,
+              textAlign: 'center',
+            }}
           >
             {tile.title}
           </Text>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+        <View
+          style={{
+            flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 3,
+          }}
+        >
           <Text variant="stat" color={ink} numberOfLines={1} tabular style={{ flexShrink: 1 }}>
             {value}
           </Text>
@@ -103,7 +119,12 @@ export function ConditionTile({ tile, onPress }: { tile: Tile; onPress?: () => v
           ) : null}
         </View>
 
-        <Text variant="caption" color={palette.muted} numberOfLines={1} style={{ fontSize: 11 }}>
+        <Text
+          variant="caption"
+          color={palette.muted}
+          numberOfLines={1}
+          style={{ fontSize: 11, textAlign: 'center' }}
+        >
           {tile.timeLabel}
         </Text>
       </View>
