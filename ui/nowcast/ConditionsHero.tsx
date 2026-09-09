@@ -8,9 +8,14 @@
  *
  * The layout follows the client's mock-up, and its argument is that this is a
  * rainfall app: what fell in the last hour and what has fallen over the last day are
- * the two numbers a grower opens the page for, so they sit in a tinted strip of
- * their own with the condition glyph beside them, and everything else is one quiet
- * line underneath.
+ * the two numbers a grower opens the page for, so they lead the card with the
+ * condition glyph beside them, and everything else is one quiet line underneath.
+ *
+ * The rainfall band takes the card's own ground rather than a blue tint. A panel
+ * inside a card is a second card, and the millimetres are already the biggest
+ * coloured numbers on the page — they did not need a box drawn round them to be
+ * found. What separates the band from the line below it is a hairline, which is what
+ * separates everything else in this app.
  *
  * That is a demotion for the temperature, which used to be a 58-point number filling
  * half the card with the reading least likely to be the reason anyone looked. It is
@@ -18,8 +23,12 @@
  * but it no longer outweighs the strip above it.
  *
  * The three-cell divider row went with it. Temperature, its range, wind and humidity
- * read as one sentence with bullets between them in the space the cells took, and
- * the rule-and-cell grid was carrying no information the spacing does not.
+ * read as one line with bullets between them in the space the cells took, spread the
+ * full width of the card so nothing is crowded into its left half.
+ *
+ * Every reading on that line is the same size and sits on one baseline — including
+ * the temperature, which was a size larger and hung above its neighbours for it. The
+ * wind arrow is a glyph like any other and stands on the same line.
  *
  * ## Everything here looks backwards, on purpose
  *
@@ -39,8 +48,8 @@
  * so real numbers stand out.
  */
 import { View } from 'react-native';
-import { radius, space, useTheme } from '../../theme';
-import { Card } from '../Card';
+import { space, useTheme } from '../../theme';
+import { Card, Rule } from '../Card';
 import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
@@ -49,10 +58,6 @@ import { convTemp, convWind, fmtMm, windUnitLabel, t, ta } from '../../core/i18n
 import { recent24 } from '../../core/model/station';
 import type { ForecastModel } from '../../core/model/types';
 import type { SavedLocation } from '../../core/prefs';
-
-/** The temperature stays the biggest mark in the bottom row without competing with
- *  the strip above it: a step up from `stat`, well short of the old `metric`. */
-const TEMP_SIZE = 27;
 
 export interface ConditionsHeroProps {
   model: ForecastModel;
@@ -110,77 +115,75 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
           </Text>
         </View>
 
-        {/* The strip: the two rainfall readings, and the weather they belong to. */}
-        <View
-          style={{
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-            gap: space[3],
-            marginTop: space[3],
-            paddingVertical: space[3], paddingHorizontal: space[4],
-            backgroundColor: palette.accentTint,
-            borderRadius: radius.tile,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[5] }}>
+        {/* The rainfall band: the two readings across the width of the card, and the
+            weather they belong to at the end of it. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: space[4] }}>
+          <View style={{ flex: 1 }}>
             <RainStat label={ta('lastHour', lang)} mm={lastHour} />
-            <View style={{ width: 1, height: 30, backgroundColor: palette.hairline }} />
+          </View>
+          <View style={{ width: 1, height: 34, backgroundColor: palette.hairline }} />
+          <View style={{ flex: 1, paddingLeft: space[4] }}>
             <RainStat label={t('hRain24', lang)} mm={precip24} />
           </View>
           {/* The icon stays modelled: a station measures quantities, not conditions. */}
-          <WeatherIcon wmo={now.wmo} isDay={now.isDay} size={44} />
+          <WeatherIcon wmo={now.wmo} isDay={now.isDay} size={46} />
+        </View>
+      </View>
+
+      <Rule soft />
+
+      {/* Everything else, as one line: temperature and its range, then wind, then
+          humidity, spread across the card and sitting on one baseline. */}
+      <View
+        style={{
+          flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
+          // Wraps rather than clips at the largest text size, where three readings
+          // and their units no longer fit across one phone.
+          flexWrap: 'wrap', rowGap: space[3], columnGap: space[3],
+          paddingHorizontal: space[5], paddingVertical: space[4],
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+          <Text variant="stat" color={palette.appValue} tabular>
+            {now.temp != null ? convTemp(now.temp, prefs.tempUnit) : '—'}°
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+            <Text variant="caption" weight="bold" color={palette.valHigh} tabular>
+              ▲{hi != null ? convTemp(hi, prefs.tempUnit) : '—'}°
+            </Text>
+            <Text variant="caption" weight="bold" color={palette.muted}>
+              {' / '}
+            </Text>
+            <Text variant="caption" weight="bold" color={palette.valLow} tabular>
+              ▼{lo != null ? convTemp(lo, prefs.tempUnit) : '—'}°
+            </Text>
+          </View>
         </View>
 
-        {/* Everything else, as one line: temperature and its range, then wind, then
-            humidity, separated by bullets rather than by rules. */}
-        <View
-          style={{
-            flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap',
-            gap: space[2],
-            marginTop: space[4],
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-            <Text variant="stat" color={palette.appValue} tabular style={{ fontSize: TEMP_SIZE }}>
-              {now.temp != null ? convTemp(now.temp, prefs.tempUnit) : '—'}°
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-              <Text variant="caption" weight="bold" color={palette.valHigh} tabular>
-                ▲{hi != null ? convTemp(hi, prefs.tempUnit) : '—'}°
-              </Text>
-              <Text variant="caption" weight="bold" color={palette.muted}>
-                {' / '}
-              </Text>
-              <Text variant="caption" weight="bold" color={palette.valLow} tabular>
-                ▼{lo != null ? convTemp(lo, prefs.tempUnit) : '—'}°
-              </Text>
-            </View>
-          </View>
+        <Bullet />
 
-          <Bullet />
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+          <WindArrow deg={now.windDir} size={15} />
+          <Text variant="stat" color={palette.valWind} tabular>
+            {convWind(now.wind, prefs.windUnit) ?? '—'}
+          </Text>
+          <Unit>{windUnitLabel(prefs.windUnit)}</Unit>
+        </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <WindArrow deg={now.windDir} size={14} />
-            <Text variant="label" color={palette.valWind} tabular>
-              {convWind(now.wind, prefs.windUnit) ?? '—'}
-            </Text>
-            <Unit>{windUnitLabel(prefs.windUnit)}</Unit>
-          </View>
+        <Bullet />
 
-          <Bullet />
-
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-            <Text variant="label" color={palette.inkHeading} tabular>
-              {now.humidity ?? '—'}
-            </Text>
-            <Unit>%</Unit>
-          </View>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+          <Text variant="stat" color={palette.inkHeading} tabular>
+            {now.humidity ?? '—'}
+          </Text>
+          <Unit>%</Unit>
         </View>
       </View>
     </Card>
   );
 }
 
-/** One rainfall reading in the strip: what it is, and how much. */
+/** One rainfall reading in the band: what it is, and how much. */
 function RainStat({ label, mm }: { label: string; mm: number }) {
   const { palette } = useTheme();
   return (
