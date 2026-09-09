@@ -450,6 +450,25 @@ share, so a reader moving between them meets the same picture for the same thing
 The quantity's own colour stays on the *line*; the pill carries the accent gradient
 like every other switcher in the app.
 
+### The chart came out of its card (9 Sep 2026)
+
+Everything below the period card is on the page now, and the plot itself reaches the
+screen's edges — out past the page's own margin, by a negative inset. A chart inside
+a card is held off three times over: the page's margin, the card's, and the room the
+chart keeps for its own axis labels. On a phone that was about a fifth of the width
+spent on nothing.
+
+- **`SeriesChart` had to be told what it stands on.** Hollow marks — a forecast bar,
+  a forecast dot, the cursor's ring — are filled with their ground so they read as
+  outlines. Filled with the card colour on a cream page they would have been solid
+  white marks. It takes a `background` now, defaulting to the card colour it was
+  born on.
+- **The band's edges start up per day and down per hour.** Per day they are the
+  day's coldest and warmest, which is what a week of temperatures is read for; per
+  hour they are the spread inside one hour, which over two days is three
+  near-parallel lines saying much the same thing. Changing the period resets them to
+  that grain's default — a choice made at one grain has no claim on another.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an

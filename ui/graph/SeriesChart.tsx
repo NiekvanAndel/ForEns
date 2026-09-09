@@ -110,6 +110,16 @@ export interface SeriesChartProps {
   height?: number;
   /** Text for an empty window, so the page's wording stays in one place. */
   emptyLabel: string;
+  /**
+   * What the chart is drawn on.
+   *
+   * Hollow marks — a forecast bar, a forecast dot, the cursor's ring — are filled
+   * with the ground they stand on, so they read as outlines rather than as shapes.
+   * Get it wrong and they are solid white marks on a cream page. It defaults to the
+   * card colour because that is where this chart lived first; the graph page hands
+   * in the page's own ground now that the chart sits directly on it.
+   */
+  background?: string;
 }
 
 export function SeriesChart({
@@ -117,9 +127,10 @@ export function SeriesChart({
   secondaryLabel, unit = '', height = 190, emptyLabel,
   showCumulative, cumulativeLabel, cumulativeColor, axisMin, axisMax, axisFixed,
   formatAxis, gridLines = GRID_LINES,
-  showValue = true, showBandLo, showBandHi, bandLoColor, bandHiColor,
+  showValue = true, showBandLo, showBandHi, bandLoColor, bandHiColor, background,
 }: SeriesChartProps) {
   const { palette } = useTheme();
+  const ground = background ?? palette.appCard;
   const [width, setWidth] = useState(0);
   const [cursor, setCursor] = useState<number | null>(null);
   /** The label's own size, measured so it can be kept inside the chart. */
@@ -250,7 +261,7 @@ export function SeriesChart({
             {shape === 'bar' ? (
               <Bars samples={samples} px={px} py={py} n={n} plotW={plotW} zeroY={py(lo)} color={color} />
             ) : shape === 'dots' ? (
-              <Dots samples={samples} px={px} py={py} color={color} cardColor={palette.appCard} />
+              <Dots samples={samples} px={px} py={py} color={color} cardColor={ground} />
             ) : (
               <Lines
                 samples={samples}
@@ -258,7 +269,7 @@ export function SeriesChart({
                 py={py}
                 color={color}
                 drawSecondary={!!secondaryLabel}
-                cardColor={palette.appCard}
+                cardColor={ground}
                 showValue={showValue}
                 lo={showBandLo ? bandLoColor ?? color : null}
                 hi={showBandHi ? bandHiColor ?? color : null}
@@ -308,8 +319,8 @@ export function SeriesChart({
                 {cursorY != null ? (
                   <Circle
                     cx={cursorX} cy={cursorY} r={4.5}
-                    fill={at.future ? palette.appCard : cursorInk}
-                    stroke={at.future ? cursorInk : palette.appCard}
+                    fill={at.future ? ground : cursorInk}
+                    stroke={at.future ? cursorInk : ground}
                     strokeWidth={2}
                   />
                 ) : null}

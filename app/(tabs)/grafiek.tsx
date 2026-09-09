@@ -54,8 +54,13 @@
  * Temperature and humidity report a minimum and a maximum, and those are readings a
  * grower acts on rather than a shaded area to squint at. Each is drawn as its own
  * line and each has its own legend switch, alongside one for the central line; one
- * of the three always stays on, because a chart of nothing is a card with an axis
- * in it.
+ * of the three always stays on, because a chart of nothing is an axis with nothing
+ * against it.
+ *
+ * Whether they start up follows the grain. Per day the edges are the day's coldest
+ * and warmest, which is what a week of temperatures is read for; per hour they are
+ * the spread inside one hour, which over two days is three near-parallel lines
+ * saying much the same thing.
  *
  * The two do not share a colour scheme. Warm is red and cold is blue, so
  * temperature's maximum is red — but humidity runs the other way, since it is the
@@ -88,7 +93,7 @@
  * and the pager waits for eighteen, so a drag that starts on the chart reads the
  * chart and a drag that starts anywhere else changes location.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -168,8 +173,16 @@ function GraphPage() {
   /** The running total over the rainfall bars. On by default — it is the reason the
    *  page can answer "how much fell in this period" at a glance. */
   const [showCumulative, setShowCumulative] = useState(true);
-  /** Which of a banded series' three lines are drawn. All of them, until the reader
-   *  says otherwise — the edges are the reason the band is worth having. */
+  /**
+   * Which of a banded series' three lines are drawn.
+   *
+   * The default follows the grain, because the edges mean different things at each.
+   * Per day they are the day's coldest and warmest — the two numbers a grower reads
+   * a week of temperatures for — so they are up. Per hour they are the spread inside
+   * one hour, which over two days is three near-parallel lines saying much the same
+   * thing, so only the central one is. Either way the legend switches decide from
+   * there, until the period changes and the grain with it.
+   */
   const [lines, setLines] = useState({ value: true, lo: true, hi: true });
 
   const station = useLocationStation(location);
@@ -198,6 +211,14 @@ function GraphPage() {
   const maxDay = forecastHorizon(model) ?? dayKey(new Date());
 
   const meta = SERIES_META[key];
+  const byDay = series.resolution === 'day';
+
+  // Changing the period is a deliberate act, and the grain it lands on is what the
+  // edges should follow; a choice made at one grain has no claim on another.
+  useEffect(() => {
+    setLines({ value: true, lo: byDay, hi: byDay });
+  }, [byDay]);
+
   const colors: PageColors = {
     temp: palette.valTemp, precip: palette.valPrecip,
     humidity: palette.accentDark, wind: palette.valWind,
@@ -262,7 +283,6 @@ function GraphPage() {
 
   // Clock times where a sample is a moment, dates where it is a day: a thirty-day
   // chart labelled 00:00 six times says nothing at all.
-  const byDay = series.resolution === 'day';
   const axisLabel = (s: Sample) =>
     byDay ? shortDay(s.key, prefs.lang) : s.key.slice(11, 16);
   const readLabel = (s: Sample) =>
@@ -306,16 +326,18 @@ function GraphPage() {
         />
       </Card>
 
-      <Card pad={0}>
+      {/* Not a card. A chart inside one is inset three times over — the page's own
+          margin, the card's, and the room the chart keeps for its axis labels — and
+          on a phone that is a fifth of the width spent on nothing. Out here it uses
+          the page, and the plot itself reaches the screen's edges. */}
+      <View>
         {/* The measurement lives with its chart, not in the card above: that one is
             about *when*, this one about *what*, and the switcher belongs to the thing
             it changes. No heading over it — six labelled pills are not a list that
             needs to be told what it is. */}
-        <View style={{ paddingHorizontal: space[4], paddingTop: space[4] }}>
-          <PillSwitcher items={pills} active={key} onChange={setKey} />
-        </View>
+        <PillSwitcher items={pills} active={key} onChange={setKey} />
 
-        <View style={{ padding: space[4], paddingBottom: 0 }}>
+        <View style={{ paddingTop: space[4] }}>
           <CardHeader label={ta(RESOLUTION_LABEL[series.resolution], prefs.lang)} />
         </View>
 
@@ -326,12 +348,7 @@ function GraphPage() {
         ) : (
           <>
             {series.stats && meta.summary !== 'none' ? (
-              <View
-                style={{
-                  flexDirection: 'row', gap: space[5],
-                  paddingHorizontal: space[4], paddingBottom: space[3],
-                }}
-              >
+              <View style={{ flexDirection: 'row', gap: space[5], paddingBottom: space[3] }}>
                 {meta.summary === 'total' ? (
                   <>
                     <Stat label={ta('total', prefs.lang)} value={format(series.stats.total)} />
@@ -368,10 +385,10 @@ function GraphPage() {
               </View>
             ) : null}
 
-            {/* Barely inset: the card is already held off the screen edge, the chart
-                keeps its own room for the axis labels, and a third margin between
-                the two was width taken from the data. */}
-            <View style={{ paddingHorizontal: space[1], paddingBottom: space[3] }}>
+            {/* Out past the page's own margin, to the screen's edges. The chart
+                keeps its own room for the axis labels and needs no second margin
+                inside a third; every point given back here is a point of plot. */}
+            <View style={{ marginHorizontal: -space[5], paddingBottom: space[3] }}>
               <SeriesChart
                 samples={series.samples}
                 shape={meta.shape}
@@ -398,6 +415,7 @@ function GraphPage() {
                 showCumulative={meta.shape === 'bar' && showCumulative}
                 cumulativeLabel={ta('cumulative', prefs.lang)}
                 cumulativeColor={palette.inkHeading}
+                background={palette.appBg}
                 emptyLabel={ta('noSeries', prefs.lang)}
               />
             </View>
@@ -411,7 +429,6 @@ function GraphPage() {
               style={{
                 flexDirection: 'row', alignItems: 'center',
                 flexWrap: 'wrap', columnGap: space[3], rowGap: space[2],
-                paddingHorizontal: space[4], paddingBottom: space[4],
               }}
             >
               {meta.shape === 'bar' ? (
@@ -475,7 +492,7 @@ function GraphPage() {
             </View>
           </>
         )}
-      </Card>
+      </View>
     </ScrollView>
   );
 }
