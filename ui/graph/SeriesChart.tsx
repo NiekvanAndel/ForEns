@@ -150,7 +150,13 @@ export function SeriesChart({
 
   const at = cursor != null && cursor < n ? samples[cursor] ?? null : null;
   const cursorX = cursor != null ? px(cursor) : 0;
-  const cursorY = at?.value != null ? py(at.value) : null;
+  // The marker rides whichever line the chart is actually about. With the running
+  // total up that is the total — it is the mark the eye is following, and a dot
+  // sitting on a bar top halfway down the plot reads as pointing at something else.
+  const onCumulative = !!showCumulative && at?.cumulative != null;
+  const cursorValue = onCumulative ? at?.cumulative : at?.value;
+  const cursorY = cursorValue != null ? py(cursorValue) : null;
+  const cursorInk = onCumulative ? cumulativeColor ?? color : color;
 
   const reading = at
     ? [
@@ -209,19 +215,23 @@ export function SeriesChart({
             {/* Over the bars, not under them: the total is read against the showers
                 that made it, and a line behind them would be hidden by the tallest
                 ones — which are exactly the ones it is explaining. */}
-            {showCumulative ? (
-              <Path
-                d={smoothPath(
-                  samples
-                    .map((s, i) => (s.cumulative == null ? null : { x: px(i), y: py(s.cumulative) }))
-                    .filter((p): p is Point => p !== null)
-                )}
-                stroke={cumulativeColor ?? color}
-                strokeWidth={2}
-                fill="none"
-                strokeLinecap="round"
-              />
-            ) : null}
+            {showCumulative
+              ? splitRuns(samples, (s) => s.cumulative, px, py).map((r, i) => (
+                  <Path
+                    key={`c${i}`}
+                    d={smoothPath(r.points)}
+                    stroke={cumulativeColor ?? color}
+                    strokeWidth={2}
+                    fill="none"
+                    strokeLinecap="round"
+                    // Dashed past the boundary, exactly as the value line is: what
+                    // has fallen and what is expected to are different claims, and
+                    // a total that ran on unbroken would blur them into one.
+                    strokeDasharray={r.future ? '5 4' : undefined}
+                    opacity={r.future ? 0.75 : 1}
+                  />
+                ))
+              : null}
 
             {samples.map((s, i) =>
               i % labelStep === 0 ? (
@@ -245,8 +255,8 @@ export function SeriesChart({
                 {cursorY != null ? (
                   <Circle
                     cx={cursorX} cy={cursorY} r={4.5}
-                    fill={at.future ? palette.appCard : color}
-                    stroke={at.future ? color : palette.appCard}
+                    fill={at.future ? palette.appCard : cursorInk}
+                    stroke={at.future ? cursorInk : palette.appCard}
                     strokeWidth={2}
                   />
                 ) : null}
@@ -317,46 +327,8 @@ function Lines({
     return `${smoothPath(top)} ${lower} Z`;
   })();
 
-  const runsOf = (read: (s: Sample) => number | null | undefined) => {
-    const out: { points: Point[]; future: boolean }[] = [];
-    let run: Point[] = [];
-    let future = false;
-    /** Consecutive empty samples seen since the last point in the open run. */
-    let missing = 0;
-    samples.forEach((s, i) => {
-      const v = read(s);
-      if (v == null) {
-        missing += 1;
-        // A gap in the forecast is usually the model itself going three-hourly past
-        // its ninetieth hour: one series sampled coarsely, not three separate
-        // opinions with silence between them, so the line is drawn through it. A gap
-        // in measurement is a station that stopped reporting, and that stays a gap —
-        // the whole point of a measured line is that it only claims what it saw.
-        if (run.length && (!s.future || missing > FORECAST_GAP_BRIDGE)) {
-          out.push({ points: run, future });
-          run = [];
-        }
-        return;
-      }
-      missing = 0;
-      const point = { x: px(i), y: py(v) };
-      if (run.length && s.future !== future) {
-        // Close the solid run on this point too, so the dashes start where the
-        // solid line ends rather than one sample later.
-        out.push({ points: [...run, point], future });
-        run = [point];
-        future = s.future;
-        return;
-      }
-      if (!run.length) future = s.future;
-      run.push(point);
-    });
-    if (run.length) out.push({ points: run, future });
-    return out;
-  };
-
-  const main = runsOf((s) => s.value);
-  const secondary = drawSecondary ? runsOf((s) => s.secondary) : [];
+  const main = splitRuns(samples, (s) => s.value, px, py);
+  const secondary = drawSecondary ? splitRuns(samples, (s) => s.secondary, px, py) : [];
 
   return (
     <G>
@@ -436,6 +408,63 @@ function Bars({
       })}
     </G>
   );
+}
+
+/**
+ * Split a series into runs that can each be drawn as one path.
+ *
+ * A run breaks on a gap and at the measured/forecast boundary, so neither is ever
+ * bridged by a stroke that would claim more than the data does. The boundary sample
+ * is repeated into the forecast run, which is what makes the two halves touch rather
+ * than leaving a notch between them.
+ *
+ * A gap in the *forecast* of up to `FORECAST_GAP_BRIDGE` samples is drawn straight
+ * through: past its ninetieth hour the model goes three-hourly, and that is one
+ * series sampled coarsely rather than three separate opinions with silence between
+ * them. A gap in measurement is a station that stopped reporting, and stays a gap —
+ * the whole point of a measured line is that it only claims what it saw.
+ *
+ * Shared by the value line, the gusts above it and the rainfall running total, so
+ * all three break at the same places and dash on the same side of the boundary.
+ */
+function splitRuns(
+  samples: readonly Sample[],
+  read: (s: Sample) => number | null | undefined,
+  px: (i: number) => number,
+  py: (v: number) => number
+): { points: Point[]; future: boolean }[] {
+  const out: { points: Point[]; future: boolean }[] = [];
+  let run: Point[] = [];
+  let future = false;
+  /** Consecutive empty samples seen since the last point in the open run. */
+  let missing = 0;
+
+  samples.forEach((s, i) => {
+    const v = read(s);
+    if (v == null) {
+      missing += 1;
+      if (run.length && (!s.future || missing > FORECAST_GAP_BRIDGE)) {
+        out.push({ points: run, future });
+        run = [];
+      }
+      return;
+    }
+    missing = 0;
+    const point = { x: px(i), y: py(v) };
+    if (run.length && s.future !== future) {
+      // Close the solid run on this point too, so the dashes start where the solid
+      // line ends rather than one sample later.
+      out.push({ points: [...run, point], future });
+      run = [point];
+      future = s.future;
+      return;
+    }
+    if (!run.length) future = s.future;
+    run.push(point);
+  });
+
+  if (run.length) out.push({ points: run, future });
+  return out;
 }
 
 function formatTick(v: number): string {

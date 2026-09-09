@@ -270,6 +270,16 @@ describe('the running rainfall total', () => {
     expect(s.samples.find((x) => x.key === '2026-06-15T18:00')?.cumulative).toBe(3);
   });
 
+  it('keeps each sample\'s forecast flag, which is what dashes the line', () => {
+    const s = buildSeries({
+      key: 'precip', ...window, measured: [], model: model(), includeForecast: true,
+    });
+    // The running total is drawn solid up to now and dashed after it, and it can
+    // only be split there if the flag survived the accumulation.
+    expect(s.samples.some((x) => x.future && x.cumulative != null)).toBe(true);
+    expect(s.samples.some((x) => !x.future && x.cumulative != null)).toBe(true);
+  });
+
   it('adds a bucketed day once, not hour by hour', () => {
     const s = buildSeries({
       key: 'precip', from: '2026-06-10', to: '2026-06-20',

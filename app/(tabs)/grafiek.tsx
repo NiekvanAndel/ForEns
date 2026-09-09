@@ -38,6 +38,12 @@
  * switches the line off, and the axis goes back to fitting the bars alone. So the
  * legend is a control here, not a caption.
  *
+ * The line is drawn in heading ink rather than in a second blue. Design rule 2 gives
+ * every quantity its own colour, so a rainfall total cannot borrow the amber that
+ * means temperature or the green that means a station — and a darker shade of the
+ * bars' own blue is not a distinction at a glance. Ink is not a quantity's colour,
+ * which is the honest thing for a line derived from the bars underneath it.
+ *
  * A window longer than a few days is bucketed into days there too — the line becomes
  * each day's mean with its range behind it, and rainfall becomes each day's total.
  * The heading says which of the two is on screen, because "3,4 mm" means different
@@ -320,7 +326,7 @@ function GraphPage() {
                 secondaryLabel={key === 'wind' ? '⤴' : undefined}
                 showCumulative={meta.shape === 'bar' && showCumulative}
                 cumulativeLabel={ta('cumulative', prefs.lang)}
-                cumulativeColor={palette.accentDark}
+                cumulativeColor={palette.inkHeading}
                 emptyLabel={ta('noSeries', prefs.lang)}
               />
             </View>
@@ -339,7 +345,7 @@ function GraphPage() {
             >
               {meta.shape === 'bar' ? (
                 <Legend
-                  color={palette.accentDark}
+                  color={palette.inkHeading}
                   label={ta('cumulative', prefs.lang)}
                   on={showCumulative}
                   onPress={() => {

@@ -295,6 +295,17 @@ Two things to check on a device:
   glance, and the reason to want the total here is to see it against the showers that
   produced it. The cost is real: a month's total dwarfs any single hour, so the bars
   flatten under it.
+- **Drawn in heading ink, not a second blue.** Design rule 2 gives every quantity
+  its own colour, so a rainfall total cannot borrow the amber that means temperature
+  or the green that means a station — and a darker shade of the bars' own blue is not
+  a distinction at a glance. Ink is not a quantity's colour, which is the honest
+  thing for a line derived from the bars underneath it.
+- **Its forecast half is dashed**, like every other forecast on this page. The run
+  splitting that does it is now shared by the value line, the gusts and the total, so
+  all three break at the same places and dash on the same side of the boundary.
+- **The cursor rides the total while it is up**, and the bars when it is not. With
+  the line drawn, that is the mark the eye is following, and a dot sitting on a bar
+  top halfway down the plot reads as pointing at something else.
 - **Which is why the legend entry is a switch.** Tapping it drops the line, and the
   axis then fits the bars alone, because `SeriesChart` scales to what is actually
   drawn. So the toggle is not a nicety but the other half of the decision to share
