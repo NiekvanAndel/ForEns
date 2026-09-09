@@ -32,8 +32,13 @@ module.exports = {
     // a snow glyph reads as one object.
     WidgetGlyphCloud: { light: '#B7C3D1', dark: '#C9D6E4' },
     WidgetGlyphSun: { light: '#FFCC00', dark: '#FFCC00' },
-    // The moon and its stars, in every glyph they appear in.
+    // The moon where it stands alone, pale so a clear night is not a second sun.
     WidgetGlyphMoon: { light: '#B7C3D1', dark: '#C9D6E4' },
+    // The moon behind a cloud, and the stars beside it: both take the sun's yellow,
+    // which is the one mark in a night glyph that reads as a light rather than a
+    // surface. The same yellow against either ground.
+    WidgetGlyphMoonClouded: { light: '#FFCC00', dark: '#FFCC00' },
+    WidgetGlyphStars: { light: '#FFCC00', dark: '#FFCC00' },
     WidgetGlyphPrecip: { light: '#3FC1EF', dark: '#3FC1EF' },
     WidgetGlyphStorm: { light: '#D9871F', dark: '#D9871F' },
   },
