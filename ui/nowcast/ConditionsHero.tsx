@@ -26,9 +26,11 @@
  * read as one line with bullets between them in the space the cells took, spread the
  * full width of the card so nothing is crowded into its left half.
  *
- * Every reading on that line is the same size and sits on one baseline — including
- * the temperature, which was a size larger and hung above its neighbours for it. The
- * wind arrow is a glyph like any other and stands on the same line.
+ * Every reading on that line sits on one baseline, the wind arrow included: it is a
+ * glyph like any other and stands on the line rather than floating centred in its
+ * own group, which is what had it sitting higher than the numbers beside it. The
+ * temperature keeps the larger size — it is what the line is anchored on — and wind
+ * and humidity stay at label size, as they read best.
  *
  * ## Everything here looks backwards, on purpose
  *
@@ -115,18 +117,22 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
           </Text>
         </View>
 
-        {/* The rainfall band: the two readings across the width of the card, and the
-            weather they belong to at the end of it. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: space[4] }}>
-          <View style={{ flex: 1 }}>
-            <RainStat label={ta('lastHour', lang)} mm={lastHour} />
-          </View>
+        {/* The rainfall band: the two readings, then the weather they belong to at
+            the end of the row.
+
+            Each reading takes the width its own words need. Splitting the row into
+            equal halves instead broke "Neerslag 24u" over three lines and its value
+            over two, with the glyph sitting on top of the millimetres: a label that
+            is two words in Dutch and one in English cannot be given a fixed share of
+            a phone's width. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[5], marginTop: space[4] }}>
+          <RainStat label={ta('lastHour', lang)} mm={lastHour} />
           <View style={{ width: 1, height: 34, backgroundColor: palette.hairline }} />
-          <View style={{ flex: 1, paddingLeft: space[4] }}>
-            <RainStat label={t('hRain24', lang)} mm={precip24} />
-          </View>
+          <RainStat label={t('hRain24', lang)} mm={precip24} />
           {/* The icon stays modelled: a station measures quantities, not conditions. */}
-          <WeatherIcon wmo={now.wmo} isDay={now.isDay} size={46} />
+          <View style={{ marginLeft: 'auto' }}>
+            <WeatherIcon wmo={now.wmo} isDay={now.isDay} size={46} />
+          </View>
         </View>
       </View>
 
@@ -164,7 +170,7 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
 
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
           <WindArrow deg={now.windDir} size={15} />
-          <Text variant="stat" color={palette.valWind} tabular>
+          <Text variant="label" color={palette.valWind} tabular>
             {convWind(now.wind, prefs.windUnit) ?? '—'}
           </Text>
           <Unit>{windUnitLabel(prefs.windUnit)}</Unit>
@@ -173,7 +179,7 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
         <Bullet />
 
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-          <Text variant="stat" color={palette.inkHeading} tabular>
+          <Text variant="label" color={palette.inkHeading} tabular>
             {now.humidity ?? '—'}
           </Text>
           <Unit>%</Unit>
@@ -192,12 +198,18 @@ function RainStat({ label, mm }: { label: string; mm: number }) {
         variant="caption"
         weight="bold"
         color={palette.muted}
-        style={{ letterSpacing: 1, textTransform: 'uppercase', marginBottom: 3, fontSize: 10.5 }}
+        numberOfLines={1}
+        style={{ letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 3, fontSize: 10.5 }}
       >
         {label}
       </Text>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
-        <Text variant="stat" color={mm > 0 ? palette.valPrecip : palette.valPrecipZero} tabular>
+        <Text
+          variant="stat"
+          color={mm > 0 ? palette.valPrecip : palette.valPrecipZero}
+          numberOfLines={1}
+          tabular
+        >
           {fmtMm(mm)}
         </Text>
         <Unit>mm</Unit>
