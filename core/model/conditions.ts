@@ -102,13 +102,18 @@ export const GLYPH_CLOUD_DARK = '#C9D6E4';
 /** The sun's yellow. Not the `--val-sun` text token, which is a deep orange chosen
  *  to be read as a number. */
 export const GLYPH_SUN = '#FFCC00';
-/** The moon: night is drawn pale rather than yellow, so a clear night does not read
- *  as a second sun. It holds in every glyph the moon appears in — `moon.fill`,
- *  `moon.stars.fill`, `cloud.moon.fill`, `cloud.moon.rain.fill` — and follows the
- *  cloud between appearances for the same reason the cloud does: it has to lift off
- *  navy. */
+/** The moon on its own — `moon.fill` and `moon.stars.fill`. Drawn pale rather than
+ *  yellow so a clear night does not read as a second sun, and following the cloud
+ *  between appearances for the same reason the cloud does: it has to lift off navy. */
 export const GLYPH_MOON_LIGHT = '#B7C3D1';
 export const GLYPH_MOON_DARK = '#C9D6E4';
+/** The moon behind a cloud — `cloud.moon.fill` and `cloud.moon.rain.fill`, at the
+ *  client's direction. Against a cloud in the same glyph the pale moon was a second
+ *  grey shape rather than a light, so there it takes the sun's yellow and reads as
+ *  the thing the cloud is passing in front of. The same yellow in both appearances,
+ *  like the stars: it is the brightest mark in the glyph either way. A moon with no
+ *  cloud beside it keeps its pale tone — nothing to be told apart from. */
+export const GLYPH_MOON_CLOUDED = '#FFCC00';
 /** The stars beside the moon in `moon.stars.fill`, at the client's direction: the
  *  moon stays pale and the stars take the sun's yellow, which is the one mark in the
  *  night glyph that reads as a light rather than as a surface. The same yellow in
@@ -128,8 +133,9 @@ export function glyphCloud(appearance: GlyphAppearance): string {
   return appearance === 'dark' ? GLYPH_CLOUD_DARK : GLYPH_CLOUD_LIGHT;
 }
 
-/** The moon's tone for an appearance, in every glyph it appears in. The stars
- *  beside it are their own colour — see `GLYPH_STARS`. */
+/** The moon's tone for an appearance, where it stands alone. Behind a cloud it is
+ *  yellow instead — see `GLYPH_MOON_CLOUDED` — and the stars beside it are their own
+ *  colour again, see `GLYPH_STARS`. */
 export function glyphMoon(appearance: GlyphAppearance): string {
   return appearance === 'dark' ? GLYPH_MOON_DARK : GLYPH_MOON_LIGHT;
 }
@@ -141,8 +147,11 @@ export function glyphLayerColors(
   appearance: GlyphAppearance
 ): string[] {
   const cloud = glyphCloud(appearance);
-  const moon = glyphMoon(appearance);
-  return symbolLayers(code, isDay).map((role) => {
+  const layers = symbolLayers(code, isDay);
+  // Which moon depends on the company it keeps: yellow where a cloud shares the
+  // glyph, pale where it does not.
+  const moon = layers.includes('cloud') ? GLYPH_MOON_CLOUDED : glyphMoon(appearance);
+  return layers.map((role) => {
     switch (role) {
       case 'cloud':
         return cloud;

@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import {
   glyphLayerColors, glyphCloud, glyphRendering, wmoSymbol,
   GLYPH_CLOUD_LIGHT, GLYPH_CLOUD_DARK, GLYPH_SUN, GLYPH_PRECIP, GLYPH_STORM,
-  GLYPH_MOON_LIGHT, GLYPH_MOON_DARK, GLYPH_STARS,
+  GLYPH_MOON_LIGHT, GLYPH_MOON_DARK, GLYPH_MOON_CLOUDED, GLYPH_STARS,
 } from '../core/model/conditions';
 
 const L = GLYPH_CLOUD_LIGHT;
@@ -23,14 +23,15 @@ const AGREED: [number, boolean, string[], string[]][] = [
   // sun.max.fill — one layer, the same yellow in both.
   [0, true, [GLYPH_SUN], [GLYPH_SUN]],
   [1, true, [GLYPH_SUN], [GLYPH_SUN]],
-  // moon.stars.fill and moon.fill — the moon is a pale night light and lifts on navy
-  // the way the cloud does; the stars beside it are yellow in both appearances.
+  // moon.stars.fill and moon.fill — with no cloud in the glyph the moon stays a pale
+  // night light and lifts on navy the way the cloud does; the stars beside it are
+  // yellow in both appearances.
   [0, false, [ML, GLYPH_STARS], [MD, GLYPH_STARS]],
   [1, false, [ML], [MD]],
-  // cloud.sun.fill / cloud.moon.fill — the sun holds its yellow against either
-  // ground; the moon is pale, and by night the whole glyph moves with the appearance.
+  // cloud.sun.fill / cloud.moon.fill — sun and moon both hold their yellow against
+  // either ground; only the cloud under them moves with the appearance.
   [2, true, [L, GLYPH_SUN], [D, GLYPH_SUN]],
-  [2, false, [L, ML], [D, MD]],
+  [2, false, [L, GLYPH_MOON_CLOUDED], [D, GLYPH_MOON_CLOUDED]],
   // cloud.fill — one layer, the cloud alone.
   [3, true, [L], [D]],
   // cloud.fog.fill — the fog lines read as part of the cloud, so they share its tone.
@@ -56,7 +57,7 @@ const AGREED: [number, boolean, string[], string[]][] = [
   [86, true, [L], [D]],
   // Showers keep their luminary: cloud, sun or moon, rain.
   [80, true, [L, GLYPH_SUN, GLYPH_PRECIP], [D, GLYPH_SUN, GLYPH_PRECIP]],
-  [80, false, [L, ML, GLYPH_PRECIP], [D, MD, GLYPH_PRECIP]],
+  [80, false, [L, GLYPH_MOON_CLOUDED, GLYPH_PRECIP], [D, GLYPH_MOON_CLOUDED, GLYPH_PRECIP]],
   [81, true, [L, GLYPH_SUN, GLYPH_PRECIP], [D, GLYPH_SUN, GLYPH_PRECIP]],
   // Thunderstorms: cloud, bolt, rain — and code 99 has no rain layer.
   [95, true, [L, GLYPH_STORM, GLYPH_PRECIP], [D, GLYPH_STORM, GLYPH_PRECIP]],
