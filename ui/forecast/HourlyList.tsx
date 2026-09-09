@@ -13,6 +13,11 @@
  * Three-hourly samples beyond the deterministic run's hourly window are marked, so
  * a gap in the model is visible rather than implied.
  *
+ * The icon and the readings are sized as on the forecast page's day rows, and read
+ * from the same constants. A sheet opened from a row is the same table one level
+ * deeper; the hours were set two points smaller than the days above them for no
+ * reason a reader could see.
+ *
  * Precipitation, temperature and wind rows also carry the hour's ensemble, once it
  * has loaded: the p10–p90 range the members allow, and for precipitation the share
  * of them that are wet at all. That is the difference between "1 mm" and "1 mm, but
@@ -29,6 +34,16 @@ import { convTemp, convWind, fmtMm, t, tempUnitLabel, windUnitLabel } from '../.
 import type { LayerKey } from '../../core/model/layers';
 import type { DetailHour } from '../../core/model/dayDetail';
 import { sunnyHourWmo } from '../../core/model/conditions';
+
+/** As on the day rows: temperature and precipitation lead, the longer units follow
+ *  a size down. See `OverviewDayRow`, which these deliberately match. */
+const VALUE_SIZE = 17;
+const VALUE_SIZE_SMALL = 15;
+const UNIT_SIZE = 12;
+const UNIT_SIZE_SMALL = 11;
+const ICON_SIZE = 30;
+/** Room for "23:00" at the size above. */
+const TIME_WIDTH = 46;
 
 export interface HourlyListProps {
   layer: LayerKey;
@@ -66,16 +81,17 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
           }}
         >
           <Text
-            variant="label"
+            variant="bodySm"
             weight="semibold"
             color={palette.muted}
             tabular
-            style={{ width: 42 }}
+            numberOfLines={1}
+            style={{ width: TIME_WIDTH }}
           >
             {h.time.slice(11, 16)}
           </Text>
 
-          <WeatherIcon wmo={sunnyHourWmo(h)} isDay={hourIsDay(h)} size={20} />
+          <WeatherIcon wmo={sunnyHourWmo(h)} isDay={hourIsDay(h)} size={ICON_SIZE} />
 
           <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'baseline', gap: 6 }}>
             <HourValue layer={layer} hour={h} />
@@ -188,7 +204,7 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
     case 'wind':
       return (
         <>
-          <WindArrow deg={hour.windDir} size={11} color={palette.muted} />
+          <WindArrow deg={hour.windDir} size={12} color={palette.muted} />
           <Pair
             value={convWind(hour.wind, prefs.windUnit)}
             unit={windUnitLabel(prefs.windUnit)}
@@ -238,31 +254,59 @@ function HourValue({ layer, hour }: { layer: LayerKey; hour: DetailHour }) {
             value={convWind(hour.wind, prefs.windUnit)}
             unit={windUnitLabel(prefs.windUnit)}
             color={palette.muted}
+            small
+          />
+          <Pair
+            value={hour.sunMin != null ? Math.round(hour.sunMin) : null}
+            unit="min"
+            color={palette.valSun}
+            small
           />
         </>
       );
   }
 }
 
+/**
+ * One reading and its unit, in a single text node.
+ *
+ * Nested rather than two boxes in a row, for the reason `OverviewDayRow` gives: two
+ * boxes are two independently shrinkable things, and a narrow column squeezes both
+ * until each wraps on its own. `adjustsFontSizeToFit` then buys the overview row —
+ * four readings wide — a couple of points on a small screen instead of a truncation.
+ */
 function Pair({
-  value, unit, color,
-}: { value: string | number | null; unit: string; color: string }) {
+  value, unit, color, small,
+}: { value: string | number | null; unit: string; color: string; small?: boolean }) {
   const { palette } = useTheme();
+  const size = small ? VALUE_SIZE_SMALL : VALUE_SIZE;
   if (value == null) {
     return (
-      <Text variant="label" color={palette.inkDisabled} tabular>
+      <Text variant="bodySm" color={palette.inkDisabled} tabular style={{ fontSize: size }}>
         —
       </Text>
     );
   }
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-      <Text variant="label" weight="bold" color={color} tabular>
-        {value}
-      </Text>
-      <Text variant="caption" weight="semibold" color={palette.muted} style={{ fontSize: 10 }}>
+    <Text
+      variant="bodySm"
+      weight="bold"
+      color={color}
+      tabular
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.85}
+      style={{ fontSize: size }}
+    >
+      {value}
+      <Text
+        variant="caption"
+        weight="semibold"
+        color={palette.muted}
+        style={{ fontSize: small ? UNIT_SIZE_SMALL : UNIT_SIZE }}
+      >
         {' '}{unit}
       </Text>
-    </View>
+    </Text>
   );
 }
