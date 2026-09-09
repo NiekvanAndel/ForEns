@@ -5,16 +5,26 @@
  * frames through here, so the tile/overlay distinction lives in one place instead of
  * in every map.
  *
- * ## Why only the active frame is mounted
+ * ## Why the overlay is mounted once and only its image changes
  *
- * An earlier version mounted every frame and drove visibility with `opacity`, to
- * avoid a flash between steps. On iOS that renders nothing at all: react-native-maps
- * does not honour per-overlay opacity on `UrlTile`, so the overlays stacked and the
- * map stayed blank. The same trap is waiting on `Overlay`, whose `opacity` prop is
- * documented as Google Maps only and is therefore inert on the Apple Maps provider
- * this app uses. So one frame is mounted at a time, keyed so it remounts on a step,
- * and `warmFrames` below fills the image cache instead — which is what makes replay
- * smooth without depending on a prop that does nothing here.
+ * Never add or remove a map layer per animation step. AIRMapOverlay loads its image
+ * asynchronously and, on completion, calls an `update` that does
+ * `[_map removeOverlay:self]; [_map addOverlay:self];` — without ever checking that
+ * it is still supposed to be on the map, and without `_map` being cleared when React
+ * removes it. So a frame unmounted while its image was still loading put *itself*
+ * back on the map when the load finished, and stepping through the loop stacked
+ * every frame it had ever shown into one illegible picture.
+ *
+ * So there is exactly one `Overlay`, mounted for as long as the map is, and stepping
+ * the loop changes its `image`. That routes through `setImageSrc`, which cancels the
+ * previous load and swaps the picture in place — the library's own intended path,
+ * and the only one that leaves a single layer on the map. Its bounds are fixed
+ * across a run, so nothing else about it changes.
+ *
+ * Note that the obvious alternative — mount every frame, flip `opacity` — is not
+ * available here: `Overlay`'s `opacity` is documented as Google Maps only, and the
+ * iOS renderer never reads it, so on the Apple Maps provider this app uses every
+ * frame would be fully opaque and stacked.
  *
  * ## Why the overlay is drawn at full strength
  *
@@ -77,13 +87,9 @@ export function RadarLayer({ provider, frame, cacheTiles = false }: RadarLayerPr
   if (provider.kind === 'overlay') {
     const overlay = provider.frameOverlay(frame);
     if (!overlay) return null;
-    return (
-      <Overlay
-        key={frame.id}
-        image={{ uri: overlay.url }}
-        bounds={boundsProp(overlay.bounds)}
-      />
-    );
+    // Deliberately unkeyed: a changing key would remount this per step, which is
+    // the stacking bug described above. One overlay, a new `image` each step.
+    return <Overlay image={{ uri: overlay.url }} bounds={boundsProp(overlay.bounds)} />;
   }
 
   return (
