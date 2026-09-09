@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { loadOracle } from './oracle';
 import { buildFixtures, BASE_MS } from './fixtures';
 import { processAll } from '../core/model/process';
-import type { ProcessContext } from '../core/model/types';
+import type { Hour, ProcessContext } from '../core/model/types';
 
 const PROCESS_FNS = [
   'r1', 'pct', 'pge',
@@ -78,6 +78,11 @@ function run(
  * series, so trimming to the last twelve compares like with like; `keeps a full day
  * of observations` below asserts the longer window is actually there.
  *
+ * Each hour also carries `tempExact` and `windExact`, the same two readings to a
+ * tenth, for the hero that has room to print them. `temp` and `wind` themselves are
+ * untouched, so these are additions like `hresHoursByDay`'s and are dropped before
+ * comparing; `keeps a tenth on temperature and wind` below asserts they are real.
+ *
  * The port's `hresHoursByDay` carries the whole IFS hour — temperature, wind,
  * humidity, sunshine — where the web app's carried only millimetres and a weather
  * code, because the web app re-fetched the rest per popup instead. That is an
@@ -93,11 +98,14 @@ function comparable(m: ReturnType<typeof processAll>): ReturnType<typeof process
       hours.map(({ time, hour, precip, wmo, is3h }) => ({ time, hour, precip, wmo, is3h })),
     ])
   );
-  const pastHours = m.pastHours.slice(-12);
+  const whole = ({ tempExact, windExact, ...rest }: Hour) => rest;
+  const pastHours = m.pastHours.slice(-12).map(whole);
+  const futureHours = m.futureHours.map(whole);
   return {
     ...m,
     pastHours,
-    allHours: [...pastHours, ...m.futureHours],
+    futureHours,
+    allHours: [...pastHours, ...futureHours],
     hresHoursByDay,
   } as ReturnType<typeof processAll>;
 }
@@ -193,6 +201,31 @@ describe('processAll', () => {
         withIcons: seed % 7 !== 0,
       });
       expect(actual, `seed ${seed}`).toEqual(expected);
+    }
+  });
+
+  it('keeps a tenth on temperature and wind, where the web app rounded', () => {
+    const f = buildFixtures(1001);
+    const { full } = run(f);
+    // The fixtures carry fractional readings, so at least one hour in each series
+    // must still be showing them — otherwise `comparable`'s rounding above would be
+    // hiding a regression rather than a deliberate divergence.
+    const fractional = (v: number | null | undefined) => v != null && v !== Math.round(v);
+    expect(full!.pastHours.some((h) => fractional(h.tempExact))).toBe(true);
+    expect(full!.pastHours.some((h) => fractional(h.windExact))).toBe(true);
+    expect(full!.futureHours.some((h) => fractional(h.tempExact))).toBe(true);
+    expect(full!.futureHours.some((h) => fractional(h.windExact))).toBe(true);
+    // A tenth, and no further: these are readings, not floating-point noise. And
+    // never a different reading from the whole-unit one beside them.
+    for (const h of [...full!.pastHours, ...full!.futureHours]) {
+      if (h.tempExact != null) {
+        expect(h.tempExact).toBe(Math.round(h.tempExact * 10) / 10);
+        expect(Math.abs(h.tempExact - (h.temp as number))).toBeLessThanOrEqual(0.5);
+      }
+      if (h.windExact != null) {
+        expect(h.windExact).toBe(Math.round(h.windExact * 10) / 10);
+        expect(Math.abs(h.windExact - (h.wind as number))).toBeLessThanOrEqual(0.5);
+      }
     }
   });
 

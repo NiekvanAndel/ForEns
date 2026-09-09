@@ -225,9 +225,11 @@ describe('AgroExact', () => {
     expect(h.temp).toBe(19);
     expect(h.tempMin).toBe(17);
     expect(h.tempMax).toBe(21);
-    // 6 m/s = 21.6 km/h, 12 m/s = 43.2 km/h.
-    expect(h.wind).toBe(22);
-    expect(h.gusts).toBe(43);
+    // 6 m/s = 21.6 km/h, 12 m/s = 43.2 km/h. The station's tenths are kept: the
+    // conditions hero prints a measurement as it was measured, and every denser row
+    // rounds where it draws.
+    expect(h.wind).toBe(21.6);
+    expect(h.gusts).toBe(43.2);
     expect(h.precip).toBe(0.6);
     expect(stationName).toBe('Weide');
   });
@@ -259,8 +261,9 @@ describe('AgroExact', () => {
     expect(asked).toContain('station_only=false');
     expect(current!.measTime).toBe('2026-06-15T11:42:00Z');
     expect(current!.time).toBe('2026-06-15T13:00');
-    expect(current!.temp).toBe(21);
-    expect(current!.wind).toBe(14);
+    expect(current!.temp).toBe(21.4);
+    // 4 m/s = 14.4 km/h.
+    expect(current!.wind).toBe(14.4);
     expect(current!.dewpoint).toBe(13);
   });
 

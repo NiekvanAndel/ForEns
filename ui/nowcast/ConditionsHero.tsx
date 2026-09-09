@@ -48,6 +48,11 @@
  * Reading colours follow the quantity, not the card (design rule 2): ▲ is val-high,
  * ▼ is val-low, millimetres are val-precip, and a zero is dimmed to val-precip-zero
  * so real numbers stand out.
+ *
+ * Temperature and wind are printed to a tenth where the feed reports one — always
+ * from an AgroExact station, usually from the model too — and as whole numbers where
+ * it does not, so nothing here reads "17,0". See `fmtDecimal`. This is the card with
+ * the room for that precision; the dense rows elsewhere still round.
  */
 import { View } from 'react-native';
 import { space, useTheme } from '../../theme';
@@ -56,7 +61,7 @@ import { Text } from '../Text';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
-import { convTemp, convWind, fmtMm, windUnitLabel, ta } from '../../core/i18n';
+import { fmtMm, fmtTempValue, fmtWindValue, windUnitLabel, ta } from '../../core/i18n';
 import { recent24 } from '../../core/model/station';
 import type { ForecastModel } from '../../core/model/types';
 import type { SavedLocation } from '../../core/prefs';
@@ -87,8 +92,10 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
   // Measurements are merged per quantity, exactly as the hour strip merges them: a
   // rain gauge fills in the rainfall and leaves the wind to the model.
   const now = {
-    temp: measured?.temp ?? modelled?.temp ?? null,
-    wind: measured?.wind ?? modelled?.wind ?? null,
+    // The exact readings, not the whole-unit ones the dense rows draw: this card
+    // has the room for the tenth the station or the model actually reported.
+    temp: measured?.temp ?? modelled?.tempExact ?? modelled?.temp ?? null,
+    wind: measured?.wind ?? modelled?.windExact ?? modelled?.wind ?? null,
     windDir: measured?.windDir ?? modelled?.windDir ?? null,
     humidity: measured?.humidity ?? modelled?.humidity ?? null,
     wmo: modelled?.wmo ?? 3,
@@ -163,17 +170,17 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
       >
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
           <Text variant="stat" color={palette.appValue} tabular>
-            {now.temp != null ? convTemp(now.temp, prefs.tempUnit) : '—'}°
+            {fmtTempValue(now.temp, prefs.tempUnit)}°
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
             <Text variant="caption" weight="bold" color={palette.valHigh} tabular>
-              ▲{hi != null ? convTemp(hi, prefs.tempUnit) : '—'}°
+              ▲{fmtTempValue(hi, prefs.tempUnit)}°
             </Text>
             <Text variant="caption" weight="bold" color={palette.muted}>
               {' / '}
             </Text>
             <Text variant="caption" weight="bold" color={palette.valLow} tabular>
-              ▼{lo != null ? convTemp(lo, prefs.tempUnit) : '—'}°
+              ▼{fmtTempValue(lo, prefs.tempUnit)}°
             </Text>
           </View>
         </View>
@@ -183,7 +190,7 @@ export function ConditionsHero({ model, location, sourceLabel, timeLabel }: Cond
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
           <WindArrow deg={now.windDir} size={15} />
           <Text variant="label" color={palette.valWind} tabular>
-            {convWind(now.wind, prefs.windUnit) ?? '—'}
+            {fmtWindValue(now.wind, prefs.windUnit)}
           </Text>
           <Unit>{windUnitLabel(prefs.windUnit)}</Unit>
         </View>

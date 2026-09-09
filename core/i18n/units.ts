@@ -95,6 +95,60 @@ export function windUnitLabel(unit: WindUnit): string {
   return 'km/u';
 }
 
+/**
+ * A reading with one decimal, but only where the reading has one.
+ *
+ * The stations report tenths and the models often do too, and rounding a measured
+ * 17,3 °C to 18 throws away the precision the instrument was bought for. But a feed
+ * that reports whole degrees should not be dressed up as tenths either, so a value
+ * that is whole to within a tenth prints as a whole number: "17,3" and "17", never
+ * "17,0".
+ *
+ * The comma is the decimal separator, per the design system's Dutch number rules.
+ *
+ * `convTemp` and `convWind` above stay as they are. They are a port of index.html's
+ * own conversions and the parity suite pins them to it; this is a second, finer
+ * rendering for the places that have the room for it, not a replacement.
+ */
+export function fmtDecimal(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(Number(v))) return DASH;
+  const tenths = Math.round(Number(v) * 10) / 10;
+  const whole = Math.round(tenths);
+  // A tenth of nothing is nothing: print the integer rather than a trailing ",0".
+  if (Math.abs(tenths - whole) < 0.05) return String(whole === 0 ? 0 : whole);
+  return tenths.toFixed(1).replace('.', ',');
+}
+
+/** Temperature converted but not rounded, so `fmtDecimal` can keep its tenths. */
+export function convTempExact(c: number | null | undefined, unit: TempUnit): number | null {
+  if (c == null) return null;
+  const v = Number(c);
+  if (unit === 'F') return (v * 9) / 5 + 32;
+  if (unit === 'K') return v + 273.15;
+  return v;
+}
+
+/** Wind converted but not rounded. Beaufort is a force, not a speed, so it stays a
+ *  whole number however fine the reading behind it was. */
+export function convWindExact(kmh: number | null | undefined, unit: WindUnit): number | null {
+  if (kmh == null) return null;
+  const v = Number(kmh);
+  if (unit === 'ms') return v / 3.6;
+  if (unit === 'kn') return v * 0.54;
+  if (unit === 'bft') return toBeaufort(v);
+  return v;
+}
+
+/** Temperature for a reading with room for its tenths: "17,3", "17", "—". */
+export function fmtTempValue(c: number | null | undefined, unit: TempUnit): string {
+  return fmtDecimal(convTempExact(c, unit));
+}
+
+/** Wind for the same, in the chosen unit. */
+export function fmtWindValue(kmh: number | null | undefined, unit: WindUnit): string {
+  return fmtDecimal(convWindExact(kmh, unit));
+}
+
 export function fmtPressure(hpa: number | null | undefined, unit: PresUnit): string {
   if (hpa == null) return DASH;
   const v = Number(hpa);

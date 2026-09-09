@@ -200,8 +200,13 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-const msToKmh = (v: number | null): number | null => (v == null ? null : Math.round(v * 3.6));
+/** Metres per second as the API sends them, in the km/h the app works in — to a
+ *  tenth, because a station's whole point is that it measured this. */
+const msToKmh = (v: number | null): number | null => (v == null ? null : round1(v * 3.6));
 const roundOrNull = (v: number | null): number | null => (v == null ? null : Math.round(v));
+/** The same, to a tenth — for the quantities a station is trusted to have measured
+ *  precisely. See `core/model/types` on `tempExact`. */
+const round1OrNull = (v: number | null): number | null => (v == null ? null : round1(v));
 
 // ── Stations ────────────────────────────────────────────────────────────────────
 
@@ -365,9 +370,11 @@ export async function fetchStationHours(
 
     out[key] = {
       time: key,
-      temp: roundOrNull(temp),
-      tempMin: roundOrNull(num(r.temperature_150_min)),
-      tempMax: roundOrNull(num(r.temperature_150_max)),
+      // Temperature keeps its tenth: this is a measurement, and the hero prints it
+      // as one. Everything that wants a whole number rounds where it draws.
+      temp: round1OrNull(temp),
+      tempMin: round1OrNull(num(r.temperature_150_min)),
+      tempMax: round1OrNull(num(r.temperature_150_max)),
       humidity: roundOrNull(humidity),
       dewpoint: roundOrNull(num(r.dewpoint)),
       wind: msToKmh(wind),
@@ -421,7 +428,7 @@ export async function fetchLatestMeasurement(
     current: {
       time,
       measTime: r.timestamp,
-      temp: roundOrNull(num(r.temperature_150)),
+      temp: round1OrNull(num(r.temperature_150)),
       humidity: roundOrNull(num(r.humidity_150)),
       dewpoint: roundOrNull(num(r.dewpoint)),
       wind: msToKmh(num(r.windspeed)),

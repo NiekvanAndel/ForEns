@@ -39,9 +39,14 @@ export function mergeHour(hour: Hour, measured: StationObservations['hours'][str
   if (!measured) return hour;
   return {
     ...hour,
-    temp: pick(measured.temp, hour.temp),
+    // The whole-unit fields stay whole and the exact ones keep the measurement's own
+    // tenth, so a merged hour reads the same way a modelled one does — see
+    // `tempExact` in `core/model/types`.
+    temp: pick(measured.temp == null ? null : Math.round(measured.temp), hour.temp),
+    tempExact: pick(measured.temp, hour.tempExact ?? null),
     precip: pick(measured.precip, hour.precip),
-    wind: pick(measured.wind, hour.wind),
+    wind: pick(measured.wind == null ? null : Math.round(measured.wind), hour.wind),
+    windExact: pick(measured.wind, hour.windExact ?? null),
     gusts: pick(measured.gusts, hour.gusts ?? null),
     windDir: pick(measured.windDir, hour.windDir ?? null),
     humidity: pick(measured.humidity, hour.humidity),
@@ -78,7 +83,9 @@ export function applyStationObservations(
     station,
     // `currentTemp` is what the widget and the notification rules read as "now", so
     // a measured reading belongs there too.
-    currentTemp: obs.current?.temp ?? model.currentTemp,
+    // Whole degrees: this is what the widget and the notification rules read, and
+    // both draw it as a round number.
+    currentTemp: obs.current?.temp != null ? Math.round(obs.current.temp) : model.currentTemp,
   };
 }
 
@@ -108,14 +115,18 @@ export function recent24(model: ForecastModel): Recent24 {
   let precip = 0;
 
   for (const h of window) {
-    if (h.temp != null) temps.push(h.temp);
+    const temp = h.tempExact ?? h.temp;
+    if (temp != null) temps.push(temp);
     precip += h.precip ?? 0;
   }
 
   // The reading from the hour in progress belongs in "the last 24 hours" as much as
   // the completed ones do — leaving it out is how a hero shows a maximum lower than
   // the temperature printed beside it.
-  const now = model.station?.current?.temp ?? model.futureHours[0]?.temp ?? null;
+  const now = model.station?.current?.temp
+    ?? model.futureHours[0]?.tempExact
+    ?? model.futureHours[0]?.temp
+    ?? null;
   if (now != null) temps.push(now);
 
   return {

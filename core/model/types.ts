@@ -65,9 +65,17 @@ export interface WeatherResponse {
 /** One hour in the strip — past (observed) or future (modelled). */
 export interface Hour {
   time: string;
+  /** Whole degrees, as index.html reports them — what the dense rows draw. */
   temp: number | null;
+  /** The same reading to a tenth, where the feed sent one. The conditions hero
+   *  prints this; everything else rounds. Absent on hours built before this existed
+   *  and on any hour the source left empty. */
+  tempExact?: number | null;
   precip: number;
+  /** Whole units, as index.html reports them. */
   wind: number | null;
+  /** The same reading to a tenth — see `tempExact`. */
+  windExact?: number | null;
   humidity: number | null;
   wmo: number;
   isDay: 0 | 1;

@@ -35,6 +35,17 @@ export function magnusRH(T: Num, Td: Num): number | null {
 
 const at = (a: NumArray | undefined, i: number): Num => (a ? a[i] : undefined);
 const roundOrNull = (v: Num): number | null => (v != null ? Math.round(v) : null);
+/**
+ * The same reading kept to a tenth, for `tempExact` and `windExact`.
+ *
+ * `temp` and `wind` are whole units because index.html rounds them there and the
+ * parity suite holds this file to it — and because every dense row in the app wants
+ * the whole number anyway. The hero has the room for the tenth the feed actually
+ * sent, so it is carried alongside rather than instead: rounding the rounded value
+ * back would not have reproduced index.html's, since 10,45 rounds to 10 in one step
+ * and to 11 in two.
+ */
+const round1OrNull = (v: Num): number | null => (v != null ? round1(v) : null);
 
 /**
  * Most frequent weather code during daylight, per day — twice over.
@@ -152,8 +163,10 @@ export function processAll(
       pastHours.push({
         time,
         temp: roundOrNull(at(oh.temperature_2m, i)),
+        tempExact: round1OrNull(at(oh.temperature_2m, i)),
         precip: round1(at(oh.precipitation, i) ?? 0),
         wind: roundOrNull(at(oh.windspeed_10m, i)),
+        windExact: round1OrNull(at(oh.windspeed_10m, i)),
         humidity: roundOrNull(at(oh.relativehumidity_2m, i)),
         wmo: (at(oh.weathercode, i) ?? 0) as number,
         isDay: isHourDay(time, lat, offsetSec),
@@ -185,8 +198,10 @@ export function processAll(
       futureHours.push({
         time,
         temp: roundOrNull(at(hh.temperature_2m, i)),
+        tempExact: round1OrNull(at(hh.temperature_2m, i)),
         precip: round1(at(hh.precipitation, i) ?? 0),
         wind: roundOrNull(at(hh.windspeed_10m, i)),
+        windExact: round1OrNull(at(hh.windspeed_10m, i)),
         gusts: roundOrNull(at(hh.windgusts_10m, i)),
         feelsLike: roundOrNull(at(hh.apparent_temperature, i)),
         et0h: at(hh.et0_fao_evapotranspiration, i) != null
