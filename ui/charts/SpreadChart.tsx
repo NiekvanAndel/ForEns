@@ -8,12 +8,29 @@
  * The band is the point of the chart: a line alone claims a precision the ensemble
  * does not have, and the whole reason the app carries 51 members is to show where
  * that claim is weak.
+ *
+ * ## Reading a value off it
+ *
+ * Dragging across the chart puts a cursor on the nearest hour and a label beside it
+ * with the hour, the value and — where the members have loaded — the range they
+ * span. The label is what the band is for: "18°" and "18°, and the members say
+ * anywhere from 16 to 21" are different forecasts, and only one of them is on the
+ * line.
+ *
+ * The cursor lives as long as the finger does. Reading a chart is a glance, not a
+ * mode, and a cursor left behind is a mark on the chart that has to be explained.
+ *
+ * The gesture only takes over once the finger has moved sideways, and gives up as
+ * soon as it moves down: the chart sits inside a sheet that scrolls, and a chart
+ * that swallowed a vertical drag would trap the reader on it.
  */
 import { useState } from 'react';
 import Svg, { Path, Line, Circle, Text as SvgText, G } from 'react-native-svg';
 import { View } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { Text } from '../Text';
-import { useTheme } from '../../theme';
+import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { niceRange, scaleX, scaleY, smoothPath, type Point } from '../../core/model/smooth';
 
 export interface SpreadSeries {
@@ -50,6 +67,11 @@ export function SpreadChart({
 }: SpreadChartProps) {
   const { palette } = useTheme();
   const [width, setWidth] = useState(0);
+  /** The hour under the finger, or null when nobody is pointing at one. */
+  const [cursor, setCursor] = useState<number | null>(null);
+  /** The label's own size, so it can be kept inside the chart rather than clipped
+   *  at the edges. Measured rather than guessed: its width depends on the reading. */
+  const [label, setLabel] = useState({ w: 0, h: 0 });
 
   const finite = (a: (number | null | undefined)[]) =>
     a.filter((v): v is number => v != null && Number.isFinite(v));
@@ -132,7 +154,47 @@ export function SpreadChart({
   // Roughly six labels, whatever the sample count.
   const labelStep = Math.max(1, Math.ceil(n / 6));
 
+  /** The sample nearest a touch, in the plot's own coordinates. */
+  const pointAt = (x: number) => {
+    if (n < 1) return;
+    const f = plotW > 0 ? (x - PAD_LEFT) / plotW : 0;
+    setCursor(Math.min(n - 1, Math.max(0, Math.round(f * (n - 1)))));
+  };
+  const clearCursor = () => setCursor(null);
+
+  const scrub = Gesture.Pan()
+    // Sideways is reading the chart, downwards is scrolling the sheet it sits in.
+    .activeOffsetX([-6, 6])
+    .failOffsetY([-12, 12])
+    .onStart((e) => { runOnJS(pointAt)(e.x); })
+    .onUpdate((e) => { runOnJS(pointAt)(e.x); })
+    .onFinalize(() => { runOnJS(clearCursor)(); });
+
+  const at = cursor != null && cursor < n ? cursor : null;
+  const atValue = at != null ? series.values[at] ?? null : null;
+  const atBand = at != null ? series.band?.[at] ?? null : null;
+  const cursorX = at != null ? px(at) : 0;
+  const cursorY = atValue != null ? py(atValue) : null;
+
+  const reading = [
+    at != null ? `${labels[at]}:00` : '',
+    atValue != null ? `${formatTick(atValue)}${unit}` : '—',
+    atBand ? `${formatTick(atBand.lo)}–${formatTick(atBand.hi)}${unit}` : '',
+  ].filter(Boolean).join(' · ');
+
+  // Beside the point, and inside the chart: pinned above unless the point is too
+  // near the top for the label to fit, and never past either edge.
+  const labelLeft = Math.min(
+    Math.max(cursorX - label.w / 2, 0),
+    Math.max(0, width - label.w)
+  );
+  const labelTop =
+    cursorY != null && cursorY - label.h - 8 >= 0
+      ? cursorY - label.h - 8
+      : (cursorY ?? PAD_TOP) + 10;
+
   return (
+    <GestureDetector gesture={scrub}>
     <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ height }}>
       {width > 0 ? (
         <Svg width={width} height={height}>
@@ -200,9 +262,61 @@ export function SpreadChart({
               </SvgText>
             ) : null
           )}
+
+          {at != null ? (
+            <G>
+              <Line
+                x1={cursorX} x2={cursorX}
+                y1={PAD_TOP} y2={height - PAD_BOTTOM}
+                stroke={palette.muted}
+                strokeWidth={1}
+                opacity={0.5}
+              />
+              {cursorY != null ? (
+                <Circle
+                  cx={cursorX} cy={cursorY} r={4.5}
+                  fill={color}
+                  stroke={palette.appCard}
+                  strokeWidth={2}
+                />
+              ) : null}
+            </G>
+          ) : null}
         </Svg>
       ) : null}
+
+      {at != null ? (
+        <View
+          onLayout={(e) => {
+            const { width: w, height: h } = e.nativeEvent.layout;
+            // Only on a change, or every drag frame would set state twice.
+            if (Math.abs(w - label.w) > 0.5 || Math.abs(h - label.h) > 0.5) {
+              setLabel({ w, h });
+            }
+          }}
+          pointerEvents="none"
+          style={[
+            {
+              position: 'absolute',
+              left: labelLeft,
+              top: labelTop,
+              // The tinted surface, not the card's own: the chart sits on a card,
+              // and a label in the card's colour is a shadow with words in it.
+              backgroundColor: palette.surfaceAlt,
+              borderRadius: radius.tile,
+              paddingVertical: 4,
+              paddingHorizontal: space[2],
+            },
+            shadowFloat,
+          ]}
+        >
+          <Text variant="caption" weight="bold" color={palette.inkHeading} tabular numberOfLines={1}>
+            {reading}
+          </Text>
+        </View>
+      ) : null}
     </View>
+    </GestureDetector>
   );
 }
 
