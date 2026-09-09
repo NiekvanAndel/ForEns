@@ -92,3 +92,25 @@ export function radarAxis(
   const span = Math.max(1, to - from);
   return { from, to, positions: offsets.map((o) => (o - from) / span) };
 }
+
+/**
+ * Where observation ends and forecast begins, as a fraction of the shared axis.
+ *
+ * The scrubber marks it with a tick and the chart above draws a line at it, and the
+ * two are only credible if they are the same mark — a rule at 40% over a tick at 43%
+ * reads as two different boundaries rather than as one drawn twice. So the fraction
+ * is computed once, here, from the frames themselves.
+ *
+ * It is the first forecast frame's own position, not the instant "now": the loop is
+ * a list of pictures, and the honest boundary is the first picture that was computed
+ * rather than observed. Null where every frame is on one side of it — an all-past
+ * loop has no boundary to draw, and neither has one that has not loaded.
+ */
+export function forecastBoundary(
+  frames: readonly RadarFrame[],
+  positions?: readonly number[]
+): number | null {
+  const first = frames.findIndex((f) => f.forecast);
+  if (first <= 0) return null;
+  return positions?.[first] ?? first / Math.max(1, frames.length - 1);
+}

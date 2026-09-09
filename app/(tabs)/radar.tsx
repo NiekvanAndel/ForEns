@@ -37,7 +37,7 @@ import { frameAtFraction, useRadarFrames } from '../../ui/radar/useRadarFrames';
 import { NowcastPanel } from '../../ui/radar/NowcastPanel';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
-import { activeProvider, frameClock, radarAxis } from '../../core/radar';
+import { activeProvider, forecastBoundary, frameClock, radarAxis } from '../../core/radar';
 import { mapChrome } from '../../ui/radar/mapStyle';
 import { usePeeking } from '../../ui/peek';
 import { ta } from '../../core/i18n';
@@ -154,6 +154,10 @@ function RadarPage() {
               domain={axis ? { from: axis.from, to: axis.to } : undefined}
               locationName={location.name}
               onScrubFraction={scrubTo}
+              boundaryFraction={forecastBoundary(frames, axis?.positions)}
+              playing={playing}
+              onTogglePlay={togglePlay}
+              playDisabled={frames.length < 2}
               compact
             />
             <View style={{ paddingHorizontal: space[5], paddingBottom: space[4] }}>
@@ -162,7 +166,6 @@ function RadarPage() {
                 index={index}
                 playing={playing}
                 onIndexChange={setIndex}
-                onTogglePlay={togglePlay}
                 showLabels={false}
                 stepPositions={axis?.positions}
               />

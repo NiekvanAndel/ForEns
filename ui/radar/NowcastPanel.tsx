@@ -23,14 +23,33 @@
  * meets both edges.
  *
  * The chart is a scrubber too: dragging across it moves the loop, since a line you
- * can see moving is a line you will try to drag.
+ * can see moving is a line you will try to drag. The cursor is drawn as a grabbable
+ * handle rather than as a dot on the line — a ring the size of a fingertip — because
+ * that is what says the line can be dragged. The whole plot takes the gesture, so
+ * the handle is an affordance rather than a target, but a mark you would not think
+ * to grab is a control nobody finds.
+ *
+ * Play and pause sit in the header, beside the place name. They used to be at the
+ * head of the scrubber below, glued to the track and reading as part of it; up here
+ * they are next to the other thing this panel says about the loop as a whole, and
+ * the track gets the full width it wants.
+ *
+ * That header is exported on its own, because on the map page the chart folds away
+ * and the play button must not fold with it — a control that disappears when you
+ * push the thing above it is a control you cannot find again. There, the header is
+ * drawn outside the collapsing region and the panel is asked to leave its own out.
+ *
+ * The dashed rule at the observed/forecast boundary is the same mark the scrubber
+ * puts on its track, from the same `forecastBoundary` — two drawings of one
+ * boundary, not two boundaries.
  */
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import Svg, { Path, Line, Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
-import { space, useTheme } from '../../theme';
+import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
+import { Icon } from '../Icon';
 import { usePrefs } from '../../state/prefs';
 import { fmtMm, ta } from '../../core/i18n';
 import { smoothPath } from '../../core/model/smooth';
@@ -47,6 +66,10 @@ const CHART_HEIGHT_COMPACT = 78;
 /** Full screen has the room, and the panel folds away when it is in the way. */
 const CHART_HEIGHT_FULL = 118;
 
+/** The cursor's grab handle. Big enough to read as one, small enough not to hide the
+ *  curve it sits on — which is why it is a ring rather than a filled disc. */
+const HANDLE_RADIUS = 9;
+
 export interface NowcastPanelProps {
   profile: NowcastProfile | null;
   /** Minutes from now the loop is currently showing, so the panel tracks the scrub. */
@@ -61,10 +84,95 @@ export interface NowcastPanelProps {
   locationName?: string;
   /** Dragging across the chart scrubs, reporting a position 0–1 along the axis. */
   onScrubFraction?: (fraction: number) => void;
+  /** Where observation ends and forecast begins, 0–1 along the axis. Drawn as a
+   *  dashed rule; the scrubber below marks the same fraction on its track. */
+  boundaryFraction?: number | null;
+  /** Play and pause, beside the name. Omitted where there is no loop to run. */
+  playing?: boolean;
+  onTogglePlay?: () => void;
+  /** Nothing to play: a loop of one frame, or none loaded. */
+  playDisabled?: boolean;
+  /** False where the caller draws `NowcastHeader` itself, outside this panel. */
+  showHeader?: boolean;
+}
+
+export interface NowcastHeaderProps {
+  profile: NowcastProfile | null;
+  /** Minutes from now the loop is showing, for the intensity on the right. */
+  offsetMin: number;
+  locationName?: string;
+  playing?: boolean;
+  onTogglePlay?: () => void;
+  playDisabled?: boolean;
+}
+
+/**
+ * Where, how hard, and whether the loop is running.
+ *
+ * One line, at the size of a caption rather than a headline, because the map above
+ * is the thing being read. Drawn even when there is no profile: the play button
+ * belongs to the radar loop, which may be perfectly good over a location the
+ * nowcast has nothing to say about.
+ */
+export function NowcastHeader({
+  profile, offsetMin, locationName, playing, onTogglePlay, playDisabled,
+}: NowcastHeaderProps) {
+  const { palette } = useTheme();
+  const { prefs } = usePrefs();
+  const samples = profile?.series?.length ? profile.series : (profile?.bars ?? []);
+  const atNow = samples.length ? intensityAt(samples, offsetMin) : null;
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+      {onTogglePlay ? (
+        <Pressable
+          onPress={onTogglePlay}
+          accessibilityRole="button"
+          accessibilityLabel={playing ? 'Animatie pauzeren' : 'Animatie afspelen'}
+          disabled={playDisabled}
+          hitSlop={8}
+          style={{
+            width: 30, height: 30, borderRadius: radius.pill,
+            backgroundColor: playDisabled ? palette.inkDisabled : palette.accent,
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Icon name={playing ? 'pause' : 'play'} size={14} color="#fff" weight="fill" />
+        </Pressable>
+      ) : null}
+
+      <Text
+        variant="bodySm"
+        weight="semibold"
+        color={palette.inkHeading}
+        numberOfLines={1}
+        style={{ flex: 1 }}
+      >
+        {locationName ?? ta('yourLocation', prefs.lang)}
+      </Text>
+
+      {atNow != null ? (
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+          <Text
+            variant="bodySm"
+            weight="bold"
+            color={atNow > 0 ? palette.valPrecip : palette.inkHeading}
+            tabular
+          >
+            {fmtMm(atNow)}
+          </Text>
+          <Text variant="caption" color={palette.muted}>
+            mm/u
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 export function NowcastPanel({
   profile, offsetMin, width, compact, domain, locationName, onScrubFraction,
+  boundaryFraction, playing, onTogglePlay, playDisabled, showHeader = true,
 }: NowcastPanelProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -72,20 +180,12 @@ export function NowcastPanel({
   // over the observed frames — and the hero's four forward bars otherwise.
   const samples = profile?.series?.length ? profile.series : (profile?.bars ?? []);
 
-  if (!samples.length) {
-    return (
-      <View style={{ padding: space[6] }}>
-        <Text variant="bodySm" color={palette.muted} align="center">
-          {ta('noData', prefs.lang)}
-        </Text>
-      </View>
-    );
-  }
-
   const chartHeight = compact ? CHART_HEIGHT_COMPACT : CHART_HEIGHT_FULL;
 
-  const from = domain?.from ?? samples[0]!.offsetMin;
-  const to = domain?.to ?? samples[samples.length - 1]!.offsetMin;
+  // Read before the empty case returns below, so both have to survive an empty
+  // profile — a location the nowcast has nothing to say about still draws a header.
+  const from = domain?.from ?? samples[0]?.offsetMin ?? 0;
+  const to = domain?.to ?? samples[samples.length - 1]?.offsetMin ?? 0;
   const spanMin = Math.max(1, to - from);
   const plotW = Math.max(1, width - PAD_LEFT - space[5]);
   const plotH = chartHeight - PAD_TOP - PAD_BOTTOM;
@@ -127,45 +227,45 @@ export function NowcastPanel({
     .onUpdate((e) => { runOnJS(report)(e.x); });
 
   // What the scrubber is pointing at, interpolated between the two nearest samples.
-  const atNow = intensityAt(samples, offsetMin);
+  const atNow = samples.length ? intensityAt(samples, offsetMin) : 0;
   const cursorX = x(Math.min(Math.max(offsetMin, from), to));
   // Ticks across the whole axis, not only where the curve is.
   const ticks = [0, 0.33, 0.66, 1].map((f) => from + f * spanMin);
 
-  return (
-    <View
-      style={{
-        paddingHorizontal: space[5],
-        paddingTop: compact ? space[4] : space[3],
-        paddingBottom: space[2],
-      }}
-    >
-      {/* Where, and how hard — one line, at the size of a caption rather than a
-          headline, because the map above is the thing being read. */}
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[3] }}>
-        <Text
-          variant="bodySm"
-          weight="semibold"
-          color={palette.inkHeading}
-          numberOfLines={1}
-          style={{ flex: 1 }}
-        >
-          {locationName ?? ta('yourLocation', prefs.lang)}
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
-          <Text
-            variant="bodySm"
-            weight="bold"
-            color={atNow > 0 ? palette.valPrecip : palette.inkHeading}
-            tabular
-          >
-            {fmtMm(atNow)}
-          </Text>
-          <Text variant="caption" color={palette.muted}>
-            mm/u
+  const header = showHeader ? (
+    <NowcastHeader
+      profile={profile}
+      offsetMin={offsetMin}
+      locationName={locationName}
+      playing={playing}
+      onTogglePlay={onTogglePlay}
+      playDisabled={playDisabled}
+    />
+  ) : null;
+
+  const frame = {
+    paddingHorizontal: space[5],
+    // No header of its own means the caller has already left room above it.
+    paddingTop: showHeader ? (compact ? space[4] : space[3]) : 0,
+    paddingBottom: space[2],
+  };
+
+  if (!samples.length) {
+    return (
+      <View style={frame}>
+        {header}
+        <View style={{ paddingVertical: space[5] }}>
+          <Text variant="bodySm" color={palette.muted} align="center">
+            {ta('noData', prefs.lang)}
           </Text>
         </View>
       </View>
+    );
+  }
+
+  return (
+    <View style={frame}>
+      {header}
 
       <GestureDetector gesture={scrub}>
       <Svg width={width} height={chartHeight} style={{ marginTop: space[2] }}>
@@ -192,6 +292,20 @@ export function NowcastPanel({
         <Path d={area} fill="url(#nowcastFill)" />
         <Path d={line} stroke={palette.accentDark} strokeWidth={2.5} fill="none" />
 
+        {/* The same boundary the scrubber ticks on its track. */}
+        {boundaryFraction != null ? (
+          <Line
+            x1={PAD_LEFT + boundaryFraction * plotW}
+            x2={PAD_LEFT + boundaryFraction * plotW}
+            y1={PAD_TOP}
+            y2={PAD_TOP + plotH}
+            stroke={palette.muted}
+            strokeWidth={1.5}
+            strokeDasharray="2 3"
+            opacity={0.55}
+          />
+        ) : null}
+
         <Line
           x1={cursorX}
           x2={cursorX}
@@ -201,7 +315,20 @@ export function NowcastPanel({
           strokeWidth={1}
           strokeDasharray="3 4"
         />
-        <Circle cx={cursorX} cy={y(atNow)} r={4.5} fill={palette.accentDark} />
+
+        {/* A ring, not a dot: it has to look like something you can take hold of,
+            and a filled disc this size would sit on the curve rather than around
+            the point on it. */}
+        <Circle
+          cx={cursorX}
+          cy={y(atNow)}
+          r={HANDLE_RADIUS}
+          fill={palette.appCard}
+          fillOpacity={0.9}
+          stroke={palette.accentDark}
+          strokeWidth={2.5}
+        />
+        <Circle cx={cursorX} cy={y(atNow)} r={2.5} fill={palette.accentDark} />
       </Svg>
       </GestureDetector>
 

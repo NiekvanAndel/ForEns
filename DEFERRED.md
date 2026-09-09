@@ -195,6 +195,28 @@ Tapping a block on 'Actueel' opens it for every saved location, as the web app's
   that is not a string, so a malformed stored value costs the arrangement and not
   the launch. Additive: no existing preference key changed.
 
+### The radar's chart and scrubber (9 Sep 2026)
+
+- **Play and pause moved** from the head of the scrubber into `NowcastHeader`,
+  beside the location name. Glued to the track it read as part of the track; up
+  there it sits with the other thing the panel says about the loop as a whole, and
+  the scrubber gets the full width — which is what a scrubber wants, since its
+  precision is its length.
+- **The header is its own exported component** because on the map page the curve
+  folds away and the play button must not fold with it. There the header is drawn
+  outside the collapsing region and the panel is passed `showHeader={false}`.
+  `PROFILE_MAX_HEIGHT` came down to 150 to match what is left inside the fold.
+- **The chart's cursor is a grab handle**, a ring at 9pt with a small filled centre,
+  rather than a 4.5pt dot. The whole plot takes the gesture, so it is an affordance
+  and not a target — but a mark nobody would think to grab is a control nobody
+  finds.
+- **The chart draws the observed/forecast boundary** as a dashed rule, from the same
+  `forecastBoundary` the scrubber uses for its tick. One number derived once: a rule
+  at 40% over a tick at 43% reads as two boundaries rather than one drawn twice.
+- **The header now renders without a profile.** It returned early before, so a
+  location the nowcast covers no part of lost its play button along with its curve —
+  the radar loop over it is perfectly good.
+
 ### Two things to verify against the live API
 
 1. **The bearer scheme.** The schema documents `Authorization: Token <api key>`; an

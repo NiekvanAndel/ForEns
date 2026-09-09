@@ -6,7 +6,7 @@
  * the labels are derived, and that derivation is what these pin down.
  */
 import { describe, it, expect } from 'vitest';
-import { frameLabel } from '../core/radar/labels';
+import { forecastBoundary, frameLabel, radarAxis } from '../core/radar/labels';
 import type { RadarFrame } from '../core/radar';
 
 const NOW = Date.UTC(2026, 7, 31, 12, 0, 0);
@@ -45,5 +45,36 @@ describe('frameLabel', () => {
 
   it('survives a missing frame rather than throwing', () => {
     expect(frameLabel(undefined, NOW)).toBe('—');
+  });
+});
+
+describe('forecastBoundary', () => {
+  // A real loop: a quarter of an hour observed, then the forecast tail.
+  const frames = [
+    frame(-15), frame(-10), frame(-5), frame(0),
+    frame(5, true), frame(10, true), frame(15, true),
+  ];
+
+  it('lands on the first computed frame, not on the instant "now"', () => {
+    const axis = radarAxis(frames, NOW);
+    // Index 4 of seven evenly spaced frames.
+    expect(forecastBoundary(frames, axis?.positions)).toBeCloseTo(4 / 6, 6);
+  });
+
+  it('is the same mark the chart and the scrubber both read', () => {
+    const axis = radarAxis(frames, NOW);
+    // The chart is handed the axis and the scrubber its positions; the boundary has
+    // to be one number derived once, or the two draw it in different places.
+    expect(forecastBoundary(frames, axis?.positions)).toBe(axis!.positions[4]);
+  });
+
+  it('falls back to an even split when no positions are given', () => {
+    expect(forecastBoundary(frames)).toBeCloseTo(4 / 6, 6);
+  });
+
+  it('has nothing to draw on a loop that is all one thing', () => {
+    expect(forecastBoundary([frame(-10), frame(-5)])).toBeNull();
+    expect(forecastBoundary([frame(5, true), frame(10, true)])).toBeNull();
+    expect(forecastBoundary([])).toBeNull();
   });
 });

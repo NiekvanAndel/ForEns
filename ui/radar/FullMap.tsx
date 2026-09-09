@@ -30,9 +30,10 @@
  * pan is no place for a gesture that navigates.
  *
  * The profile can be swiped down out of the way, because sometimes the map is the
- * whole point and the panel is a band across the bottom of it. The timeline and its
- * play button never go: they are how the loop is driven, and a control that
- * disappears when you push the thing above it is a control you cannot find again.
+ * whole point and the panel is a band across the bottom of it. What never goes is
+ * how the loop is driven: the timeline, and the header above it carrying the place
+ * name and the play button. A control that disappears when you push the thing above
+ * it is a control you cannot find again, so the curve alone folds away.
  */
 import { useState } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
@@ -45,16 +46,20 @@ import { duration, radius, shadowFloat, space, useTheme } from '../../theme';
 import { Icon } from '../Icon';
 import { RadarMap, MAP_CHROME_SIZE, type PlacePin } from './RadarMap';
 import { Timeline } from './Timeline';
-import { NowcastPanel } from './NowcastPanel';
+import { NowcastHeader, NowcastPanel } from './NowcastPanel';
 import { mapChrome } from './mapStyle';
 import { frameAtFraction } from './useRadarFrames';
-import { frameClock, radarAxis, type NowcastProfile, type RadarFrame } from '../../core/radar';
+import {
+  forecastBoundary, frameClock, radarAxis, type NowcastProfile, type RadarFrame,
+} from '../../core/radar';
 import { usePrefs } from '../../state/prefs';
 import { ta } from '../../core/i18n';
 
-/** Enough for the headings, the curve and its axis. Animating a fixed maximum is
- *  what lets the timeline stay put while the profile above it folds away. */
-const PROFILE_MAX_HEIGHT = 190;
+/** Enough for the curve and its axis — the header is no longer inside this, so it
+ *  is not counted. Animating a fixed maximum is what lets the timeline stay put
+ *  while the profile above it folds away; set too high, the first part of the fold
+ *  does nothing visible. */
+const PROFILE_MAX_HEIGHT = 150;
 
 export interface FullMapProps {
   /** Leaves the page. The route hands in `router.back()`. */
@@ -194,6 +199,20 @@ export function FullMap({
               />
             </Pressable>
 
+            {/* Outside the collapse: the name says which place the loop is over and
+                the play button drives it, and neither stops mattering because the
+                curve has been pushed out of the way. */}
+            <View style={{ paddingHorizontal: space[5], paddingBottom: space[2] }}>
+              <NowcastHeader
+                profile={profile}
+                offsetMin={offsetMin}
+                locationName={locationName}
+                playing={playing}
+                onTogglePlay={onTogglePlay}
+                playDisabled={frames.length < 2}
+              />
+            </View>
+
             <Animated.View style={[{ overflow: 'hidden' }, profileStyle]}>
               <NowcastPanel
                 profile={profile}
@@ -202,6 +221,8 @@ export function FullMap({
                 domain={axis ? { from: axis.from, to: axis.to } : undefined}
                 locationName={locationName}
                 onScrubFraction={scrubTo}
+                boundaryFraction={forecastBoundary(frames, axis?.positions)}
+                showHeader={false}
               />
             </Animated.View>
           </View>
@@ -213,7 +234,6 @@ export function FullMap({
             index={activeIndex}
             playing={playing}
             onIndexChange={onScrub}
-            onTogglePlay={onTogglePlay}
             showLabels={false}
             stepPositions={axis?.positions}
           />

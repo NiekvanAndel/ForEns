@@ -1,5 +1,5 @@
 /**
- * The radar timeline: play/pause and a scrubber across the frames.
+ * The radar timeline: a scrubber across the frames.
  *
  * The design's slider runs "nu · +1 uur · +2 uur", but a real frame list is not
  * evenly split that way — the ExactCast run is a quarter of an hour of observation
@@ -11,14 +11,19 @@
  * `showLabels` turns that row off where a chart above the slider already carries
  * the time axis — three more timestamps under it would be the same information
  * twice, in a place where height is what the map wants.
+ *
+ * Play and pause used to sit here, at the head of the row. It has moved up beside
+ * the location name in `NowcastPanel`: this row is one control, and a button glued
+ * to the end of a track reads as part of the track. Up there it sits with the other
+ * thing the panel says about the loop as a whole, and the track gets the full width
+ * — which is what a scrubber wants, since its precision is its length.
  */
 import { useEffect } from 'react';
-import { View, Pressable } from 'react-native';
+import { View } from 'react-native';
 import { Scrubber } from './Scrubber';
-import { radius, space, useTheme } from '../../theme';
+import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
-import { Icon } from '../Icon';
-import { frameClock, type RadarFrame } from '../../core/radar';
+import { forecastBoundary, frameClock, type RadarFrame } from '../../core/radar';
 
 /** One step per this many milliseconds during playback, matching the design's 450ms. */
 export const PLAY_INTERVAL_MS = 450;
@@ -26,9 +31,9 @@ export const PLAY_INTERVAL_MS = 450;
 export interface TimelineProps {
   frames: RadarFrame[];
   index: number;
+  /** Whether the loop is running — the interval lives here, the button does not. */
   playing: boolean;
   onIndexChange: (i: number) => void;
-  onTogglePlay: () => void;
   /** The from/at/to row above the slider. */
   showLabels?: boolean;
   /** Where each frame sits on the track, 0–1, when a chart above shares the axis. */
@@ -36,7 +41,7 @@ export interface TimelineProps {
 }
 
 export function Timeline({
-  frames, index, playing, onIndexChange, onTogglePlay, showLabels = true, stepPositions,
+  frames, index, playing, onIndexChange, showLabels = true, stepPositions,
 }: TimelineProps) {
   const { palette } = useTheme();
   const last = Math.max(0, frames.length - 1);
@@ -47,28 +52,8 @@ export function Timeline({
     return () => clearInterval(id);
   }, [playing, index, frames.length, onIndexChange]);
 
-  const firstForecast = frames.findIndex((f) => f.forecast);
-  const nowFraction =
-    firstForecast > 0
-      ? stepPositions?.[firstForecast] ?? firstForecast / last
-      : null;
-
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
-      <Pressable
-        onPress={onTogglePlay}
-        accessibilityRole="button"
-        accessibilityLabel={playing ? 'Animatie pauzeren' : 'Animatie afspelen'}
-        disabled={frames.length < 2}
-        style={{
-          width: 42, height: 42, borderRadius: radius.pill,
-          backgroundColor: frames.length < 2 ? palette.inkDisabled : palette.accent,
-          alignItems: 'center', justifyContent: 'center',
-        }}
-      >
-        <Icon name={playing ? 'pause' : 'play'} size={18} color="#fff" weight="fill" />
-      </Pressable>
-
       <View style={{ flex: 1 }}>
         {showLabels ? (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -88,7 +73,7 @@ export function Timeline({
           value={index}
           steps={frames.length}
           onChange={onIndexChange}
-          markerFraction={nowFraction}
+          markerFraction={forecastBoundary(frames, stepPositions)}
           stepPositions={stepPositions}
           disabled={frames.length < 2}
           accessibilityLabel="Tijdlijn"
