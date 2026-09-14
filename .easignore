@@ -1,0 +1,25 @@
+# What not to upload to EAS Build.
+#
+# When this file exists it REPLACES .gitignore for the upload, so everything
+# .gitignore holds back has to be repeated here or it would be sent.
+
+# Generated, or rebuilt on the build machine from package-lock.json and app.json.
+node_modules/
+ios/
+android/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+*.log
+.DS_Store
+.env*.local
+
+# The reference web app. 488 KB, read only by the parity tests in tests/, which
+# run on a laptop and never on a build machine.
+index.html
+tests/
+
+# The design system: JSX, prompts and type stubs for the web, kept for reference.
+# Nothing in the app imports from it.
+iOS/
