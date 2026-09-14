@@ -9,6 +9,11 @@
 module.exports = {
   type: 'widget',
   name: 'ExactCast',
+  // Stated rather than left to the default, which would derive the same string
+  // from the target's type. A leading dot appends to the app's own identifier,
+  // so this resolves to com.agroexact.exactcast.widget. It is what App Store
+  // Connect registers the extension under, and is permanent once shipped.
+  bundleIdentifier: '.widget',
   // The widget shares the app's icon. It only appears in the widget gallery, where
   // a mark distinct from the app's would make the widget harder to find, not easier.
   icon: '../../logos/exactcast-icon-radar-light.png',

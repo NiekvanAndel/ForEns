@@ -1,0 +1,56 @@
+# Build ExactCast AI and hand it to TestFlight.
+#
+# Deliberately manual. A production build spends EAS build minutes and burns a build
+# number that App Store Connect will never accept again, so it is a decision someone
+# takes, not something a push to a branch triggers.
+#
+# Needs one repository secret, EXPO_TOKEN, from expo.dev -> account settings -> access
+# tokens. Apple credentials live on EAS rather than here; see RELEASE.md.
+name: TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      submit:
+        description: 'Submit the build to App Store Connect when it succeeds'
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    name: Build and submit
+    runs-on: ubuntu-latest
+    # The iOS build itself runs on EAS's macOS workers; this runner only drives it.
+    # Generous, because a cold production build regularly passes half an hour.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      # The checks that are cheap here and expensive once a build machine has already
+      # spent twenty minutes. check:icons in particular catches an alpha channel that
+      # Apple would otherwise reject at submission.
+      - run: npm run check:icons
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+      - name: Build
+        run: |
+          eas build \
+            --platform ios \
+            --profile production \
+            --non-interactive \
+            --wait \
+            ${{ inputs.submit && '--auto-submit' || '' }}
