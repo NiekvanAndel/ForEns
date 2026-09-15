@@ -118,6 +118,102 @@ function localiseLayer(layer: LayerSpecification, lang: string): LayerSpecificat
 }
 
 /**
+ * How place names are drawn, per appearance.
+ *
+ * The stock dark basemap prints them white with a black halo, which is right over a dark
+ * map and wrong over ours: with a weather field underneath, the ground is orange or blue
+ * rather than navy, and black-haloed white type reads as a sticker rather than a label.
+ *
+ * So dark mode takes the light basemap's arrangement — dark ink, white halo (2026-09-15,
+ * at the client's direction, who asked for the white halo). The halo had to bring the ink
+ * with it: white type inside a white halo is not a lighter label, it is no label.
+ *
+ * Both appearances are set rather than only the one that changed, so the labels are the
+ * app's decision in both and not the basemap author's in one of them.
+ */
+export const LABEL_STYLE: Record<Appearance, { ink: string; halo: string; haloWidth: number }> = {
+  light: { ink: '#0C2547', halo: '#FFFFFF', haloWidth: 1.4 },
+  dark: { ink: '#0C2547', halo: '#FFFFFF', haloWidth: 1.6 },
+};
+
+/**
+ * Repaint the labels that draw names, leaving what they say alone.
+ *
+ * Only `text-color` and the halo are touched, and only on the layers `localiseStyle`
+ * already recognises — so road shields keep their own colours and nothing here can blank
+ * a label. A layer that set these with an expression (a colour that shifts with zoom) is
+ * overwritten flat, which is the point: one ink for every name, whatever is under it.
+ */
+export function restyleLabels(
+  style: StyleSpecification,
+  appearance: Appearance
+): StyleSpecification {
+  if (!Array.isArray(style?.layers)) return style;
+  const { ink, halo, haloWidth } = LABEL_STYLE[appearance];
+  return {
+    ...style,
+    layers: style.layers.map((layer) => {
+      if (layer.type !== 'symbol' || !mentionsName(layer.layout?.['text-field'])) return layer;
+      return {
+        ...layer,
+        paint: {
+          ...layer.paint,
+          'text-color': ink,
+          'text-halo-color': halo,
+          'text-halo-width': haloWidth,
+        },
+      } as LayerSpecification;
+    }),
+  };
+}
+
+/**
+ * How deep into the basemap the weather is buried.
+ *
+ * `labels` puts it under the names only, so roads, water and the coastline are drawn on
+ * top of the weather and only the ground beneath it. `features` puts it under the water
+ * and the roads as well, so a field covers nothing but the landcover it is over.
+ *
+ * `features` is the current choice (2026-09-15, at the client's direction). Flip this
+ * one constant to compare; nothing else in the app has an opinion.
+ */
+export const WEATHER_UNDER: 'labels' | 'features' = 'features';
+
+/**
+ * The style layer the app's own raster layers should be drawn beneath.
+ *
+ * Callers pass the result straight to `beforeId`, where undefined means "on top" — the
+ * behaviour before any of this existed, and the right fallback for a style that is still
+ * a URL or that failed to load.
+ */
+export function weatherBeforeLayerId(style: StyleSpecification | string | undefined) {
+  return WEATHER_UNDER === 'features'
+    ? firstFeatureLayerId(style) ?? firstLabelLayerId(style)
+    : firstLabelLayerId(style);
+}
+
+/**
+ * The first layer that draws something built or wet, so weather can go under it.
+ *
+ * The rule is the layer's *kind*, not its name, because this app does not own the style:
+ * the first `line` layer (waterways, roads, boundaries) or the first fill that mentions
+ * water. Everything before that in an OpenMapTiles style is background and landcover —
+ * the ground itself — which is exactly what a temperature field should be allowed to
+ * cover.
+ *
+ * Falls back to the label layer where a style has no such layer at all, so the weather
+ * is never left drawing over the names.
+ */
+export function firstFeatureLayerId(style: StyleSpecification | string | undefined) {
+  if (!style || typeof style === 'string' || !Array.isArray(style.layers)) return undefined;
+  return style.layers.find(
+    (layer) =>
+      layer.type === 'line' ||
+      (layer.type === 'fill' && JSON.stringify(layer).toLowerCase().includes('water'))
+  )?.id;
+}
+
+/**
  * The first layer that draws place names, so weather can be slid underneath it.
  *
  * A style's layers are drawn in order, and anything this app adds goes on top of all of

@@ -8,7 +8,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
-import { firstLabelLayerId, localiseStyle } from '../ui/radar/mapStyle';
+import {
+  firstFeatureLayerId, firstLabelLayerId, LABEL_STYLE, localiseStyle, restyleLabels,
+} from '../ui/radar/mapStyle';
 
 const style = (layers: unknown[]): StyleSpecification =>
   ({ version: 8, sources: {}, layers } as unknown as StyleSpecification);
@@ -123,5 +125,111 @@ describe('firstLabelLayerId', () => {
     expect(firstLabelLayerId(undefined)).toBeUndefined();
     expect(firstLabelLayerId('https://tiles.openfreemap.org/styles/bright')).toBeUndefined();
     expect(firstLabelLayerId(style([{ id: 'water', type: 'fill' }]))).toBeUndefined();
+  });
+});
+
+describe('firstFeatureLayerId', () => {
+  // With WEATHER_UNDER at 'features' the weather covers the landcover and nothing else:
+  // water, roads and boundaries are drawn over it.
+  it('names the first line or water layer, past the ground', () => {
+    const id = firstFeatureLayerId(
+      style([
+        { id: 'background', type: 'background' },
+        { id: 'landcover-grass', type: 'fill' },
+        { id: 'landuse-residential', type: 'fill' },
+        { id: 'waterway', type: 'line' },
+        { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water' },
+        { id: 'road-motorway', type: 'line' },
+      ])
+    );
+    expect(id).toBe('waterway');
+  });
+
+  it('finds a water fill where the style has no waterways above it', () => {
+    const id = firstFeatureLayerId(
+      style([
+        { id: 'background', type: 'background' },
+        { id: 'landcover', type: 'fill' },
+        { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water' },
+        { id: 'roads', type: 'line' },
+      ])
+    );
+    expect(id).toBe('water');
+  });
+
+  it('is not fooled into burying the weather under the landcover', () => {
+    // A fill that is only ground has to be passed over, or the field ends up beneath the
+    // grass and the map shows no weather at all.
+    const id = firstFeatureLayerId(
+      style([
+        { id: 'park', type: 'fill' },
+        { id: 'wood', type: 'fill' },
+        { id: 'boundary', type: 'line' },
+      ])
+    );
+    expect(id).toBe('boundary');
+  });
+
+  it('has no answer for a style it was not given', () => {
+    expect(firstFeatureLayerId(undefined)).toBeUndefined();
+    expect(firstFeatureLayerId('https://tiles.openfreemap.org/styles/fiord')).toBeUndefined();
+  });
+});
+
+describe('restyleLabels', () => {
+  const paint = (s: ReturnType<typeof restyleLabels>, id: string): Record<string, unknown> =>
+    ((s.layers.find((l) => l.id === id) as { paint?: Record<string, unknown> })?.paint ?? {});
+
+  it('gives every name the same ink and halo', () => {
+    const out = restyleLabels(
+      style([
+        { id: 'place', type: 'symbol', layout: { 'text-field': ['get', 'name'] } },
+        { id: 'water-name', type: 'symbol', layout: { 'text-field': '{name:latin}' } },
+      ]),
+      'dark'
+    );
+    for (const id of ['place', 'water-name']) {
+      expect(paint(out, id)['text-color']).toBe(LABEL_STYLE.dark.ink);
+      expect(paint(out, id)['text-halo-color']).toBe(LABEL_STYLE.dark.halo);
+    }
+  });
+
+  it('overwrites an expression the basemap author wrote', () => {
+    // A colour that shifts with zoom is exactly what has to go: one ink for every name,
+    // whatever the weather underneath is doing.
+    const out = restyleLabels(
+      style([
+        {
+          id: 'place',
+          type: 'symbol',
+          layout: { 'text-field': ['get', 'name'] },
+          paint: { 'text-color': ['interpolate', ['linear'], ['zoom'], 5, '#fff', 10, '#000'] },
+        },
+      ]),
+      'light'
+    );
+    expect(paint(out, 'place')['text-color']).toBe(LABEL_STYLE.light.ink);
+  });
+
+  it('leaves alone what is not a name', () => {
+    // Motorway shields have their own colours and are legible as they are; repainting
+    // them navy on white would make every road number look like a town.
+    const out = restyleLabels(
+      style([
+        { id: 'shields', type: 'symbol', layout: { 'text-field': ['get', 'ref'] },
+          paint: { 'text-color': '#ffffff' } },
+        { id: 'roads', type: 'line', paint: { 'line-color': '#cccccc' } },
+      ]),
+      'dark'
+    );
+    expect(paint(out, 'shields')['text-color']).toBe('#ffffff');
+    expect(paint(out, 'roads')['line-color']).toBe('#cccccc');
+  });
+
+  it('keeps the text itself untouched', () => {
+    const layers = [{ id: 'place', type: 'symbol', layout: { 'text-field': ['get', 'name:nl'] } }];
+    const out = restyleLabels(style(layers), 'dark');
+    expect((out.layers[0] as { layout?: Record<string, unknown> }).layout?.['text-field'])
+      .toEqual(['get', 'name:nl']);
   });
 });

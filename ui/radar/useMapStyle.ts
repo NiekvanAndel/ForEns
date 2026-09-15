@@ -27,7 +27,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
-import { firstLabelLayerId, localiseStyle, mapStyleFor } from './mapStyle';
+import { localiseStyle, mapStyleFor, restyleLabels, weatherBeforeLayerId } from './mapStyle';
 import { usePrefs } from '../../state/prefs';
 import { useTheme } from '../../theme';
 
@@ -41,6 +41,8 @@ function useStyleQuery() {
   const { prefs } = usePrefs();
   const url = mapStyleFor(appearance);
 
+  // The key carries the URL, which differs per appearance, so a restyle for one theme
+  // can never be served to the other.
   const query = useQuery({
     queryKey: mapStyleKey(url, prefs.lang),
     staleTime: STYLE_STALE_MS,
@@ -51,7 +53,11 @@ function useStyleQuery() {
     queryFn: async ({ signal }): Promise<StyleSpecification> => {
       const response = await fetch(url, { signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return localiseStyle((await response.json()) as StyleSpecification, prefs.lang);
+      const style = (await response.json()) as StyleSpecification;
+      // What the labels say, then how they look. Both are rewrites of the same document
+      // and both are pure, so the order between them does not matter — it reads in the
+      // order a reader would ask the questions.
+      return restyleLabels(localiseStyle(style, prefs.lang), appearance);
     },
   });
 
@@ -64,8 +70,8 @@ export function useLocalisedMapStyle(): string | StyleSpecification {
 }
 
 /**
- * The style layer the app's own layers should be drawn *under*, so place names stay on
- * top of the weather.
+ * The style layer the app's own raster layers should be drawn *under*, so the basemap's
+ * own marks stay on top of the weather. Which marks those are is `WEATHER_UNDER`.
  *
  * Reads the same query as `useLocalisedMapStyle`, so a second caller costs nothing: the
  * style is fetched once per appearance and language and held for a day. Undefined until
@@ -73,5 +79,5 @@ export function useLocalisedMapStyle(): string | StyleSpecification {
  * top, exactly as they did before.
  */
 export function useLabelLayerId(): string | undefined {
-  return firstLabelLayerId(useStyleQuery().data);
+  return weatherBeforeLayerId(useStyleQuery().data);
 }
