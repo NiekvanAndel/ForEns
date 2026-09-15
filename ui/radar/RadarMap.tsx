@@ -22,8 +22,8 @@ import {
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
-import { MIN_ZOOM, START_ZOOM, ZOOM_STEP, mapChrome, maxZoomFor } from './mapStyle';
-import { useLabelLayerId, useLocalisedMapStyle } from './useMapStyle';
+import { LAYER_DEPTH, MIN_ZOOM, START_ZOOM, ZOOM_STEP, mapChrome, maxZoomFor } from './mapStyle';
+import { useLocalisedMapStyle, useWeatherBeforeId } from './useMapStyle';
 import { RadarLayer } from './RadarLayer';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import type { MapView } from '../../core/radar/bubbles';
@@ -116,8 +116,8 @@ export function RadarMap({
   // Labels in the app's language, falling back to the plain style URL. See
   // `useMapStyle`.
   const mapStyle = useLocalisedMapStyle();
-  // Where the weather sits among the basemap's layers; see `WEATHER_UNDER`.
-  const labelLayerId = useLabelLayerId();
+  // Where the radar sits among the basemap's layers; see `LAYER_DEPTH`.
+  const labelLayerId = useWeatherBeforeId(LAYER_DEPTH.nowcast);
   const peeking = usePeeking();
   const provider = activeProvider();
   const camera = useRef<CameraRef>(null);

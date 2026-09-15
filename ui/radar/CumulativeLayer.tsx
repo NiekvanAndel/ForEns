@@ -10,8 +10,9 @@
  * higher opacity than the radar loop without burying the coastline: what is painted
  * here is only the wet part.
  *
- * Like the field layers, they go under the style's first label layer, so a place name
- * stays readable through the wettest block of the ramp.
+ * Like the field layers, they are inserted into the basemap at `LAYER_DEPTH.cumulative`
+ * rather than laid over it, so the water, the boundaries and the place names stay
+ * readable through the wettest block of the ramp.
  */
 import { ImageSource, Layer } from '@maplibre/maplibre-react-native';
 import type { LngLat } from '@maplibre/maplibre-react-native';

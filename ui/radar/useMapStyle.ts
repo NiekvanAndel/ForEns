@@ -27,7 +27,9 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
-import { localiseStyle, mapStyleFor, orderForWeather, weatherBeforeLayerId } from './mapStyle';
+import {
+  localiseStyle, mapStyleFor, orderForWeather, weatherBeforeLayerId, type WeatherDepth,
+} from './mapStyle';
 import { usePrefs } from '../../state/prefs';
 import { useTheme } from '../../theme';
 
@@ -70,14 +72,14 @@ export function useLocalisedMapStyle(): string | StyleSpecification {
 }
 
 /**
- * The style layer the app's own raster layers should be drawn *under*, so the basemap's
- * own marks stay on top of the weather. Which marks those are is `WEATHER_UNDER`.
+ * The style layer a weather layer should be drawn *under*, so the basemap's own marks
+ * stay on top of it. Which marks those are is the depth — see `LAYER_DEPTH`.
  *
  * Reads the same query as `useLocalisedMapStyle`, so a second caller costs nothing: the
  * style is fetched once per appearance and language and held for a day. Undefined until
- * it lands, and undefined for good if it never does — in which case the layers draw on
- * top, exactly as they did before.
+ * it lands, and undefined for good if it never does — in which case the layer draws on
+ * top, exactly as it did before.
  */
-export function useLabelLayerId(): string | undefined {
-  return weatherBeforeLayerId(useStyleQuery().data);
+export function useWeatherBeforeId(depth: WeatherDepth): string | undefined {
+  return weatherBeforeLayerId(useStyleQuery().data, depth);
 }

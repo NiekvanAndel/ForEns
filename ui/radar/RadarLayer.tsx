@@ -22,20 +22,21 @@
  * This is what the Apple Maps implementation could not do, and why the app moved off
  * it — see ./mapStyle for that history.
  *
- * ## Under the labels
+ * ## Into the basemap, not over it
  *
- * `beforeId` puts the frames beneath the style's first label layer, so place names stay
- * readable through heavy rain. It matters least here of the three layers — a shower
- * leaves most of the map alone — and it is done anyway, so that switching layers does
- * not also switch whether the map has names on it.
+ * `beforeId` puts the frames beneath part of the basemap rather than over all of it, at
+ * `LAYER_DEPTH.nowcast`: the coastline, the boundaries and the place names stay on top,
+ * the water goes under. Rain over a lake is rain, and a shower leaves most of the map
+ * alone anyway — which is why this layer can afford to cover the water where a
+ * temperature field cannot.
  */
 import { ImageSource, Layer, RasterSource } from '@maplibre/maplibre-react-native';
 import type { LngLat } from '@maplibre/maplibre-react-native';
 import type { GeoBounds, RadarFrame, RadarProvider } from '../../core/radar';
 
-/** How opaque the visible frame is drawn. Short of solid, so town names and the
- *  coastline stay legible under moderate rain. */
-const FRAME_OPACITY = 0.9;
+/** How opaque the visible frame is drawn. Short of solid, so the basemap reads through
+ *  moderate rain rather than being buried by it. */
+const FRAME_OPACITY = 0.85;
 
 /**
  * No cross-fade, no smoothing.
