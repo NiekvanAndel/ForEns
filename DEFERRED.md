@@ -652,3 +652,40 @@ Three things stand between this and the live endpoints. None of them touches the
 tested — the 503-with-`Retry-After` state, the untouched anchor-stamped URLs — so
 switching over is a change of source, not of screens. When it lands, the fixtures and
 `ui/radar/fixtureSource.ts` go.
+
+## The Detailcharts field layers run on fixtures too (15 Sep 2026)
+
+Temperature, humidity and wind are on the layer picker, drawn from
+`core/fields/fixture/` rather than from a server. The pipeline lives in the
+Detailcharts repo; its contract is `docs/app_layer_plan.md` there, and
+`core/fields/httpSource` is written against it and unused.
+
+Two things about the bundled data that the UI says out loud rather than hiding:
+
+1. **Only the newest frame is measured.** The other eleven of each variable were
+   derived from it by advecting the field, so the loop has something to animate.
+   Every manifest carries `source: "synthetic"`, `isSynthetic()` exposes it, and
+   `FieldPanel` prints it under the reading. When real 10-minute frames exist this
+   goes away by itself — the flag comes from the pipeline, not from the app.
+2. **The overlays are half resolution.** A bundle is not a CDN: full-resolution PNGs
+   are about 270 kB a frame and twelve frames of three variables would be 16 MB. The
+   published product is full resolution and nothing in the UI depends on the size.
+
+Three things stand between this and live frames, and none of them touches the UI:
+
+1. **Hosting is undecided.** Static bucket like the nowcast, or behind the
+   AgroExactWebApp API like the cumulative layer. `httpSource` takes a base URL and
+   an optional token, so either works without a change here — but the PNG header
+   problem from the cumulative layer above applies identically if it ends up
+   authenticated.
+2. **The value rasters are the wrong shape for this.** To put one figure in one
+   bubble the app downloads a whole country's raster, and it wants one per frame for
+   the loop. The contract anticipates a point endpoint (`/field/timeseries?lat&lon`)
+   for exactly this; it replaces `FieldSource.values` and nothing else.
+3. **The panel has no curve**, deliberately. A curve of one location's value across
+   the loop is the obvious next thing to draw and it needs that endpoint first —
+   drawing it today would mean twelve rasters to read twelve cells. The panel shows
+   one reading and the slider instead.
+
+Not verified on a device. The layer typechecks, its logic is tested, and the geometry
+is checked against the pipeline's own output — but nobody has yet seen it draw.

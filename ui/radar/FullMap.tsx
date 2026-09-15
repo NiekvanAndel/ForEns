@@ -69,7 +69,7 @@
  * nothing to fold, so the grabber goes and the row simply stands. The rule under
  * every case is the same one: something on screen has to be draggable.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -83,7 +83,14 @@ import { CumulativeLayer } from './CumulativeLayer';
 import { CumulativeLegend } from './CumulativeLegend';
 import { CumulativePanel } from './CumulativePanel';
 import { CumulativeTimeline } from './CumulativeTimeline';
-import { MapLayersControl, type MapLayer } from './MapLayersControl';
+import { fieldVariableOf, MapLayersControl, type MapLayer } from './MapLayersControl';
+import { FieldLayer } from '../fields/FieldLayer';
+import { FieldBubbles } from '../fields/FieldBubbles';
+import { FieldLegend } from '../fields/FieldLegend';
+import { FieldPanel } from '../fields/FieldPanel';
+import { useFields } from '../fields/useFields';
+import { fixtureFieldSource } from '../fields/fixtureSource';
+import { frameClock as fieldClock, sampleField } from '../../core/fields';
 import { CumulativeBubbles } from './CumulativeBubbles';
 import { useCumulative } from './useCumulative';
 import { useCumulativeReadings } from './useCumulativeReadings';
@@ -182,6 +189,11 @@ export function FullMap({
   const [view, setView] = useState<MapView | null>(null);
   const cumulative = useCumulative(fixtureSource);
   const totals = layer === 'cumulative';
+  // The three Detailcharts layers are one thing to this screen: a scalar field on a
+  // loop. Only the variable differs, so they share a hook, a panel and a legend.
+  const fields = useFields(fixtureFieldSource);
+  const fieldVariable = fieldVariableOf(layer);
+  const showField = fieldVariable != null;
 
   // The reader's own list, which is both what carries a bubble each and the order
   // that settles an overlap.
@@ -200,18 +212,39 @@ export function FullMap({
     cumulative.rasters
   );
   const reading = readings[selectedIndex] ?? SELECTED_PENDING;
+
+  // The field's value at each saved location for the frame on screen. Recomputed per
+  // frame, which is a handful of array lookups: the expensive part is the raster, and
+  // that is fetched once per frame by the hook.
+  const fieldValues = useMemo(
+    () =>
+      fields.manifest && fields.values
+        ? locations.map((l) => sampleField(fields.manifest!, fields.values!, l.lat, l.lon))
+        : locations.map(() => null),
+    [fields.manifest, fields.values, locations]
+  );
   // Only a panel with a curve in it has anything to fold. While the totals are still
   // loading — or cannot be built at all — the panel is a single line of explanation,
   // and a grabber over it would promise a drag that does nothing.
-  const foldable = totals ? cumulative.status === 'ready' && !!cumulative.window : curve;
+  // A field layer has no curve to fold: its panel is one reading and the slider under
+  // it, which is the arrangement `FullMap` already uses where the nowcast has nothing
+  // to draw. Nothing to fold means no grabber, and the row simply stands.
+  const foldable = showField
+    ? false
+    : totals
+      ? cumulative.status === 'ready' && !!cumulative.window
+      : curve;
 
   const chooseLayer = (next: MapLayer) => {
     setLayer(next);
     cumulative.setEnabled(next === 'cumulative');
+    // Null takes the field layer off entirely, so a reader who never picks one pays
+    // for no manifest and no rasters.
+    fields.setVariable(fieldVariableOf(next));
     // A loop nobody can see should not be running. Its frames come off the map with
     // the layer switch, and a reader coming back to find the play head somewhere else
     // has watched time pass behind a picture that was not on screen.
-    if (next === 'cumulative' && playing) onTogglePlay();
+    if (next !== 'nowcast' && playing) onTogglePlay();
   };
 
   const setOpen = (open: boolean) => {
@@ -282,13 +315,33 @@ export function FullMap({
           timeLabel={
             totals && cumulative.window
               ? lookbackLabel(cumulative.window.hours)
-              : frameClock(active)
+              : showField && fields.frame
+                ? fieldClock(fields.frame)
+                : frameClock(active)
           }
-          showFrames={!totals}
-          showPins={!totals}
-          onViewChange={totals ? setView : undefined}
+          showFrames={!totals && !showField}
+          showPins={!totals && !showField}
+          onViewChange={totals || showField ? setView : undefined}
           overlay={
-            totals && cumulative.manifest ? (
+            showField && fields.manifest && fieldVariable ? (
+              <>
+                <FieldLayer
+                  manifest={fields.manifest}
+                  frames={fields.frames}
+                  active={fields.frame}
+                  source={fixtureFieldSource}
+                />
+                <FieldBubbles
+                  variable={fieldVariable}
+                  legend={fields.manifest.legend}
+                  locations={locations}
+                  values={fieldValues}
+                  selectedIndex={selectedIndex}
+                  view={view}
+                  onSelect={onSelectPlace}
+                />
+              </>
+            ) : totals && cumulative.manifest ? (
               <>
                 <CumulativeLayer
                   manifest={cumulative.manifest}
@@ -354,6 +407,14 @@ export function FullMap({
             bottom={radius.appCard + space[2] + 28}
           />
         ) : null}
+
+        {showField && fields.manifest ? (
+          <FieldLegend
+            legend={fields.manifest.legend}
+            unit={fields.manifest.unit}
+            bottom={radius.appCard + space[2] + 28}
+          />
+        ) : null}
       </View>
 
       <View
@@ -390,7 +451,21 @@ export function FullMap({
               </Pressable>
             ) : null}
 
-            {totals ? (
+            {showField ? (
+              <FieldPanel
+                status={fields.status}
+                manifest={fields.manifest}
+                frames={fields.frames}
+                index={fields.index}
+                onIndexChange={fields.setIndex}
+                playing={fields.playing}
+                onTogglePlay={fields.togglePlay}
+                value={fieldValues[selectedIndex] ?? null}
+                loading={fields.values == null}
+                locationName={locationName}
+                retryAfterSec={fields.retryAfterSec}
+              />
+            ) : totals ? (
               <Animated.View
                 style={[{ overflow: 'hidden' }, foldable ? totalsStyle : undefined]}
               >
@@ -431,7 +506,9 @@ export function FullMap({
           </View>
         </GestureDetector>
 
-        {totals ? (
+        {/* A field layer carries its own slider inside the panel, so there is no
+            second row to stand in for a folded curve. */}
+        {showField ? null : totals ? (
           foldable ? (
             <Animated.View
               // Invisible is also untouchable: a slider at zero opacity behind the

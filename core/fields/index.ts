@@ -290,6 +290,51 @@ export function loopMinutes(manifest: FieldManifest): number {
 }
 
 /**
+ * The unit as it is printed beside a figure, from the manifest's CF-style unit.
+ *
+ * The manifest speaks CF because the pipeline writes NetCDF; a reader does not. An
+ * unrecognised unit is passed through rather than blanked: a wrong-looking unit beside
+ * a number is a bug report, a missing one is a mystery.
+ */
+export function unitLabel(unit: string): string {
+  if (unit === 'degC') return '\u00b0C';
+  if (unit === 'percent') return '%';
+  if (unit === 'm s-1') return 'm/s';
+  return unit;
+}
+
+/**
+ * How far back a frame is, in the reader's words.
+ *
+ * The newest frame is not called "now". A run is minutes old before a phone sees it and
+ * the anchor can be older still, so "laatste" says where it sits in the loop without
+ * making a claim about the clock.
+ */
+export function backLabel(frames: readonly FieldFrame[], index: number): string {
+  const newest = frames[frames.length - 1];
+  const frame = frames[index];
+  if (!newest || !frame) return '';
+  const minutes = Math.round((Date.parse(newest.time) - Date.parse(frame.time)) / 60_000);
+  if (minutes <= 0) return 'laatste';
+  if (minutes < 60) return `${minutes} min terug`;
+  const hours = minutes / 60;
+  return `${Number.isInteger(hours) ? hours : hours.toFixed(1).replace('.', ',')} uur terug`;
+}
+
+/**
+ * Readable ink on a fill taken from the ramp.
+ *
+ * Rec. 601 luma, which is the cheap approximation that gets this right across a scale
+ * running from #244E8C through #7FD9C9 to #7A1414: the mint and the yellow need dark
+ * ink, both ends need light. Used by the bubbles, whose fill is the value's own colour.
+ */
+export function inkOn(hex: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const luma = (0.299 * (r ?? 0) + 0.587 * (g ?? 0) + 0.114 * (b ?? 0)) / 255;
+  return luma > 0.6 ? '#0C2547' : '#FFFFFF';
+}
+
+/**
  * How a value should be printed: the unit's own precision, not the raster's.
  *
  * The rasters carry hundredths because that is what fits in a uint16, not because a

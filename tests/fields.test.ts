@@ -10,8 +10,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  FIELD_VARIABLES, formatFieldValue, frameClock, isSynthetic, legendColorFor, loopMinutes,
-  orderedFrames, pixelFor, sampleField,
+  backLabel, FIELD_VARIABLES, formatFieldValue, frameClock, inkOn, isSynthetic,
+  legendColorFor, loopMinutes, orderedFrames, pixelFor, sampleField, unitLabel,
   type FieldVariable,
 } from '../core/fields';
 import { fixtureManifest, fixtureValues } from '../core/fields/fixture';
@@ -258,5 +258,40 @@ describe('labels', () => {
   it('clocks a frame in the reader’s own time', () => {
     const frame = orderedFrames(fixtureManifest('temperature')).at(-1)!;
     expect(frameClock(frame)).toMatch(/^\d{2}:\d{2}$/);
+  });
+
+  it('translates the manifest’s CF units into what a reader reads', () => {
+    expect(unitLabel('degC')).toBe('°C');
+    expect(unitLabel('percent')).toBe('%');
+    expect(unitLabel('m s-1')).toBe('m/s');
+    // An unrecognised unit passes through: wrong-looking beside a number is a bug
+    // report, missing is a mystery.
+    expect(unitLabel('mm')).toBe('mm');
+  });
+
+  it('says how far back a frame is, without calling the newest one “now”', () => {
+    const frames = orderedFrames(fixtureManifest('temperature'));
+    expect(backLabel(frames, frames.length - 1)).toBe('laatste');
+    expect(backLabel(frames, frames.length - 2)).toBe('10 min terug');
+    expect(backLabel(frames, frames.length - 7)).toBe('1 uur terug');
+    expect(backLabel(frames, 0)).toBe('1,8 uur terug');
+    expect(backLabel([], 0)).toBe('');
+  });
+
+  it('picks ink that stays readable across the whole ramp', () => {
+    const legend = fixtureManifest('temperature').legend;
+    // Every stop, plus the midpoints between them: the ramp runs dark-light-dark, so a
+    // single ink colour cannot serve it and this is what the bubbles rely on.
+    for (let t = legend.vmin; t <= legend.vmax; t += 2.5) {
+      const fill = legendColorFor(legend, t)!;
+      const ink = inkOn(fill);
+      const luma = (hex: string) => {
+        const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+        return (0.299 * r! + 0.587 * g! + 0.114 * b!) / 255;
+      };
+      // Not a contrast-ratio check, which the design system owns; just that the ink is
+      // on the other side of the fill rather than beside it.
+      expect(Math.abs(luma(ink) - luma(fill)), `${t} C`).toBeGreaterThan(0.35);
+    }
   });
 });
