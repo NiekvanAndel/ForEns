@@ -23,7 +23,7 @@ import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { MIN_ZOOM, START_ZOOM, ZOOM_STEP, mapChrome, maxZoomFor } from './mapStyle';
-import { useLocalisedMapStyle } from './useMapStyle';
+import { useLabelLayerId, useLocalisedMapStyle } from './useMapStyle';
 import { RadarLayer } from './RadarLayer';
 import { activeProvider, type RadarFrame } from '../../core/radar';
 import type { MapView } from '../../core/radar/bubbles';
@@ -116,6 +116,8 @@ export function RadarMap({
   // Labels in the app's language, falling back to the plain style URL. See
   // `useMapStyle`.
   const mapStyle = useLocalisedMapStyle();
+  // Weather goes under the place names; see `firstLabelLayerId`.
+  const labelLayerId = useLabelLayerId();
   const peeking = usePeeking();
   const provider = activeProvider();
   const camera = useRef<CameraRef>(null);
@@ -209,7 +211,12 @@ export function RadarMap({
         />
 
         {showFrames ? (
-          <RadarLayer provider={provider} frames={frames} active={active} />
+          <RadarLayer
+            provider={provider}
+            frames={frames}
+            active={active}
+            beforeId={labelLayerId}
+          />
         ) : null}
 
         {overlay}

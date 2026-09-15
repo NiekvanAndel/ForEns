@@ -6,28 +6,34 @@
  * a blank between frames. Nothing is fetched, decoded or re-rasterised while the play
  * head is running.
  *
- * ## Full opacity, and linear resampling
+ * ## Under the labels, and short of solid
  *
- * Two deliberate differences from the radar layers above.
+ * The layer goes under the style's first label layer, so town names, the coastline's
+ * type and the motorway shields stay on top of the weather. A field covers the whole
+ * country by design — unlike a shower, which leaves most of the map alone — so without
+ * this the map loses every name it has the moment the layer comes up. Roads and water
+ * stay underneath, which is right: they are the ground the weather is over.
  *
- * The overlay is drawn solid rather than at 0.8, because it arrives already faded: its
- * alpha is the posterior's own uncertainty, so it is solid where stations anchor the
- * field and gone where the regression was only extrapolating. Dimming it again would
- * dim a judgement the pipeline already made, and leave a thin wash over ground where
- * there is nothing to say.
+ * It is drawn a little short of solid for the same reason. The overlay already carries
+ * its own fade — its alpha is the posterior's uncertainty — and this is a second, flat
+ * one on top: enough that the coastline and the larger roads read through, not so much
+ * that the ramp stops meaning a temperature. The same value the cumulative layer uses,
+ * so two layers that answer different questions at least look like one product.
  *
- * And the raster is resampled linearly, where radar uses `nearest`. The radar's cells
- * are measurements and interpolating them invents precision; this is a *posterior mean
- * field* — smooth by construction, evaluated on a grid — so a smooth enlargement is
- * closer to what the model says than a staircase of kilometre squares would be.
+ * ## Linear resampling
+ *
+ * Where radar uses `nearest`. The radar's cells are measurements and interpolating them
+ * invents precision; this is a *posterior mean field* — smooth by construction,
+ * evaluated on a grid — so a smooth enlargement is closer to what the model says than a
+ * staircase of kilometre squares would be.
  */
 import { ImageSource, Layer } from '@maplibre/maplibre-react-native';
 import type { LngLat } from '@maplibre/maplibre-react-native';
 import { overlayBounds, type FieldFrame, type FieldManifest, type FieldSource } from '../../core/fields';
 import type { GeoBounds } from '../../core/radar';
 
-/** Solid: the image's own alpha is where this layer stops. */
-const OVERLAY_OPACITY = 1;
+/** Short of solid, so the basemap reads through. Matches `CumulativeLayer`. */
+const OVERLAY_OPACITY = 0.82;
 
 const PAINT = {
   'raster-fade-duration': 0,
@@ -51,9 +57,12 @@ export interface FieldLayerProps {
   /** The frame to show. Everything else stays mounted at zero opacity. */
   active: FieldFrame | undefined;
   source: FieldSource;
+  /** The style layer to draw beneath, so the labels stay on top. Undefined draws on
+   *  top of everything, which is what happens while the style is still loading. */
+  beforeId?: string;
 }
 
-export function FieldLayer({ manifest, frames, active, source }: FieldLayerProps) {
+export function FieldLayer({ manifest, frames, active, source, beforeId }: FieldLayerProps) {
   const corners = cornersOf(overlayBounds(manifest));
 
   return (
@@ -74,6 +83,7 @@ export function FieldLayer({ manifest, frames, active, source }: FieldLayerProps
             <Layer
               type="raster"
               id={`${id}-layer`}
+              beforeId={beforeId}
               paint={{
                 ...PAINT,
                 'raster-opacity': frame.time === active?.time ? OVERLAY_OPACITY : 0,

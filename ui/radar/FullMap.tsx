@@ -100,6 +100,7 @@ import type { MapView } from '../../core/radar/bubbles';
 import { Timeline } from './Timeline';
 import { hasNowcastCurve, NowcastPanel } from './NowcastPanel';
 import { FULL_MAP_START_ZOOM, mapChrome } from './mapStyle';
+import { useLabelLayerId } from './useMapStyle';
 import { frameAtFraction } from './useRadarFrames';
 import {
   forecastBoundary, frameClock, radarAxis, type NowcastProfile, type RadarFrame,
@@ -192,6 +193,9 @@ export function FullMap({
   // The three Detailcharts layers are one thing to this screen: a scalar field on a
   // loop. Only the variable differs, so they share a hook, a panel and a legend.
   const fields = useFields(fixtureFieldSource);
+  // The overlays this screen owns go under the place names, as the radar frames
+  // inside `RadarMap` do.
+  const labelLayerId = useLabelLayerId();
   const fieldVariable = fieldVariableOf(layer);
   const showField = fieldVariable != null;
 
@@ -334,6 +338,7 @@ export function FullMap({
                   frames={fields.frames}
                   active={fields.frame}
                   source={fixtureFieldSource}
+                  beforeId={labelLayerId}
                 />
                 <FieldBubbles
                   variable={fieldVariable}
@@ -352,6 +357,7 @@ export function FullMap({
                   windows={cumulative.windows}
                   active={cumulative.window}
                   source={fixtureSource}
+                  beforeId={labelLayerId}
                 />
                 <CumulativeBubbles
                   locations={locations}

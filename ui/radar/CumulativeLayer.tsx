@@ -9,6 +9,9 @@
  * The images are palette PNGs with transparent dry ground, so they can be drawn at a
  * higher opacity than the radar loop without burying the coastline: what is painted
  * here is only the wet part.
+ *
+ * Like the field layers, they go under the style's first label layer, so a place name
+ * stays readable through the wettest block of the ramp.
  */
 import { ImageSource, Layer } from '@maplibre/maplibre-react-native';
 import type { LngLat } from '@maplibre/maplibre-react-native';
@@ -43,9 +46,13 @@ export interface CumulativeLayerProps {
   /** The window on screen; every other one stays mounted at zero opacity. */
   active: CumulativeWindow | undefined;
   source: CumulativeSource;
+  /** The style layer to draw beneath, so the labels stay on top. */
+  beforeId?: string;
 }
 
-export function CumulativeLayer({ manifest, windows, active, source }: CumulativeLayerProps) {
+export function CumulativeLayer({
+  manifest, windows, active, source, beforeId,
+}: CumulativeLayerProps) {
   const corners = cornersOf(overlayBounds(manifest));
 
   return (
@@ -69,6 +76,7 @@ export function CumulativeLayer({ manifest, windows, active, source }: Cumulativ
             <Layer
               type="raster"
               id={`cumulative-layer-${window.hours}`}
+              beforeId={beforeId}
               paint={{
                 ...PAINT,
                 'raster-opacity': window.hours === active?.hours ? OVERLAY_OPACITY : 0,

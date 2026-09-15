@@ -21,6 +21,13 @@
  *
  * This is what the Apple Maps implementation could not do, and why the app moved off
  * it — see ./mapStyle for that history.
+ *
+ * ## Under the labels
+ *
+ * `beforeId` puts the frames beneath the style's first label layer, so place names stay
+ * readable through heavy rain. It matters least here of the three layers — a shower
+ * leaves most of the map alone — and it is done anyway, so that switching layers does
+ * not also switch whether the map has names on it.
  */
 import { ImageSource, Layer, RasterSource } from '@maplibre/maplibre-react-native';
 import type { LngLat } from '@maplibre/maplibre-react-native';
@@ -59,9 +66,11 @@ export interface RadarLayerProps {
   frames: readonly RadarFrame[];
   /** The frame to show. Everything else stays mounted at zero opacity. */
   active: RadarFrame | undefined;
+  /** The style layer to draw beneath, so the labels stay on top. */
+  beforeId?: string;
 }
 
-export function RadarLayer({ provider, frames, active }: RadarLayerProps) {
+export function RadarLayer({ provider, frames, active, beforeId }: RadarLayerProps) {
   if (provider.kind === 'overlay') {
     return (
       <>
@@ -78,6 +87,7 @@ export function RadarLayer({ provider, frames, active }: RadarLayerProps) {
               <Layer
                 type="raster"
                 id={`radar-layer-${frame.id}`}
+                beforeId={beforeId}
                 paint={{
                   ...RADAR_PAINT,
                   'raster-opacity': frame.id === active?.id ? FRAME_OPACITY : 0,
@@ -105,6 +115,7 @@ export function RadarLayer({ provider, frames, active }: RadarLayerProps) {
           <Layer
             type="raster"
             id={`radar-layer-${frame.id}`}
+            beforeId={beforeId}
             paint={{
               ...RADAR_PAINT,
               'raster-opacity': frame.id === active?.id ? FRAME_OPACITY : 0,

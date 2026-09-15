@@ -27,7 +27,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
-import { localiseStyle, mapStyleFor } from './mapStyle';
+import { firstLabelLayerId, localiseStyle, mapStyleFor } from './mapStyle';
 import { usePrefs } from '../../state/prefs';
 import { useTheme } from '../../theme';
 
@@ -36,12 +36,12 @@ const STYLE_STALE_MS = 24 * 60 * 60_000;
 
 export const mapStyleKey = (url: string, lang: string) => ['map-style', url, lang] as const;
 
-export function useLocalisedMapStyle(): string | StyleSpecification {
+function useStyleQuery() {
   const { appearance } = useTheme();
   const { prefs } = usePrefs();
   const url = mapStyleFor(appearance);
 
-  const { data } = useQuery({
+  const query = useQuery({
     queryKey: mapStyleKey(url, prefs.lang),
     staleTime: STYLE_STALE_MS,
     gcTime: STYLE_STALE_MS,
@@ -55,5 +55,23 @@ export function useLocalisedMapStyle(): string | StyleSpecification {
     },
   });
 
+  return { data: query.data, url };
+}
+
+export function useLocalisedMapStyle(): string | StyleSpecification {
+  const { data, url } = useStyleQuery();
   return data ?? url;
+}
+
+/**
+ * The style layer the app's own layers should be drawn *under*, so place names stay on
+ * top of the weather.
+ *
+ * Reads the same query as `useLocalisedMapStyle`, so a second caller costs nothing: the
+ * style is fetched once per appearance and language and held for a day. Undefined until
+ * it lands, and undefined for good if it never does — in which case the layers draw on
+ * top, exactly as they did before.
+ */
+export function useLabelLayerId(): string | undefined {
+  return firstLabelLayerId(useStyleQuery().data);
 }

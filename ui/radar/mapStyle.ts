@@ -117,6 +117,31 @@ function localiseLayer(layer: LayerSpecification, lang: string): LayerSpecificat
   } as LayerSpecification;
 }
 
+/**
+ * The first layer that draws place names, so weather can be slid underneath it.
+ *
+ * A style's layers are drawn in order, and anything this app adds goes on top of all of
+ * them — which buries Amsterdam under the temperature field. MapLibre's `beforeId` puts
+ * a layer *under* a named one instead, and the right one to name is the first label
+ * layer in the style: everything above it is type, everything below it is ground.
+ *
+ * Found by walking the layers in order for the first symbol layer that mentions a name,
+ * the same blunt test `localiseStyle` uses and for the same reason — this app does not
+ * own the style and cannot enumerate its layer ids. Roads, coastlines and water go under
+ * the weather, which is right: they are the ground it is falling on. Names go over it,
+ * because a name nobody can read is not a label.
+ *
+ * Undefined where the style is a URL rather than an object, or carries no labels at all.
+ * Callers pass it straight to `beforeId`, where undefined means "on top" — the behaviour
+ * before this existed, which is also the correct fallback.
+ */
+export function firstLabelLayerId(style: StyleSpecification | string | undefined) {
+  if (!style || typeof style === 'string' || !Array.isArray(style.layers)) return undefined;
+  return style.layers.find(
+    (layer) => layer.type === 'symbol' && mentionsName(layer.layout?.['text-field'])
+  )?.id;
+}
+
 /** Whether an expression or token string draws a name at all. See above. */
 function mentionsName(field: unknown): boolean {
   return JSON.stringify(field)?.includes('name') ?? false;

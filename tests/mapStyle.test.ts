@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
-import { localiseStyle } from '../ui/radar/mapStyle';
+import { firstLabelLayerId, localiseStyle } from '../ui/radar/mapStyle';
 
 const style = (layers: unknown[]): StyleSpecification =>
   ({ version: 8, sources: {}, layers } as unknown as StyleSpecification);
@@ -86,5 +86,42 @@ describe('localiseStyle', () => {
   it('survives a style that is not shaped like a style', () => {
     const broken = { version: 8 } as unknown as StyleSpecification;
     expect(localiseStyle(broken, 'nl')).toBe(broken);
+  });
+});
+
+describe('firstLabelLayerId', () => {
+  // Weather covers the whole country, so without this the map loses every place name
+  // the moment a field layer comes up. The id it finds is what `beforeId` is given.
+  it('names the first layer that draws place names', () => {
+    const id = firstLabelLayerId(
+      style([
+        { id: 'water', type: 'fill' },
+        { id: 'roads', type: 'line' },
+        { id: 'place-town', type: 'symbol', layout: { 'text-field': ['get', 'name'] } },
+        { id: 'place-city', type: 'symbol', layout: { 'text-field': ['get', 'name'] } },
+      ])
+    );
+    expect(id).toBe('place-town');
+  });
+
+  it('ignores symbol layers that label something other than a name', () => {
+    // Motorway shields carry `ref`, contours carry `ele`. Sliding the weather under a
+    // shield layer would leave every town buried and only the road numbers on top.
+    const id = firstLabelLayerId(
+      style([
+        { id: 'shields', type: 'symbol', layout: { 'text-field': ['get', 'ref'] } },
+        { id: 'contours', type: 'symbol', layout: { 'text-field': '{ele}' } },
+        { id: 'place', type: 'symbol', layout: { 'text-field': '{name:latin}' } },
+      ])
+    );
+    expect(id).toBe('place');
+  });
+
+  it('has no answer for a style it was not given', () => {
+    // A URL rather than an object, or a style that failed to load: `beforeId` then gets
+    // undefined, which draws on top — the behaviour before any of this existed.
+    expect(firstLabelLayerId(undefined)).toBeUndefined();
+    expect(firstLabelLayerId('https://tiles.openfreemap.org/styles/bright')).toBeUndefined();
+    expect(firstLabelLayerId(style([{ id: 'water', type: 'fill' }]))).toBeUndefined();
   });
 });
