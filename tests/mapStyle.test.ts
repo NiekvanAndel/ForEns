@@ -225,9 +225,11 @@ describe('weatherBeforeLayerId', () => {
     }
   });
 
-  it('is the shipped arrangement: rain over the water, fields under it, roads always down', () => {
+  it('is the shipped arrangement: only the nowcast goes over the water', () => {
+    // The totals are a field like the others — they cover everything, so a lake painted
+    // over by one would cease to exist. Only the patchy layer can afford the water.
     expect(LAYER_DEPTH.nowcast).toBe('names');
-    expect(LAYER_DEPTH.cumulative).toBe('names');
+    expect(LAYER_DEPTH.cumulative).toBe('water');
     expect(LAYER_DEPTH.field).toBe('water');
   });
 

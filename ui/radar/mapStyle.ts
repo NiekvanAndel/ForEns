@@ -139,14 +139,15 @@ export type WeatherDepth = 'names' | 'water';
 /**
  * Which depth each layer draws at (2026-09-15, at the client's direction).
  *
- * Precipitation goes over the water: rain over a lake is still rain, and both rain
- * layers leave most of the map alone. A temperature, humidity or wind field covers
- * everything, so a lake it painted over would simply cease to exist — those keep the
- * water on top.
+ * Only the nowcast loop goes over the water. It is the one layer that is genuinely
+ * patchy — a shower covers part of the country and leaves the rest alone — so rain over
+ * a lake reads as rain over a lake. Everything else, the rainfall totals included, is a
+ * field that covers everything, and a lake painted over by one would simply cease to
+ * exist; those keep the water on top.
  */
 export const LAYER_DEPTH = {
   nowcast: 'names',
-  cumulative: 'names',
+  cumulative: 'water',
   field: 'water',
 } as const satisfies Record<string, WeatherDepth>;
 
@@ -248,6 +249,27 @@ export function orderForWeather(style: StyleSpecification): StyleSpecification {
   const bands: LayerSpecification[][] = [[], [], []];
   for (const layer of style.layers) bands[bandOf(layer)]!.push(layer);
   return { ...style, layers: [...bands[0]!, ...bands[1]!, ...bands[2]!] };
+}
+
+/**
+ * What the banding did to a style, as one line per band.
+ *
+ * The basemap is fetched at runtime from a host this project cannot reach from a
+ * build machine, so its layer ids are known only by schema and habit. When the map comes
+ * up with something over the weather that should be under it, this is how to find out
+ * which layer landed where instead of guessing at it — see `useLocalisedMapStyle`, which
+ * prints it in development.
+ */
+export function describeBands(style: StyleSpecification): string {
+  const names = ['under the weather', 'water', 'boundaries and names'];
+  return [0, 1, 2]
+    .map((band) => {
+      const ids = style.layers.filter((layer) => bandOf(layer) === band).map((l) => l.id);
+      return `  band ${band} (${names[band]}): ${ids.length} — ${ids.slice(0, 12).join(', ')}${
+        ids.length > 12 ? ', …' : ''
+      }`;
+    })
+    .join('\n');
 }
 
 /**

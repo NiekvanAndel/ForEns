@@ -28,7 +28,8 @@
 import { useQuery } from '@tanstack/react-query';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
 import {
-  localiseStyle, mapStyleFor, orderForWeather, weatherBeforeLayerId, type WeatherDepth,
+  describeBands, LAYER_DEPTH, localiseStyle, mapStyleFor, orderForWeather,
+  weatherBeforeLayerId, type WeatherDepth,
 } from './mapStyle';
 import { usePrefs } from '../../state/prefs';
 import { useTheme } from '../../theme';
@@ -57,9 +58,21 @@ function useStyleQuery() {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const style = (await response.json()) as StyleSpecification;
       // What the labels say, then where the weather will sit among the layers. Both are
-      // pure rewrites of the same document; see `WEATHER_UNDER` for why the second one
-      // has to move layers rather than only pick an insertion point.
-      return orderForWeather(localiseStyle(style, prefs.lang));
+      // pure rewrites of the same document; see `LAYER_DEPTH` for why the second one has
+      // to reorder rather than only pick an insertion point.
+      const ordered = orderForWeather(localiseStyle(style, prefs.lang));
+
+      if (__DEV__) {
+        // The basemap is not reachable from a build machine, so its layer ids are known
+        // by schema and habit rather than by having read them. If something lands on the
+        // wrong side of the weather, this says which layer it was.
+        console.log(
+          `[map] ${url}\n${describeBands(ordered)}\n` +
+            `  seams: rain under "${weatherBeforeLayerId(ordered, LAYER_DEPTH.nowcast)}", ` +
+            `fields under "${weatherBeforeLayerId(ordered, LAYER_DEPTH.field)}"`
+        );
+      }
+      return ordered;
     },
   });
 
