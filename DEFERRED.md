@@ -605,13 +605,19 @@ look-back window of 1, 3, 6, 12, 24 or 48 hours, chosen with the stacked-layers
 button in the top-right corner. The slider under the map is the length of the
 window: the last hour at the left, two days at the right, so dragging right reaches
 further back and the total grows. Play walks the same way, so the thumb moves with
-the number rather than against it. The backend contract is
+the number rather than against it.
+
+The contract's two coverage warnings — missing radar hours make the total a floor,
+uncalibrated hours are raw radar — are **not shown**, taken out at the client's
+direction (15 Sep 2026): on a 48 hour window both fire at once and, with the dummy
+notice, spent half the panel on caveats. `coverageOf` still derives them from the
+manifest, so restoring them anywhere is a render rather than a rebuild. The backend contract is
 `docs/exactcast-cumulative-radar.md` in AgroExactWebApp.
 
 **It draws bundled dummy data, not live data.** `core/radar/fixture/generated.ts` and
 `assets/cumulative/*.png` are the output of `manage.py build_cumulative_radar --dummy`,
 dumped by `AgroExactWebApp/scripts/dump_cumulative_fixtures.py`. The manifest reads
-`source: "dummy"` and the panel says so on screen, which
+`source: "dummy"` and the panel's provenance line says so beside the figure, which
 `tests/cumulative.test.ts` pins so a dummy build can never quietly pass for
 measurements. Two known differences from a live response, both deliberate: the value
 rasters are averaged down by 4 and the fixture manifest declares those smaller

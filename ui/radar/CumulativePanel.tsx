@@ -16,19 +16,25 @@
  * from the last hour out to two days, so the thumb moves with the number rather than
  * against it.
  *
- * ## What it says out loud
+ * ## What it says, and what it no longer says
  *
- * Three things the contract insists on, because each of them makes the number on
- * screen mean something other than it appears to:
+ * The anchor is named rather than called "now": the hourly radar for hour H is stored
+ * at H:10, so the newest window can end over an hour ago, and that is the one caveat
+ * a reader cannot work around by looking at the map.
  *
- *  - **The anchor is not now.** The hourly radar for hour H is stored at H:10, so the
- *    newest window can end over an hour ago. The panel names that time.
- *  - **Missing radar hours make the total a floor**, not an estimate.
- *  - **Uncalibrated hours** are raw radar rather than gauge-corrected.
+ * The contract also asks for two coverage warnings — missing radar hours make the
+ * total a floor, uncalibrated hours are raw radar — and those were a stack of three
+ * lines under the slider. Taken out at the client's direction (15 Sep 2026): on a
+ * 48 hour window all of them fire at once, which spends half the panel on caveats
+ * about a number the reader has not finished reading. The data is still in the
+ * manifest and `coverageOf` still derives it, so putting it back anywhere is a
+ * render, not a rebuild.
  *
- * And one the contract does not, because it only exists in this app: where the
- * location has a rain gauge standing in it, the figure is that gauge's own total and
- * says so — see `useCumulativeReading`.
+ * What stays beside the figure is its provenance, because that is not a caveat but
+ * part of the reading: a gauge's own total and a calibrated radar estimate are two
+ * different kinds of answer to the same question — see `useCumulativeReading`. While
+ * the layer runs on the dummy build, the radar line says so, or synthetic rainfall
+ * reads as measured.
  */
 import { Pressable, View } from 'react-native';
 import { radius, space, useTheme } from '../../theme';
@@ -36,7 +42,7 @@ import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { Scrubber } from './Scrubber';
 import {
-  clockAt, coverageOf, formatMm, sinceLabel, windowLabel,
+  clockAt, formatMm, sinceLabel, windowLabel,
   type CumulativeManifest, type CumulativeWindow,
 } from '../../core/radar/cumulative';
 import type { CumulativeReading } from './useCumulativeReading';
@@ -91,8 +97,6 @@ export function CumulativePanel({
     return <Notice icon="drop" title="Neerslagsom laden…" detail="" />;
   }
 
-  const coverage = coverageOf(window);
-
   return (
     <View style={{ paddingHorizontal: space[5], gap: space[3] }}>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[3] }}>
@@ -105,7 +109,7 @@ export function CumulativePanel({
           <Text variant="stat" weight="bold" color={palette.appValue} tabular>
             {reading.mm != null ? formatMm(reading.mm) : reading.loading ? '…' : '—'}
           </Text>
-          <Origin reading={reading} />
+          <Origin reading={reading} source={manifest.source} />
         </View>
 
         {/* The window as a word, beside the figure it belongs to. The slider's
@@ -159,50 +163,36 @@ export function CumulativePanel({
         </View>
       </View>
 
-      {coverage.missing > 0 ? (
-        <Warning
-          text={
-            `${coverage.missing} van de ${window.hours_expected} radaruren ontbreekt — ` +
-            'het totaal is een ondergrens.'
-          }
-        />
-      ) : null}
-
-      {coverage.uncalibrated > 0 ? (
-        <Warning
-          text={
-            `${coverage.uncalibrated} uur is ongekalibreerde radar, zonder correctie ` +
-            'op regenmeters.'
-          }
-        />
-      ) : null}
-
-      {reading.stationGap ? (
-        <Warning
-          text={
-            `${reading.stationName ?? 'Het station'} meldde ${reading.stationGap.hoursFound} ` +
-            `van de ${reading.stationGap.hoursExpected} uur; de radarwaarde wordt getoond.`
-          }
-        />
-      ) : null}
-
-      {reading.outsideCrop ? (
-        <Warning text="Deze locatie ligt buiten het gebied van de neerslagsom." />
-      ) : null}
-
-      {manifest.source !== 'radar' ? (
-        <Warning text={`Testdata (${manifest.source}) — geen echte metingen.`} />
-      ) : null}
     </View>
   );
 }
 
-/** Where the figure came from. Two sources answer the same question here and they are
- *  not the same kind of answer, so the panel never shows one without saying which. */
-function Origin({ reading }: { reading: CumulativeReading }) {
+/**
+ * Where the figure came from.
+ *
+ * Two sources answer the same question here and they are not the same kind of answer,
+ * so the panel never shows one without saying which. It also carries the two things a
+ * bare dash cannot explain by itself: a location the layer does not cover, and a
+ * layer built from synthetic data.
+ */
+function Origin({ reading, source }: { reading: CumulativeReading; source: string }) {
   const { palette } = useTheme();
-  if (reading.mm == null) return null;
 
+  if (reading.mm == null) {
+    // The crop is tighter than the map, so this is a real answer rather than a gap:
+    // without it the dash reads as a loading state that never finishes.
+    if (reading.outsideCrop) {
+      return (
+        <Text variant="caption" color={palette.muted}>
+          Buiten het gebied van de neerslagsom
+        </Text>
+      );
+    }
+    return null;
+  }
+
+  // A station's own measurement is a measurement whatever the radar layer is built
+  // from, so the dummy note belongs to the radar line and only to it.
   if (reading.origin === 'station') {
     return (
       <Text variant="caption" color={palette.textStation} weight="semibold">
@@ -212,22 +202,10 @@ function Origin({ reading }: { reading: CumulativeReading }) {
   }
   return (
     <Text variant="caption" color={palette.muted}>
-      Radar, gekalibreerd op regenmeters
+      {source === 'radar'
+        ? 'Radar, gekalibreerd op regenmeters'
+        : `Radar · testdata (${source}), geen echte metingen`}
     </Text>
-  );
-}
-
-function Warning({ text }: { text: string }) {
-  const { palette } = useTheme();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[2] }}>
-      <View style={{ paddingTop: 1 }}>
-        <Icon name="warning" size={13} color={palette.muted} />
-      </View>
-      <Text variant="caption" color={palette.muted} style={{ flex: 1 }}>
-        {text}
-      </Text>
-    </View>
   );
 }
 
