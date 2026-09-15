@@ -25,9 +25,9 @@
  * ## Into the basemap, not over it
  *
  * `beforeId` puts the frames beneath part of the basemap rather than over all of it, at
- * `LAYER_DEPTH.nowcast`: the coastline, the boundaries and the place names stay on top,
- * the water goes under. Rain over a lake is rain, and a shower leaves most of the map
- * alone anyway — which is why this layer can afford to cover the water where a
+ * `LAYER_DEPTH.nowcast`: the boundaries and the place names stay on top, the water and
+ * the roads go under. Rain over a lake is still rain, and a shower leaves most of the
+ * map alone anyway — which is why this layer can afford to cover the water where a
  * temperature field cannot.
  */
 import { ImageSource, Layer, RasterSource } from '@maplibre/maplibre-react-native';

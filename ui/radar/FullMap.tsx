@@ -193,9 +193,10 @@ export function FullMap({
   // The three Detailcharts layers are one thing to this screen: a scalar field on a
   // loop. Only the variable differs, so they share a hook, a panel and a legend.
   const fields = useFields(fixtureFieldSource);
-  // The overlays this screen owns are fields rather than rain, so they sit deeper than
-  // the radar frames inside `RadarMap`: under the water as well. See `LAYER_DEPTH`.
-  const labelLayerId = useWeatherBeforeId(LAYER_DEPTH.field);
+  // A field sits deeper in the basemap than rain does — under the water as well — so
+  // the two overlays this screen owns take their own depths. See `LAYER_DEPTH`.
+  const fieldBeforeId = useWeatherBeforeId(LAYER_DEPTH.field);
+  const rainBeforeId = useWeatherBeforeId(LAYER_DEPTH.cumulative);
   const fieldVariable = fieldVariableOf(layer);
   const showField = fieldVariable != null;
 
@@ -338,7 +339,7 @@ export function FullMap({
                   frames={fields.frames}
                   active={fields.frame}
                   source={fixtureFieldSource}
-                  beforeId={labelLayerId}
+                  beforeId={fieldBeforeId}
                 />
                 <FieldBubbles
                   variable={fieldVariable}
@@ -357,7 +358,7 @@ export function FullMap({
                   windows={cumulative.windows}
                   active={cumulative.window}
                   source={fixtureSource}
-                  beforeId={labelLayerId}
+                  beforeId={rainBeforeId}
                 />
                 <CumulativeBubbles
                   locations={locations}

@@ -118,33 +118,36 @@ function localiseLayer(layer: LayerSpecification, lang: string): LayerSpecificat
 }
 
 /**
- * How deep into the basemap a weather layer is buried.
+ * How deep into the basemap a weather layer is drawn — what stays on top of it.
  *
- * - `geography` — water, coastline, boundaries and names stay over the weather; roads
- *   and buildings go under it. The map keeps its skeleton and the road network stops
- *   competing with the field for the same pixels.
- * - `coast` — only the coastline, the boundaries and the names stay over. The water
- *   areas go under too, so a field runs across the IJsselmeer and the rivers as one
- *   surface with the shoreline drawn back on top as a line.
+ * - `names` — the boundaries and the place names, and nothing else. The water areas go
+ *   under the weather with the roads.
+ * - `water` — the water as well, so the lakes and rivers stay blue over the weather.
  *
- * Two earlier settings were tried and dropped: `labels` (everything over the weather but
- * the names) and `features` (only the landcover under it). Both put the road network on
- * top of the weather, which is what this exists to stop.
+ * Roads and buildings are under the weather at either depth. A road network painted over
+ * a weather layer competes with it for the same pixels and wins, which is what all of
+ * this exists to stop.
+ *
+ * Two other arrangements were tried and dropped: everything-but-the-names on top, and
+ * only the landcover underneath. Both left the roads over the weather. A derived
+ * coastline — a line traced over the water polygon so a shoreline survived the water
+ * sinking — was tried too and dropped with them: at `names` the boundaries already carry
+ * the country's shape, and rain is patchy enough that the water reads through it.
  */
-export type WeatherDepth = 'geography' | 'coast';
+export type WeatherDepth = 'names' | 'water';
 
 /**
  * Which depth each layer draws at (2026-09-15, at the client's direction).
  *
- * The nowcast is rain rather than a field: it leaves most of the map alone, so it can
- * afford to cover the water and read as something falling *over* the country. A
- * temperature or wind field covers everything, so it wants the water on top of it to
- * keep the Randstad's lakes from disappearing.
+ * Precipitation goes over the water: rain over a lake is still rain, and both rain
+ * layers leave most of the map alone. A temperature, humidity or wind field covers
+ * everything, so a lake it painted over would simply cease to exist — those keep the
+ * water on top.
  */
 export const LAYER_DEPTH = {
-  nowcast: 'coast',
-  cumulative: 'geography',
-  field: 'geography',
+  nowcast: 'names',
+  cumulative: 'names',
+  field: 'water',
 } as const satisfies Record<string, WeatherDepth>;
 
 // ── Which layers belong over the weather ────────────────────────────────────────
@@ -209,9 +212,9 @@ export function isLabelLayer(layer: LayerSpecification): boolean {
  * The band a layer belongs to, counting up from the ground.
  *
  * 0 is the ground and everything built on it, 1 is the water, 2 is the boundaries and
- * the names. Three bands is what lets one style serve two depths at once: the nowcast
- * goes in at the 1|2 seam and the fields at the 0|1 seam, so the same document draws
- * rain over the water and a temperature field under it.
+ * the names. Three bands is what lets one style serve both depths at once: rain goes in
+ * at the 1|2 seam and a field at the 0|1 seam, so the same document draws a shower over
+ * the IJsselmeer and a temperature field under it.
  *
  * A road *name* is a label by every other test and still belongs in band 0. A road
  * hidden under a field whose label floats above it reads as a bug, not a choice.
@@ -225,48 +228,8 @@ export function bandOf(layer: LayerSpecification): 0 | 1 | 2 {
 
 // ── Putting the weather into the style ──────────────────────────────────────────
 
-/** The id of the coastline this module draws, so the shoreline survives sunken water. */
-export const COASTLINE_LAYER_ID = 'weather-coastline';
-
-/** How the drawn-back coastline looks where the basemap gives nothing to copy. */
-const COASTLINE_FALLBACK = '#7aa6c2';
-const COASTLINE_WIDTH = 0.9;
-
 /**
- * A coastline, for a map whose water can go under the weather.
- *
- * OpenMapTiles has no coastline layer: the coast is the edge of the water polygon, so
- * sinking the water takes the shoreline with it and the country loses its shape. A line
- * layer over the same source draws that polygon's outline and gives it back — the
- * shoreline, the IJsselmeer's edge and the wider rivers, over the weather rather than
- * under it.
- *
- * Its colour is lifted from the water fill it traces, so the line belongs to the basemap
- * it came from and follows the appearance without being told which one is on. A fill
- * painted with an expression gives nothing to copy, and then a neutral stands in.
- */
-export function coastlineLayer(style: StyleSpecification): LayerSpecification | null {
-  const water = style.layers?.find((layer) => layer.type === 'fill' && isWaterLayer(layer)) as
-    | (LayerSpecification & { source?: string; paint?: Record<string, unknown> })
-    | undefined;
-  if (!water?.source) return null;
-
-  const fill = water.paint?.['fill-color'];
-  return {
-    id: COASTLINE_LAYER_ID,
-    type: 'line',
-    source: water.source,
-    'source-layer': sourceLayerOf(water),
-    paint: {
-      'line-color': typeof fill === 'string' ? fill : COASTLINE_FALLBACK,
-      'line-width': COASTLINE_WIDTH,
-    },
-  } as unknown as LayerSpecification;
-}
-
-/**
- * The style as the map should draw it: the three bands in order, with the coastline at
- * the head of the top one.
+ * The style as the map should draw it: the three bands, in order.
  *
  * Sorting into bands rather than moving individual layers is what keeps each band
  * stacked the way its author drew it — road casings under road fills, boundaries under
@@ -275,51 +238,38 @@ export function coastlineLayer(style: StyleSpecification): LayerSpecification | 
  * **It is idempotent, and that is load-bearing.** The seam is found by asking the same
  * question of the ordered style that built it, so ordering an already-ordered style is a
  * no-op and the answer does not move. An earlier version found its insertion point by
- * position — the first line layer — and reordering changed what that was: the roads slid
- * below the water, became the first line layer themselves, and the weather was inserted
- * beneath them. Roads over the weather, which is precisely what the mode existed to
- * prevent.
+ * position — the first line layer — and its own reordering changed what that was: the
+ * roads slid below the water, became the first line layer themselves, and the weather
+ * was inserted beneath them. Roads over the weather, which is precisely what this exists
+ * to prevent.
  */
 export function orderForWeather(style: StyleSpecification): StyleSpecification {
   if (!Array.isArray(style?.layers)) return style;
-
   const bands: LayerSpecification[][] = [[], [], []];
-  for (const layer of style.layers) {
-    if (layer.id === COASTLINE_LAYER_ID) continue; // ours, re-added below
-    bands[bandOf(layer)]!.push(layer);
-  }
-  const coast = coastlineLayer(style);
-  return {
-    ...style,
-    layers: [...bands[0]!, ...bands[1]!, ...(coast ? [coast] : []), ...bands[2]!],
-  };
+  for (const layer of style.layers) bands[bandOf(layer)]!.push(layer);
+  return { ...style, layers: [...bands[0]!, ...bands[1]!, ...bands[2]!] };
 }
 
 /**
  * The style layer a weather layer at this depth should be drawn beneath.
  *
- * `geography` goes in under the water, `coast` under the coastline the ordering drew.
- * Callers pass the result straight to `beforeId`, where undefined means "on top" — the
- * behaviour before any of this existed, and the right fallback for a style that is still
- * a URL or that failed to load.
+ * `water` goes in under the water, `names` under the boundaries and the names. Callers
+ * pass the result straight to `beforeId`, where undefined means "on top" — the behaviour
+ * before any of this existed, and the right fallback for a style that is still a URL or
+ * that failed to load.
+ *
+ * A style with no water at all still puts a `water` layer below the names rather than
+ * over them: the seam falls back up a band, never off the top.
  */
 export function weatherBeforeLayerId(
   style: StyleSpecification | string | undefined,
   depth: WeatherDepth
 ): string | undefined {
   if (!style || typeof style === 'string' || !Array.isArray(style.layers)) return undefined;
-  const above = (band: 1 | 2) =>
-    style.layers.find((layer) => layer.id !== COASTLINE_LAYER_ID && bandOf(layer) >= band)?.id;
-
-  if (depth === 'coast') {
-    return style.layers.find((layer) => layer.id === COASTLINE_LAYER_ID)?.id ?? above(2);
-  }
-  // Under the water where there is any, and under the coastline or the names where the
-  // style has none — never over the names.
+  const from = depth === 'water' ? 1 : 2;
   return (
-    above(1) ??
-    style.layers.find((layer) => layer.id === COASTLINE_LAYER_ID)?.id ??
-    above(2)
+    style.layers.find((layer) => bandOf(layer) >= from)?.id ??
+    style.layers.find((layer) => bandOf(layer) >= 2)?.id
   );
 }
 

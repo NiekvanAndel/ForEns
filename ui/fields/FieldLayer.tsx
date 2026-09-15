@@ -10,10 +10,10 @@
  *
  * The layer is inserted into the basemap rather than laid over it, so the map keeps the
  * marks that make it a map. How deep is `LAYER_DEPTH.field` in `../radar/mapStyle`: under
- * the water as well as the boundaries and the names, which is deeper than the nowcast
- * goes. A field covers the whole country by design — unlike a shower, which leaves most
- * of the map alone — so a lake it painted over would simply cease to exist, and without
- * any of this the map loses every name it has the moment the layer comes up.
+ * the water as well as the boundaries and the names, which is a band deeper than either
+ * rain layer goes. A field covers the whole country by design — unlike a shower, which
+ * leaves most of the map alone — so a lake it painted over would simply cease to exist,
+ * and without any of this the map loses every name it has the moment the layer comes up.
  *
  * It is drawn a little short of solid for the same reason. The overlay already carries
  * its own fade — its alpha is the posterior's uncertainty — and this is a second, flat

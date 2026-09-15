@@ -9,8 +9,8 @@
 import { describe, it, expect } from 'vitest';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
 import {
-  bandOf, COASTLINE_LAYER_ID, coastlineLayer, isBoundaryLayer, isBuiltLayer, isLabelLayer,
-  isWaterLayer, LAYER_DEPTH, localiseStyle, orderForWeather, weatherBeforeLayerId,
+  bandOf, isBoundaryLayer, isBuiltLayer, isLabelLayer, isWaterLayer, LAYER_DEPTH,
+  localiseStyle, orderForWeather, weatherBeforeLayerId,
 } from '../ui/radar/mapStyle';
 
 const style = (layers: unknown[]): StyleSpecification =>
@@ -163,8 +163,7 @@ describe('classifying a basemap layer', () => {
 });
 
 describe('orderForWeather', () => {
-  const bandsOf = (s: StyleSpecification) =>
-    s.layers.filter((l) => l.id !== COASTLINE_LAYER_ID).map((l) => bandOf(l));
+  const bandsOf = (s: StyleSpecification) => s.layers.map((l) => bandOf(l));
 
   it('sorts the style into three bands, each keeping its own order', () => {
     const out = orderForWeather(bright());
@@ -178,47 +177,35 @@ describe('orderForWeather', () => {
     expect(order.indexOf('boundary-land')).toBeLessThan(order.indexOf('place-city'));
   });
 
-  it('draws the coastline back on, in the water’s own colour', () => {
-    const coast = orderForWeather(bright()).layers.find((l) => l.id === COASTLINE_LAYER_ID) as
-      | { type: string; paint?: Record<string, unknown>; 'source-layer'?: string }
-      | undefined;
-    expect(coast?.type).toBe('line');
-    expect(coast?.['source-layer']).toBe('water');
-    // Lifted from the fill it traces, so the line belongs to the basemap it came from.
-    expect(coast?.paint?.['line-color']).toBe('#a0c8f0');
-  });
-
-  it('loses no layer and invents only the coastline', () => {
-    const before = ids(bright());
-    const after = ids(orderForWeather(bright()));
-    expect(after.filter((id) => id !== COASTLINE_LAYER_ID).sort()).toEqual([...before].sort());
+  it('loses no layer and invents none', () => {
+    expect(ids(orderForWeather(bright())).sort()).toEqual([...ids(bright())].sort());
   });
 
   it('is idempotent, which is the bug that shipped once', () => {
     // An earlier version found its insertion point by position — the first line layer —
     // and its own reordering changed what that was: the roads slid below the water,
     // became the first line layer themselves, and the weather went in beneath them.
-    // Roads over the weather, which is what the mode existed to prevent.
+    // Roads over the weather, which is what this exists to prevent.
     const once = orderForWeather(bright());
     const twice = orderForWeather(once);
     expect(ids(twice)).toEqual(ids(once));
-    for (const depth of ['geography', 'coast'] as const) {
+    for (const depth of ['names', 'water'] as const) {
       expect(weatherBeforeLayerId(twice, depth)).toBe(weatherBeforeLayerId(once, depth));
     }
   });
 });
 
 describe('weatherBeforeLayerId', () => {
-  const seamFor = (depth: 'geography' | 'coast') => {
+  const seamFor = (depth: 'names' | 'water') => {
     const out = orderForWeather(bright());
     const order = ids(out);
     return { order, seam: order.indexOf(weatherBeforeLayerId(out, depth)!) };
   };
 
   it('puts a field under the water and over the roads', () => {
-    const { order, seam } = seamFor('geography');
+    const { order, seam } = seamFor('water');
     const at = (id: string) => order.indexOf(id);
-    for (const over of ['water', 'waterway', COASTLINE_LAYER_ID, 'boundary-land', 'place-city']) {
+    for (const over of ['water', 'waterway', 'boundary-land', 'water-name', 'place-city']) {
       expect(at(over), over).toBeGreaterThanOrEqual(seam);
     }
     for (const under of ['road-primary', 'building', 'highway-name', 'landcover-grass']) {
@@ -226,21 +213,22 @@ describe('weatherBeforeLayerId', () => {
     }
   });
 
-  it('puts the nowcast over the water, under the coastline and the names', () => {
-    const { order, seam } = seamFor('coast');
+  it('puts precipitation over the water, under the boundaries and the names', () => {
+    const { order, seam } = seamFor('names');
     const at = (id: string) => order.indexOf(id);
-    for (const over of [COASTLINE_LAYER_ID, 'boundary-land', 'water-name', 'place-city']) {
+    for (const over of ['boundary-land', 'water-name', 'place-city']) {
       expect(at(over), over).toBeGreaterThanOrEqual(seam);
     }
-    for (const under of ['water', 'waterway', 'road-primary', 'landcover-grass']) {
+    for (const under of ['water', 'waterway', 'road-primary', 'building', 'highway-name',
+                         'landcover-grass']) {
       expect(at(under), under).toBeLessThan(seam);
     }
   });
 
-  it('is the shipped arrangement: rain over the water, fields under it', () => {
-    expect(LAYER_DEPTH.nowcast).toBe('coast');
-    expect(LAYER_DEPTH.field).toBe('geography');
-    expect(LAYER_DEPTH.cumulative).toBe('geography');
+  it('is the shipped arrangement: rain over the water, fields under it, roads always down', () => {
+    expect(LAYER_DEPTH.nowcast).toBe('names');
+    expect(LAYER_DEPTH.cumulative).toBe('names');
+    expect(LAYER_DEPTH.field).toBe('water');
   });
 
   it('never leaves the weather over the names, whatever the style is missing', () => {
@@ -253,17 +241,13 @@ describe('weatherBeforeLayerId', () => {
           layout: { 'text-field': ['get', 'name'] } },
       ])
     );
-    expect(weatherBeforeLayerId(dry, 'geography')).toBe('place');
-    expect(weatherBeforeLayerId(dry, 'coast')).toBe('place');
+    expect(weatherBeforeLayerId(dry, 'water')).toBe('place');
+    expect(weatherBeforeLayerId(dry, 'names')).toBe('place');
   });
 
   it('has no answer for a style it was not given', () => {
-    expect(weatherBeforeLayerId(undefined, 'coast')).toBeUndefined();
-    expect(weatherBeforeLayerId('https://tiles.openfreemap.org/styles/bright', 'geography'))
+    expect(weatherBeforeLayerId(undefined, 'names')).toBeUndefined();
+    expect(weatherBeforeLayerId('https://tiles.openfreemap.org/styles/bright', 'water'))
       .toBeUndefined();
-  });
-
-  it('has no coastline to draw where the style has no water fill', () => {
-    expect(coastlineLayer(style([{ id: 'roads', type: 'line' }]))).toBeNull();
   });
 });

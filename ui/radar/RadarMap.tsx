@@ -117,7 +117,7 @@ export function RadarMap({
   // `useMapStyle`.
   const mapStyle = useLocalisedMapStyle();
   // Where the radar sits among the basemap's layers; see `LAYER_DEPTH`.
-  const labelLayerId = useWeatherBeforeId(LAYER_DEPTH.nowcast);
+  const radarBeforeId = useWeatherBeforeId(LAYER_DEPTH.nowcast);
   const peeking = usePeeking();
   const provider = activeProvider();
   const camera = useRef<CameraRef>(null);
@@ -215,7 +215,7 @@ export function RadarMap({
             provider={provider}
             frames={frames}
             active={active}
-            beforeId={labelLayerId}
+            beforeId={radarBeforeId}
           />
         ) : null}
 
