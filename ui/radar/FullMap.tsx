@@ -45,6 +45,10 @@
  * only for the one the panel is about — see `CumulativeBubbles`, which also decides
  * which bubbles have room.
  *
+ * Both layers fold the same way and through the same gesture, so a reader who put the
+ * panel away keeps it away across a layer switch. Only the folded contents differ:
+ * the radar loop's frames under one, the six windows under the other.
+ *
  * ## The panel has two states, and each is one control
  *
  * Open, it is the curve with its header: the place, how hard it is raining at the
@@ -78,12 +82,13 @@ import { RadarMap, MAP_CHROME_SIZE, type PlacePin } from './RadarMap';
 import { CumulativeLayer } from './CumulativeLayer';
 import { CumulativeLegend } from './CumulativeLegend';
 import { CumulativePanel } from './CumulativePanel';
+import { CumulativeTimeline } from './CumulativeTimeline';
 import { MapLayersControl, type MapLayer } from './MapLayersControl';
 import { CumulativeBubbles } from './CumulativeBubbles';
 import { useCumulative } from './useCumulative';
 import { useCumulativeReadings } from './useCumulativeReadings';
 import { fixtureSource } from './fixtureSource';
-import { windowLabel } from '../../core/radar/cumulative';
+import { lookbackLabel } from '../../core/radar/cumulative';
 import type { MapView } from '../../core/radar/bubbles';
 import { Timeline } from './Timeline';
 import { hasNowcastCurve, NowcastPanel } from './NowcastPanel';
@@ -104,6 +109,14 @@ const PROFILE_MAX_HEIGHT = 190;
  *  folds. The 42pt button is the tallest thing in the row; set this higher and the
  *  last part of the fold animates a height nothing occupies. */
 const TIMELINE_HEIGHT = 50;
+/** The same, for the totals panel: its heading, the figure, the window in clock terms
+ *  and the curve with its axis. Taller than the nowcast profile because it carries the
+ *  reading as well as the chart — and deliberately a little over rather than under, so
+ *  a location with a long name is folded rather than clipped while it is open. */
+const TOTALS_MAX_HEIGHT = 260;
+/** The folded row's own height: the same play button, with the window labels above
+ *  the track that the curve's axis carried while it was open. */
+const TOTALS_TIMELINE_HEIGHT = 64;
 
 /** Stable empty list, so the readings hook is not handed a new array every render
  *  while the cumulative layer is off. */
@@ -187,6 +200,10 @@ export function FullMap({
     cumulative.rasters
   );
   const reading = readings[selectedIndex] ?? SELECTED_PENDING;
+  // Only a panel with a curve in it has anything to fold. While the totals are still
+  // loading — or cannot be built at all — the panel is a single line of explanation,
+  // and a grabber over it would promise a drag that does nothing.
+  const foldable = totals ? cumulative.status === 'ready' && !!cumulative.window : curve;
 
   const chooseLayer = (next: MapLayer) => {
     setLayer(next);
@@ -224,6 +241,18 @@ export function FullMap({
     maxHeight: collapse.value * TIMELINE_HEIGHT,
   }));
 
+  // The same pair again for the totals panel. Separate styles rather than one with a
+  // height passed in: the two panels are different heights, and a fold that animates
+  // the wrong one either clips the panel open or spends its first inches on nothing.
+  const totalsStyle = useAnimatedStyle(() => ({
+    opacity: 1 - collapse.value,
+    maxHeight: (1 - collapse.value) * TOTALS_MAX_HEIGHT,
+  }));
+  const totalsTimelineStyle = useAnimatedStyle(() => ({
+    opacity: collapse.value,
+    maxHeight: collapse.value * TOTALS_TIMELINE_HEIGHT,
+  }));
+
   const active = frames[activeIndex];
   // Minutes from now for the frame on screen, which is what the panel's cursor and
   // its headline intensity are pinned to.
@@ -247,9 +276,13 @@ export function FullMap({
           places={places}
           onSelectPlace={onSelectPlace}
           // While the totals are up the badge names the window rather than a frame
-          // time: there is no frame on screen for a clock to belong to.
+          // time: there is no frame on screen for a clock to belong to. Signed, and in
+          // the same words the chart's axis uses, so the badge and the point under the
+          // cursor are visibly the same window.
           timeLabel={
-            totals && cumulative.window ? windowLabel(cumulative.window.hours) : frameClock(active)
+            totals && cumulative.window
+              ? lookbackLabel(cumulative.window.hours)
+              : frameClock(active)
           }
           showFrames={!totals}
           showPins={!totals}
@@ -333,99 +366,123 @@ export function FullMap({
           marginTop: -radius.appCard,
         }}
       >
-        {totals ? (
-          <View style={{ paddingTop: space[4] }}>
-            <CumulativePanel
-              status={cumulative.status}
-              manifest={cumulative.manifest}
-              windows={cumulative.windows}
-              index={cumulative.index}
-              onIndexChange={cumulative.setIndex}
-              playing={cumulative.playing}
-              onTogglePlay={cumulative.togglePlay}
-              reading={reading}
-              series={series}
-              locationName={locationName}
-              retryAfterSec={cumulative.retryAfterSec}
-              width={Math.max(1, panelWidth - space[5] * 2)}
-            />
-          </View>
-        ) : (
-          <>
-            <GestureDetector gesture={drag}>
-              <View>
-                {/* The grabber says the panel moves, and taps as a shortcut for the
-                    reader who would rather not drag. Without a curve there is nothing
-                    to fold, so it is not drawn. */}
-                {curve ? (
-                  <Pressable
-                    onPress={() => setOpen(!profileOpen)}
-                    accessibilityRole="button"
-                    accessibilityLabel={profileOpen ? 'Neerslaggrafiek verbergen' : 'Neerslaggrafiek tonen'}
-                    accessibilityState={{ expanded: profileOpen }}
-                    hitSlop={10}
-                    style={{ alignItems: 'center', paddingTop: space[3], paddingBottom: space[2] }}
-                  >
-                    <View
-                      style={{
-                        width: 38, height: 4, borderRadius: 2,
-                        backgroundColor: palette.hairline,
-                      }}
-                    />
-                  </Pressable>
-                ) : null}
-
-                <Animated.View style={[{ overflow: 'hidden' }, profileStyle]}>
-                  <NowcastPanel
-                    profile={profile}
-                    offsetMin={offsetMin}
-                    width={Math.max(1, panelWidth - space[5] * 2)}
-                    domain={axis ? { from: axis.from, to: axis.to } : undefined}
-                    locationName={locationName}
-                    onScrubFraction={scrubTo}
-                    boundaryFraction={forecastBoundary(frames, axis?.positions)}
-                    playing={playing}
-                    onTogglePlay={onTogglePlay}
-                    playDisabled={frames.length < 2}
-                  />
-                </Animated.View>
-              </View>
-            </GestureDetector>
-
-            {curve ? (
-              <Animated.View
-                // Invisible is also untouchable: a slider at zero opacity behind the
-                // curve would still swallow the drag meant for the curve.
-                pointerEvents={profileOpen ? 'none' : 'auto'}
-                style={[
-                  { overflow: 'hidden', paddingHorizontal: space[5], paddingTop: space[2] },
-                  timelineStyle,
-                ]}
+        <GestureDetector gesture={drag}>
+          <View>
+            {/* The grabber says the panel moves, and taps as a shortcut for the
+                reader who would rather not drag. With nothing to fold — a location
+                the nowcast cannot reach, or totals that have not loaded — it is not
+                drawn, because it would promise a drag that does nothing. */}
+            {foldable ? (
+              <Pressable
+                onPress={() => setOpen(!profileOpen)}
+                accessibilityRole="button"
+                accessibilityLabel={`${totals ? 'Neerslagsom' : 'Neerslaggrafiek'} ${profileOpen ? 'verbergen' : 'tonen'}`}
+                accessibilityState={{ expanded: profileOpen }}
+                hitSlop={10}
+                style={{ alignItems: 'center', paddingTop: space[3], paddingBottom: space[2] }}
               >
-                <Timeline
-                  frames={frames}
-                  index={activeIndex}
-                  onIndexChange={onScrub}
-                  playing={playing}
-                  onTogglePlay={onTogglePlay}
-                  showLabels={false}
-                  stepPositions={axis?.positions}
+                <View
+                  style={{
+                    width: 38, height: 4, borderRadius: 2,
+                    backgroundColor: palette.hairline,
+                  }}
                 />
+              </Pressable>
+            ) : null}
+
+            {totals ? (
+              <Animated.View
+                style={[{ overflow: 'hidden' }, foldable ? totalsStyle : undefined]}
+              >
+                {/* Its own air above it only where the grabber is not drawing any. */}
+                <View style={{ paddingTop: foldable ? 0 : space[4] }}>
+                  <CumulativePanel
+                    status={cumulative.status}
+                    manifest={cumulative.manifest}
+                    windows={cumulative.windows}
+                    index={cumulative.index}
+                    onIndexChange={cumulative.setIndex}
+                    playing={cumulative.playing}
+                    onTogglePlay={cumulative.togglePlay}
+                    reading={reading}
+                    series={series}
+                    locationName={locationName}
+                    retryAfterSec={cumulative.retryAfterSec}
+                    width={Math.max(1, panelWidth - space[5] * 2)}
+                  />
+                </View>
               </Animated.View>
             ) : (
-              <View style={{ paddingHorizontal: space[5], paddingTop: space[2] }}>
-                <Timeline
-                  frames={frames}
-                  index={activeIndex}
-                  onIndexChange={onScrub}
+              <Animated.View style={[{ overflow: 'hidden' }, profileStyle]}>
+                <NowcastPanel
+                  profile={profile}
+                  offsetMin={offsetMin}
+                  width={Math.max(1, panelWidth - space[5] * 2)}
+                  domain={axis ? { from: axis.from, to: axis.to } : undefined}
+                  locationName={locationName}
+                  onScrubFraction={scrubTo}
+                  boundaryFraction={forecastBoundary(frames, axis?.positions)}
                   playing={playing}
                   onTogglePlay={onTogglePlay}
-                  showLabels={false}
-                  stepPositions={axis?.positions}
+                  playDisabled={frames.length < 2}
                 />
-              </View>
+              </Animated.View>
             )}
-          </>
+          </View>
+        </GestureDetector>
+
+        {totals ? (
+          foldable ? (
+            <Animated.View
+              // Invisible is also untouchable: a slider at zero opacity behind the
+              // curve would still swallow the drag meant for the curve.
+              pointerEvents={profileOpen ? 'none' : 'auto'}
+              style={[
+                { overflow: 'hidden', paddingHorizontal: space[5], paddingTop: space[2] },
+                totalsTimelineStyle,
+              ]}
+            >
+              <CumulativeTimeline
+                windows={cumulative.windows}
+                index={cumulative.index}
+                onIndexChange={cumulative.setIndex}
+                playing={cumulative.playing}
+                onTogglePlay={cumulative.togglePlay}
+              />
+            </Animated.View>
+          ) : null
+        ) : curve ? (
+          <Animated.View
+            // Invisible is also untouchable: a slider at zero opacity behind the
+            // curve would still swallow the drag meant for the curve.
+            pointerEvents={profileOpen ? 'none' : 'auto'}
+            style={[
+              { overflow: 'hidden', paddingHorizontal: space[5], paddingTop: space[2] },
+              timelineStyle,
+            ]}
+          >
+            <Timeline
+              frames={frames}
+              index={activeIndex}
+              onIndexChange={onScrub}
+              playing={playing}
+              onTogglePlay={onTogglePlay}
+              showLabels={false}
+              stepPositions={axis?.positions}
+            />
+          </Animated.View>
+        ) : (
+          <View style={{ paddingHorizontal: space[5], paddingTop: space[2] }}>
+            <Timeline
+              frames={frames}
+              index={activeIndex}
+              onIndexChange={onScrub}
+              playing={playing}
+              onTogglePlay={onTogglePlay}
+              showLabels={false}
+              stepPositions={axis?.positions}
+            />
+          </View>
         )}
       </View>
     </View>

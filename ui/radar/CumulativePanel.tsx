@@ -7,18 +7,22 @@
  * time-scrubber under a static total would invite the reader to drag it looking for
  * motion that is not there.
  *
- * ## The curve is the control
+ * ## The curve is the control, until it is folded away
  *
- * There is no slider. `CumulativeChart` draws the total at each window, shortest on
- * the left, and dragging across it picks the window — the same arrangement the
- * nowcast curve has, and for the same reason: a line a reader can see moving is a
- * line they will try to drag, and a track underneath it would be a second control for
- * one choice. What the chart adds over the track it replaces is the shape of the
- * climb, which is the difference between rain that fell this morning and rain that
- * was already there yesterday.
+ * `CumulativeChart` draws the total at each window, shortest on the left, and dragging
+ * across it picks the window — the same arrangement the nowcast curve has, and for the
+ * same reason: a line a reader can see moving is a line they will try to drag. What
+ * the chart adds over a bare track is the shape of the climb, which is the difference
+ * between rain that fell this morning and rain that was already there yesterday.
  *
- * The play button walks the same way, from the last hour out to two days, so the
- * cursor moves with the number rather than against it.
+ * Swiped down, all of this folds and `CumulativeTimeline` stands in its place with a
+ * play button and a slider, because something on screen has to be draggable. The two
+ * are never visible together, which is also why the small play button in the header
+ * here and the full-sized one in that row are not a duplicate pair. The fold itself
+ * belongs to `FullMap`, which owns it for whichever layer is up.
+ *
+ * The play button walks from the last hour out to two days, so the cursor moves with
+ * the number rather than against it.
  *
  * ## What it says, and what it no longer says
  *
@@ -46,7 +50,7 @@ import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { CumulativeChart } from './CumulativeChart';
 import {
-  clockAt, formatMm, sinceLabel, windowLabel,
+  clockAt, formatMm, sinceLabel,
   type CumulativeManifest, type CumulativeWindow,
 } from '../../core/radar/cumulative';
 import type { CumulativeReading, SeriesPoint } from '../../core/radar/reading';
@@ -135,20 +139,6 @@ export function CumulativePanel({
           <Icon name={playing ? 'pause' : 'play'} size={15} color="#fff" weight="fill" />
         </Pressable>
 
-        {/* The window as a word, beside the figure it belongs to. The cursor's
-            position on the curve is that same length as a distance, which is
-            readable at a glance and unreadable as a number. */}
-        <View
-          style={{
-            backgroundColor: palette.surfaceAlt,
-            borderRadius: radius.pill,
-            paddingVertical: 6, paddingHorizontal: space[3],
-          }}
-        >
-          <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
-            {windowLabel(window.hours)}
-          </Text>
-        </View>
       </View>
 
       {/* The window in clock terms. "tot" and not "nu": the newest complete radar

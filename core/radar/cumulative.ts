@@ -307,22 +307,21 @@ export function sinceLabel(window: CumulativeWindow, now: Date = new Date()): st
   return `sinds ${pad(start.getDate())}-${pad(start.getMonth() + 1)} ${clock}`;
 }
 
-/** The window's length, as the chip beside the figure names it. */
-export function windowLabel(hours: number): string {
-  return hours === 1 ? '1 uur' : `${hours} uur`;
-}
-
 /**
- * A window on the chart's axis, as a point in the past.
+ * A window as a point in the past — how the chart's axis and the map's badge name it.
  *
- * Signed, and that is the whole point of it: "48u" under a rising line reads as a
- * forecast running two days out, which is the opposite of what this layer shows.
- * "−48u" says the axis runs backwards from now, so the climb from left to right is
- * rain being counted in as the window reaches further back.
+ * Signed, and that is the whole point of it: a bare "48u" beside a rising total reads
+ * as a forecast running two days out, which is the opposite of what this layer shows.
+ * "−48u" says the axis runs backwards from the anchor, so the climb from left to right
+ * is rain being counted in as the window reaches further back.
+ *
+ * One function for both because they are one label in two places: the badge over the
+ * map and the point under the cursor always name the same window, and two spellings of
+ * it would read as two different things.
  *
  * The minus is U+2212 rather than a hyphen, matching the app's other signed spans.
  */
-export function axisLabel(hours: number): string {
+export function lookbackLabel(hours: number): string {
   return `−${hours}u`;
 }
 

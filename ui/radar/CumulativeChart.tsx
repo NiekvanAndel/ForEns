@@ -13,8 +13,9 @@
  *
  * It is the control as well as the picture, exactly as the nowcast curve is: dragging
  * across it picks the window, and the map follows. A line a reader can see moving is
- * a line they will try to drag, and a slider underneath it would be a second control
- * for the one choice.
+ * a line they will try to drag, and a track underneath it would be a second control
+ * for one choice — the slider in `CumulativeTimeline` appears only once this is folded
+ * away, so the two are never on screen together.
  *
  * ## Gaps are drawn as gaps
  *
@@ -30,7 +31,7 @@ import Svg, { Circle, Defs, Line, LinearGradient as SvgGradient, Path, Stop } fr
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import type { SeriesPoint } from '../../core/radar/reading';
-import { axisLabel } from '../../core/radar/cumulative';
+import { lookbackLabel } from '../../core/radar/cumulative';
 
 const PAD_TOP = 10;
 const PAD_BOTTOM = 6;
@@ -190,7 +191,7 @@ export function CumulativeChart({ series, index, onIndexChange, width }: Cumulat
             weight={i === index ? 'bold' : 'regular'}
             tabular
           >
-            {axisLabel(point.hours)}
+            {lookbackLabel(point.hours)}
           </Text>
         ))}
       </View>

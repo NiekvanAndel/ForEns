@@ -612,7 +612,8 @@ up. Bubbles grow with zoom and, where two would overlap, the location higher up 
 reader's own list keeps its bubble and the other falls back to a dot — any rule based
 on the weather itself would reshuffle the map as the weather moved. The panel draws
 the accumulation curve across all six windows and doubles as the control, as the
-nowcast curve does; there is no separate slider.
+nowcast curve does; swiped down it folds away to a play button and a slider, through
+the same gesture and the same fold state the nowcast panel uses.
 
 The contract's two coverage warnings — missing radar hours make the total a floor,
 uncalibrated hours are raw radar — are **not shown**, taken out at the client's
