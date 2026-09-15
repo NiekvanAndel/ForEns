@@ -15,11 +15,12 @@
  * leaves most of the map alone — so a lake it painted over would simply cease to exist,
  * and without any of this the map loses every name it has the moment the layer comes up.
  *
- * It is drawn a little short of solid for the same reason. The overlay already carries
- * its own fade — its alpha is the posterior's uncertainty — and this is a second, flat
- * one on top: enough that the coastline and the larger roads read through, not so much
- * that the ramp stops meaning a temperature. The same value the cumulative layer uses,
- * so two layers that answer different questions at least look like one product.
+ * It is drawn well short of solid on top of that. The overlay already carries its own
+ * fade — its alpha is the posterior's uncertainty — and this is a second, flat one over
+ * it, so the roads and the towns under the field still read as the ground it is drawn
+ * on. Layer order decides what is painted over what; this decides how much of what is
+ * underneath survives being covered. They are separate questions and this layer answers
+ * both.
  *
  * ## Linear resampling
  *
@@ -33,8 +34,17 @@ import type { LngLat } from '@maplibre/maplibre-react-native';
 import { overlayBounds, type FieldFrame, type FieldManifest, type FieldSource } from '../../core/fields';
 import type { GeoBounds } from '../../core/radar';
 
-/** Short of solid, so the basemap reads through. Matches `CumulativeLayer`. */
-const OVERLAY_OPACITY = 0.82;
+/**
+ * How opaque the visible frame is drawn (0.7, at the client's direction, 2026-09-15).
+ *
+ * Well short of solid, and deliberately: roughly a third of the basemap comes through,
+ * so the road network and the built-up areas still read as a faint ground under the
+ * field. That is a different question from the layer order — the roads are *under* the
+ * weather either way (`LAYER_DEPTH`), this decides how much of them survives the
+ * covering. Lower than either rain layer, because a field covers the whole country and
+ * would otherwise erase the map it is drawn on.
+ */
+const OVERLAY_OPACITY = 0.7;
 
 const PAINT = {
   'raster-fade-duration': 0,
