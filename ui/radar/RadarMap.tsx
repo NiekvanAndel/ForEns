@@ -94,6 +94,9 @@ export interface RadarMapProps {
    * is the alternative.
    */
   onViewChange?: (view: MapView) => void;
+  /** The zoom the map opens on. Defaults to the card's framing; the full-screen page
+   *  passes `FULL_MAP_START_ZOOM`, which is a level further out. */
+  startZoom?: number;
   /** Where the basemap's attribution button sits. It is the map's own ornament, so
    *  it can only be placed inside the map — which means the caller has to say where
    *  it will not be covered. Full screen passes a raised position, because the
@@ -105,7 +108,7 @@ export interface RadarMapProps {
 export function RadarMap({
   lat, lon, frames, activeIndex, places = [], onSelectPlace, timeLabel,
   interactive = true, showControls = true, showLegend = false,
-  showFrames = true, overlay, showPins = true, onViewChange,
+  showFrames = true, overlay, showPins = true, onViewChange, startZoom = START_ZOOM,
   chromeTop = CHROME_INSET, attributionPosition = { bottom: space[2], left: space[2] },
   style,
 }: RadarMapProps) {
@@ -119,7 +122,7 @@ export function RadarMap({
   const maxZoom = maxZoomFor(provider.maxZoom);
   // Tracked so a zoom button knows where it is starting from; the camera itself
   // owns the live value once the reader pans.
-  const zoom = useRef(START_ZOOM);
+  const zoom = useRef(startZoom);
   // The last viewport reported, so a layout change can re-emit one without waiting
   // for the reader to move the map.
   const viewport = useRef({ center: [lon, lat] as [number, number], size: { width: 0, height: 0 } });
@@ -200,7 +203,7 @@ export function RadarMap({
       >
         <Camera
           ref={camera}
-          initialViewState={{ center: [lon, lat], zoom: START_ZOOM }}
+          initialViewState={{ center: [lon, lat], zoom: startZoom }}
           minZoom={MIN_ZOOM}
           maxZoom={maxZoom}
         />

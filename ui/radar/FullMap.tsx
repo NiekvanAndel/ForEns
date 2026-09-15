@@ -99,7 +99,7 @@ import { lookbackLabel } from '../../core/radar/cumulative';
 import type { MapView } from '../../core/radar/bubbles';
 import { Timeline } from './Timeline';
 import { hasNowcastCurve, NowcastPanel } from './NowcastPanel';
-import { mapChrome } from './mapStyle';
+import { FULL_MAP_START_ZOOM, mapChrome } from './mapStyle';
 import { frameAtFraction } from './useRadarFrames';
 import {
   forecastBoundary, frameClock, radarAxis, type NowcastProfile, type RadarFrame,
@@ -235,6 +235,9 @@ export function FullMap({
       ? cumulative.status === 'ready' && !!cumulative.window
       : curve;
 
+  // Under the back button, level with the layers card across the map.
+  const legendTop = insets.top + space[2] + MAP_CHROME_SIZE + space[2];
+
   const chooseLayer = (next: MapLayer) => {
     setLayer(next);
     cumulative.setEnabled(next === 'cumulative');
@@ -304,6 +307,7 @@ export function FullMap({
         <RadarMap
           lat={lat}
           lon={lon}
+          startZoom={FULL_MAP_START_ZOOM}
           frames={frames}
           activeIndex={activeIndex}
           places={places}
@@ -399,20 +403,18 @@ export function FullMap({
           top={insets.top + space[2] + MAP_CHROME_SIZE + space[2]}
         />
 
-        {/* Only with the layer that needs it, and clear of the attribution button in
-            the same corner. */}
+        {/* Both legends stand in the top-left corner, under the back button and on the
+            same line the layers control starts on opposite them. Only one can be up:
+            the picker is a radio. */}
         {totals && cumulative.manifest ? (
-          <CumulativeLegend
-            legend={cumulative.manifest.legend}
-            bottom={radius.appCard + space[2] + 28}
-          />
+          <CumulativeLegend legend={cumulative.manifest.legend} top={legendTop} />
         ) : null}
 
         {showField && fields.manifest ? (
           <FieldLegend
             legend={fields.manifest.legend}
             unit={fields.manifest.unit}
-            bottom={radius.appCard + space[2] + 28}
+            top={legendTop}
           />
         ) : null}
       </View>
@@ -460,9 +462,6 @@ export function FullMap({
                 onIndexChange={fields.setIndex}
                 playing={fields.playing}
                 onTogglePlay={fields.togglePlay}
-                value={fieldValues[selectedIndex] ?? null}
-                loading={fields.values == null}
-                locationName={locationName}
                 retryAfterSec={fields.retryAfterSec}
               />
             ) : totals ? (

@@ -7,16 +7,16 @@
  * `Scrubber`, which is the control itself — so the thumb, the rail and the drag behave
  * identically whichever layer is up, and only the labels differ.
  *
- * The ends are labelled with how far back they reach rather than with clock times, and
- * the middle carries the frame on screen as a clock. "2 uur terug — 22:50 — nu" says
- * both things a reader needs: where in the past this is, and what time that was.
+ * The ends are labelled with how far back the track reaches, and the middle carries
+ * nothing: the clock for the frame on screen is the badge in the map's top-right corner,
+ * and printing it again under the thumb would be the same fact twice, eight inches apart.
  */
 import { Pressable, View } from 'react-native';
 import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { Scrubber } from '../radar/Scrubber';
-import { backLabel, frameClock, type FieldFrame } from '../../core/fields';
+import { backLabel, type FieldFrame } from '../../core/fields';
 
 export interface FieldTimelineProps {
   /** Oldest first, as the track runs. */
@@ -31,7 +31,6 @@ export function FieldTimeline({
   frames, index, onIndexChange, playing, onTogglePlay,
 }: FieldTimelineProps) {
   const { palette } = useTheme();
-  const current = frames[index];
   const disabled = frames.length < 2;
 
   return (
@@ -54,11 +53,6 @@ export function FieldTimeline({
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
           <Text variant="caption" color={palette.muted} tabular>
             {backLabel(frames, 0)}
-          </Text>
-          {/* The frame itself: with no curve above this row, it is the only place that
-              says which moment the map is showing. */}
-          <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
-            {current ? frameClock(current) : ''}
           </Text>
           <Text variant="caption" color={palette.muted} tabular>
             {backLabel(frames, frames.length - 1)}

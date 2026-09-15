@@ -682,10 +682,12 @@ Three things stand between this and live frames, and none of them touches the UI
    bubble the app downloads a whole country's raster, and it wants one per frame for
    the loop. The contract anticipates a point endpoint (`/field/timeseries?lat&lon`)
    for exactly this; it replaces `FieldSource.values` and nothing else.
-3. **The panel has no curve**, deliberately. A curve of one location's value across
-   the loop is the obvious next thing to draw and it needs that endpoint first —
-   drawing it today would mean twelve rasters to read twelve cells. The panel shows
-   one reading and the slider instead.
+3. **The panel is only the slider.** It briefly carried a reading — the variable, the
+   value at the selected location, the clock — and every one of those was already on
+   the map, in the bubble, the badge and the layer the reader had just picked. Taken
+   out at the client's direction (15 Sep 2026). A curve of one location's value across
+   the loop is the one thing that would earn the space back, and it needs the point
+   endpoint first: drawing it today would mean twelve rasters to read twelve cells.
 
 Not verified on a device. The layer typechecks, its logic is tested, and the geometry
 is checked against the pipeline's own output — but nobody has yet seen it draw.

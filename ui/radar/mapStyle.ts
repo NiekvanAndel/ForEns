@@ -133,6 +133,22 @@ export const maxZoomFor = (providerMaxZoom: number) => providerMaxZoom + 2;
  *  the same framing the map had before the move to MapLibre. */
 export const START_ZOOM = 7;
 
+/**
+ * The zoom the *full-screen* map opens on: one level further out (2026-09-15, at the
+ * client's direction).
+ *
+ * A level is a factor of two, so this goes from about 165 km across a phone to about
+ * 330 km — the Netherlands whole, with Belgium and a slice of Germany around it. That
+ * is the footprint of both products the page draws: the nowcast run covers NL, BE and
+ * western Germany, and the Detailcharts fields are published over NL+BE. Opening inside
+ * your own data and having to pinch out to find its edge is the wrong first impression
+ * of a map that has a country's worth to show.
+ *
+ * The card on the home screen keeps `START_ZOOM`: it is a small square meant to answer
+ * "is it raining here", and a country in a thumbnail answers nothing.
+ */
+export const FULL_MAP_START_ZOOM = 6;
+
 /** The band the zoom buttons work within, matching MIN_ZOOM and maxZoomFor. */
 export const ZOOM_STEP = 1;
 
