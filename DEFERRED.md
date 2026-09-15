@@ -597,3 +597,43 @@ Three things deliberately stay out of it, decided with the client (9 Sep 2026):
   mint and yellow against a white card, dark blue and dark red against navy. The
   derivation is a note in the module and a floor enforced by
   `tests/temperatureColor.test.ts`, not code that recomputes it at draw time.
+
+## The cumulative rainfall layer runs on fixtures (15 Sep 2026)
+
+The full-screen map has a second layer: gauge-calibrated rainfall totals over a
+look-back window of 1, 3, 6, 12, 24 or 48 hours, chosen with the stacked-layers
+button in the top-right corner. The slider under the map is a time axis whose
+right-hand end is the anchor, so dragging left reaches further back and the total
+grows; play walks the same way. The backend contract is
+`docs/exactcast-cumulative-radar.md` in AgroExactWebApp.
+
+**It draws bundled dummy data, not live data.** `core/radar/fixture/generated.ts` and
+`assets/cumulative/*.png` are the output of `manage.py build_cumulative_radar --dummy`,
+dumped by `AgroExactWebApp/scripts/dump_cumulative_fixtures.py`. The manifest reads
+`source: "dummy"` and the panel says so on screen, which
+`tests/cumulative.test.ts` pins so a dummy build can never quietly pass for
+measurements. Two known differences from a live response, both deliberate: the value
+rasters are averaged down by 4 and the fixture manifest declares those smaller
+dimensions, and they are base64 in a module rather than binary assets — a
+full-resolution set is 6.4 MB of raster in the bundle.
+
+Three things stand between this and the live endpoints. None of them touches the UI:
+
+1. **Authentication.** `swiftcast/views_api.py` takes the DRF defaults, which are
+   `SessionAuthentication` and `TokenAuthentication` only. The app's sole credential
+   is a WorkOS AuthKit bearer token, so all three endpoints answer 401 to it today.
+   The fix is `WorkOSJWTAPIAuthentication` on those views — a backend change, on the
+   same branch as the layer itself.
+2. **Which backend.** `AGRO_BASE` is hard-coded to production, and the cumulative
+   branch is not deployed there. The layer needs a configurable origin before it can
+   be pointed anywhere real.
+3. **The PNG needs a header.** MapLibre's `ImageSource` takes a URL and cannot send
+   `Authorization`, and unlike the nowcast frames these PNGs are not public. Either
+   the app downloads them itself and hands the map a `file://` path (which means
+   adding `expo-file-system`), or the manifest starts carrying a short-lived signed
+   URL the map can fetch unaided.
+
+`httpSource` in `core/radar/cumulative.ts` is already written against the contract and
+tested — the 503-with-`Retry-After` state, the untouched anchor-stamped URLs — so
+switching over is a change of source, not of screens. When it lands, the fixtures and
+`ui/radar/fixtureSource.ts` go.

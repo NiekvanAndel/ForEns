@@ -66,6 +66,7 @@ export default function MapScreen() {
         onSelectPlace={selectLocation}
         profile={nowcast}
         locationName={location.name}
+        location={location}
       />
     </>
   );

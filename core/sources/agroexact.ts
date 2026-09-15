@@ -497,6 +497,89 @@ export async function fetchStationHours(
   return { hours: out, stationName };
 }
 
+/** One hour of measured rainfall, kept on its own UTC stamp. */
+export interface PrecipHour {
+  /** End of the hour the row covers, epoch ms UTC — the API's own stamp, unshifted. */
+  endMs: number;
+  /** Millimetres in that hour, or null where the station reported nothing. */
+  precip: number | null;
+}
+
+/**
+ * The station's hourly rainfall, on UTC stamps rather than local hour keys.
+ *
+ * `fetchStationHours` is the right call for anything the app lays out by local hour,
+ * and re-keying its output would be the obvious way to build this. It would also be
+ * wrong: the cumulative radar's windows end on an anchor that is a whole *UTC* hour,
+ * and matching those against local keys means a conversion in each direction with a
+ * DST change waiting inside it. This keeps the stamps the API sent.
+ *
+ * `include_partial=true` for the same reason it is set there — the newest hour is
+ * withheld otherwise, and that is exactly the hour a window ends on.
+ */
+export async function fetchStationPrecipHours(
+  token: string,
+  stationId: string,
+  hours: number,
+  opts: FetchOptions = {}
+): Promise<PrecipHour[]> {
+  const rows = await agroFetch<AggregateRow[]>(
+    token,
+    `/aggregates/${encodeURIComponent(stationId)}/` +
+      `?hours=${hours}&include_partial=true&station_only=false`,
+    opts
+  );
+
+  const out: PrecipHour[] = [];
+  for (const r of Array.isArray(rows) ? rows : []) {
+    if (!r?.timestamp) continue;
+    const endMs = new Date(r.timestamp).getTime();
+    if (!Number.isFinite(endMs)) continue;
+    const mm = num(r.precipitation);
+    out.push({ endMs, precip: mm != null ? round1(mm) : null });
+  }
+  return out;
+}
+
+/** A measured rainfall total over a window, and how much of the window it covers. */
+export interface PrecipSum {
+  mm: number;
+  /** Hours the station actually reported a figure for. */
+  hoursFound: number;
+  hoursExpected: number;
+}
+
+/**
+ * The station's own total over exactly the window a radar layer covers.
+ *
+ * The window is `(anchor - hours, anchor]`, matching the cumulative layer: a row is
+ * stamped at the end of the hour it covers, so a row at 14:00Z belongs to a window
+ * ending at 14:00Z and not to one ending at 13:00Z. Summing "the last N hours from
+ * now" instead would quietly compare a different stretch of weather with the map.
+ *
+ * Hours the station did not report are skipped rather than counted as dry, and said
+ * out loud through `hoursFound` — a gauge with a gap under-reports exactly the way a
+ * radar field with a missing hour does.
+ */
+export function sumPrecipWindow(
+  rows: readonly PrecipHour[],
+  anchorMs: number,
+  hours: number
+): PrecipSum {
+  const from = anchorMs - hours * HOUR_MS;
+  let mm = 0;
+  let hoursFound = 0;
+
+  for (const row of rows) {
+    if (row.endMs <= from || row.endMs > anchorMs) continue;
+    if (row.precip == null) continue;
+    mm += row.precip;
+    hoursFound++;
+  }
+
+  return { mm: round1(mm), hoursFound, hoursExpected: hours };
+}
+
 interface ReadingRow {
   timestamp?: string;
   station_name?: string;

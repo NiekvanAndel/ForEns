@@ -29,6 +29,17 @@
  * that does it elsewhere belongs to the pages under the tab bar, and a map you can
  * pan is no place for a gesture that navigates.
  *
+ * ## A second layer, and what it displaces
+ *
+ * The layer button in the top-right corner switches the map between the nowcast loop
+ * and the cumulative rainfall totals. It is a choice, not an addition: two
+ * precipitation ramps over the same ground leave neither of them meaning anything.
+ *
+ * So the panel below switches with it. The nowcast's curve and scrubber answer "how
+ * hard, here, soon"; the totals' slider answers "how much, here, since when". Both are
+ * the panel's one job — turn the picture into the number a reader acts on — and
+ * neither is readable while the other's controls are on screen.
+ *
  * ## The panel has two states, and each is one control
  *
  * Open, it is the curve with its header: the place, how hard it is raining at the
@@ -59,6 +70,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { duration, radius, shadowFloat, space, useTheme } from '../../theme';
 import { Icon } from '../Icon';
 import { RadarMap, MAP_CHROME_SIZE, type PlacePin } from './RadarMap';
+import { CumulativeLayer } from './CumulativeLayer';
+import { CumulativeLegend } from './CumulativeLegend';
+import { CumulativePanel } from './CumulativePanel';
+import { MapLayersControl, type MapLayer } from './MapLayersControl';
+import { useCumulative } from './useCumulative';
+import { useCumulativeReading } from './useCumulativeReading';
+import { fixtureSource } from './fixtureSource';
+import { windowLabel } from '../../core/radar/cumulative';
 import { Timeline } from './Timeline';
 import { hasNowcastCurve, NowcastPanel } from './NowcastPanel';
 import { mapChrome } from './mapStyle';
@@ -67,6 +86,7 @@ import {
   forecastBoundary, frameClock, radarAxis, type NowcastProfile, type RadarFrame,
 } from '../../core/radar';
 import { usePrefs } from '../../state/prefs';
+import type { SavedLocation } from '../../core/prefs';
 import { ta } from '../../core/i18n';
 
 /** The header, the curve and its axis. Animating a fixed maximum is what lets the
@@ -94,11 +114,19 @@ export interface FullMapProps {
   profile: NowcastProfile | null;
   /** Named in the profile's header, as on the radar page. */
   locationName?: string;
+  /**
+   * The location itself, for the cumulative read-out.
+   *
+   * `lat`/`lon` place the camera, but a rainfall total also has to know whether a rain
+   * gauge is standing here: on a station-backed location the station's own measurement
+   * is the answer, and the radar field is only an estimate of it.
+   */
+  location: SavedLocation;
 }
 
 export function FullMap({
   onClose, lat, lon, frames, activeIndex, onScrub,
-  playing, onTogglePlay, places, onSelectPlace, profile, locationName,
+  playing, onTogglePlay, places, onSelectPlace, profile, locationName, location,
 }: FullMapProps) {
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
@@ -113,6 +141,25 @@ export function FullMap({
   // Nothing to fold away, and nothing to drag: the slider stands rather than
   // trading places with a curve that was never drawn.
   const curve = hasNowcastCurve(profile);
+
+  // The second layer. Nothing is fetched until it is chosen, so a reader who never
+  // opens the picker pays nothing for it.
+  const [layer, setLayer] = useState<MapLayer>('nowcast');
+  const [layersOpen, setLayersOpen] = useState(false);
+  const cumulative = useCumulative(fixtureSource);
+  const totals = layer === 'cumulative';
+  const reading = useCumulativeReading(
+    location, cumulative.manifest, cumulative.window, cumulative.values
+  );
+
+  const chooseLayer = (next: MapLayer) => {
+    setLayer(next);
+    cumulative.setEnabled(next === 'cumulative');
+    // A loop nobody can see should not be running. Its frames come off the map with
+    // the layer switch, and a reader coming back to find the play head somewhere else
+    // has watched time pass behind a picture that was not on screen.
+    if (next === 'cumulative' && playing) onTogglePlay();
+  };
 
   const setOpen = (open: boolean) => {
     setProfileOpen(open);
@@ -163,7 +210,22 @@ export function FullMap({
           activeIndex={activeIndex}
           places={places}
           onSelectPlace={onSelectPlace}
-          timeLabel={frameClock(active)}
+          // While the totals are up the badge names the window rather than a frame
+          // time: there is no frame on screen for a clock to belong to.
+          timeLabel={
+            totals && cumulative.window ? windowLabel(cumulative.window.hours) : frameClock(active)
+          }
+          showFrames={!totals}
+          overlay={
+            totals && cumulative.manifest ? (
+              <CumulativeLayer
+                manifest={cumulative.manifest}
+                windows={cumulative.windows}
+                active={cumulative.window}
+                source={fixtureSource}
+              />
+            ) : null
+          }
           showControls={false}
           // The map runs under the status bar here, so its chrome starts below
           // the safe area: the time badge used to sit behind the battery.
@@ -193,6 +255,25 @@ export function FullMap({
         >
           <Icon name="caret-left" size={18} color={chrome.ink} weight="bold" />
         </Pressable>
+
+        {/* Directly under the time badge, on the same right-hand edge, so the map's
+            chrome stays two columns rather than three. */}
+        <MapLayersControl
+          active={layer}
+          onSelect={chooseLayer}
+          open={layersOpen}
+          onOpenChange={setLayersOpen}
+          top={insets.top + space[2] + MAP_CHROME_SIZE + space[2]}
+        />
+
+        {/* Only with the layer that needs it, and clear of the attribution button in
+            the same corner. */}
+        {totals && cumulative.manifest ? (
+          <CumulativeLegend
+            legend={cumulative.manifest.legend}
+            bottom={radius.appCard + space[2] + 28}
+          />
+        ) : null}
       </View>
 
       <View
@@ -205,78 +286,97 @@ export function FullMap({
           marginTop: -radius.appCard,
         }}
       >
-        <GestureDetector gesture={drag}>
-          <View>
-            {/* The grabber says the panel moves, and taps as a shortcut for the
-                reader who would rather not drag. Without a curve there is nothing
-                to fold, so it is not drawn. */}
-            {curve ? (
-              <Pressable
-                onPress={() => setOpen(!profileOpen)}
-                accessibilityRole="button"
-                accessibilityLabel={profileOpen ? 'Neerslaggrafiek verbergen' : 'Neerslaggrafiek tonen'}
-                accessibilityState={{ expanded: profileOpen }}
-                hitSlop={10}
-                style={{ alignItems: 'center', paddingTop: space[3], paddingBottom: space[2] }}
-              >
-                <View
-                  style={{
-                    width: 38, height: 4, borderRadius: 2,
-                    backgroundColor: palette.hairline,
-                  }}
-                />
-              </Pressable>
-            ) : null}
-
-            <Animated.View style={[{ overflow: 'hidden' }, profileStyle]}>
-              <NowcastPanel
-                profile={profile}
-                offsetMin={offsetMin}
-                width={Math.max(1, panelWidth - space[5] * 2)}
-                domain={axis ? { from: axis.from, to: axis.to } : undefined}
-                locationName={locationName}
-                onScrubFraction={scrubTo}
-                boundaryFraction={forecastBoundary(frames, axis?.positions)}
-                playing={playing}
-                onTogglePlay={onTogglePlay}
-                playDisabled={frames.length < 2}
-              />
-            </Animated.View>
-          </View>
-        </GestureDetector>
-
-        {curve ? (
-          <Animated.View
-            // Invisible is also untouchable: a slider at zero opacity behind the
-            // curve would still swallow the drag meant for the curve.
-            pointerEvents={profileOpen ? 'none' : 'auto'}
-            style={[
-              { overflow: 'hidden', paddingHorizontal: space[5], paddingTop: space[2] },
-              timelineStyle,
-            ]}
-          >
-            <Timeline
-              frames={frames}
-              index={activeIndex}
-              onIndexChange={onScrub}
-              playing={playing}
-              onTogglePlay={onTogglePlay}
-              showLabels={false}
-              stepPositions={axis?.positions}
+        {totals ? (
+          <View style={{ paddingTop: space[4] }}>
+            <CumulativePanel
+              status={cumulative.status}
+              manifest={cumulative.manifest}
+              windows={cumulative.windows}
+              index={cumulative.index}
+              onIndexChange={cumulative.setIndex}
+              playing={cumulative.playing}
+              onTogglePlay={cumulative.togglePlay}
+              reading={reading}
+              locationName={locationName}
+              retryAfterSec={cumulative.retryAfterSec}
             />
-          </Animated.View>
+          </View>
         ) : (
-          <View style={{ paddingHorizontal: space[5], paddingTop: space[2] }}>
-            <Timeline
-              frames={frames}
-              index={activeIndex}
-              onIndexChange={onScrub}
-              playing={playing}
-              onTogglePlay={onTogglePlay}
-              showLabels={false}
-              stepPositions={axis?.positions}
-            />
-          </View>
+          <>
+            <GestureDetector gesture={drag}>
+              <View>
+                {/* The grabber says the panel moves, and taps as a shortcut for the
+                    reader who would rather not drag. Without a curve there is nothing
+                    to fold, so it is not drawn. */}
+                {curve ? (
+                  <Pressable
+                    onPress={() => setOpen(!profileOpen)}
+                    accessibilityRole="button"
+                    accessibilityLabel={profileOpen ? 'Neerslaggrafiek verbergen' : 'Neerslaggrafiek tonen'}
+                    accessibilityState={{ expanded: profileOpen }}
+                    hitSlop={10}
+                    style={{ alignItems: 'center', paddingTop: space[3], paddingBottom: space[2] }}
+                  >
+                    <View
+                      style={{
+                        width: 38, height: 4, borderRadius: 2,
+                        backgroundColor: palette.hairline,
+                      }}
+                    />
+                  </Pressable>
+                ) : null}
+
+                <Animated.View style={[{ overflow: 'hidden' }, profileStyle]}>
+                  <NowcastPanel
+                    profile={profile}
+                    offsetMin={offsetMin}
+                    width={Math.max(1, panelWidth - space[5] * 2)}
+                    domain={axis ? { from: axis.from, to: axis.to } : undefined}
+                    locationName={locationName}
+                    onScrubFraction={scrubTo}
+                    boundaryFraction={forecastBoundary(frames, axis?.positions)}
+                    playing={playing}
+                    onTogglePlay={onTogglePlay}
+                    playDisabled={frames.length < 2}
+                  />
+                </Animated.View>
+              </View>
+            </GestureDetector>
+
+            {curve ? (
+              <Animated.View
+                // Invisible is also untouchable: a slider at zero opacity behind the
+                // curve would still swallow the drag meant for the curve.
+                pointerEvents={profileOpen ? 'none' : 'auto'}
+                style={[
+                  { overflow: 'hidden', paddingHorizontal: space[5], paddingTop: space[2] },
+                  timelineStyle,
+                ]}
+              >
+                <Timeline
+                  frames={frames}
+                  index={activeIndex}
+                  onIndexChange={onScrub}
+                  playing={playing}
+                  onTogglePlay={onTogglePlay}
+                  showLabels={false}
+                  stepPositions={axis?.positions}
+                />
+              </Animated.View>
+            ) : (
+              <View style={{ paddingHorizontal: space[5], paddingTop: space[2] }}>
+                <Timeline
+                  frames={frames}
+                  index={activeIndex}
+                  onIndexChange={onScrub}
+                  playing={playing}
+                  onTogglePlay={onTogglePlay}
+                  showLabels={false}
+                  stepPositions={axis?.positions}
+                />
+              </View>
+            )}
+          </>
         )}
       </View>
     </View>

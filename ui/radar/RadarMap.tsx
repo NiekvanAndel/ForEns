@@ -14,7 +14,7 @@
  * location changes, and the pin is on screen at every zoom the map allows, so the
  * button existed to undo a pan that a reader who had panned did not want undone.
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { View, Pressable } from 'react-native';
 import {
   Camera, Map as MapLibreMap, Marker, type CameraRef, type MapProps,
@@ -65,6 +65,17 @@ export interface RadarMapProps {
    *  inset, so the time badge clears the clock and the battery rather than sitting
    *  behind them. */
   chromeTop?: number;
+  /**
+   * Whether the radar loop's own frames are drawn.
+   *
+   * Off while another precipitation layer is up. Both ramps paint rain over the same
+   * ground, and stacking them gives a picture in which neither colour means anything
+   * — so the layer picker chooses between them rather than adding to them.
+   */
+  showFrames?: boolean;
+  /** Extra map layers, drawn above the radar frames and below the pins. Full screen
+   *  passes the cumulative overlays; the card has none. */
+  overlay?: ReactNode;
   /** Where the basemap's attribution button sits. It is the map's own ornament, so
    *  it can only be placed inside the map — which means the caller has to say where
    *  it will not be covered. Full screen passes a raised position, because the
@@ -76,6 +87,7 @@ export interface RadarMapProps {
 export function RadarMap({
   lat, lon, frames, activeIndex, places = [], onSelectPlace, timeLabel,
   interactive = true, showControls = true, showLegend = false,
+  showFrames = true, overlay,
   chromeTop = CHROME_INSET, attributionPosition = { bottom: space[2], left: space[2] },
   style,
 }: RadarMapProps) {
@@ -151,7 +163,11 @@ export function RadarMap({
           maxZoom={maxZoom}
         />
 
-        <RadarLayer provider={provider} frames={frames} active={active} />
+        {showFrames ? (
+          <RadarLayer provider={provider} frames={frames} active={active} />
+        ) : null}
+
+        {overlay}
 
         {/* A small dot rather than a teardrop, which at pin size covered a county. */}
         <Marker lngLat={[lon, lat]} anchor="center">
