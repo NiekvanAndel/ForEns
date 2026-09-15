@@ -28,6 +28,7 @@ import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
+import { Columns, useSidePadding } from '../../ui/layout';
 import { Card } from '../../ui/Card';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { Text } from '../../ui/Text';
@@ -67,6 +68,7 @@ const LANG_NAMES: Record<LangCode, string> = {
 export default function SettingsScreen() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
+  const sidePadding = useSidePadding();
   const { prefs, setPref } = usePrefs();
   const { refresh } = useForecast();
   const [page, setPage] = useState<Page | null>(null);
@@ -113,61 +115,63 @@ export default function SettingsScreen() {
     <View style={{ flex: 1, backgroundColor: palette.appBg }}>
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: space[5],
+          ...sidePadding,
           paddingTop: insets.top + space[4],
           paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
           gap: space[6],
         }}
         showsVerticalScrollIndicator={false}
       >
-        <Text variant="screenTitle" color={palette.inkHeading}>
-          {t('settings', prefs.lang)}
-        </Text>
+        <Columns spanning={1}>
+          <Text variant="screenTitle" color={palette.inkHeading}>
+            {t('settings', prefs.lang)}
+          </Text>
 
-        <Card pad={0}>
-          <NavRow
-            icon="circle-half"
-            label={ta('display', prefs.lang)}
-            value={`${LANG_NAMES[prefs.lang]} · ${themeLabel}`}
-            onPress={() => { tap(); setPage('display'); }}
-          />
-          <NavRow
-            icon="ruler"
-            label={ta('units', prefs.lang)}
-            value={`${windLabel} · ${tempUnitLabel(prefs.tempUnit)}`}
-            onPress={() => { tap(); setPage('units'); }}
-          />
-          <NavRow
-            icon="cloud-sun"
-            label={ta('weatherModel', prefs.lang)}
-            value={modelLabel}
-            onPress={() => { tap(); setPage('model'); }}
-          />
-          <NavRow
-            icon="dots-six-vertical"
-            label={ta('myLocations', prefs.lang)}
-            value={String(prefs.locations.length)}
-            onPress={() => { tap(); setPage('locations'); }}
-          />
-          <NavRow
-            icon="plugs-connected"
-            label={ta('integrations', prefs.lang)}
-            value={agro.connected ? (agro.account ?? ta('agroConnected', prefs.lang)) : ''}
-            onPress={() => { tap(); setPage('integrations'); }}
-          />
-          <NavRow
-            icon="info"
-            label={ta('source', prefs.lang)}
-            last
-            onPress={() => { tap(); setPage('source'); }}
-          />
-        </Card>
+          <Card pad={0}>
+            <NavRow
+              icon="circle-half"
+              label={ta('display', prefs.lang)}
+              value={`${LANG_NAMES[prefs.lang]} · ${themeLabel}`}
+              onPress={() => { tap(); setPage('display'); }}
+            />
+            <NavRow
+              icon="ruler"
+              label={ta('units', prefs.lang)}
+              value={`${windLabel} · ${tempUnitLabel(prefs.tempUnit)}`}
+              onPress={() => { tap(); setPage('units'); }}
+            />
+            <NavRow
+              icon="cloud-sun"
+              label={ta('weatherModel', prefs.lang)}
+              value={modelLabel}
+              onPress={() => { tap(); setPage('model'); }}
+            />
+            <NavRow
+              icon="dots-six-vertical"
+              label={ta('myLocations', prefs.lang)}
+              value={String(prefs.locations.length)}
+              onPress={() => { tap(); setPage('locations'); }}
+            />
+            <NavRow
+              icon="plugs-connected"
+              label={ta('integrations', prefs.lang)}
+              value={agro.connected ? (agro.account ?? ta('agroConnected', prefs.lang)) : ''}
+              onPress={() => { tap(); setPage('integrations'); }}
+            />
+            <NavRow
+              icon="info"
+              label={ta('source', prefs.lang)}
+              last
+              onPress={() => { tap(); setPage('source'); }}
+            />
+          </Card>
 
-        <Text variant="caption" color={palette.muted} align="center" style={{ lineHeight: 18 }}>
-          ExactCast AI · versie {APP_VERSION} (iOS){'\n'}
-          Weerdata: Open-Meteo · ECMWF · KNMI HARMONIE-AROME{'\n'}
-          Radar: ExactCast AI nowcast (DGMR) · KNMI-radar
-        </Text>
+          <Text variant="caption" color={palette.muted} align="center" style={{ lineHeight: 18 }}>
+            ExactCast AI · versie {APP_VERSION} (iOS){'\n'}
+            Weerdata: Open-Meteo · ECMWF · KNMI HARMONIE-AROME{'\n'}
+            Radar: ExactCast AI nowcast (DGMR) · KNMI-radar
+          </Text>
+        </Columns>
       </ScrollView>
 
       {/* ── Weergave ─────────────────────────────────────────────────────────── */}

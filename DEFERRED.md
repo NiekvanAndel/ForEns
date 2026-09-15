@@ -691,3 +691,36 @@ Three things stand between this and live frames, and none of them touches the UI
 
 Not verified on a device. The layer typechecks, its logic is tested, and the geometry
 is checked against the pipeline's own output — but nobody has yet seen it draw.
+
+## Rotation (15 Sep 2026)
+
+The app was portrait-locked; it now allows portrait and both landscapes, not
+upside-down. `app.json` names the three explicitly, because Expo's `"default"`
+would let iOS add portrait-upside-down as well. `ios/` is generated, so a
+prebuild picks this up with nothing to edit by hand.
+
+What landscape changes:
+
+- **Pages lay out in two columns** (`ui/layout` → `Columns`, arithmetic in
+  `core/layout`). Cards alternate left, right, left; a page says how many of its
+  leading cards span the full width (its heading, an alert banner) and how many
+  trailing ones do (the chart on 'Grafiek', which is a time axis).
+- **Both map surfaces float their panel** over the map instead of stacking it
+  under, capped at 420pt. Sideways there is no height to give away, and a control
+  spanning a landscape screen puts its play button and the end of its track a
+  hand's width apart.
+- **The chrome takes the side insets.** Turned sideways the notch is on one edge
+  and the rounded corner on the other, so the top bar, the tab bar, the map's
+  buttons and the legends inset by `insets.left`/`insets.right` on top of their
+  own margin.
+
+Known and accepted:
+
+- **The columns are ragged.** They alternate rather than balance by height, so a
+  short card beside a tall one leaves white space. Balancing means measuring,
+  which means cards that move after they are drawn; a gap is better than a jump.
+- **Rotating remounts the cards**, because moving them into columns moves them in
+  the tree. Page-level state survives (it is held by the page); anything a card
+  holds internally does not. Nothing on these pages currently does.
+- **Not verified on a device.** Typecheck, lint and the suite pass, and the
+  column arithmetic is tested, but nobody has turned a phone yet.

@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
+import { Columns, useSidePadding } from '../../ui/layout';
 import { Text } from '../../ui/Text';
 import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
@@ -43,6 +44,7 @@ function NowcastPage() {
   } = useForecast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const sidePadding = useSidePadding();
 
   const [expanded, setExpanded] = useState(false);
   const [sheetDay, setSheetDay] = useState<Day | null>(null);
@@ -114,7 +116,7 @@ function NowcastPage() {
     <>
     <ScrollView
       contentContainerStyle={{
-        paddingHorizontal: space[5],
+        ...sidePadding,
         paddingTop: TOP_BAR_CLEARANCE + insets.top,
         paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
         gap: space[4],
@@ -122,75 +124,77 @@ function NowcastPage() {
       showsVerticalScrollIndicator={false}
       refreshControl={refreshControl}
     >
-      <LocationTitle />
+      <Columns spanning={2} spanningEnd={1}>
+        <LocationTitle />
 
-      {phase === 'error' ? (
-        <Card>
-          <Text variant="body" color={palette.muted} align="center">
-            {error ?? ta('noData', prefs.lang)}
-          </Text>
-          <Pressable onPress={refresh} accessibilityRole="button" style={{ marginTop: space[4] }}>
-            <Text variant="label" color={palette.accentDark} align="center">
-              {ta('retry', prefs.lang)}
+        {phase === 'error' ? (
+          <Card>
+            <Text variant="body" color={palette.muted} align="center">
+              {error ?? ta('noData', prefs.lang)}
             </Text>
-          </Pressable>
-        </Card>
-      ) : !model ? (
-        <Card>
-          <View style={{ paddingVertical: space[8], alignItems: 'center', gap: space[3] }}>
-            <ActivityIndicator color={palette.accent} />
-            <Text variant="bodySm" color={palette.muted}>
-              {t('dataLoading', prefs.lang)}
-            </Text>
-          </View>
-        </Card>
-      ) : (
-        <>
-          <AlertHero alert={alert} />
-
-          <ConditionsHero
-            model={model}
-            location={location}
-            sourceLabel={sourceLabel}
-            timeLabel={timeLabel}
-            // The card's own subject at full length. See `ConditionsHero`.
-            onPress={() => router.push('/actueel')}
-          />
-
-          {/* The next hours, as their own block: the hero says what it is doing
-              now, this says what happens next, and a tap on an hour opens that
-              day in 'Verwachting'.
-
-              No heading. It said "Korte termijn (0–2 uur)" over a strip that runs a
-              day and a half in both directions, so it was wrong about the one thing
-              a heading is for; and a row of hours labelled with their own times does
-              not need to be told it is hours. */}
-          <Card pad={0} style={{ paddingTop: space[4] }}>
-            <HourSlider model={model} onPressHour={openHourDay} />
+            <Pressable onPress={refresh} accessibilityRole="button" style={{ marginTop: space[4] }}>
+              <Text variant="label" color={palette.accentDark} align="center">
+                {ta('retry', prefs.lang)}
+              </Text>
+            </Pressable>
           </Card>
+        ) : !model ? (
+          <Card>
+            <View style={{ paddingVertical: space[8], alignItems: 'center', gap: space[3] }}>
+              <ActivityIndicator color={palette.accent} />
+              <Text variant="bodySm" color={palette.muted}>
+                {t('dataLoading', prefs.lang)}
+              </Text>
+            </View>
+          </Card>
+        ) : (
+          <>
+            <AlertHero alert={alert} />
 
-          <RadarPreview
-            lat={location.lat}
-            lon={location.lon}
-            stationName={location.stationName}
-            onOpen={() => router.push('/radar')}
-          />
+            <ConditionsHero
+              model={model}
+              location={location}
+              sourceLabel={sourceLabel}
+              timeLabel={timeLabel}
+              // The card's own subject at full length. See `ConditionsHero`.
+              onPress={() => router.push('/actueel')}
+            />
 
-          <ForecastPreview
-            model={model}
-            onOpen={() => router.push('/forecast')}
-            expanded={expanded}
-            onToggleExpanded={toggleExpanded}
-            extendedLoading={!extendedLoaded}
-            onOpenDay={setSheetDay}
-          />
+            {/* The next hours, as their own block: the hero says what it is doing
+                now, this says what happens next, and a tap on an hour opens that
+                day in 'Verwachting'.
 
-          <Text variant="caption" color={palette.muted} align="center">
-            {ta('refreshedAt', prefs.lang)} {timeLabel}
-            {model.hresRunLabel ? ` · ${model.hresRunLabel}` : ''}
-          </Text>
-        </>
-      )}
+                No heading. It said "Korte termijn (0–2 uur)" over a strip that runs a
+                day and a half in both directions, so it was wrong about the one thing
+                a heading is for; and a row of hours labelled with their own times does
+                not need to be told it is hours. */}
+            <Card pad={0} style={{ paddingTop: space[4] }}>
+              <HourSlider model={model} onPressHour={openHourDay} />
+            </Card>
+
+            <RadarPreview
+              lat={location.lat}
+              lon={location.lon}
+              stationName={location.stationName}
+              onOpen={() => router.push('/radar')}
+            />
+
+            <ForecastPreview
+              model={model}
+              onOpen={() => router.push('/forecast')}
+              expanded={expanded}
+              onToggleExpanded={toggleExpanded}
+              extendedLoading={!extendedLoaded}
+              onOpenDay={setSheetDay}
+            />
+
+            <Text variant="caption" color={palette.muted} align="center">
+              {ta('refreshedAt', prefs.lang)} {timeLabel}
+              {model.hresRunLabel ? ` · ${model.hresRunLabel}` : ''}
+            </Text>
+          </>
+        )}
+      </Columns>
     </ScrollView>
 
     <DaySheet

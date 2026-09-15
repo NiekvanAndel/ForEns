@@ -88,10 +88,12 @@ export interface MapLayersControlProps {
   onOpenChange: (open: boolean) => void;
   /** Where the button's row starts, matching the rest of the map's chrome. */
   top: number;
+  /** How far in from the right, so it clears the notch when the phone is on its side. */
+  right: number;
 }
 
 export function MapLayersControl({
-  active, onSelect, open, onOpenChange, top,
+  active, onSelect, open, onOpenChange, top, right,
 }: MapLayersControlProps) {
   const { palette, appearance } = useTheme();
   const chrome = mapChrome(palette, appearance);
@@ -112,7 +114,7 @@ export function MapLayersControl({
         />
       ) : null}
 
-      <View style={{ position: 'absolute', right: 14, top, alignItems: 'flex-end' }}>
+      <View style={{ position: 'absolute', right, top, alignItems: 'flex-end' }}>
         <Pressable
           onPress={() => onOpenChange(!open)}
           accessibilityRole="button"

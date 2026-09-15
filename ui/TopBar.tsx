@@ -103,7 +103,8 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
       <View
         style={{
           position: 'absolute', left: 0, right: 0, top: 0,
-          paddingHorizontal: space[5],
+          paddingLeft: space[5] + insets.left,
+          paddingRight: space[5] + insets.right,
           paddingTop: insets.top + 6,
           paddingBottom: space[3],
           // Opaque while searching: a list of places over a moving page is unreadable.
@@ -194,7 +195,8 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
       interactive
       style={{
         position: 'absolute', left: 0, right: 0, top: 0,
-        paddingHorizontal: space[5],
+        paddingLeft: space[5] + insets.left,
+        paddingRight: space[5] + insets.right,
         paddingTop: insets.top + 6,
         paddingBottom: space[2],
         flexDirection: 'row', alignItems: 'center',

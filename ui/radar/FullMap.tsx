@@ -104,6 +104,7 @@ import { frameAtFraction } from './useRadarFrames';
 import {
   forecastBoundary, frameClock, radarAxis, type NowcastProfile, type RadarFrame,
 } from '../../core/radar';
+import { useLandscape } from '../layout';
 import { usePrefs } from '../../state/prefs';
 import type { SavedLocation } from '../../core/prefs';
 import { ta } from '../../core/i18n';
@@ -132,6 +133,11 @@ const TIMELINE_HEIGHT = 68;
  *  reading as well as the chart — and deliberately a little over rather than under, so
  *  a location with a long name is folded rather than clipped while it is open. */
 const TOTALS_MAX_HEIGHT = 260;
+
+/** How wide the floating panel gets in landscape. Wider than this and the play button
+ *  and the far end of the track are a hand's width apart, which is a control nobody can
+ *  work one-handed. */
+const PANEL_MAX_WIDTH = 420;
 
 /** Stable empty list, so the readings hook is not handed a new array every render
  *  while the cumulative layer is off. */
@@ -177,6 +183,10 @@ export function FullMap({
   const { prefs } = usePrefs();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  // Turned sideways there is barely any height to give away, so the panel stops being a
+  // band under the map and becomes a card floating on it. Bottom-left, which is the one
+  // corner nothing else claims: the legend is top-left, the layer picker top-right.
+  const landscape = useLandscape();
   const chrome = mapChrome(palette, appearance);
   const [panelWidth, setPanelWidth] = useState(width);
   // The profile collapses out of the way; the timeline below it never does.
@@ -249,6 +259,7 @@ export function FullMap({
 
   // Under the back button, level with the layers card across the map.
   const legendTop = insets.top + space[2] + MAP_CHROME_SIZE + space[2];
+  const legendLeft = insets.left + 14;
 
   const chooseLayer = (next: MapLayer) => {
     setLayer(next);
@@ -381,7 +392,7 @@ export function FullMap({
             {
               // Same line as the time badge on the right, and the same height,
               // so the two read as one row of chrome across the top.
-              position: 'absolute', left: 14, top: insets.top + space[2],
+              position: 'absolute', left: insets.left + 14, top: insets.top + space[2],
               width: MAP_CHROME_SIZE, height: MAP_CHROME_SIZE, borderRadius: radius.pill,
               backgroundColor: chrome.bg,
               alignItems: 'center', justifyContent: 'center',
@@ -401,13 +412,14 @@ export function FullMap({
           open={layersOpen}
           onOpenChange={setLayersOpen}
           top={insets.top + space[2]}
+          right={insets.right + 14}
         />
 
         {/* Both legends stand in the top-left corner, under the back button and on the
             same line the layers control starts on opposite them. Only one can be up:
             the picker is a radio. */}
         {totals && cumulative.manifest ? (
-          <CumulativeLegend legend={cumulative.manifest.legend} top={legendTop} />
+          <CumulativeLegend legend={cumulative.manifest.legend} top={legendTop} left={legendLeft} />
         ) : null}
 
         {showField && fields.manifest ? (
@@ -415,19 +427,35 @@ export function FullMap({
             legend={fields.manifest.legend}
             unit={fields.manifest.unit}
             top={legendTop}
+            left={legendLeft}
           />
         ) : null}
       </View>
 
       <View
         onLayout={(e) => setPanelWidth(e.nativeEvent.layout.width)}
-        style={{
-          backgroundColor: palette.appCard,
-          borderTopLeftRadius: radius.appCard,
-          borderTopRightRadius: radius.appCard,
-          paddingBottom: insets.bottom + space[3],
-          marginTop: -radius.appCard,
-        }}
+        style={[
+          { backgroundColor: palette.appCard },
+          landscape
+            ? {
+                position: 'absolute',
+                left: insets.left + space[3],
+                bottom: insets.bottom + space[3],
+                // Capped, because a control that spans a landscape screen puts its play
+                // button and the end of its track a hand's width apart.
+                width: Math.min(PANEL_MAX_WIDTH, width - insets.left - insets.right - space[6]),
+                borderRadius: radius.appCard,
+                paddingBottom: space[3],
+                ...shadowFloat,
+              }
+            : {
+                borderTopLeftRadius: radius.appCard,
+                borderTopRightRadius: radius.appCard,
+                paddingBottom: insets.bottom + space[3],
+                // Pulled up over the map, so the two read as one surface.
+                marginTop: -radius.appCard,
+              },
+        ]}
       >
         <GestureDetector gesture={drag}>
           <View>

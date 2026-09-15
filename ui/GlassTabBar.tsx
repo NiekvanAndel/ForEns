@@ -110,8 +110,10 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
       pointerEvents="box-none"
       style={{
         position: 'absolute',
-        left: space[5],
-        right: space[5],
+        // Sideways the notch takes one edge and the rounded corner the other, so the
+        // bar is inset by whatever the hardware claims on top of its own margin.
+        left: space[5] + insets.left,
+        right: space[5] + insets.right,
         bottom: Math.max(insets.bottom, space[3]),
       }}
     >

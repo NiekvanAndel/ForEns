@@ -3,12 +3,14 @@
     "name": "ExactCast AI",
     "slug": "exactcast-ai",
     "version": "0.1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "scheme": "exactcast",
     "userInterfaceStyle": "automatic",
     "icon": "./logos/exactcast-icon-radar-light.png",
     "newArchEnabled": true,
-    "platforms": ["ios"],
+    "platforms": [
+      "ios"
+    ],
     "ios": {
       "bundleIdentifier": "com.agroexact.exactcast",
       "icon": {
@@ -21,12 +23,24 @@
         "usesNonExemptEncryption": false
       },
       "entitlements": {
-        "com.apple.security.application-groups": ["group.com.agroexact.exactcast"]
+        "com.apple.security.application-groups": [
+          "group.com.agroexact.exactcast"
+        ]
       },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "ExactCast gebruikt je locatie om het weer en de radar voor de plek waar je bent te tonen.",
-        "BGTaskSchedulerPermittedIdentifiers": ["com.agroexact.exactcast.refresh"],
-        "UIBackgroundModes": ["fetch", "processing"]
+        "BGTaskSchedulerPermittedIdentifiers": [
+          "com.agroexact.exactcast.refresh"
+        ],
+        "UIBackgroundModes": [
+          "fetch",
+          "processing"
+        ],
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
       }
     },
     "plugins": [

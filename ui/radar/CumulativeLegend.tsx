@@ -31,9 +31,11 @@ export interface CumulativeLegendProps {
   legend: Legend;
   /** How far down it floats; the caller clears the map's own chrome. */
   top: number;
+  /** How far in from the left, so it clears the notch when the phone is on its side. */
+  left: number;
 }
 
-export function CumulativeLegend({ legend, top }: CumulativeLegendProps) {
+export function CumulativeLegend({ legend, top, left }: CumulativeLegendProps) {
   const { palette, appearance } = useTheme();
   const chrome = mapChrome(palette, appearance);
   const stops = legendStops(legend);
@@ -45,7 +47,7 @@ export function CumulativeLegend({ legend, top }: CumulativeLegendProps) {
     <View
       style={[
         {
-          position: 'absolute', left: 14, top,
+          position: 'absolute', left, top,
           backgroundColor: chrome.bg,
           borderRadius: radius.tile,
           paddingVertical: 8, paddingHorizontal: 8,

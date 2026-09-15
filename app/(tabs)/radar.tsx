@@ -24,7 +24,9 @@
  * one, and both pages read the same selection.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import {
+  ActivityIndicator, Pressable, ScrollView, View, useWindowDimensions,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { shadowFloat, space, useTheme } from '../../theme';
@@ -43,13 +45,20 @@ import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { activeProvider, forecastBoundary, frameClock, radarAxis } from '../../core/radar';
 import { mapChrome } from '../../ui/radar/mapStyle';
+import { useLandscape, useSidePadding } from '../../ui/layout';
 import { usePeeking } from '../../ui/peek';
 import { ta } from '../../core/i18n';
 
 /** The map takes as much of the page as it can. Taller than wide, because a shower
  *  track is usually read north-to-south here, and because the panel beneath it is
- *  short. */
+ *  short. Portrait only: sideways the map fills the page instead, where 0.78 would make
+ *  it taller than the screen. */
 const MAP_ASPECT = 0.78;
+
+/** How wide the floating panel gets in landscape — the same cap the full-screen map
+ *  uses, and for the same reason: a curve stretched across a landscape screen puts its
+ *  play button and the end of its axis a hand's width apart. */
+const PANEL_MAX_WIDTH = 420;
 
 function RadarPage() {
   const { palette, appearance } = useTheme();
@@ -92,31 +101,26 @@ function RadarPage() {
     ? Math.round((frames[index]!.timeMs - Date.now()) / 60_000)
     : 0;
 
+  const landscape = useLandscape();
+  const sidePadding = useSidePadding();
+  const { width } = useWindowDimensions();
+
   /** A position along the shared axis, back to the frame nearest it. */
   const scrubTo = (fraction: number) => {
     const at = frameAtFraction(axis?.positions, fraction);
     if (at != null) setIndex(at);
   };
 
-  return (
-    <ScrollView
-      onLayout={(e) => setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 4))}
-      contentContainerStyle={{
-        paddingHorizontal: space[5],
-        paddingTop: TOP_BAR_CLEARANCE + insets.top,
-        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
-        gap: space[4],
-      }}
-      showsVerticalScrollIndicator={false}
-      refreshControl={refreshControl}
-    >
-      <View>
+  // The two pieces of this page, named so the two orientations can arrange them
+  // differently without either being written twice.
+  const map = (
+      <View style={landscape ? { flex: 1 } : undefined}>
         <RadarMap
           lat={location.lat}
           lon={location.lon}
           frames={frames}
           activeIndex={index}
-          style={{ aspectRatio: MAP_ASPECT }}
+          style={landscape ? { flex: 1, borderRadius: 0 } : { aspectRatio: MAP_ASPECT }}
         />
         <Pressable
           onPress={() => router.push('/map')}
@@ -125,7 +129,7 @@ function RadarPage() {
           hitSlop={8}
           style={[
             {
-              position: 'absolute', right: 14, bottom: 14,
+              position: 'absolute', right: insets.right + 14, bottom: 14,
               width: 38, height: 38, borderRadius: 19,
               backgroundColor: chrome.bg,
               alignItems: 'center', justifyContent: 'center',
@@ -137,6 +141,9 @@ function RadarPage() {
         </Pressable>
       </View>
 
+  );
+
+  const panel = (
       <Card pad={0}>
         {loading ? (
           <View style={{ paddingVertical: space[6], alignItems: 'center' }}>
@@ -185,6 +192,51 @@ function RadarPage() {
           </View>
         )}
       </Card>
+  );
+
+  // Portrait stacks them and scrolls. Landscape has no height to give away, so the
+  // map fills the page and the panel floats on it — the arrangement the full-screen
+  // map makes, so the two read as one product.
+  if (landscape) {
+    return (
+      <View style={{ flex: 1 }}>
+        {map}
+        <View
+          onLayout={(e) =>
+            setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 2))
+          }
+          style={{
+            position: 'absolute',
+            left: insets.left + space[3],
+            bottom: TAB_BAR_CLEARANCE + insets.bottom,
+            width: Math.min(
+              PANEL_MAX_WIDTH,
+              width - insets.left - insets.right - space[6]
+            ),
+          }}
+        >
+          {panel}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      onLayout={(e) => setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 4))}
+      contentContainerStyle={{
+        ...sidePadding,
+        paddingTop: TOP_BAR_CLEARANCE + insets.top,
+        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
+        gap: space[4],
+      }}
+      showsVerticalScrollIndicator={false}
+      refreshControl={refreshControl}
+    >
+      {map}
+
+      {panel}
+
 
       <View
         style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], justifyContent: 'center' }}
