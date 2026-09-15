@@ -19,7 +19,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CumulativeUnavailable, clockAt, coverageOf, decodeValues, formatMm, httpSource,
   legendColorFor, legendStops, overlayBounds, pixelFor, sampleMm, sinceLabel,
-  slidingWindows, windowLabel, windowOf,
+  axisLabel, slidingWindows, windowLabel, windowOf,
   type CumulativeWindow,
 } from '../core/radar/cumulative';
 import { fixtureManifest, fixtureValues } from '../core/radar/fixture';
@@ -225,6 +225,16 @@ describe('labels', () => {
   it('names the window as a duration', () => {
     expect(windowLabel(1)).toBe('1 uur');
     expect(windowLabel(48)).toBe('48 uur');
+  });
+
+  it('signs the chart axis, so it cannot be read as a forecast', () => {
+    // A bare "48u" under a line that climbs to the right reads as two days ahead,
+    // which is the opposite of what the layer shows.
+    expect(axisLabel(1)).toBe('−1u');
+    expect(axisLabel(48)).toBe('−48u');
+    // The typographic minus, not a hyphen — the same sign the layer picker uses for
+    // the nowcast's own span.
+    expect(axisLabel(24).charCodeAt(0)).toBe(0x2212);
   });
 
   it('says when the counting started, in days a reader recognises', () => {

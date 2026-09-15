@@ -1,7 +1,11 @@
 /**
  * The accumulation curve: how the total at this location built up.
  *
- * One point per published window, shortest on the left. Because the windows nest —
+ * One point per published window, shortest on the left — and the axis is signed,
+ * −1u to −48u, because a bare "48u" under a rising line reads as a forecast running
+ * two days out rather than a total counted backwards from now.
+ *
+ * Because the windows nest —
  * the 24 hour field is the newest 24 hours of the 48 hour one — those points read as
  * a running sum, and the line can only climb. What it shows is the shape of that
  * climb: a steep left-hand end is rain that fell in the last few hours, a flat one
@@ -26,6 +30,7 @@ import Svg, { Circle, Defs, Line, LinearGradient as SvgGradient, Path, Stop } fr
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import type { SeriesPoint } from '../../core/radar/reading';
+import { axisLabel } from '../../core/radar/cumulative';
 
 const PAD_TOP = 10;
 const PAD_BOTTOM = 6;
@@ -185,7 +190,7 @@ export function CumulativeChart({ series, index, onIndexChange, width }: Cumulat
             weight={i === index ? 'bold' : 'regular'}
             tabular
           >
-            {`${point.hours}u`}
+            {axisLabel(point.hours)}
           </Text>
         ))}
       </View>

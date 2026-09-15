@@ -307,9 +307,23 @@ export function sinceLabel(window: CumulativeWindow, now: Date = new Date()): st
   return `sinds ${pad(start.getDate())}-${pad(start.getMonth() + 1)} ${clock}`;
 }
 
-/** The window's length, as the chip on the slider names it. */
+/** The window's length, as the chip beside the figure names it. */
 export function windowLabel(hours: number): string {
   return hours === 1 ? '1 uur' : `${hours} uur`;
+}
+
+/**
+ * A window on the chart's axis, as a point in the past.
+ *
+ * Signed, and that is the whole point of it: "48u" under a rising line reads as a
+ * forecast running two days out, which is the opposite of what this layer shows.
+ * "−48u" says the axis runs backwards from now, so the climb from left to right is
+ * rain being counted in as the window reaches further back.
+ *
+ * The minus is U+2212 rather than a hyphen, matching the app's other signed spans.
+ */
+export function axisLabel(hours: number): string {
+  return `−${hours}u`;
 }
 
 /** A total, in the one decimal the raster actually carries. */
