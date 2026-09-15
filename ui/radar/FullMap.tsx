@@ -112,18 +112,26 @@ import { ta } from '../../core/i18n';
  *  fold be a height rather than a measurement; set too high, the first part of it
  *  does nothing visible. */
 const PROFILE_MAX_HEIGHT = 190;
-/** The play button, the slider and the air above them — what unfolds as the curve
- *  folds. The 42pt button is the tallest thing in the row; set this higher and the
- *  last part of the fold animates a height nothing occupies. */
-const TIMELINE_HEIGHT = 50;
+/**
+ * The folded row: a play button, three labels and the track under them.
+ *
+ * Measured rather than guessed, because a fold animates *to* this number and anything
+ * short of the content is a row with its bottom cut off — which is what happened when
+ * the nowcast row started showing its labels and this still said 50, the height of the
+ * same row without them.
+ *
+ * 12.5pt caption ≈ 16, plus its 4pt gap, plus the scrubber's 40pt touch area = 60; plus
+ * the block's own 8pt of air above = 68. The 42pt play button fits inside the 60, so it
+ * is not what sets the height — which is exactly why the old number looked right.
+ *
+ * Both folded rows are this shape now, so they share it.
+ */
+const TIMELINE_HEIGHT = 68;
 /** The same, for the totals panel: its heading, the figure, the window in clock terms
  *  and the curve with its axis. Taller than the nowcast profile because it carries the
  *  reading as well as the chart — and deliberately a little over rather than under, so
  *  a location with a long name is folded rather than clipped while it is open. */
 const TOTALS_MAX_HEIGHT = 260;
-/** The folded row's own height: the same play button, with the window labels above
- *  the track that the curve's axis carried while it was open. */
-const TOTALS_TIMELINE_HEIGHT = 64;
 
 /** Stable empty list, so the readings hook is not handed a new array every render
  *  while the cumulative layer is off. */
@@ -281,16 +289,12 @@ export function FullMap({
     maxHeight: collapse.value * TIMELINE_HEIGHT,
   }));
 
-  // The same pair again for the totals panel. Separate styles rather than one with a
-  // height passed in: the two panels are different heights, and a fold that animates
-  // the wrong one either clips the panel open or spends its first inches on nothing.
+  // The panels themselves are different heights, so they keep separate styles: a fold
+  // that animates the wrong one either clips the panel open or spends its first inches
+  // on nothing. Their folded rows are the same shape, though, so those share `timelineStyle`.
   const totalsStyle = useAnimatedStyle(() => ({
     opacity: 1 - collapse.value,
     maxHeight: (1 - collapse.value) * TOTALS_MAX_HEIGHT,
-  }));
-  const totalsTimelineStyle = useAnimatedStyle(() => ({
-    opacity: collapse.value,
-    maxHeight: collapse.value * TOTALS_TIMELINE_HEIGHT,
   }));
 
   const active = frames[activeIndex];
@@ -512,7 +516,7 @@ export function FullMap({
               pointerEvents={profileOpen ? 'none' : 'auto'}
               style={[
                 { overflow: 'hidden', paddingHorizontal: space[5], paddingTop: space[2] },
-                totalsTimelineStyle,
+                timelineStyle,
               ]}
             >
               <CumulativeTimeline
