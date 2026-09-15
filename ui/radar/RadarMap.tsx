@@ -14,7 +14,7 @@
  * location changes, and the pin is on screen at every zoom the map allows, so the
  * button existed to undo a pan that a reader who had panned did not want undone.
  */
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ReactNode } from 'react';
 import { View, Pressable } from 'react-native';
 import {
   Camera, Map as MapLibreMap, Marker, type CameraRef, type MapProps,
@@ -26,6 +26,7 @@ import { MIN_ZOOM, START_ZOOM, ZOOM_STEP, mapChrome, maxZoomFor } from './mapSty
 import { useLocalisedMapStyle } from './useMapStyle';
 import { RadarLayer } from './RadarLayer';
 import { activeProvider, type RadarFrame } from '../../core/radar';
+import type { MapView } from '../../core/radar/bubbles';
 import { usePeeking } from '../peek';
 import type { SavedLocation } from '../../core/prefs';
 
@@ -76,6 +77,23 @@ export interface RadarMapProps {
   /** Extra map layers, drawn above the radar frames and below the pins. Full screen
    *  passes the cumulative overlays; the card has none. */
   overlay?: ReactNode;
+  /**
+   * The pin for this location and the dots for the others.
+   *
+   * On by default. Off where the overlay draws its own marks for the same places —
+   * the cumulative layer replaces every dot with a bubble carrying that location's
+   * total, and two marks per place would be two answers to one question.
+   */
+  showPins?: boolean;
+  /**
+   * The viewport, whenever it changes.
+   *
+   * Only what the map already knows: where it is, how far in, and how big it is on
+   * screen. An overlay that has to decide which of its marks would collide needs all
+   * three, and asking the map for every mark's screen point on every frame of a pan
+   * is the alternative.
+   */
+  onViewChange?: (view: MapView) => void;
   /** Where the basemap's attribution button sits. It is the map's own ornament, so
    *  it can only be placed inside the map — which means the caller has to say where
    *  it will not be covered. Full screen passes a raised position, because the
@@ -87,7 +105,7 @@ export interface RadarMapProps {
 export function RadarMap({
   lat, lon, frames, activeIndex, places = [], onSelectPlace, timeLabel,
   interactive = true, showControls = true, showLegend = false,
-  showFrames = true, overlay,
+  showFrames = true, overlay, showPins = true, onViewChange,
   chromeTop = CHROME_INSET, attributionPosition = { bottom: space[2], left: space[2] },
   style,
 }: RadarMapProps) {
@@ -102,6 +120,20 @@ export function RadarMap({
   // Tracked so a zoom button knows where it is starting from; the camera itself
   // owns the live value once the reader pans.
   const zoom = useRef(START_ZOOM);
+  // The last viewport reported, so a layout change can re-emit one without waiting
+  // for the reader to move the map.
+  const viewport = useRef({ center: [lon, lat] as [number, number], size: { width: 0, height: 0 } });
+
+  const emitView = useCallback(() => {
+    const { center, size } = viewport.current;
+    if (!onViewChange || size.width <= 0 || size.height <= 0) return;
+    onViewChange({ center, zoom: zoom.current, width: size.width, height: size.height });
+  }, [onViewChange]);
+
+  // Report the viewport as soon as there is somebody to report it to. `onLayout`
+  // fires once, on mount, so an overlay switched on later would otherwise wait for
+  // the reader to pan before it knew where anything was.
+  useEffect(() => { emitView(); }, [emitView]);
 
   // Recentre when the chosen location changes, rather than stranding the user
   // looking at the previous city.
@@ -139,7 +171,13 @@ export function RadarMap({
   }
 
   return (
-    <View style={[{ borderRadius: radius.appCard, overflow: 'hidden' }, style]}>
+    <View
+      onLayout={(e) => {
+        viewport.current.size = e.nativeEvent.layout;
+        emitView();
+      }}
+      style={[{ borderRadius: radius.appCard, overflow: 'hidden' }, style]}
+    >
       <MapLibreMap
         style={{ flex: 1 }}
         mapStyle={mapStyle}
@@ -154,7 +192,11 @@ export function RadarMap({
         // the button is the least intrusive way to show it on a map this size.
         attribution
         attributionPosition={attributionPosition}
-        onRegionDidChange={(e) => { zoom.current = e.nativeEvent.zoom; }}
+        onRegionDidChange={(e) => {
+          zoom.current = e.nativeEvent.zoom;
+          viewport.current.center = e.nativeEvent.center as [number, number];
+          emitView();
+        }}
       >
         <Camera
           ref={camera}
@@ -170,6 +212,7 @@ export function RadarMap({
         {overlay}
 
         {/* A small dot rather than a teardrop, which at pin size covered a county. */}
+        {showPins ? (
         <Marker lngLat={[lon, lat]} anchor="center">
           <View
             style={{
@@ -179,11 +222,12 @@ export function RadarMap({
             }}
           />
         </Marker>
+        ) : null}
 
         {/* The other saved locations. Hollow, so the filled dot above stays the
             place the page is about, and tappable, which is how full screen changes
             location without leaving full screen. */}
-        {places.map((p) => (
+        {(showPins ? places : []).map((p) => (
           <Marker
             key={`${p.index}-${p.location.name}`}
             lngLat={[p.location.lon, p.location.lat]}

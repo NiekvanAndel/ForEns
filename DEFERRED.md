@@ -607,6 +607,13 @@ window: the last hour at the left, two days at the right, so dragging right reac
 further back and the total grows. Play walks the same way, so the thumb moves with
 the number rather than against it.
 
+Every saved location carries its own total in a bubble on the map while the layer is
+up. Bubbles grow with zoom and, where two would overlap, the location higher up the
+reader's own list keeps its bubble and the other falls back to a dot — any rule based
+on the weather itself would reshuffle the map as the weather moved. The panel draws
+the accumulation curve across all six windows and doubles as the control, as the
+nowcast curve does; there is no separate slider.
+
 The contract's two coverage warnings — missing radar hours make the total a floor,
 uncalibrated hours are raw radar — are **not shown**, taken out at the client's
 direction (15 Sep 2026): on a 48 hour window both fire at once and, with the dummy

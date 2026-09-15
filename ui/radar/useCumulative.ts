@@ -2,9 +2,10 @@
  * The cumulative rainfall layer: which window is on screen, and what it holds.
  *
  * Owns the manifest, the window the slider is on, the play head that walks the
- * windows, and the value raster behind the read-out. The map draws all six overlays
- * at once and flips opacity between them — the rule `RadarLayer` already lives by —
- * so nothing here loads anything while the slider is being dragged.
+ * windows, and the value rasters behind every number the layer prints. The map draws
+ * all six overlays at once and flips opacity between them — the rule `RadarLayer`
+ * already lives by — so nothing here loads anything while the slider is being
+ * dragged.
  *
  * ## Why the play head runs towards *longer* windows
  *
@@ -13,6 +14,14 @@
  * the shower accumulate rather than a slideshow of six unrelated pictures. The slider
  * is ordered to match — shortest at the left — so the thumb travels with the number
  * instead of sliding backwards under a rising total.
+ *
+ * ## Every raster, not only the one on screen
+ *
+ * The panel draws the accumulation curve across all six windows at once, so all six
+ * rasters are wanted rather than the active one. One queue fetches them in the
+ * background, always taking the window in front next, and the curve fills in as they
+ * land — a chart that waits for its last point is blank for as long as the slowest
+ * request.
  *
  * ## The layer is off until it is asked for
  *
@@ -31,9 +40,8 @@ import {
 export const WINDOW_PLAY_INTERVAL_MS = 800;
 
 /** Which window the layer opens on. A day is the span most questions are about —
- *  "how much did we get overnight" — and it is long enough that the coverage
- *  warnings, when there are any, are on screen from the start rather than surprising
- *  the reader three steps into the slider. */
+ *  "how much did we get overnight" — and it is long enough that the accumulation
+ *  curve has somewhere to go in both directions from the start. */
 export const DEFAULT_WINDOW_HOURS = 24;
 
 export type CumulativeStatus = 'off' | 'loading' | 'ready' | 'unavailable' | 'error';
@@ -51,6 +59,8 @@ export interface CumulativeLayerState {
   window: CumulativeWindow | undefined;
   playing: boolean;
   togglePlay: () => void;
+  /** Every raster decoded so far, by window length. */
+  rasters: ReadonlyMap<number, Uint16Array>;
   /** The active window's raster, once it has arrived. */
   values: Uint16Array | null;
   /** Seconds the server asked us to wait, when it says the layers are not built. */
@@ -64,13 +74,21 @@ export function useCumulative(source: CumulativeSource): CumulativeLayerState {
   const [windows, setWindows] = useState<CumulativeWindow[]>([]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [values, setValues] = useState<Uint16Array | null>(null);
+  const [rasters, setRasters] = useState<ReadonlyMap<number, Uint16Array>>(new Map());
   const [retryAfterSec, setRetryAfterSec] = useState<number | null>(null);
-  // Rasters already decoded. Small, and the slider walks back over windows it has
-  // shown before; refetching one mid-drag would stall the read-out for no reason.
-  const rasters = useRef(new Map<number, Uint16Array>());
+  // Windows already being fetched, so a queue restarted by a switch-off and back on
+  // cannot ask for one that is still on its way.
+  const inFlight = useRef(new Set<number>());
+  // Mirrors the state above, so `load` can skip a window it already has without
+  // taking the map as a dependency and rebuilding itself on every arrival.
+  const rastersRef = useRef(rasters);
+  rastersRef.current = rasters;
 
   const window = windows[index];
+  // Read by the fetch queue to decide what to pull next. A ref rather than a
+  // dependency: the queue follows the slider, it does not restart with it.
+  const activeHours = useRef<number | undefined>(window?.hours);
+  activeHours.current = window?.hours;
 
   // The manifest, once, the first time the layer is switched on.
   useEffect(() => {
@@ -85,12 +103,11 @@ export function useCumulative(source: CumulativeSource): CumulativeLayerState {
         const ordered = slidingWindows(m);
         setManifest(m);
         setWindows(ordered);
-        // Open on the default window where the server publishes it, rather than on
-        // whichever end of the list happens to be first.
+        // Open on the default window where the server publishes it; without it, the
+        // shortest, which is the cheapest thing to show and the one least likely to
+        // be read as a claim about the whole of yesterday.
         const preferred = windowOf(m, DEFAULT_WINDOW_HOURS);
         const at = preferred ? ordered.indexOf(preferred) : -1;
-        // Without it, the shortest window: the cheapest thing to show, and the one
-        // least likely to be read as a claim about the whole of yesterday.
         setIndex(at >= 0 ? at : 0);
         setStatus('ready');
         setRetryAfterSec(null);
@@ -110,35 +127,49 @@ export function useCumulative(source: CumulativeSource): CumulativeLayerState {
     return () => ctrl.abort();
   }, [enabled, manifest, source]);
 
-  // The active window's raster. The overlay is already on screen by now — the picture
-  // never waits for the numbers behind it.
-  useEffect(() => {
-    if (!enabled || !window) return;
-    const cached = rasters.current.get(window.hours);
-    if (cached) {
-      setValues(cached);
-      return;
-    }
+  /** Fetch one window's raster, unless it is already here or already on its way. */
+  const load = useCallback(
+    async (target: CumulativeWindow, signal?: AbortSignal) => {
+      if (rastersRef.current.has(target.hours) || inFlight.current.has(target.hours)) return;
+      inFlight.current.add(target.hours);
+      try {
+        const raster = await source.values(target, signal);
+        if (signal?.aborted) return;
+        setRasters((prev) => new Map(prev).set(target.hours, raster));
+      } catch {
+        // The read-out and the curve simply have nothing to say for this window; the
+        // overlay itself is unaffected, so this is not the panel's error state.
+      } finally {
+        inFlight.current.delete(target.hours);
+      }
+    },
+    [source]
+  );
 
+  // One queue, serving whichever window is in front next.
+  //
+  // Sequential rather than parallel: six rasters at once on a mobile connection
+  // delays the one being looked at. And the order is read from a ref at each step
+  // rather than from the effect's own dependencies, so dragging the slider changes
+  // what is fetched next without tearing down a request that is already running —
+  // which, with the queue restarting on every arrival, is a loop rather than a load.
+  useEffect(() => {
+    if (!enabled || !windows.length) return;
     const ctrl = new AbortController();
-    // Whatever is on screen belongs to the previous window; keeping it would print a
-    // 24 hour total under a 48 hour picture.
-    setValues(null);
-    source
-      .values(window, ctrl.signal)
-      .then((raster) => {
-        if (ctrl.signal.aborted) return;
-        rasters.current.set(window.hours, raster);
-        setValues(raster);
-      })
-      .catch(() => {
-        // The read-out simply has nothing to say; the layer itself is unaffected, so
-        // this is not the panel's error state.
-        if (!ctrl.signal.aborted) setValues(null);
-      });
+
+    (async () => {
+      const remaining = new Map(windows.map((w) => [w.hours, w]));
+      while (remaining.size && !ctrl.signal.aborted) {
+        const front = activeHours.current;
+        const hours = front != null && remaining.has(front) ? front : [...remaining.keys()][0]!;
+        const target = remaining.get(hours)!;
+        remaining.delete(hours);
+        await load(target, ctrl.signal);
+      }
+    })();
 
     return () => ctrl.abort();
-  }, [enabled, window, source]);
+  }, [enabled, windows, load]);
 
   useEffect(() => {
     if (!playing || windows.length < 2) return;
@@ -175,7 +206,8 @@ export function useCumulative(source: CumulativeSource): CumulativeLayerState {
     window,
     playing,
     togglePlay: useCallback(() => setPlaying((p) => !p), []),
-    values,
+    rasters,
+    values: window ? rasters.get(window.hours) ?? null : null,
     retryAfterSec,
   };
 }

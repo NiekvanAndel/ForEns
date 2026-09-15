@@ -36,9 +36,14 @@
  * precipitation ramps over the same ground leave neither of them meaning anything.
  *
  * So the panel below switches with it. The nowcast's curve and scrubber answer "how
- * hard, here, soon"; the totals' slider answers "how much, here, since when". Both are
- * the panel's one job — turn the picture into the number a reader acts on — and
- * neither is readable while the other's controls are on screen.
+ * hard, here, soon"; the totals' curve answers "how much, here, and how did it build
+ * up". Both are the panel's one job — turn the picture into the number a reader acts
+ * on — and neither is readable while the other's controls are on screen.
+ *
+ * The pins switch too. With the totals up every saved location carries its own figure
+ * in a bubble instead of a dot, so the map answers for the reader's own places and not
+ * only for the one the panel is about — see `CumulativeBubbles`, which also decides
+ * which bubbles have room.
  *
  * ## The panel has two states, and each is one control
  *
@@ -74,10 +79,12 @@ import { CumulativeLayer } from './CumulativeLayer';
 import { CumulativeLegend } from './CumulativeLegend';
 import { CumulativePanel } from './CumulativePanel';
 import { MapLayersControl, type MapLayer } from './MapLayersControl';
+import { CumulativeBubbles } from './CumulativeBubbles';
 import { useCumulative } from './useCumulative';
-import { useCumulativeReading } from './useCumulativeReading';
+import { useCumulativeReadings } from './useCumulativeReadings';
 import { fixtureSource } from './fixtureSource';
 import { windowLabel } from '../../core/radar/cumulative';
+import type { MapView } from '../../core/radar/bubbles';
 import { Timeline } from './Timeline';
 import { hasNowcastCurve, NowcastPanel } from './NowcastPanel';
 import { mapChrome } from './mapStyle';
@@ -97,6 +104,16 @@ const PROFILE_MAX_HEIGHT = 190;
  *  folds. The 42pt button is the tallest thing in the row; set this higher and the
  *  last part of the fold animates a height nothing occupies. */
 const TIMELINE_HEIGHT = 50;
+
+/** Stable empty list, so the readings hook is not handed a new array every render
+ *  while the cumulative layer is off. */
+const EMPTY_LOCATIONS: SavedLocation[] = [];
+
+/** What the panel shows for the selected location before any reading exists — which
+ *  is the moment between switching the layer on and the manifest arriving. */
+const SELECTED_PENDING = {
+  mm: null, origin: null, outsideCrop: false, loading: true,
+} as const;
 
 export interface FullMapProps {
   /** Leaves the page. The route hands in `router.back()`. */
@@ -146,11 +163,30 @@ export function FullMap({
   // opens the picker pays nothing for it.
   const [layer, setLayer] = useState<MapLayer>('nowcast');
   const [layersOpen, setLayersOpen] = useState(false);
+  // Where the map is, for deciding which bubbles would land on top of each other.
+  // Only tracked while the bubbles are up: a state update per frame of a pan is not
+  // something to do for a layer nobody has switched on.
+  const [view, setView] = useState<MapView | null>(null);
   const cumulative = useCumulative(fixtureSource);
   const totals = layer === 'cumulative';
-  const reading = useCumulativeReading(
-    location, cumulative.manifest, cumulative.window, cumulative.values
+
+  // The reader's own list, which is both what carries a bubble each and the order
+  // that settles an overlap.
+  const locations = prefs.locations;
+  // -1 where the selected location is not in the list at all, which happens only with
+  // an empty list and the built-in default standing in for it. Left as -1 rather than
+  // clamped to 0: clamping would fill in the first location's bubble as if it were the
+  // one the map is about.
+  const selectedIndex = locations.indexOf(location);
+  const { readings, series } = useCumulativeReadings(
+    totals ? locations : EMPTY_LOCATIONS,
+    location,
+    cumulative.manifest,
+    cumulative.windows,
+    cumulative.window,
+    cumulative.rasters
   );
+  const reading = readings[selectedIndex] ?? SELECTED_PENDING;
 
   const chooseLayer = (next: MapLayer) => {
     setLayer(next);
@@ -216,14 +252,25 @@ export function FullMap({
             totals && cumulative.window ? windowLabel(cumulative.window.hours) : frameClock(active)
           }
           showFrames={!totals}
+          showPins={!totals}
+          onViewChange={totals ? setView : undefined}
           overlay={
             totals && cumulative.manifest ? (
-              <CumulativeLayer
-                manifest={cumulative.manifest}
-                windows={cumulative.windows}
-                active={cumulative.window}
-                source={fixtureSource}
-              />
+              <>
+                <CumulativeLayer
+                  manifest={cumulative.manifest}
+                  windows={cumulative.windows}
+                  active={cumulative.window}
+                  source={fixtureSource}
+                />
+                <CumulativeBubbles
+                  locations={locations}
+                  readings={readings}
+                  selectedIndex={selectedIndex}
+                  view={view}
+                  onSelect={onSelectPlace}
+                />
+              </>
             ) : null
           }
           showControls={false}
@@ -297,8 +344,10 @@ export function FullMap({
               playing={cumulative.playing}
               onTogglePlay={cumulative.togglePlay}
               reading={reading}
+              series={series}
               locationName={locationName}
               retryAfterSec={cumulative.retryAfterSec}
+              width={Math.max(1, panelWidth - space[5] * 2)}
             />
           </View>
         ) : (

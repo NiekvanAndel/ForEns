@@ -7,14 +7,18 @@
  * time-scrubber under a static total would invite the reader to drag it looking for
  * motion that is not there.
  *
- * ## The slider is the length of the window, and it grows to the right
+ * ## The curve is the control
  *
- * Every window ends at the same moment, so what the slider chooses is how far back
- * the counting starts. Dragging right reaches further back, and because the windows
- * nest, the total can only grow as it goes — which is the whole reading: drag out
- * through the night and watch the shower add up. The play button walks the same way,
- * from the last hour out to two days, so the thumb moves with the number rather than
- * against it.
+ * There is no slider. `CumulativeChart` draws the total at each window, shortest on
+ * the left, and dragging across it picks the window — the same arrangement the
+ * nowcast curve has, and for the same reason: a line a reader can see moving is a
+ * line they will try to drag, and a track underneath it would be a second control for
+ * one choice. What the chart adds over the track it replaces is the shape of the
+ * climb, which is the difference between rain that fell this morning and rain that
+ * was already there yesterday.
+ *
+ * The play button walks the same way, from the last hour out to two days, so the
+ * cursor moves with the number rather than against it.
  *
  * ## What it says, and what it no longer says
  *
@@ -40,12 +44,12 @@ import { Pressable, View } from 'react-native';
 import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
-import { Scrubber } from './Scrubber';
+import { CumulativeChart } from './CumulativeChart';
 import {
   clockAt, formatMm, sinceLabel, windowLabel,
   type CumulativeManifest, type CumulativeWindow,
 } from '../../core/radar/cumulative';
-import type { CumulativeReading } from './useCumulativeReading';
+import type { CumulativeReading, SeriesPoint } from '../../core/radar/reading';
 import type { CumulativeStatus } from './useCumulative';
 
 export interface CumulativePanelProps {
@@ -58,13 +62,17 @@ export interface CumulativePanelProps {
   playing: boolean;
   onTogglePlay: () => void;
   reading: CumulativeReading;
+  /** The accumulation curve for this location, one point per window. */
+  series: SeriesPoint[];
   locationName?: string;
   retryAfterSec: number | null;
+  /** Width available to the chart, which has to be told rather than measure itself. */
+  width: number;
 }
 
 export function CumulativePanel({
   status, manifest, windows, index, onIndexChange, playing, onTogglePlay,
-  reading, locationName, retryAfterSec,
+  reading, series, locationName, retryAfterSec, width,
 }: CumulativePanelProps) {
   const { palette } = useTheme();
   const window = windows[index];
@@ -99,7 +107,7 @@ export function CumulativePanel({
 
   return (
     <View style={{ paddingHorizontal: space[5], gap: space[3] }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[3] }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space[3] }}>
         <View style={{ flex: 1 }}>
           {locationName ? (
             <Text variant="label" weight="bold" color={palette.inkHeading} numberOfLines={1}>
@@ -112,14 +120,29 @@ export function CumulativePanel({
           <Origin reading={reading} source={manifest.source} />
         </View>
 
-        {/* The window as a word, beside the figure it belongs to. The slider's
-            position is that same length as a distance along a track, which is
+        <Pressable
+          onPress={onTogglePlay}
+          accessibilityRole="button"
+          accessibilityLabel={playing ? 'Opbouw pauzeren' : 'Opbouw afspelen'}
+          disabled={windows.length < 2}
+          hitSlop={8}
+          style={{
+            width: 34, height: 34, borderRadius: radius.pill,
+            backgroundColor: windows.length < 2 ? palette.inkDisabled : palette.accent,
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Icon name={playing ? 'pause' : 'play'} size={15} color="#fff" weight="fill" />
+        </Pressable>
+
+        {/* The window as a word, beside the figure it belongs to. The cursor's
+            position on the curve is that same length as a distance, which is
             readable at a glance and unreadable as a number. */}
         <View
           style={{
             backgroundColor: palette.surfaceAlt,
             borderRadius: radius.pill,
-            paddingVertical: 4, paddingHorizontal: space[3],
+            paddingVertical: 6, paddingHorizontal: space[3],
           }}
         >
           <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
@@ -128,40 +151,19 @@ export function CumulativePanel({
         </View>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
-        <Pressable
-          onPress={onTogglePlay}
-          accessibilityRole="button"
-          accessibilityLabel={playing ? 'Opbouw pauzeren' : 'Opbouw afspelen'}
-          disabled={windows.length < 2}
-          style={{
-            width: 42, height: 42, borderRadius: radius.pill,
-            backgroundColor: windows.length < 2 ? palette.inkDisabled : palette.accent,
-            alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <Icon name={playing ? 'pause' : 'play'} size={18} color="#fff" weight="fill" />
-        </Pressable>
+      {/* The window in clock terms. "tot" and not "nu": the newest complete radar
+          hour can be over an hour old, which is the one caveat a reader cannot work
+          around by looking at the map. */}
+      <Text variant="caption" color={palette.muted} tabular>
+        {`${sinceLabel(window)} tot ${clockAt(manifest.anchor)}`}
+      </Text>
 
-        <View style={{ flex: 1, gap: 4 }}>
-          <Scrubber
-            value={index}
-            steps={windows.length}
-            onChange={onIndexChange}
-            disabled={windows.length < 2}
-            accessibilityLabel="Terugkijkperiode"
-          />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text variant="caption" color={palette.muted} tabular>
-              {sinceLabel(window)}
-            </Text>
-            {/* Never "nu": the newest complete radar hour can be over an hour old. */}
-            <Text variant="caption" color={palette.muted} tabular>
-              {`tot ${clockAt(manifest.anchor)}`}
-            </Text>
-          </View>
-        </View>
-      </View>
+      <CumulativeChart
+        series={series}
+        index={index}
+        onIndexChange={onIndexChange}
+        width={width}
+      />
 
     </View>
   );
