@@ -6,13 +6,13 @@
  * a blank between frames. Nothing is fetched, decoded or re-rasterised while the play
  * head is running.
  *
- * ## Under the labels, and short of solid
+ * ## Under the basemap's own marks, and short of solid
  *
- * The layer goes under the style's first label layer, so town names, the coastline's
- * type and the motorway shields stay on top of the weather. A field covers the whole
+ * The layer is inserted into the basemap rather than laid over it, so the map keeps the
+ * marks that make it a map. How deep is `WEATHER_UNDER` in `../radar/mapStyle`, which is
+ * where that decision lives for all three raster layers. A field covers the whole
  * country by design — unlike a shower, which leaves most of the map alone — so without
- * this the map loses every name it has the moment the layer comes up. Roads and water
- * stay underneath, which is right: they are the ground the weather is over.
+ * this the map loses every name it has the moment the layer comes up.
  *
  * It is drawn a little short of solid for the same reason. The overlay already carries
  * its own fade — its alpha is the posterior's uncertainty — and this is a second, flat

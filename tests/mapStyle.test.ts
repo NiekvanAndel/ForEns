@@ -9,7 +9,8 @@
 import { describe, it, expect } from 'vitest';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
 import {
-  firstFeatureLayerId, firstLabelLayerId, LABEL_STYLE, localiseStyle, restyleLabels,
+  firstFeatureLayerId, firstLabelLayerId, isBuiltLayer, localiseStyle, sinkBuiltLayers,
+  weatherBeforeLayerId,
 } from '../ui/radar/mapStyle';
 
 const style = (layers: unknown[]): StyleSpecification =>
@@ -176,60 +177,95 @@ describe('firstFeatureLayerId', () => {
   });
 });
 
-describe('restyleLabels', () => {
-  const paint = (s: ReturnType<typeof restyleLabels>, id: string): Record<string, unknown> =>
-    ((s.layers.find((l) => l.id === id) as { paint?: Record<string, unknown> })?.paint ?? {});
+describe('sinkBuiltLayers', () => {
+  /** An OpenMapTiles style in the order OpenFreeMap's Bright draws it. */
+  const bright = () =>
+    style([
+      { id: 'background', type: 'background' },
+      { id: 'landcover-grass', type: 'fill', 'source-layer': 'landcover' },
+      { id: 'waterway', type: 'line', 'source-layer': 'waterway' },
+      { id: 'water', type: 'fill', 'source-layer': 'water' },
+      { id: 'building', type: 'fill', 'source-layer': 'building' },
+      { id: 'tunnel-motorway', type: 'line', 'source-layer': 'transportation' },
+      { id: 'road-primary', type: 'line', 'source-layer': 'transportation' },
+      { id: 'bridge-motorway', type: 'line', 'source-layer': 'transportation' },
+      { id: 'highway-name', type: 'symbol', 'source-layer': 'transportation_name',
+        layout: { 'text-field': ['get', 'name'] } },
+      { id: 'boundary-land', type: 'line', 'source-layer': 'boundary' },
+      { id: 'water-name', type: 'symbol', 'source-layer': 'water_name',
+        layout: { 'text-field': ['get', 'name'] } },
+      { id: 'place-city', type: 'symbol', 'source-layer': 'place',
+        layout: { 'text-field': ['get', 'name'] } },
+    ]);
 
-  it('gives every name the same ink and halo', () => {
-    const out = restyleLabels(
-      style([
-        { id: 'place', type: 'symbol', layout: { 'text-field': ['get', 'name'] } },
-        { id: 'water-name', type: 'symbol', layout: { 'text-field': '{name:latin}' } },
-      ]),
-      'dark'
-    );
-    for (const id of ['place', 'water-name']) {
-      expect(paint(out, id)['text-color']).toBe(LABEL_STYLE.dark.ink);
-      expect(paint(out, id)['text-halo-color']).toBe(LABEL_STYLE.dark.halo);
+  const order = (s: ReturnType<typeof sinkBuiltLayers>) => s.layers.map((l) => l.id);
+
+  it('puts the roads below the anchor and leaves the geography above it', () => {
+    // The whole point of the 'geography' mode: no single insertion point can do this,
+    // because the roads sit between the water and the boundaries in the draw order.
+    const anchor = weatherBeforeLayerId(bright())!;
+    expect(anchor).toBe('waterway');
+
+    const out = order(sinkBuiltLayers(bright(), anchor));
+    const at = (id: string) => out.indexOf(id);
+
+    for (const road of ['building', 'tunnel-motorway', 'road-primary', 'bridge-motorway',
+                        'highway-name']) {
+      expect(at(road), road).toBeLessThan(at('waterway'));
+    }
+    for (const geography of ['water', 'boundary-land', 'water-name', 'place-city']) {
+      expect(at(geography), geography).toBeGreaterThan(at('waterway'));
     }
   });
 
-  it('overwrites an expression the basemap author wrote', () => {
-    // A colour that shifts with zoom is exactly what has to go: one ink for every name,
-    // whatever the weather underneath is doing.
-    const out = restyleLabels(
-      style([
-        {
-          id: 'place',
-          type: 'symbol',
-          layout: { 'text-field': ['get', 'name'] },
-          paint: { 'text-color': ['interpolate', ['linear'], ['zoom'], 5, '#fff', 10, '#000'] },
-        },
-      ]),
-      'light'
-    );
-    expect(paint(out, 'place')['text-color']).toBe(LABEL_STYLE.light.ink);
+  it('keeps the roads stacked the way their author drew them', () => {
+    // Casings under fills, bridges over tunnels: the road network's own order still has
+    // to hold, or the map is subtly wrong wherever two roads cross.
+    const out = order(sinkBuiltLayers(bright(), 'waterway'));
+    const roads = out.filter((id) =>
+      ['tunnel-motorway', 'road-primary', 'bridge-motorway'].includes(id));
+    expect(roads).toEqual(['tunnel-motorway', 'road-primary', 'bridge-motorway']);
   });
 
-  it('leaves alone what is not a name', () => {
-    // Motorway shields have their own colours and are legible as they are; repainting
-    // them navy on white would make every road number look like a town.
-    const out = restyleLabels(
-      style([
-        { id: 'shields', type: 'symbol', layout: { 'text-field': ['get', 'ref'] },
-          paint: { 'text-color': '#ffffff' } },
-        { id: 'roads', type: 'line', paint: { 'line-color': '#cccccc' } },
-      ]),
-      'dark'
-    );
-    expect(paint(out, 'shields')['text-color']).toBe('#ffffff');
-    expect(paint(out, 'roads')['line-color']).toBe('#cccccc');
+  it('moves nothing that is already below the anchor', () => {
+    const before = style([
+      { id: 'road-early', type: 'line', 'source-layer': 'transportation' },
+      { id: 'water', type: 'fill', 'source-layer': 'water' },
+    ]);
+    expect(order(sinkBuiltLayers(before, 'water'))).toEqual(['road-early', 'water']);
   });
 
-  it('keeps the text itself untouched', () => {
-    const layers = [{ id: 'place', type: 'symbol', layout: { 'text-field': ['get', 'name:nl'] } }];
-    const out = restyleLabels(style(layers), 'dark');
-    expect((out.layers[0] as { layout?: Record<string, unknown> }).layout?.['text-field'])
-      .toEqual(['get', 'name:nl']);
+  it('leaves a style alone when there is nothing to sink or nowhere to put it', () => {
+    const plain = style([
+      { id: 'water', type: 'fill', 'source-layer': 'water' },
+      { id: 'place', type: 'symbol', layout: { 'text-field': ['get', 'name'] } },
+    ]);
+    expect(order(sinkBuiltLayers(plain, 'water'))).toEqual(['water', 'place']);
+    expect(order(sinkBuiltLayers(bright(), undefined))).toEqual(order(bright()));
+    expect(order(sinkBuiltLayers(bright(), 'no-such-layer'))).toEqual(order(bright()));
+  });
+});
+
+describe('isBuiltLayer', () => {
+  const layer = (l: Record<string, unknown>) =>
+    isBuiltLayer(l as unknown as Parameters<typeof isBuiltLayer>[0]);
+
+  it('knows the built world by its source layer first', () => {
+    expect(layer({ id: 'anything', type: 'line', 'source-layer': 'transportation' })).toBe(true);
+    expect(layer({ id: 'anything', type: 'fill', 'source-layer': 'building' })).toBe(true);
+  });
+
+  it('falls back to the layer id where a style names nothing', () => {
+    expect(layer({ id: 'road-primary', type: 'line' })).toBe(true);
+    expect(layer({ id: 'bridge-casing', type: 'line' })).toBe(true);
+  });
+
+  it('does not mistake the geography for the built world', () => {
+    // These four are the ones the map keeps over the weather; sinking any of them by
+    // accident is what this guards.
+    for (const id of ['water', 'waterway', 'boundary-land', 'place-city', 'water-name',
+                      'landcover-grass', 'park']) {
+      expect(layer({ id, type: 'fill' }), id).toBe(false);
+    }
   });
 });

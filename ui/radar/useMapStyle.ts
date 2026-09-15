@@ -27,7 +27,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
-import { localiseStyle, mapStyleFor, restyleLabels, weatherBeforeLayerId } from './mapStyle';
+import { localiseStyle, mapStyleFor, orderForWeather, weatherBeforeLayerId } from './mapStyle';
 import { usePrefs } from '../../state/prefs';
 import { useTheme } from '../../theme';
 
@@ -54,10 +54,10 @@ function useStyleQuery() {
       const response = await fetch(url, { signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const style = (await response.json()) as StyleSpecification;
-      // What the labels say, then how they look. Both are rewrites of the same document
-      // and both are pure, so the order between them does not matter — it reads in the
-      // order a reader would ask the questions.
-      return restyleLabels(localiseStyle(style, prefs.lang), appearance);
+      // What the labels say, then where the weather will sit among the layers. Both are
+      // pure rewrites of the same document; see `WEATHER_UNDER` for why the second one
+      // has to move layers rather than only pick an insertion point.
+      return orderForWeather(localiseStyle(style, prefs.lang));
     },
   });
 

@@ -118,66 +118,33 @@ function localiseLayer(layer: LayerSpecification, lang: string): LayerSpecificat
 }
 
 /**
- * How place names are drawn, per appearance.
- *
- * The stock dark basemap prints them white with a black halo, which is right over a dark
- * map and wrong over ours: with a weather field underneath, the ground is orange or blue
- * rather than navy, and black-haloed white type reads as a sticker rather than a label.
- *
- * So dark mode takes the light basemap's arrangement — dark ink, white halo (2026-09-15,
- * at the client's direction, who asked for the white halo). The halo had to bring the ink
- * with it: white type inside a white halo is not a lighter label, it is no label.
- *
- * Both appearances are set rather than only the one that changed, so the labels are the
- * app's decision in both and not the basemap author's in one of them.
- */
-export const LABEL_STYLE: Record<Appearance, { ink: string; halo: string; haloWidth: number }> = {
-  light: { ink: '#0C2547', halo: '#FFFFFF', haloWidth: 1.4 },
-  dark: { ink: '#0C2547', halo: '#FFFFFF', haloWidth: 1.6 },
-};
-
-/**
- * Repaint the labels that draw names, leaving what they say alone.
- *
- * Only `text-color` and the halo are touched, and only on the layers `localiseStyle`
- * already recognises — so road shields keep their own colours and nothing here can blank
- * a label. A layer that set these with an expression (a colour that shifts with zoom) is
- * overwritten flat, which is the point: one ink for every name, whatever is under it.
- */
-export function restyleLabels(
-  style: StyleSpecification,
-  appearance: Appearance
-): StyleSpecification {
-  if (!Array.isArray(style?.layers)) return style;
-  const { ink, halo, haloWidth } = LABEL_STYLE[appearance];
-  return {
-    ...style,
-    layers: style.layers.map((layer) => {
-      if (layer.type !== 'symbol' || !mentionsName(layer.layout?.['text-field'])) return layer;
-      return {
-        ...layer,
-        paint: {
-          ...layer.paint,
-          'text-color': ink,
-          'text-halo-color': halo,
-          'text-halo-width': haloWidth,
-        },
-      } as LayerSpecification;
-    }),
-  };
-}
-
-/**
  * How deep into the basemap the weather is buried.
  *
- * `labels` puts it under the names only, so roads, water and the coastline are drawn on
- * top of the weather and only the ground beneath it. `features` puts it under the water
- * and the roads as well, so a field covers nothing but the landcover it is over.
+ * - `labels` — under the names only. Everything the basemap draws, roads included, is
+ *   on top of the weather.
+ * - `features` — under the water and the roads too, so a field covers nothing but the
+ *   landcover it is over.
+ * - `geography` — under the water, the coastline, the boundaries and the names, but
+ *   *over* the roads and buildings: the geographic skeleton stays legible and the road
+ *   network stops competing with the field for the same pixels.
  *
- * `features` is the current choice (2026-09-15, at the client's direction). Flip this
+ * `geography` is the current choice (2026-09-15, at the client's direction). Flip this
  * one constant to compare; nothing else in the app has an opinion.
+ *
+ * ## Why `geography` needs the style reordered
+ *
+ * A style is drawn in array order and `beforeId` is a single insertion point, so what a
+ * layer is above or below follows entirely from where it lands. In the OpenMapTiles
+ * order the roads sit *between* the water and the boundaries — water, roads, boundaries,
+ * names — which means no single insertion point can put water and boundaries above the
+ * weather while leaving roads below it.
+ *
+ * So `geography` does two things rather than one: it anchors at the water, and it moves
+ * the road and building layers down to just under that anchor (`sinkBuiltLayers`). The
+ * app already rewrites this document to translate its labels, so reordering it is the
+ * same kind of change rather than a new liberty.
  */
-export const WEATHER_UNDER: 'labels' | 'features' = 'features';
+export const WEATHER_UNDER: 'labels' | 'features' | 'geography' = 'geography';
 
 /**
  * The style layer the app's own raster layers should be drawn beneath.
@@ -187,9 +154,76 @@ export const WEATHER_UNDER: 'labels' | 'features' = 'features';
  * a URL or that failed to load.
  */
 export function weatherBeforeLayerId(style: StyleSpecification | string | undefined) {
-  return WEATHER_UNDER === 'features'
-    ? firstFeatureLayerId(style) ?? firstLabelLayerId(style)
-    : firstLabelLayerId(style);
+  return WEATHER_UNDER === 'labels'
+    ? firstLabelLayerId(style)
+    : firstFeatureLayerId(style) ?? firstLabelLayerId(style);
+}
+
+/**
+ * Source layers the OpenMapTiles schema puts the built world in. Checked first, because
+ * a schema is a contract and a layer id is a style author's habit.
+ */
+const BUILT_SOURCE_LAYERS = ['transportation', 'transportation_name', 'building', 'aeroway'];
+
+/** The same thing by name, for a style that names its layers but not its sources. */
+const BUILT_ID =
+  /road|highway|motorway|trunk|street|bridge|tunnel|rail|transit|aeroway|building|ferry/i;
+
+/** Whether a layer draws something built rather than something geographic. */
+export function isBuiltLayer(layer: LayerSpecification): boolean {
+  const sourceLayer = (layer as { 'source-layer'?: string })['source-layer'];
+  if (sourceLayer && BUILT_SOURCE_LAYERS.includes(sourceLayer)) return true;
+  return BUILT_ID.test(layer.id);
+}
+
+/**
+ * Move the roads and buildings down to just under the weather's insertion point.
+ *
+ * Only layers currently drawn *above* the anchor are moved, and their order among
+ * themselves is kept, so the road network still stacks the way its author intended —
+ * casings under fills, motorways over tracks. What changes is only where the whole stack
+ * sits relative to the weather.
+ *
+ * Road *names* go down with the road lines. A road dimmed under a temperature field
+ * whose label still floats above it reads as a bug rather than as a choice; the names
+ * worth keeping on top are the places, and those live in their own layers.
+ *
+ * One known cost: a road moved below the water fill is hidden where the two overlap, so
+ * a bridge over a river loses its line for that span. At the zoom this map opens on, a
+ * bridge is a few pixels — and the alternative is either roads over the weather or a
+ * far more invasive rewrite that splits the water layer in two.
+ */
+export function sinkBuiltLayers(
+  style: StyleSpecification,
+  beforeId: string | undefined
+): StyleSpecification {
+  if (!beforeId || !Array.isArray(style?.layers)) return style;
+  const anchor = style.layers.findIndex((layer) => layer.id === beforeId);
+  if (anchor < 0) return style;
+
+  const built: LayerSpecification[] = [];
+  const rest: LayerSpecification[] = [];
+  style.layers.forEach((layer, index) => {
+    // Layers already below the anchor are where they need to be; moving them would
+    // reshuffle the ground the weather sits on for no reason.
+    if (index > anchor && isBuiltLayer(layer)) built.push(layer);
+    else rest.push(layer);
+  });
+  if (!built.length) return style;
+
+  const at = rest.findIndex((layer) => layer.id === beforeId);
+  return { ...style, layers: [...rest.slice(0, at), ...built, ...rest.slice(at)] };
+}
+
+/**
+ * The style as the map should draw it, given `WEATHER_UNDER`.
+ *
+ * A no-op for every mode but `geography`, which is the only one that needs the document
+ * itself changed rather than an insertion point chosen.
+ */
+export function orderForWeather(style: StyleSpecification): StyleSpecification {
+  if (WEATHER_UNDER !== 'geography') return style;
+  return sinkBuiltLayers(style, weatherBeforeLayerId(style));
 }
 
 /**
