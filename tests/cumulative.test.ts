@@ -76,8 +76,8 @@ describe('the windows', () => {
     }
   });
 
-  it('runs longest first, so the slider s left-hand end is furthest back', () => {
-    expect(slidingWindows(manifest).map((w) => w.hours)).toEqual([48, 24, 12, 6, 3, 1]);
+  it('runs shortest first, so the slider grows to the right as play does', () => {
+    expect(slidingWindows(manifest).map((w) => w.hours)).toEqual([1, 3, 6, 12, 24, 48]);
   });
 
   it('starts each window exactly its own length before the anchor', () => {

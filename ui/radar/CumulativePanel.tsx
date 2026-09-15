@@ -7,13 +7,14 @@
  * time-scrubber under a static total would invite the reader to drag it looking for
  * motion that is not there.
  *
- * ## The slider is a time axis, and the right-hand end is the anchor
+ * ## The slider is the length of the window, and it grows to the right
  *
- * Every window ends at the same moment, so what the slider actually chooses is where
- * the counting *starts*. Dragging left reaches further back, and because the windows
- * nest, the total can only grow as it goes — which is the whole reading: drag back
+ * Every window ends at the same moment, so what the slider chooses is how far back
+ * the counting starts. Dragging right reaches further back, and because the windows
+ * nest, the total can only grow as it goes — which is the whole reading: drag out
  * through the night and watch the shower add up. The play button walks the same way,
- * from the last hour out to two days.
+ * from the last hour out to two days, so the thumb moves with the number rather than
+ * against it.
  *
  * ## What it says out loud
  *
@@ -44,7 +45,7 @@ import type { CumulativeStatus } from './useCumulative';
 export interface CumulativePanelProps {
   status: CumulativeStatus;
   manifest: CumulativeManifest | null;
-  /** Longest first — the order the slider's track runs in. */
+  /** Shortest first — the order the slider's track runs in. */
   windows: CumulativeWindow[];
   index: number;
   onIndexChange: (index: number) => void;
@@ -107,8 +108,9 @@ export function CumulativePanel({
           <Origin reading={reading} />
         </View>
 
-        {/* The window as a word, beside the figure it belongs to: the slider says
-            where the counting starts, this says how long that is. */}
+        {/* The window as a word, beside the figure it belongs to. The slider's
+            position is that same length as a distance along a track, which is
+            readable at a glance and unreadable as a number. */}
         <View
           style={{
             backgroundColor: palette.surfaceAlt,

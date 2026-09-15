@@ -20,20 +20,23 @@
  *    carries `Retry-After`. It is a state the UI shows, which is why it has its own
  *    error class instead of arriving as a failed fetch.
  *
- * ## The window is a moment, not a duration
+ * ## The slider runs from the last hour outwards
  *
- * Every window ends at `anchor`, so what actually varies between them is where they
- * *start*. That is how the map presents them: the slider marks "since when", the
- * right-hand end of its track is the anchor, and dragging left reaches further back
- * and so shows a larger total. Which also means the anchor is never "now" — the
- * hourly radar for hour H is stored at H:10, so the newest window can end up to about
- * seventy minutes ago, and saying "now" would be a lie the size of a shower.
+ * Every window ends at `anchor`, so what varies between them is where they *start*
+ * and therefore how much they have had time to collect. The slider is that length:
+ * the last hour at the left, two days at the right, and dragging right reaches
+ * further back and shows a larger total. Which is also the direction the play head
+ * moves, so the thumb never runs backwards while the total climbs.
+ *
+ * The anchor itself is never "now" — the hourly radar for hour H is stored at H:10,
+ * so the newest window can end up to about seventy minutes ago, and saying "now"
+ * would be a lie the size of a shower.
  */
 import type { GeoBounds } from './types';
 
-/** The look-back windows the backend publishes, longest first — the order the map's
- *  slider runs in, since its left-hand end is the furthest back in time. */
-export const WINDOW_HOURS = [48, 24, 12, 6, 3, 1] as const;
+/** The look-back windows the backend publishes, shortest first — the order the map's
+ *  slider runs in, so dragging right lengthens the window. */
+export const WINDOW_HOURS = [1, 3, 6, 12, 24, 48] as const;
 
 /** Little-endian uint16 tenths of a millimetre; the manifest's `raster.scale` is what
  *  actually divides, this is only what the raster is expected to be. */
@@ -210,13 +213,18 @@ export function windowOf(
 }
 
 /**
- * The windows in the order the slider runs: longest first, so left is furthest back.
+ * The windows in the order the slider runs: shortest first.
+ *
+ * The track's left-hand end is the last hour and its right-hand end is the longest
+ * window, so dragging right — and playing, which moves the same way — lengthens the
+ * window and grows the total. A track ordered the other way is a defensible time
+ * axis, and it reads as the slider running backwards under a rising number.
  *
  * Driven by what the manifest actually carries rather than by `WINDOW_HOURS`, so a
  * server that publishes a different set is drawn rather than half-drawn.
  */
 export function slidingWindows(manifest: CumulativeManifest): CumulativeWindow[] {
-  return [...manifest.windows].sort((a, b) => b.hours - a.hours);
+  return [...manifest.windows].sort((a, b) => a.hours - b.hours);
 }
 
 /** How a window's coverage departs from what it asked for. */

@@ -6,13 +6,13 @@
  * at once and flips opacity between them — the rule `RadarLayer` already lives by —
  * so nothing here loads anything while the slider is being dragged.
  *
- * ## Why the play head runs forwards through *longer* windows
+ * ## Why the play head runs towards *longer* windows
  *
  * The windows nest, so stepping to a longer one can only add rain. Played from the
  * shortest to the longest, the field fills in and the total climbs: the reader sees
- * the shower accumulate rather than a slideshow of six unrelated pictures. On the
- * slider that is a thumb moving leftwards, because the track is a time axis whose
- * right-hand end is the anchor — see `slidingWindows`.
+ * the shower accumulate rather than a slideshow of six unrelated pictures. The slider
+ * is ordered to match — shortest at the left — so the thumb travels with the number
+ * instead of sliding backwards under a rising total.
  *
  * ## The layer is off until it is asked for
  *
@@ -43,7 +43,7 @@ export interface CumulativeLayerState {
   setEnabled: (on: boolean) => void;
   status: CumulativeStatus;
   manifest: CumulativeManifest | null;
-  /** Longest first, which is the order the slider's track runs in. */
+  /** Shortest first, which is the order the slider's track runs in. */
   windows: CumulativeWindow[];
   index: number;
   setIndex: (index: number) => void;
@@ -89,7 +89,9 @@ export function useCumulative(source: CumulativeSource): CumulativeLayerState {
         // whichever end of the list happens to be first.
         const preferred = windowOf(m, DEFAULT_WINDOW_HOURS);
         const at = preferred ? ordered.indexOf(preferred) : -1;
-        setIndex(at >= 0 ? at : Math.max(0, ordered.length - 1));
+        // Without it, the shortest window: the cheapest thing to show, and the one
+        // least likely to be read as a claim about the whole of yesterday.
+        setIndex(at >= 0 ? at : 0);
         setStatus('ready');
         setRetryAfterSec(null);
       })
@@ -141,9 +143,9 @@ export function useCumulative(source: CumulativeSource): CumulativeLayerState {
   useEffect(() => {
     if (!playing || windows.length < 2) return;
     const id = setInterval(() => {
-      // Backwards through the list, which is forwards through window length: the
-      // total grows with every step and then starts over at the shortest.
-      setIndex((i) => (i - 1 + windows.length) % windows.length);
+      // Forwards through the list, which is forwards through window length: the total
+      // grows with every step and then starts over at the shortest.
+      setIndex((i) => (i + 1) % windows.length);
     }, WINDOW_PLAY_INTERVAL_MS);
     return () => clearInterval(id);
   }, [playing, windows.length]);

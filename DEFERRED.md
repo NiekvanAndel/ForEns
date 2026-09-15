@@ -602,9 +602,10 @@ Three things deliberately stay out of it, decided with the client (9 Sep 2026):
 
 The full-screen map has a second layer: gauge-calibrated rainfall totals over a
 look-back window of 1, 3, 6, 12, 24 or 48 hours, chosen with the stacked-layers
-button in the top-right corner. The slider under the map is a time axis whose
-right-hand end is the anchor, so dragging left reaches further back and the total
-grows; play walks the same way. The backend contract is
+button in the top-right corner. The slider under the map is the length of the
+window: the last hour at the left, two days at the right, so dragging right reaches
+further back and the total grows. Play walks the same way, so the thumb moves with
+the number rather than against it. The backend contract is
 `docs/exactcast-cumulative-radar.md` in AgroExactWebApp.
 
 **It draws bundled dummy data, not live data.** `core/radar/fixture/generated.ts` and
