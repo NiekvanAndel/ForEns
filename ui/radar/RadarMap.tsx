@@ -116,7 +116,7 @@ export function RadarMap({
   // Labels in the app's language, falling back to the plain style URL. See
   // `useMapStyle`.
   const mapStyle = useLocalisedMapStyle();
-  // Weather goes under the place names; see `firstLabelLayerId`.
+  // Where the weather sits among the basemap's layers; see `WEATHER_UNDER`.
   const labelLayerId = useLabelLayerId();
   const peeking = usePeeking();
   const provider = activeProvider();

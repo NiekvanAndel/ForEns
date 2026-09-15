@@ -9,7 +9,8 @@
 import { describe, it, expect } from 'vitest';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
 import {
-  firstFeatureLayerId, firstLabelLayerId, isBuiltLayer, localiseStyle, sinkBuiltLayers,
+  COASTLINE_LAYER_ID, coastlineLayer, isBoundaryLayer, isBuiltLayer, isGroundLayer,
+  isLabelLayer, isWaterLayer, localiseStyle, orderForWeather, WEATHER_UNDER,
   weatherBeforeLayerId,
 } from '../ui/radar/mapStyle';
 
@@ -92,180 +93,132 @@ describe('localiseStyle', () => {
   });
 });
 
-describe('firstLabelLayerId', () => {
-  // Weather covers the whole country, so without this the map loses every place name
-  // the moment a field layer comes up. The id it finds is what `beforeId` is given.
-  it('names the first layer that draws place names', () => {
-    const id = firstLabelLayerId(
-      style([
-        { id: 'water', type: 'fill' },
-        { id: 'roads', type: 'line' },
-        { id: 'place-town', type: 'symbol', layout: { 'text-field': ['get', 'name'] } },
-        { id: 'place-city', type: 'symbol', layout: { 'text-field': ['get', 'name'] } },
-      ])
-    );
-    expect(id).toBe('place-town');
-  });
+// ── Where the weather sits among the basemap's layers ───────────────────────────
 
-  it('ignores symbol layers that label something other than a name', () => {
-    // Motorway shields carry `ref`, contours carry `ele`. Sliding the weather under a
-    // shield layer would leave every town buried and only the road numbers on top.
-    const id = firstLabelLayerId(
-      style([
-        { id: 'shields', type: 'symbol', layout: { 'text-field': ['get', 'ref'] } },
-        { id: 'contours', type: 'symbol', layout: { 'text-field': '{ele}' } },
-        { id: 'place', type: 'symbol', layout: { 'text-field': '{name:latin}' } },
-      ])
-    );
-    expect(id).toBe('place');
-  });
+/** An OpenMapTiles style in the order OpenFreeMap's Bright draws it. */
+const bright = () =>
+  style([
+    { id: 'background', type: 'background' },
+    { id: 'landcover-grass', type: 'fill', 'source-layer': 'landcover' },
+    { id: 'park', type: 'fill', 'source-layer': 'park' },
+    { id: 'waterway', type: 'line', 'source-layer': 'waterway' },
+    { id: 'water', type: 'fill', 'source-layer': 'water', source: 'openmaptiles',
+      paint: { 'fill-color': '#a0c8f0' } },
+    { id: 'building', type: 'fill', 'source-layer': 'building' },
+    { id: 'tunnel-motorway', type: 'line', 'source-layer': 'transportation' },
+    { id: 'road-primary', type: 'line', 'source-layer': 'transportation' },
+    { id: 'bridge-motorway', type: 'line', 'source-layer': 'transportation' },
+    { id: 'highway-name', type: 'symbol', 'source-layer': 'transportation_name',
+      layout: { 'text-field': ['get', 'name'] } },
+    { id: 'boundary-land', type: 'line', 'source-layer': 'boundary' },
+    { id: 'water-name', type: 'symbol', 'source-layer': 'water_name',
+      layout: { 'text-field': ['get', 'name'] } },
+    { id: 'place-city', type: 'symbol', 'source-layer': 'place',
+      layout: { 'text-field': ['get', 'name'] } },
+  ]);
 
-  it('has no answer for a style it was not given', () => {
-    // A URL rather than an object, or a style that failed to load: `beforeId` then gets
-    // undefined, which draws on top — the behaviour before any of this existed.
-    expect(firstLabelLayerId(undefined)).toBeUndefined();
-    expect(firstLabelLayerId('https://tiles.openfreemap.org/styles/bright')).toBeUndefined();
-    expect(firstLabelLayerId(style([{ id: 'water', type: 'fill' }]))).toBeUndefined();
-  });
-});
+const ids = (s: StyleSpecification) => s.layers.map((l) => l.id);
 
-describe('firstFeatureLayerId', () => {
-  // With WEATHER_UNDER at 'features' the weather covers the landcover and nothing else:
-  // water, roads and boundaries are drawn over it.
-  it('names the first line or water layer, past the ground', () => {
-    const id = firstFeatureLayerId(
-      style([
-        { id: 'background', type: 'background' },
-        { id: 'landcover-grass', type: 'fill' },
-        { id: 'landuse-residential', type: 'fill' },
-        { id: 'waterway', type: 'line' },
-        { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water' },
-        { id: 'road-motorway', type: 'line' },
-      ])
-    );
-    expect(id).toBe('waterway');
-  });
+describe('classifying a basemap layer', () => {
+  const find = (id: string) => bright().layers.find((l) => l.id === id)!;
 
-  it('finds a water fill where the style has no waterways above it', () => {
-    const id = firstFeatureLayerId(
-      style([
-        { id: 'background', type: 'background' },
-        { id: 'landcover', type: 'fill' },
-        { id: 'water', type: 'fill', source: 'openmaptiles', 'source-layer': 'water' },
-        { id: 'roads', type: 'line' },
-      ])
-    );
-    expect(id).toBe('water');
-  });
-
-  it('is not fooled into burying the weather under the landcover', () => {
-    // A fill that is only ground has to be passed over, or the field ends up beneath the
-    // grass and the map shows no weather at all.
-    const id = firstFeatureLayerId(
-      style([
-        { id: 'park', type: 'fill' },
-        { id: 'wood', type: 'fill' },
-        { id: 'boundary', type: 'line' },
-      ])
-    );
-    expect(id).toBe('boundary');
-  });
-
-  it('has no answer for a style it was not given', () => {
-    expect(firstFeatureLayerId(undefined)).toBeUndefined();
-    expect(firstFeatureLayerId('https://tiles.openfreemap.org/styles/fiord')).toBeUndefined();
-  });
-});
-
-describe('sinkBuiltLayers', () => {
-  /** An OpenMapTiles style in the order OpenFreeMap's Bright draws it. */
-  const bright = () =>
-    style([
-      { id: 'background', type: 'background' },
-      { id: 'landcover-grass', type: 'fill', 'source-layer': 'landcover' },
-      { id: 'waterway', type: 'line', 'source-layer': 'waterway' },
-      { id: 'water', type: 'fill', 'source-layer': 'water' },
-      { id: 'building', type: 'fill', 'source-layer': 'building' },
-      { id: 'tunnel-motorway', type: 'line', 'source-layer': 'transportation' },
-      { id: 'road-primary', type: 'line', 'source-layer': 'transportation' },
-      { id: 'bridge-motorway', type: 'line', 'source-layer': 'transportation' },
-      { id: 'highway-name', type: 'symbol', 'source-layer': 'transportation_name',
-        layout: { 'text-field': ['get', 'name'] } },
-      { id: 'boundary-land', type: 'line', 'source-layer': 'boundary' },
-      { id: 'water-name', type: 'symbol', 'source-layer': 'water_name',
-        layout: { 'text-field': ['get', 'name'] } },
-      { id: 'place-city', type: 'symbol', 'source-layer': 'place',
-        layout: { 'text-field': ['get', 'name'] } },
-    ]);
-
-  const order = (s: ReturnType<typeof sinkBuiltLayers>) => s.layers.map((l) => l.id);
-
-  it('puts the roads below the anchor and leaves the geography above it', () => {
-    // The whole point of the 'geography' mode: no single insertion point can do this,
-    // because the roads sit between the water and the boundaries in the draw order.
-    const anchor = weatherBeforeLayerId(bright())!;
-    expect(anchor).toBe('waterway');
-
-    const out = order(sinkBuiltLayers(bright(), anchor));
-    const at = (id: string) => out.indexOf(id);
-
-    for (const road of ['building', 'tunnel-motorway', 'road-primary', 'bridge-motorway',
-                        'highway-name']) {
-      expect(at(road), road).toBeLessThan(at('waterway'));
+  it('tells the built world from the geography', () => {
+    for (const id of ['building', 'road-primary', 'bridge-motorway', 'highway-name']) {
+      expect(isBuiltLayer(find(id)), id).toBe(true);
     }
-    for (const geography of ['water', 'boundary-land', 'water-name', 'place-city']) {
-      expect(at(geography), geography).toBeGreaterThan(at('waterway'));
+    // These four are what the map keeps over the weather; mistaking any of them for a
+    // road is what would quietly sink the country's outline.
+    for (const id of ['water', 'waterway', 'boundary-land', 'place-city']) {
+      expect(isBuiltLayer(find(id)), id).toBe(false);
     }
   });
 
-  it('keeps the roads stacked the way their author drew them', () => {
+  it('knows water, boundaries, names and ground apart', () => {
+    expect(isWaterLayer(find('water'))).toBe(true);
+    expect(isWaterLayer(find('waterway'))).toBe(true);
+    // A lake's name is a label, not water: it belongs with the other names.
+    expect(isWaterLayer(find('water-name'))).toBe(false);
+
+    expect(isBoundaryLayer(find('boundary-land'))).toBe(true);
+    expect(isBoundaryLayer(find('road-primary'))).toBe(false);
+
+    expect(isLabelLayer(find('place-city'))).toBe(true);
+    expect(isLabelLayer(find('water'))).toBe(false);
+
+    expect(isGroundLayer(find('background'))).toBe(true);
+    expect(isGroundLayer(find('landcover-grass'))).toBe(true);
+    expect(isGroundLayer(find('park'))).toBe(true);
+    expect(isGroundLayer(find('water'))).toBe(false);
+  });
+
+  it('falls back to the layer id where a style names no source', () => {
+    const plain = (id: string, type = 'line') =>
+      ({ id, type } as unknown as Parameters<typeof isBuiltLayer>[0]);
+    expect(isBuiltLayer(plain('road-primary'))).toBe(true);
+    expect(isWaterLayer(plain('river-outline'))).toBe(true);
+    expect(isBoundaryLayer(plain('admin-0'))).toBe(true);
+  });
+});
+
+describe('orderForWeather', () => {
+  // The suite pins the mode the app actually ships, so a flip of the constant is a
+  // deliberate act that shows up here rather than a silent change of the map.
+  it('is set to the mode this build draws', () => {
+    expect(WEATHER_UNDER).toBe('coast');
+  });
+
+  it('keeps only the coastline, the boundaries and the names over the weather', () => {
+    const out = orderForWeather(bright());
+    const seam = ids(out).indexOf(weatherBeforeLayerId(out)!);
+    const at = (id: string) => ids(out).indexOf(id);
+
+    for (const over of [COASTLINE_LAYER_ID, 'boundary-land', 'water-name', 'place-city']) {
+      expect(at(over), over).toBeGreaterThanOrEqual(seam);
+    }
+    // The water areas go under with the roads, which is the whole point of this mode:
+    // the field runs across the IJsselmeer as one surface.
+    for (const under of ['water', 'waterway', 'road-primary', 'building', 'highway-name',
+                         'landcover-grass']) {
+      expect(at(under), under).toBeLessThan(seam);
+    }
+  });
+
+  it('draws the coastline back on, in the water’s own colour', () => {
+    const out = orderForWeather(bright());
+    const coast = out.layers.find((l) => l.id === COASTLINE_LAYER_ID) as
+      | { type: string; paint?: Record<string, unknown>; 'source-layer'?: string }
+      | undefined;
+    expect(coast?.type).toBe('line');
+    expect(coast?.['source-layer']).toBe('water');
+    // Lifted from the fill it traces, so the line belongs to the basemap it came from
+    // and follows the appearance without being told which one is on.
+    expect(coast?.paint?.['line-color']).toBe('#a0c8f0');
+  });
+
+  it('keeps each group stacked the way its author drew it', () => {
     // Casings under fills, bridges over tunnels: the road network's own order still has
     // to hold, or the map is subtly wrong wherever two roads cross.
-    const out = order(sinkBuiltLayers(bright(), 'waterway'));
-    const roads = out.filter((id) =>
-      ['tunnel-motorway', 'road-primary', 'bridge-motorway'].includes(id));
-    expect(roads).toEqual(['tunnel-motorway', 'road-primary', 'bridge-motorway']);
-  });
-
-  it('moves nothing that is already below the anchor', () => {
-    const before = style([
-      { id: 'road-early', type: 'line', 'source-layer': 'transportation' },
-      { id: 'water', type: 'fill', 'source-layer': 'water' },
+    const out = ids(orderForWeather(bright()));
+    expect(out.filter((id) => id.includes('motorway') || id === 'road-primary')).toEqual([
+      'tunnel-motorway', 'road-primary', 'bridge-motorway',
     ]);
-    expect(order(sinkBuiltLayers(before, 'water'))).toEqual(['road-early', 'water']);
+    expect(out.indexOf('boundary-land')).toBeLessThan(out.indexOf('place-city'));
   });
 
-  it('leaves a style alone when there is nothing to sink or nowhere to put it', () => {
-    const plain = style([
-      { id: 'water', type: 'fill', 'source-layer': 'water' },
-      { id: 'place', type: 'symbol', layout: { 'text-field': ['get', 'name'] } },
-    ]);
-    expect(order(sinkBuiltLayers(plain, 'water'))).toEqual(['water', 'place']);
-    expect(order(sinkBuiltLayers(bright(), undefined))).toEqual(order(bright()));
-    expect(order(sinkBuiltLayers(bright(), 'no-such-layer'))).toEqual(order(bright()));
-  });
-});
-
-describe('isBuiltLayer', () => {
-  const layer = (l: Record<string, unknown>) =>
-    isBuiltLayer(l as unknown as Parameters<typeof isBuiltLayer>[0]);
-
-  it('knows the built world by its source layer first', () => {
-    expect(layer({ id: 'anything', type: 'line', 'source-layer': 'transportation' })).toBe(true);
-    expect(layer({ id: 'anything', type: 'fill', 'source-layer': 'building' })).toBe(true);
+  it('loses no layer and invents only the coastline', () => {
+    const before = ids(bright());
+    const after = ids(orderForWeather(bright()));
+    expect(after.filter((id) => id !== COASTLINE_LAYER_ID).sort()).toEqual([...before].sort());
   });
 
-  it('falls back to the layer id where a style names nothing', () => {
-    expect(layer({ id: 'road-primary', type: 'line' })).toBe(true);
-    expect(layer({ id: 'bridge-casing', type: 'line' })).toBe(true);
+  it('leaves a style it cannot place alone', () => {
+    const ground = style([{ id: 'background', type: 'background' }]);
+    expect(ids(orderForWeather(ground))).toEqual(['background']);
+    expect(weatherBeforeLayerId(undefined)).toBeUndefined();
+    expect(weatherBeforeLayerId('https://tiles.openfreemap.org/styles/bright')).toBeUndefined();
   });
 
-  it('does not mistake the geography for the built world', () => {
-    // These four are the ones the map keeps over the weather; sinking any of them by
-    // accident is what this guards.
-    for (const id of ['water', 'waterway', 'boundary-land', 'place-city', 'water-name',
-                      'landcover-grass', 'park']) {
-      expect(layer({ id, type: 'fill' }), id).toBe(false);
-    }
+  it('has no coastline to draw where the style has no water fill', () => {
+    expect(coastlineLayer(style([{ id: 'roads', type: 'line' }]))).toBeNull();
   });
 });

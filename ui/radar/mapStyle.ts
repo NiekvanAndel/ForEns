@@ -120,156 +120,187 @@ function localiseLayer(layer: LayerSpecification, lang: string): LayerSpecificat
 /**
  * How deep into the basemap the weather is buried.
  *
- * - `labels` — under the names only. Everything the basemap draws, roads included, is
- *   on top of the weather.
+ * - `labels` — under the names only. Everything else the basemap draws, roads included,
+ *   is on top of the weather.
  * - `features` — under the water and the roads too, so a field covers nothing but the
  *   landcover it is over.
- * - `geography` — under the water, the coastline, the boundaries and the names, but
- *   *over* the roads and buildings: the geographic skeleton stays legible and the road
- *   network stops competing with the field for the same pixels.
+ * - `geography` — water, coastline, boundaries and names above; roads and buildings
+ *   below. The geographic skeleton stays legible and the road network stops competing
+ *   with the field for the same pixels.
+ * - `coast` — only the coastline, the boundaries and the names above. The water areas
+ *   themselves go under the weather, so a field runs across the IJsselmeer and the
+ *   rivers as one surface, with the shoreline drawn back on top as a line.
  *
- * `geography` is the current choice (2026-09-15, at the client's direction). Flip this
- * one constant to compare; nothing else in the app has an opinion.
+ * `coast` is the current choice (2026-09-15, at the client's direction). Flip this one
+ * constant to compare; nothing else in the app has an opinion.
  *
- * ## Why `geography` needs the style reordered
+ * ## Why this reorders the style rather than picking an insertion point
  *
- * A style is drawn in array order and `beforeId` is a single insertion point, so what a
- * layer is above or below follows entirely from where it lands. In the OpenMapTiles
+ * A style draws in array order and `beforeId` is a single position, so what a layer ends
+ * up above or below follows entirely from where the raster lands. In the OpenMapTiles
  * order the roads sit *between* the water and the boundaries — water, roads, boundaries,
- * names — which means no single insertion point can put water and boundaries above the
- * weather while leaving roads below it.
+ * names — and no single position can put water and boundaries above while leaving roads
+ * below.
  *
- * So `geography` does two things rather than one: it anchors at the water, and it moves
- * the road and building layers down to just under that anchor (`sinkBuiltLayers`). The
- * app already rewrites this document to translate its labels, so reordering it is the
- * same kind of change rather than a new liberty.
+ * So the mode is expressed as a question asked of each layer ("does this belong over the
+ * weather?"), the layers are partitioned on the answer, and the raster is inserted at the
+ * seam. The app already rewrites this document to translate its labels, so reordering it
+ * is the same kind of change rather than a new liberty.
  */
-export const WEATHER_UNDER: 'labels' | 'features' | 'geography' = 'geography';
+export const WEATHER_UNDER: 'labels' | 'features' | 'geography' | 'coast' = 'coast';
+
+// ── Which layers belong over the weather ────────────────────────────────────────
+
+/**
+ * Source layers the OpenMapTiles schema files things under. Checked before layer ids,
+ * because a schema is a contract and a layer id is a style author's habit.
+ */
+const SOURCE_LAYERS = {
+  built: ['transportation', 'transportation_name', 'building', 'aeroway'],
+  water: ['water', 'waterway', 'ocean'],
+  boundary: ['boundary'],
+  ground: ['landcover', 'landuse', 'park', 'globallandcover'],
+};
+
+const BUILT_ID =
+  /road|highway|motorway|trunk|street|bridge|tunnel|rail|transit|aeroway|building|ferry/i;
+const WATER_ID = /water|ocean|river|lake|sea\b/i;
+const BOUNDARY_ID = /boundary|border|admin/i;
+
+function sourceLayerOf(layer: LayerSpecification): string | undefined {
+  return (layer as { 'source-layer'?: string })['source-layer'];
+}
+
+/** Whether a layer draws something built rather than something geographic. */
+export function isBuiltLayer(layer: LayerSpecification): boolean {
+  const source = sourceLayerOf(layer);
+  if (source) return SOURCE_LAYERS.built.includes(source);
+  return BUILT_ID.test(layer.id);
+}
+
+/** Whether a layer draws water — the areas, not their names. */
+export function isWaterLayer(layer: LayerSpecification): boolean {
+  if (layer.type === 'symbol') return false;
+  const source = sourceLayerOf(layer);
+  if (source) return SOURCE_LAYERS.water.includes(source);
+  return WATER_ID.test(layer.id);
+}
+
+/** Whether a layer draws a national or regional border. */
+export function isBoundaryLayer(layer: LayerSpecification): boolean {
+  if (layer.type === 'symbol') return false;
+  const source = sourceLayerOf(layer);
+  if (source) return SOURCE_LAYERS.boundary.includes(source);
+  return BOUNDARY_ID.test(layer.id);
+}
+
+/** Whether a layer draws a name — the same blunt test `localiseStyle` uses. */
+export function isLabelLayer(layer: LayerSpecification): boolean {
+  return layer.type === 'symbol' && mentionsName(layer.layout?.['text-field']);
+}
+
+/** Whether a layer is the ground itself: the backdrop, the landcover, the parks. */
+export function isGroundLayer(layer: LayerSpecification): boolean {
+  if (layer.type === 'background') return true;
+  const source = sourceLayerOf(layer);
+  return layer.type === 'fill' && !!source && SOURCE_LAYERS.ground.includes(source);
+}
+
+/** The question each mode asks of a layer: does this belong over the weather? */
+export function drawsOverWeather(layer: LayerSpecification): boolean {
+  switch (WEATHER_UNDER) {
+    case 'labels':
+      return isLabelLayer(layer);
+    case 'features':
+      return !isGroundLayer(layer);
+    case 'geography':
+      return !isGroundLayer(layer) && !isBuiltLayer(layer);
+    case 'coast':
+      // `!isBuiltLayer` is what keeps the road *names* down with the road lines. A road
+      // hidden under a temperature field whose label still floats above it reads as a
+      // bug rather than a choice, and a road name is a label by every other test.
+      return (isBoundaryLayer(layer) || isLabelLayer(layer)) && !isBuiltLayer(layer);
+  }
+}
+
+// ── Putting the weather into the style ──────────────────────────────────────────
+
+/** The id of the coastline this module draws when the water areas go under the weather. */
+export const COASTLINE_LAYER_ID = 'weather-coastline';
+
+/** How the drawn-back coastline looks where the basemap gives nothing to copy. */
+const COASTLINE_FALLBACK = '#7aa6c2';
+const COASTLINE_WIDTH = 0.9;
+
+/**
+ * A coastline, for a map whose water has gone under the weather.
+ *
+ * OpenMapTiles has no coastline layer: the coast is the edge of the water polygon, so
+ * sinking the water takes the shoreline with it and the country loses its shape. A line
+ * layer over the same source draws that polygon's outline and gives it back — the
+ * shoreline, the IJsselmeer's edge and the wider rivers, over the field rather than
+ * under it.
+ *
+ * Its colour is lifted from the water fill it is tracing, so the line belongs to the
+ * basemap it came from and follows the appearance without being told which one is on. A
+ * fill painted with an expression gives nothing to copy, and then a neutral stands in.
+ */
+export function coastlineLayer(style: StyleSpecification): LayerSpecification | null {
+  const water = style.layers?.find(
+    (layer) => layer.type === 'fill' && isWaterLayer(layer)
+  ) as (LayerSpecification & { source?: string; paint?: Record<string, unknown> }) | undefined;
+  if (!water?.source) return null;
+
+  const fill = water.paint?.['fill-color'];
+  return {
+    id: COASTLINE_LAYER_ID,
+    type: 'line',
+    source: water.source,
+    'source-layer': sourceLayerOf(water),
+    paint: {
+      'line-color': typeof fill === 'string' ? fill : COASTLINE_FALLBACK,
+      'line-width': COASTLINE_WIDTH,
+    },
+  } as unknown as LayerSpecification;
+}
+
+/**
+ * The style as the map should draw it: everything that belongs under the weather first,
+ * everything that belongs over it after, each group in its original order.
+ *
+ * Partitioning rather than moving individual layers is what keeps every group stacked
+ * the way its author drew it — road casings under road fills, motorways over tracks.
+ * What changes is only where the seam falls.
+ */
+export function orderForWeather(style: StyleSpecification): StyleSpecification {
+  if (!Array.isArray(style?.layers)) return style;
+
+  const below: LayerSpecification[] = [];
+  const above: LayerSpecification[] = [];
+  for (const layer of style.layers) (drawsOverWeather(layer) ? above : below).push(layer);
+  if (!above.length) return style;
+
+  // With the water underneath, the shoreline has to be drawn back on, and it goes at the
+  // bottom of the group above — under the boundaries and the names, as it was.
+  const coast = WEATHER_UNDER === 'coast' ? coastlineLayer(style) : null;
+  return { ...style, layers: [...below, ...(coast ? [coast] : []), ...above] };
+}
 
 /**
  * The style layer the app's own raster layers should be drawn beneath.
  *
- * Callers pass the result straight to `beforeId`, where undefined means "on top" — the
- * behaviour before any of this existed, and the right fallback for a style that is still
- * a URL or that failed to load.
+ * The first layer of the group that belongs over the weather, which after
+ * `orderForWeather` is exactly the seam. Callers pass it straight to `beforeId`, where
+ * undefined means "on top" — the behaviour before any of this existed, and the right
+ * fallback for a style that is still a URL or that failed to load.
  */
 export function weatherBeforeLayerId(style: StyleSpecification | string | undefined) {
-  return WEATHER_UNDER === 'labels'
-    ? firstLabelLayerId(style)
-    : firstFeatureLayerId(style) ?? firstLabelLayerId(style);
-}
-
-/**
- * Source layers the OpenMapTiles schema puts the built world in. Checked first, because
- * a schema is a contract and a layer id is a style author's habit.
- */
-const BUILT_SOURCE_LAYERS = ['transportation', 'transportation_name', 'building', 'aeroway'];
-
-/** The same thing by name, for a style that names its layers but not its sources. */
-const BUILT_ID =
-  /road|highway|motorway|trunk|street|bridge|tunnel|rail|transit|aeroway|building|ferry/i;
-
-/** Whether a layer draws something built rather than something geographic. */
-export function isBuiltLayer(layer: LayerSpecification): boolean {
-  const sourceLayer = (layer as { 'source-layer'?: string })['source-layer'];
-  if (sourceLayer && BUILT_SOURCE_LAYERS.includes(sourceLayer)) return true;
-  return BUILT_ID.test(layer.id);
-}
-
-/**
- * Move the roads and buildings down to just under the weather's insertion point.
- *
- * Only layers currently drawn *above* the anchor are moved, and their order among
- * themselves is kept, so the road network still stacks the way its author intended —
- * casings under fills, motorways over tracks. What changes is only where the whole stack
- * sits relative to the weather.
- *
- * Road *names* go down with the road lines. A road dimmed under a temperature field
- * whose label still floats above it reads as a bug rather than as a choice; the names
- * worth keeping on top are the places, and those live in their own layers.
- *
- * One known cost: a road moved below the water fill is hidden where the two overlap, so
- * a bridge over a river loses its line for that span. At the zoom this map opens on, a
- * bridge is a few pixels — and the alternative is either roads over the weather or a
- * far more invasive rewrite that splits the water layer in two.
- */
-export function sinkBuiltLayers(
-  style: StyleSpecification,
-  beforeId: string | undefined
-): StyleSpecification {
-  if (!beforeId || !Array.isArray(style?.layers)) return style;
-  const anchor = style.layers.findIndex((layer) => layer.id === beforeId);
-  if (anchor < 0) return style;
-
-  const built: LayerSpecification[] = [];
-  const rest: LayerSpecification[] = [];
-  style.layers.forEach((layer, index) => {
-    // Layers already below the anchor are where they need to be; moving them would
-    // reshuffle the ground the weather sits on for no reason.
-    if (index > anchor && isBuiltLayer(layer)) built.push(layer);
-    else rest.push(layer);
-  });
-  if (!built.length) return style;
-
-  const at = rest.findIndex((layer) => layer.id === beforeId);
-  return { ...style, layers: [...rest.slice(0, at), ...built, ...rest.slice(at)] };
-}
-
-/**
- * The style as the map should draw it, given `WEATHER_UNDER`.
- *
- * A no-op for every mode but `geography`, which is the only one that needs the document
- * itself changed rather than an insertion point chosen.
- */
-export function orderForWeather(style: StyleSpecification): StyleSpecification {
-  if (WEATHER_UNDER !== 'geography') return style;
-  return sinkBuiltLayers(style, weatherBeforeLayerId(style));
-}
-
-/**
- * The first layer that draws something built or wet, so weather can go under it.
- *
- * The rule is the layer's *kind*, not its name, because this app does not own the style:
- * the first `line` layer (waterways, roads, boundaries) or the first fill that mentions
- * water. Everything before that in an OpenMapTiles style is background and landcover —
- * the ground itself — which is exactly what a temperature field should be allowed to
- * cover.
- *
- * Falls back to the label layer where a style has no such layer at all, so the weather
- * is never left drawing over the names.
- */
-export function firstFeatureLayerId(style: StyleSpecification | string | undefined) {
   if (!style || typeof style === 'string' || !Array.isArray(style.layers)) return undefined;
-  return style.layers.find(
-    (layer) =>
-      layer.type === 'line' ||
-      (layer.type === 'fill' && JSON.stringify(layer).toLowerCase().includes('water'))
-  )?.id;
-}
-
-/**
- * The first layer that draws place names, so weather can be slid underneath it.
- *
- * A style's layers are drawn in order, and anything this app adds goes on top of all of
- * them — which buries Amsterdam under the temperature field. MapLibre's `beforeId` puts
- * a layer *under* a named one instead, and the right one to name is the first label
- * layer in the style: everything above it is type, everything below it is ground.
- *
- * Found by walking the layers in order for the first symbol layer that mentions a name,
- * the same blunt test `localiseStyle` uses and for the same reason — this app does not
- * own the style and cannot enumerate its layer ids. Roads, coastlines and water go under
- * the weather, which is right: they are the ground it is falling on. Names go over it,
- * because a name nobody can read is not a label.
- *
- * Undefined where the style is a URL rather than an object, or carries no labels at all.
- * Callers pass it straight to `beforeId`, where undefined means "on top" — the behaviour
- * before this existed, which is also the correct fallback.
- */
-export function firstLabelLayerId(style: StyleSpecification | string | undefined) {
-  if (!style || typeof style === 'string' || !Array.isArray(style.layers)) return undefined;
-  return style.layers.find(
-    (layer) => layer.type === 'symbol' && mentionsName(layer.layout?.['text-field'])
-  )?.id;
+  if (WEATHER_UNDER === 'coast') {
+    const coast = style.layers.find((layer) => layer.id === COASTLINE_LAYER_ID);
+    if (coast) return coast.id;
+  }
+  return style.layers.find(drawsOverWeather)?.id;
 }
 
 /** Whether an expression or token string draws a name at all. See above. */
