@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  backLabel, FIELD_VARIABLES, formatFieldValue, frameClock, inkOn, isSynthetic,
+  FIELD_VARIABLES, formatFieldValue, frameClock, inkOn, isSynthetic,
   legendColorFor, loopMinutes, orderedFrames, pixelFor, sampleField, unitLabel,
   type FieldVariable,
 } from '../core/fields';
@@ -267,15 +267,6 @@ describe('labels', () => {
     // An unrecognised unit passes through: wrong-looking beside a number is a bug
     // report, missing is a mystery.
     expect(unitLabel('mm')).toBe('mm');
-  });
-
-  it('says how far back a frame is, without calling the newest one “now”', () => {
-    const frames = orderedFrames(fixtureManifest('temperature'));
-    expect(backLabel(frames, frames.length - 1)).toBe('laatste');
-    expect(backLabel(frames, frames.length - 2)).toBe('10 min terug');
-    expect(backLabel(frames, frames.length - 7)).toBe('1 uur terug');
-    expect(backLabel(frames, 0)).toBe('1,8 uur terug');
-    expect(backLabel([], 0)).toBe('');
   });
 
   it('picks ink that stays readable across the whole ramp', () => {

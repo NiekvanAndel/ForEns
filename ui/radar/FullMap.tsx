@@ -90,12 +90,11 @@ import { FieldLegend } from '../fields/FieldLegend';
 import { FieldPanel } from '../fields/FieldPanel';
 import { useFields } from '../fields/useFields';
 import { fixtureFieldSource } from '../fields/fixtureSource';
-import { frameClock as fieldClock, sampleField } from '../../core/fields';
+import { sampleField } from '../../core/fields';
 import { CumulativeBubbles } from './CumulativeBubbles';
 import { useCumulative } from './useCumulative';
 import { useCumulativeReadings } from './useCumulativeReadings';
 import { fixtureSource } from './fixtureSource';
-import { lookbackLabel } from '../../core/radar/cumulative';
 import type { MapView } from '../../core/radar/bubbles';
 import { Timeline } from './Timeline';
 import { hasNowcastCurve, NowcastPanel } from './NowcastPanel';
@@ -317,17 +316,6 @@ export function FullMap({
           activeIndex={activeIndex}
           places={places}
           onSelectPlace={onSelectPlace}
-          // While the totals are up the badge names the window rather than a frame
-          // time: there is no frame on screen for a clock to belong to. Signed, and in
-          // the same words the chart's axis uses, so the badge and the point under the
-          // cursor are visibly the same window.
-          timeLabel={
-            totals && cumulative.window
-              ? lookbackLabel(cumulative.window.hours)
-              : showField && fields.frame
-                ? fieldClock(fields.frame)
-                : frameClock(active)
-          }
           showFrames={!totals && !showField}
           showPins={!totals && !showField}
           onViewChange={totals || showField ? setView : undefined}
@@ -400,14 +388,15 @@ export function FullMap({
           <Icon name="caret-left" size={18} color={chrome.ink} weight="bold" />
         </Pressable>
 
-        {/* Directly under the time badge, on the same right-hand edge, so the map's
-            chrome stays two columns rather than three. */}
+        {/* The top-right corner, level with the back button opposite. It used to sit a
+            row below a time badge; the time lives in the panel now, so this moves up
+            into the space that left. */}
         <MapLayersControl
           active={layer}
           onSelect={chooseLayer}
           open={layersOpen}
           onOpenChange={setLayersOpen}
-          top={insets.top + space[2] + MAP_CHROME_SIZE + space[2]}
+          top={insets.top + space[2]}
         />
 
         {/* Both legends stand in the top-left corner, under the back button and on the
@@ -503,6 +492,7 @@ export function FullMap({
                   locationName={locationName}
                   onScrubFraction={scrubTo}
                   boundaryFraction={forecastBoundary(frames, axis?.positions)}
+                  timeLabel={frameClock(active)}
                   playing={playing}
                   onTogglePlay={onTogglePlay}
                   playDisabled={frames.length < 2}
@@ -550,7 +540,6 @@ export function FullMap({
               onIndexChange={onScrub}
               playing={playing}
               onTogglePlay={onTogglePlay}
-              showLabels={false}
               stepPositions={axis?.positions}
             />
           </Animated.View>
@@ -562,7 +551,6 @@ export function FullMap({
               onIndexChange={onScrub}
               playing={playing}
               onTogglePlay={onTogglePlay}
-              showLabels={false}
               stepPositions={axis?.positions}
             />
           </View>

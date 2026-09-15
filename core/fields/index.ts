@@ -304,24 +304,6 @@ export function unitLabel(unit: string): string {
 }
 
 /**
- * How far back a frame is, in the reader's words.
- *
- * The newest frame is not called "now". A run is minutes old before a phone sees it and
- * the anchor can be older still, so "laatste" says where it sits in the loop without
- * making a claim about the clock.
- */
-export function backLabel(frames: readonly FieldFrame[], index: number): string {
-  const newest = frames[frames.length - 1];
-  const frame = frames[index];
-  if (!newest || !frame) return '';
-  const minutes = Math.round((Date.parse(newest.time) - Date.parse(frame.time)) / 60_000);
-  if (minutes <= 0) return 'laatste';
-  if (minutes < 60) return `${minutes} min terug`;
-  const hours = minutes / 60;
-  return `${Number.isInteger(hours) ? hours : hours.toFixed(1).replace('.', ',')} uur terug`;
-}
-
-/**
  * Readable ink on a fill taken from the ramp.
  *
  * Rec. 601 luma, which is the cheap approximation that gets this right across a scale

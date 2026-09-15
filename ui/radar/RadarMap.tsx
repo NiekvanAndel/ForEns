@@ -55,15 +55,13 @@ export interface RadarMapProps {
   places?: PlacePin[];
   /** Selects a place. Without it the pins are labels rather than controls. */
   onSelectPlace?: (index: number) => void;
-  /** Label for the time badge, e.g. "nu" or "+45 min". */
-  timeLabel: string;
   interactive?: boolean;
   showControls?: boolean;
   /** The pin legend. Off by default: with one pin on the map, a caption naming it
    *  spends a corner of the map explaining a dot that needs no explaining. */
   showLegend?: boolean;
   /** How far down the floating chrome starts. Full screen passes the safe-area
-   *  inset, so the time badge clears the clock and the battery rather than sitting
+   *  inset, so the chrome clears the clock and the battery rather than sitting
    *  behind them. */
   chromeTop?: number;
   /**
@@ -106,7 +104,7 @@ export interface RadarMapProps {
 }
 
 export function RadarMap({
-  lat, lon, frames, activeIndex, places = [], onSelectPlace, timeLabel,
+  lat, lon, frames, activeIndex, places = [], onSelectPlace,
   interactive = true, showControls = true, showLegend = false,
   showFrames = true, overlay, showPins = true, onViewChange, startZoom = START_ZOOM,
   chromeTop = CHROME_INSET, attributionPosition = { bottom: space[2], left: space[2] },
@@ -256,24 +254,7 @@ export function RadarMap({
         ))}
       </MapLibreMap>
 
-      <View
-        style={[
-          {
-            position: 'absolute', right: CHROME_INSET, top: chromeTop,
-            height: MAP_CHROME_SIZE, justifyContent: 'center',
-            backgroundColor: chromeBg,
-            borderRadius: radius.pill,
-            paddingHorizontal: space[4],
-          },
-          shadowFloat,
-        ]}
-      >
-        <Text variant="caption" weight="bold" color={chromeInk} tabular>
-          {timeLabel}
-        </Text>
-      </View>
-
-      {showControls ? (
+{showControls ? (
         <View style={{ position: 'absolute', left: CHROME_INSET, top: chromeTop, gap: space[2] }}>
           <ControlButton icon="plus" label="Inzoomen" bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(ZOOM_STEP)} />
           <ControlButton icon="minus" label="Uitzoomen" bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(-ZOOM_STEP)} />

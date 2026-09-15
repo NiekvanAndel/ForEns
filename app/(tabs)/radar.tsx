@@ -116,7 +116,6 @@ function RadarPage() {
           lon={location.lon}
           frames={frames}
           activeIndex={index}
-          timeLabel={frameClock(frames[index])}
           style={{ aspectRatio: MAP_ASPECT }}
         />
         <Pressable
@@ -154,6 +153,7 @@ function RadarPage() {
             <NowcastPanel
               profile={nowcast}
               offsetMin={offsetMin}
+              timeLabel={frameClock(frames[index])}
               width={panelWidth}
               domain={axis ? { from: axis.from, to: axis.to } : undefined}
               locationName={location.name}

@@ -90,6 +90,10 @@ export interface NowcastPanelProps {
   /** The axis span, in minutes from now — the window the radar loop covers. The
    *  curve is clipped to it. Defaults to the profile's own range. */
   domain?: { from: number; to: number };
+  /** The clock for the frame on screen, printed beside the intensity. The map used to
+   *  carry this in a badge of its own; a time and the rate at that time are one reading
+   *  and belong together. */
+  timeLabel?: string;
   /** Named on the left of the header. */
   locationName?: string;
   /** Dragging across the chart scrubs, reporting a position 0–1 along the axis. */
@@ -108,6 +112,7 @@ interface NowcastHeaderProps {
   profile: NowcastProfile | null;
   /** Minutes from now the loop is showing, for the intensity on the right. */
   offsetMin: number;
+  timeLabel?: string;
   locationName?: string;
   playing?: boolean;
   onTogglePlay?: () => void;
@@ -123,7 +128,7 @@ interface NowcastHeaderProps {
  * nowcast has nothing to say about.
  */
 function NowcastHeader({
-  profile, offsetMin, locationName, playing, onTogglePlay, playDisabled,
+  profile, offsetMin, timeLabel, locationName, playing, onTogglePlay, playDisabled,
 }: NowcastHeaderProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -159,6 +164,12 @@ function NowcastHeader({
         {locationName ?? ta('yourLocation', prefs.lang)}
       </Text>
 
+      {timeLabel ? (
+        <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
+          {timeLabel}
+        </Text>
+      ) : null}
+
       {atNow != null ? (
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
           <Text
@@ -179,7 +190,7 @@ function NowcastHeader({
 }
 
 export function NowcastPanel({
-  profile, offsetMin, width, compact, domain, locationName, onScrubFraction,
+  profile, offsetMin, timeLabel, width, compact, domain, locationName, onScrubFraction,
   boundaryFraction, playing, onTogglePlay, playDisabled,
 }: NowcastPanelProps) {
   const { palette } = useTheme();
@@ -244,6 +255,7 @@ export function NowcastPanel({
     <NowcastHeader
       profile={profile}
       offsetMin={offsetMin}
+      timeLabel={timeLabel}
       locationName={locationName}
       playing={playing}
       onTogglePlay={onTogglePlay}

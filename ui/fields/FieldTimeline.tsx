@@ -7,16 +7,21 @@
  * `Scrubber`, which is the control itself — so the thumb, the rail and the drag behave
  * identically whichever layer is up, and only the labels differ.
  *
- * The ends are labelled with how far back the track reaches, and the middle carries
- * nothing: the clock for the frame on screen is the badge in the map's top-right corner,
- * and printing it again under the thumb would be the same fact twice, eight inches apart.
+ * Three clocks: the oldest frame, the one on screen, the newest. The map used to carry
+ * the middle one in a badge of its own, which meant reading the time in one corner and
+ * setting it in another; with the badge gone this row is the only place that says which
+ * moment is drawn, and it says it directly above the thumb that chose it.
+ *
+ * Clock times rather than "1,8 uur terug": a reader comparing this with anything else —
+ * a forecast row, their own memory of the evening — is comparing times of day, and
+ * arithmetic they have to do themselves is arithmetic they will get wrong.
  */
 import { Pressable, View } from 'react-native';
 import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { Scrubber } from '../radar/Scrubber';
-import { backLabel, type FieldFrame } from '../../core/fields';
+import { frameClock, type FieldFrame } from '../../core/fields';
 
 export interface FieldTimelineProps {
   /** Oldest first, as the track runs. */
@@ -32,6 +37,9 @@ export function FieldTimeline({
 }: FieldTimelineProps) {
   const { palette } = useTheme();
   const disabled = frames.length < 2;
+  const current = frames[index];
+  const oldest = frames[0];
+  const newest = frames[frames.length - 1];
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
@@ -52,10 +60,13 @@ export function FieldTimeline({
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
           <Text variant="caption" color={palette.muted} tabular>
-            {backLabel(frames, 0)}
+            {oldest ? frameClock(oldest) : ''}
+          </Text>
+          <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
+            {current ? frameClock(current) : ''}
           </Text>
           <Text variant="caption" color={palette.muted} tabular>
-            {backLabel(frames, frames.length - 1)}
+            {newest ? frameClock(newest) : ''}
           </Text>
         </View>
 
