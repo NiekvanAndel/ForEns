@@ -64,6 +64,10 @@ export interface RadarMapProps {
    *  inset, so the chrome clears the clock and the battery rather than sitting
    *  behind them. */
   chromeTop?: number;
+  /** How far in from the left it starts. Sideways the notch takes a strip of the
+   *  screen, and on the radar page the floating header starts above the map — so the
+   *  page that draws a full-bleed map has to say where its own chrome is not. */
+  chromeLeft?: number;
   /**
    * Whether the radar loop's own frames are drawn.
    *
@@ -92,6 +96,15 @@ export interface RadarMapProps {
    * is the alternative.
    */
   onViewChange?: (view: MapView) => void;
+  /**
+   * A tap on the map itself, anywhere a pin or a control did not take it.
+   *
+   * Full screen uses it to put its panel away, the way Apple's weather map does: the
+   * picture is the point, and the control over it is worth a tap to dismiss. Left
+   * undefined on the card, where the map is small enough that there is nothing to
+   * uncover.
+   */
+  onMapPress?: () => void;
   /** The zoom the map opens on. Defaults to the card's framing; the full-screen page
    *  passes `FULL_MAP_START_ZOOM`, which is a level further out. */
   startZoom?: number;
@@ -107,7 +120,8 @@ export function RadarMap({
   lat, lon, frames, activeIndex, places = [], onSelectPlace,
   interactive = true, showControls = true, showLegend = false,
   showFrames = true, overlay, showPins = true, onViewChange, startZoom = START_ZOOM,
-  chromeTop = CHROME_INSET, attributionPosition = { bottom: space[2], left: space[2] },
+  chromeTop = CHROME_INSET, chromeLeft = CHROME_INSET, onMapPress,
+  attributionPosition = { bottom: space[2], left: space[2] },
   style,
 }: RadarMapProps) {
   const { palette, appearance } = useTheme();
@@ -195,6 +209,7 @@ export function RadarMap({
         // the button is the least intrusive way to show it on a map this size.
         attribution
         attributionPosition={attributionPosition}
+        onPress={onMapPress ? () => onMapPress() : undefined}
         onRegionDidChange={(e) => {
           zoom.current = e.nativeEvent.zoom;
           viewport.current.center = e.nativeEvent.center as [number, number];
@@ -255,7 +270,7 @@ export function RadarMap({
       </MapLibreMap>
 
 {showControls ? (
-        <View style={{ position: 'absolute', left: CHROME_INSET, top: chromeTop, gap: space[2] }}>
+        <View style={{ position: 'absolute', left: chromeLeft, top: chromeTop, gap: space[2] }}>
           <ControlButton icon="plus" label="Inzoomen" bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(ZOOM_STEP)} />
           <ControlButton icon="minus" label="Uitzoomen" bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(-ZOOM_STEP)} />
         </View>

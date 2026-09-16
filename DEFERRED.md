@@ -714,10 +714,20 @@ What landscape changes:
   lists rather than one legible one.
 - **The blocks on 'Actueel' take as many columns as fit**, two to four, from a
   measured width rather than an orientation switch — so the sizes between get what
-  fits too.
-- **Both map surfaces put their panel in a band at the bottom**, centred and
-  capped at 420pt, in the flow rather than over the map: a control floating on the
-  thing it controls covers the weather being scrubbed through.
+  fits too. **That page opts out of `Columns`** for the same reason 'Verwachting'
+  does, arrived at the other way round: the grid already answers the question
+  `Columns` asks, and inside a column it measured half a screen and laid out the
+  portrait grid with white space beside it.
+- **Both map surfaces float their panel over the bottom of the map**, centred and
+  capped at 420pt. It sat in the flow for one round, on the argument that a control
+  over the thing it controls covers the weather being scrubbed through — which is
+  true and still costs less than a band across a screen whose scarce dimension is
+  height. Full screen it can also be dismissed outright: a tap on the map hides it,
+  a second tap brings it back, as Apple's weather map does.
+- **The map's own buttons clear the chrome around them.** Sideways the radar page's
+  map is full-bleed under a floating header and beside a standing tab bar, so the
+  zoom buttons start below the header (`chromeTop`/`chromeLeft` on `RadarMap`) and
+  the full-screen button insets by `TAB_BAR_CLEARANCE_SIDE`.
 - **The chrome takes the side insets.** Turned sideways the notch is on one edge
   and the rounded corner on the other, so the top bar, the tab bar, the map's
   buttons and the legends inset by `insets.left`/`insets.right` on top of their
@@ -731,5 +741,11 @@ Known and accepted:
 - **Rotating remounts the cards**, because moving them into columns moves them in
   the tree. Page-level state survives (it is held by the page); anything a card
   holds internally does not. Nothing on these pages currently does.
+- **Day rows size their numbers from their measured width**, not with
+  `adjustsFontSizeToFit`. That prop stops honouring `minimumFontScale` on iOS once
+  the text node has a nested one inside it, and every reading nests its unit — what
+  it produced was two days in a fortnight printed visibly smaller than the rest,
+  picked out by nothing but which numbers happened to be longest. `dayRowCompact`
+  decides it from the width alone, so every row in a list agrees.
 - **Not verified on a device.** Typecheck, lint and the suite pass, and the
-  column arithmetic is tested, but nobody has turned a phone yet.
+  column and row arithmetic is tested, but nobody has turned a phone yet.

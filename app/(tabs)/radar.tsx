@@ -120,6 +120,12 @@ function RadarPage() {
           lon={location.lon}
           frames={frames}
           activeIndex={index}
+          // Sideways the map is the whole page and the floating header sits on top of
+          // it, so the zoom buttons start below the header rather than behind it. In
+          // portrait the map begins under the header anyway and the default inset is
+          // measured from the map's own corner.
+          chromeTop={landscape ? TOP_BAR_CLEARANCE + insets.top + space[2] : undefined}
+          chromeLeft={landscape ? insets.left + 14 : undefined}
           style={landscape ? { flex: 1, borderRadius: 0 } : { aspectRatio: MAP_ASPECT }}
         />
         <Pressable
@@ -129,7 +135,12 @@ function RadarPage() {
           hitSlop={8}
           style={[
             {
-              position: 'absolute', right: insets.right + 14, bottom: 14,
+              position: 'absolute',
+              // Clear of the tab bar, which stands against the right edge sideways.
+              right: insets.right + 14 + (landscape ? TAB_BAR_CLEARANCE_SIDE : 0),
+              // Only sideways does the map run to the bottom of the screen; in
+              // portrait it is a card in a scroll view and the inset is already spent.
+              bottom: 14 + (landscape ? insets.bottom : 0),
               width: 38, height: 38, borderRadius: 19,
               backgroundColor: chrome.bg,
               alignItems: 'center', justifyContent: 'center',
@@ -194,30 +205,43 @@ function RadarPage() {
       </Card>
   );
 
-  // Portrait stacks them and scrolls. Landscape gives the map the page and puts the
-  // panel in a band beneath it, centred and capped — the arrangement the full-screen map
-  // makes, so the two read as one product. In the flow rather than over the map: a
-  // control floating on the thing it controls covers the weather being scrubbed through.
+  // Portrait stacks them and scrolls. Landscape gives the map the whole page and floats
+  // the panel over the bottom of it, centred and capped — the arrangement the
+  // full-screen map makes, so the two read as one product.
+  //
+  // Floating rather than in the flow, which is what it was for one round: height is the
+  // scarce dimension sideways, and a band under the map spends a fifth of it on a
+  // control that is mostly white. Over the map it costs only the strip it covers, and
+  // that strip is 420 points wide in the middle rather than the full width.
   if (landscape) {
     return (
       <View style={{ flex: 1 }}>
         {map}
         <View
-          onLayout={(e) =>
-            setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 2))
-          }
+          pointerEvents="box-none"
           style={{
-            alignSelf: 'center',
-            width: Math.min(
-              PANEL_MAX_WIDTH,
-              width - insets.left - insets.right - TAB_BAR_CLEARANCE_SIDE - space[6]
-            ),
-            // Clear of the tab bar, which stands against the right edge.
-            marginRight: TAB_BAR_CLEARANCE_SIDE,
-            marginBottom: insets.bottom + space[3],
+            position: 'absolute', left: 0, bottom: insets.bottom + space[3],
+            // Centred on the map rather than on the screen: the tab bar takes a column
+            // off the right, and a panel centred on the whole width would sit under it.
+            right: TAB_BAR_CLEARANCE_SIDE,
+            alignItems: 'center',
           }}
         >
-          {panel}
+          <View
+            onLayout={(e) =>
+              setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 2))
+            }
+            // Only the width: `Card` brings its own radius and shadow, and a second
+            // one over it reads as a card on a card.
+            style={{
+              width: Math.min(
+                PANEL_MAX_WIDTH,
+                width - insets.left - insets.right - TAB_BAR_CLEARANCE_SIDE - space[6]
+              ),
+            }}
+          >
+            {panel}
+          </View>
         </View>
       </View>
     );

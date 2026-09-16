@@ -84,3 +84,26 @@ export function gridColumns(available: number, gap: number): number {
   const fits = Math.floor((available + gap) / (MIN_TILE_WIDTH + gap));
   return Math.min(TILE_COLUMN_RANGE[1], Math.max(TILE_COLUMN_RANGE[0], fits));
 }
+
+/**
+ * The width below which a day row on 'Verwachting' and 'Nu' prints its readings a
+ * size down.
+ *
+ * The row has six columns, and at the full size a freezing day ("-12° 24°") is a few
+ * points too wide for them on a 375-point screen. It used to solve that per reading,
+ * with `adjustsFontSizeToFit` — which on iOS ignores `minimumFontScale` as soon as the
+ * text node has a nested one inside it, and every reading here nests its unit. The
+ * result was two or three rows in a list printed visibly smaller than the rest, picked
+ * out by nothing a reader could see: whichever days happened to carry the longest
+ * numbers.
+ *
+ * So the size is decided by the width the row actually got and nothing else. Every row
+ * in a list has the same width, so they agree — which is the property that was missing.
+ */
+export const DAY_ROW_COMPACT_WIDTH = 360;
+
+/** Whether a day row that wide has to print a size down. Zero means unmeasured, which
+ *  is the first frame: assume there is room rather than flashing small text. */
+export function dayRowCompact(width: number): boolean {
+  return width > 0 && width < DAY_ROW_COMPACT_WIDTH;
+}

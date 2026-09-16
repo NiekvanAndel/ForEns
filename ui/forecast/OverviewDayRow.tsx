@@ -28,6 +28,7 @@
  * but the wrapping had a different cause, and one flat row of columns is easier to
  * read down than a row with one two-storey cell in it.
  */
+import { useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { radius, useTheme } from '../../theme';
 import { Text } from '../Text';
@@ -36,6 +37,7 @@ import { WindArrow } from '../WindArrow';
 import { usePrefs } from '../../state/prefs';
 import { convTemp, convWind, dayNames, fmtMm, windUnitLabel } from '../../core/i18n';
 import { resolveDayValues } from '../../core/model/dayValues';
+import { dayRowCompact } from '../../core/layout';
 import type { Day } from '../../core/model/types';
 
 /** Room for the longest weekday abbreviation and a two-digit date. */
@@ -47,21 +49,26 @@ const COL_GAP = 5;
  * How big the numbers get.
  *
  * Six columns share the row, so "as big as it fits" depends on the phone: the sizes
- * here fit comfortably from an iPhone 15 up, and on a 375-point screen a freezing
- * day ("-12° 24°") is a few points too wide for them. So the readings also carry
- * `adjustsFontSizeToFit` with a floor of 0.85, which shrinks that one column by up
- * to two points on the narrow screens rather than truncating it — every other row
- * and every wider phone keeps the full size.
+ * here fit comfortably from an iPhone 15 up, and on a 375-point screen a freezing day
+ * ("-12° 24°") is a few points too wide for them. The row therefore measures itself and
+ * drops a size below `DAY_ROW_COMPACT_WIDTH` — the whole row at once, so a list of them
+ * stays one table.
  *
- * That prop was removed from this file once before, when it was hiding a
- * precipitation reading that wrapped because it was built from two text nodes. The
- * structure is one node now; this is the prop doing its actual job.
+ * It used to be `adjustsFontSizeToFit` on each reading instead, which is the obvious
+ * answer and the wrong one here: on iOS that prop stops honouring `minimumFontScale` as
+ * soon as the text node has a nested one inside it, and every reading nests its unit.
+ * What a reader saw was two days in a fortnight printed noticeably smaller than the
+ * other twelve — the two that happened to carry the longest numbers. A size that depends
+ * on the width cannot do that, because every row in a list has the same width.
  *
  * Temperature and precipitation lead; wind and sunshine follow a size down, since
  * they carry the longer units.
  */
 const VALUE_SIZE = 17;
 const VALUE_SIZE_SMALL = 15;
+/** The same pair on a narrow screen. */
+const VALUE_SIZE_TIGHT = 15;
+const VALUE_SIZE_TIGHT_SMALL = 13.5;
 /** The units and the `~`, scaled with the numbers they belong to. */
 const UNIT_SIZE = 12;
 const UNIT_SIZE_SMALL = 11;
@@ -80,12 +87,18 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const v = resolveDayValues(day, { dayIndex });
+  // Measured rather than taken from the window: this row sits inside a card on 'Nu'
+  // and across the full page on 'Verwachting', and it is the room it has that decides
+  // whether the numbers fit, not the size of the screen around it.
+  const [width, setWidth] = useState(0);
+  const tight = dayRowCompact(width);
 
   const date = new Date(day.date + 'T12:00:00Z');
   const names = dayNames(prefs.lang);
 
   const body = (
     <View
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
       style={{
         flexDirection: 'row', alignItems: 'center',
         paddingVertical: 11, paddingHorizontal: 4,
@@ -123,12 +136,14 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
           suffix="°"
           color={palette.valLow}
           approx={!v.tempMin.direct}
+          tight={tight}
         />
         <Reading
           value={convTemp(v.tempMax.value, prefs.tempUnit)}
           suffix="°"
           color={palette.valHigh}
           approx={!v.tempMax.direct}
+          tight={tight}
         />
       </View>
 
@@ -145,6 +160,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
           color={palette.muted}
           approx={!v.wind.direct}
           small
+          tight={tight}
         />
       </View>
 
@@ -154,6 +170,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
           suffix=" mm"
           color={v.precip.value ? palette.valPrecip : palette.valPrecipZero}
           approx={!v.precip.direct}
+          tight={tight}
         />
       </View>
 
@@ -163,6 +180,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
           suffix=" u"
           color={palette.valSun}
           small
+          tight={tight}
         />
       </View>
     </View>
@@ -188,15 +206,20 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
 /** One number, with its unit and the `~` the web app uses to mark an ensemble
  *  stand-in — all in one text node, so nothing inside it can be squeezed apart. */
 function Reading({
-  value, suffix, color, approx, small,
+  value, suffix, color, approx, small, tight,
 }: {
   value: string | number | null;
   suffix?: string;
   color: string;
   approx?: boolean;
   small?: boolean;
+  /** Set by the row when it is too narrow for the full size. */
+  tight?: boolean;
 }) {
   const { palette } = useTheme();
+  const size = tight
+    ? (small ? VALUE_SIZE_TIGHT_SMALL : VALUE_SIZE_TIGHT)
+    : (small ? VALUE_SIZE_SMALL : VALUE_SIZE);
   if (value == null) {
     return (
       <Text
@@ -204,7 +227,7 @@ function Reading({
         color={palette.inkDisabled}
         tabular
         numberOfLines={1}
-        style={{ fontSize: small ? VALUE_SIZE_SMALL : VALUE_SIZE }}
+        style={{ fontSize: size }}
       >
         —
       </Text>
@@ -217,9 +240,7 @@ function Reading({
       color={color}
       tabular
       numberOfLines={1}
-      adjustsFontSizeToFit
-      minimumFontScale={0.85}
-      style={{ fontSize: small ? VALUE_SIZE_SMALL : VALUE_SIZE }}
+      style={{ fontSize: size }}
     >
       {value}
       {suffix ? (

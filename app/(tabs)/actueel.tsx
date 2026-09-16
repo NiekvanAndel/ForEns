@@ -52,7 +52,7 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space, useTheme } from '../../theme';
-import { Columns, usePagePadding } from '../../ui/layout';
+import { usePagePadding } from '../../ui/layout';
 import { gridColumns } from '../../core/layout';
 import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
@@ -141,88 +141,91 @@ function CurrentPage() {
       showsVerticalScrollIndicator={false}
       refreshControl={refreshControl}
     >
-      <Columns spanning={2}>
-        <LocationTitle />
+      {/* No two-column split here, unlike every other page. This page *is* a grid,
+          and `Grid` already takes as many blocks a row as the width allows — put it in
+          a column and it measures half a screen and lays out two across, which is the
+          portrait layout with more white space beside it. Sideways it gets the whole
+          width and four blocks a row. */}
+      <LocationTitle />
 
-        {phase === 'error' ? (
-          <Card>
-            <Text variant="body" color={palette.muted} align="center">
-              {error ?? ta('noData', prefs.lang)}
+      {phase === 'error' ? (
+        <Card>
+          <Text variant="body" color={palette.muted} align="center">
+            {error ?? ta('noData', prefs.lang)}
+          </Text>
+          <Pressable onPress={refresh} accessibilityRole="button" style={{ marginTop: space[4] }}>
+            <Text variant="label" color={palette.accentDark} align="center">
+              {ta('retry', prefs.lang)}
             </Text>
-            <Pressable onPress={refresh} accessibilityRole="button" style={{ marginTop: space[4] }}>
-              <Text variant="label" color={palette.accentDark} align="center">
-                {ta('retry', prefs.lang)}
+          </Pressable>
+        </Card>
+      ) : loading ? (
+        <Card>
+          <View style={{ paddingVertical: space[8], alignItems: 'center', gap: space[3] }}>
+            <ActivityIndicator color={palette.accent} />
+          </View>
+        </Card>
+      ) : (
+        <>
+          {/* Where the grid is from and when. The station's name earns its line here
+              in a way it does not on 'Nu': the reader is looking at a wall of
+              numbers, and which instrument produced them is the first question. */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2 }}>
+            <Text variant="label" weight="semibold" color={palette.muted} tabular>
+              {timeLabel}
+            </Text>
+            {station ? (
+              <View
+                style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.agroBright }}
+              />
+            ) : null}
+            <Text
+              variant="caption"
+              color={station ? palette.agroInk : palette.muted}
+              numberOfLines={1}
+              style={{ flexShrink: 1 }}
+            >
+              {station
+                ? `AgroExact - ${station.name ?? location.stationName ?? 'station'}`
+                : ta('yourLocation', prefs.lang)}
+            </Text>
+
+            {/* At the end of the line that says what the grid is, because arranging
+                it is a thing you do to the grid — not another destination in the top
+                row, which is for moving between places. */}
+            <Pressable
+              onPress={() => setEditing(true)}
+              accessibilityRole="button"
+              accessibilityLabel={ta('editBlocks', prefs.lang)}
+              hitSlop={10}
+              style={{ marginLeft: 'auto', paddingLeft: space[3] }}
+            >
+              <Icon name="pencil-simple" size={16} color={palette.muted} />
+            </Pressable>
+          </View>
+
+          <Grid tiles={tiles} onOpen={setCompared} />
+
+          {/* Only where there is nothing measuring this place. On a station-backed
+              location the dots already say which blocks are instruments, and a
+              sentence about connecting one would be advice to somebody who has. */}
+          {!station ? (
+            <Pressable
+              onPress={() => router.push('/settings')}
+              accessibilityRole="button"
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: space[2],
+                paddingHorizontal: space[2],
+              }}
+            >
+              <Icon name="info" size={13} color={palette.muted} />
+              <Text variant="caption" color={palette.muted} style={{ flexShrink: 1 }}>
+                {ta('modelledBlocks', prefs.lang)}
               </Text>
             </Pressable>
-          </Card>
-        ) : loading ? (
-          <Card>
-            <View style={{ paddingVertical: space[8], alignItems: 'center', gap: space[3] }}>
-              <ActivityIndicator color={palette.accent} />
-            </View>
-          </Card>
-        ) : (
-          <>
-            {/* Where the grid is from and when. The station's name earns its line here
-                in a way it does not on 'Nu': the reader is looking at a wall of
-                numbers, and which instrument produced them is the first question. */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2 }}>
-              <Text variant="label" weight="semibold" color={palette.muted} tabular>
-                {timeLabel}
-              </Text>
-              {station ? (
-                <View
-                  style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.agroBright }}
-                />
-              ) : null}
-              <Text
-                variant="caption"
-                color={station ? palette.agroInk : palette.muted}
-                numberOfLines={1}
-                style={{ flexShrink: 1 }}
-              >
-                {station
-                  ? `AgroExact - ${station.name ?? location.stationName ?? 'station'}`
-                  : ta('yourLocation', prefs.lang)}
-              </Text>
-
-              {/* At the end of the line that says what the grid is, because arranging
-                  it is a thing you do to the grid — not another destination in the top
-                  row, which is for moving between places. */}
-              <Pressable
-                onPress={() => setEditing(true)}
-                accessibilityRole="button"
-                accessibilityLabel={ta('editBlocks', prefs.lang)}
-                hitSlop={10}
-                style={{ marginLeft: 'auto', paddingLeft: space[3] }}
-              >
-                <Icon name="pencil-simple" size={16} color={palette.muted} />
-              </Pressable>
-            </View>
-
-            <Grid tiles={tiles} onOpen={setCompared} />
-
-            {/* Only where there is nothing measuring this place. On a station-backed
-                location the dots already say which blocks are instruments, and a
-                sentence about connecting one would be advice to somebody who has. */}
-            {!station ? (
-              <Pressable
-                onPress={() => router.push('/settings')}
-                accessibilityRole="button"
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: space[2],
-                  paddingHorizontal: space[2],
-                }}
-              >
-                <Icon name="info" size={13} color={palette.muted} />
-                <Text variant="caption" color={palette.muted} style={{ flexShrink: 1 }}>
-                  {ta('modelledBlocks', prefs.lang)}
-                </Text>
-              </Pressable>
-            ) : null}
-          </>
-        )}
-      </Columns>
+          ) : null}
+        </>
+      )}
     </ScrollView>
 
     <TileSheet tile={compared} labels={labels} onClose={() => setCompared(null)} />

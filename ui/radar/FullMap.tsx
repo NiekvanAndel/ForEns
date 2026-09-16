@@ -68,6 +68,21 @@
  * Where there is no curve at all — a location the nowcast does not reach — there is
  * nothing to fold, so the grabber goes and the row simply stands. The rule under
  * every case is the same one: something on screen has to be draggable.
+ *
+ * ## A tap on the map puts the panel away entirely
+ *
+ * Folding makes the panel small; tapping the map makes it gone, and tapping again
+ * brings it back. This is what Apple's weather map does, and the reason is the one
+ * behind every other decision on this screen: the picture is the point, and there is
+ * no arrangement of a panel that does not cover some of it. A gesture that gives the
+ * reader the whole map for as long as they want it beats another few points shaved off
+ * a control.
+ *
+ * It follows that the panel floats over the map rather than sitting under it, in both
+ * orientations — there would be nothing to uncover otherwise. Sideways it also narrows
+ * to a card in the middle, so what it covers is a strip rather than a band: height is
+ * the scarce dimension there, and a panel that spends it across the full width is
+ * spending it on white space either side of a 420-point control.
  */
 import { useMemo, useState } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
@@ -104,7 +119,6 @@ import { frameAtFraction } from './useRadarFrames';
 import {
   forecastBoundary, frameClock, radarAxis, type NowcastProfile, type RadarFrame,
 } from '../../core/radar';
-import { TAB_BAR_CLEARANCE_SIDE } from '../GlassTabBar';
 import { useLandscape } from '../layout';
 import { usePrefs } from '../../state/prefs';
 import type { SavedLocation } from '../../core/prefs';
@@ -185,16 +199,19 @@ export function FullMap({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   // Sideways the panel narrows to a card at the bottom centre rather than spanning the
-  // width. It stays in the flow — the map ends where the panel starts — because a
-  // control floating over the thing it controls covers the weather a reader is scrubbing
-  // through to see.
+  // width, and the map keeps the whole screen behind it. See the note at the top.
   const landscape = useLandscape();
   const chrome = mapChrome(palette, appearance);
   const [panelWidth, setPanelWidth] = useState(width);
   // The profile collapses out of the way; the timeline below it never does.
   const [profileOpen, setProfileOpen] = useState(true);
+  // And the whole panel goes, on a tap on the map. Kept as React state as well as a
+  // shared value because `pointerEvents` is a prop, not a style: a panel faded to
+  // nothing still swallows the tap meant to bring it back.
+  const [panelHidden, setPanelHidden] = useState(false);
   const reduceMotion = useReducedMotion();
   const collapse = useSharedValue(0);
+  const hide = useSharedValue(0);
   // Nothing to fold away, and nothing to drag: the slider stands rather than
   // trading places with a curve that was never drawn.
   const curve = hasNowcastCurve(profile);
@@ -275,6 +292,14 @@ export function FullMap({
     if (next !== 'nowcast' && playing) onTogglePlay();
   };
 
+  const togglePanel = () => {
+    const next = !panelHidden;
+    setPanelHidden(next);
+    hide.value = reduceMotion
+      ? (next ? 1 : 0)
+      : withTiming(next ? 1 : 0, { duration: duration.base });
+  };
+
   const setOpen = (open: boolean) => {
     setProfileOpen(open);
     collapse.value = reduceMotion
@@ -289,6 +314,14 @@ export function FullMap({
       if (e.translationY > 30 || e.velocityY > 500) runOnJS(setOpen)(false);
       else if (e.translationY < -30 || e.velocityY < -500) runOnJS(setOpen)(true);
     });
+
+  // Sliding down as it fades, so it reads as the panel leaving rather than the panel
+  // dissolving. A fixed distance: the panel's height is not known here, and past the
+  // first few points of travel a fade has already done the work.
+  const panelStyle = useAnimatedStyle(() => ({
+    opacity: 1 - hide.value,
+    transform: [{ translateY: hide.value * 36 }],
+  }));
 
   const profileStyle = useAnimatedStyle(() => ({
     opacity: 1 - collapse.value,
@@ -336,6 +369,7 @@ export function FullMap({
           showFrames={!totals && !showField}
           showPins={!totals && !showField}
           onViewChange={totals || showField ? setView : undefined}
+          onMapPress={togglePanel}
           overlay={
             showField && fields.manifest && fieldVariable ? (
               <>
@@ -434,22 +468,35 @@ export function FullMap({
         ) : null}
       </View>
 
+      {/* Over the map rather than under it, so a tap on the map has something to
+          uncover — and, sideways, so the map keeps the height a band would take.
+          `box-none` lets a tap through the padding around the card to the map below;
+          `none` while hidden lets the tap that brings it back reach the map at all. */}
+      <Animated.View
+        pointerEvents={panelHidden ? 'none' : 'box-none'}
+        style={[
+          {
+            position: 'absolute', left: 0, right: 0, bottom: 0,
+            alignItems: landscape ? 'center' : 'stretch',
+          },
+          landscape ? { paddingBottom: insets.bottom + space[3] } : null,
+          panelStyle,
+        ]}
+      >
       <View
         onLayout={(e) => setPanelWidth(e.nativeEvent.layout.width)}
         style={[
           { backgroundColor: palette.appCard },
           landscape
             ? {
-                alignSelf: 'center',
                 // Capped, because a control that spans a landscape screen puts its play
-                // button and the end of its track a hand's width apart.
+                // button and the end of its track a hand's width apart. Centred on the
+                // screen: this page is pushed over the tab bar, not beside it, so there
+                // is nothing standing against the right edge to lean away from.
                 width: Math.min(
                   PANEL_MAX_WIDTH,
-                  width - insets.left - insets.right - TAB_BAR_CLEARANCE_SIDE - space[6]
+                  width - insets.left - insets.right - space[6]
                 ),
-                // Clear of the tab bar, which stands against the right edge.
-                marginRight: TAB_BAR_CLEARANCE_SIDE,
-                marginBottom: insets.bottom + space[3],
                 borderRadius: radius.appCard,
                 paddingBottom: space[3],
                 ...shadowFloat,
@@ -458,8 +505,7 @@ export function FullMap({
                 borderTopLeftRadius: radius.appCard,
                 borderTopRightRadius: radius.appCard,
                 paddingBottom: insets.bottom + space[3],
-                // Pulled up over the map, so the two read as one surface.
-                marginTop: -radius.appCard,
+                ...shadowFloat,
               },
         ]}
       >
@@ -594,6 +640,7 @@ export function FullMap({
           </View>
         )}
       </View>
+      </Animated.View>
     </View>
   );
 }

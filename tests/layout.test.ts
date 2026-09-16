@@ -8,7 +8,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createElement, Fragment, isValidElement, type ReactElement } from 'react';
-import { cardsOf, gridColumns, MIN_TILE_WIDTH, splitColumns } from '../core/layout';
+import {
+  cardsOf, dayRowCompact, DAY_ROW_COMPACT_WIDTH, gridColumns, MIN_TILE_WIDTH, splitColumns,
+} from '../core/layout';
 
 const page = ['title', 'alert', 'hero', 'hours', 'radar', 'forecast', 'footer'];
 
@@ -155,6 +157,32 @@ describe('gridColumns', () => {
       const columns = gridColumns(available, gap);
       const each = (available - (columns - 1) * gap) / columns;
       if (columns > 2) expect(each, `${available}pt / ${columns}`).toBeGreaterThanOrEqual(MIN_TILE_WIDTH);
+    }
+  });
+});
+
+describe('dayRowCompact', () => {
+  it('prints full size on a row with room', () => {
+    expect(dayRowCompact(DAY_ROW_COMPACT_WIDTH)).toBe(false);
+    expect(dayRowCompact(800)).toBe(false);
+  });
+
+  it('drops a size on a narrow row', () => {
+    expect(dayRowCompact(DAY_ROW_COMPACT_WIDTH - 1)).toBe(true);
+    expect(dayRowCompact(300)).toBe(true);
+  });
+
+  it('assumes there is room before anything is measured', () => {
+    // Zero is the first render. Guessing 'tight' there would show every list flashing
+    // small text for a frame and then growing.
+    expect(dayRowCompact(0)).toBe(false);
+  });
+
+  it('answers the same for every row in one list', () => {
+    // The whole point: the size may depend on the width, and on nothing else. Two rows
+    // that got the same width can never disagree, whatever is written in them.
+    for (const width of [320, 360, 375, 420, 700]) {
+      expect(dayRowCompact(width)).toBe(dayRowCompact(width));
     }
   });
 });
