@@ -13,6 +13,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.agroexact.exactcast",
+      "appleTeamId": "D23YRP46B6",
       "icon": {
         "light": "./logos/exactcast-icon-radar-light.png",
         "dark": "./logos/exactcast-icon-radar.png"
