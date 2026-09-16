@@ -12,28 +12,26 @@
  * measurands because each has its own ensemble picture to show; here every measurand
  * is one column of the same table, and the table fits on one screen.
  *
- * The hourly list is `HourlyList` on its overview layer, which is the component the
- * forecast sheet uses for the same job. `pastOnly` turns off the dimming and the
- * per-row "meting" label: both exist to mark the past inside a list that is partly
- * future, and here the header says it once.
+ * What it does share is the top of the sheet: the same six figures from
+ * `DaySummaryCells`, and the same hour-by-hour table from `HourlyList` on its overview
+ * layer. A day is a day, and a reader moving between the two halves of the table should
+ * not have to learn a second layout to read one. `pastOnly` turns off the list's
+ * dimming and its per-row "meting" label: both exist to mark the past inside a list
+ * that is partly future, and here the header says it once.
  */
-import type { ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space, useTheme } from '../../theme';
-import { Card, Rule } from '../Card';
+import { Card } from '../Card';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
-import { WindArrow } from '../WindArrow';
+import { DaySummaryCells } from './DaySummaryCells';
 import { HourlyList } from './HourlyList';
 import { usePrefs } from '../../state/prefs';
 import { pastDetailHours, type PastHour } from '../../core/model/pastDays';
-import { resolveDayValues } from '../../core/model/dayValues';
 import type { Day } from '../../core/model/types';
-import {
-  convTemp, convWind, dayNames, fmtMm, t, ta, tempUnitLabel, windUnitLabel, wmoText,
-} from '../../core/i18n';
+import { dayNames, t, ta, wmoText } from '../../core/i18n';
 
 export interface PastDaySheetProps {
   visible: boolean;
@@ -79,7 +77,6 @@ function Body({
   const insets = useSafeAreaInsets();
 
   const detail = pastDetailHours(hours, day.date);
-  const v = resolveDayValues(day, { dayIndex: 0 });
 
   const date = new Date(day.date + 'T12:00:00Z');
   const names = dayNames(prefs.lang);
@@ -132,79 +129,14 @@ function Body({
         showsVerticalScrollIndicator={false}
       >
         <Card>
-          {/* The day in five figures, above its hours — the same five the row in the
-              table carries, so opening a row does not change what it says. */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: space[4] }}>
-            <Figure
-              label={ta('tempMin', prefs.lang)}
-              value={convTemp(v.tempMin.value, prefs.tempUnit)}
-              unit={tempUnitLabel(prefs.tempUnit)}
-              color={palette.valLow}
-            />
-            <Figure
-              label={ta('tempMax', prefs.lang)}
-              value={convTemp(v.tempMax.value, prefs.tempUnit)}
-              unit={tempUnitLabel(prefs.tempUnit)}
-              color={palette.valHigh}
-            />
-            <Figure
-              label={ta('rain', prefs.lang)}
-              value={v.precip.value != null ? fmtMm(v.precip.value) : null}
-              unit="mm"
-              color={v.precip.value ? palette.valPrecip : palette.valPrecipZero}
-            />
-            <Figure
-              label={ta('maxWind', prefs.lang)}
-              value={convWind(v.wind.value, prefs.windUnit)}
-              unit={windUnitLabel(prefs.windUnit)}
-              color={palette.valWind}
-              lead={<WindArrow deg={v.windDir} size={12} color={palette.muted} />}
-            />
-            <Figure
-              label={t('sun', prefs.lang)}
-              value={v.sunHours != null ? v.sunHours.toFixed(1).replace('.', ',') : null}
-              unit="u"
-              color={palette.valSun}
-            />
-          </View>
-
-          <Rule soft style={{ marginTop: space[4] }} />
+          {/* The same six figures the forecast sheet opens with, from the same
+              component: a day is a day, and a reader moving between the two halves of
+              the table should not have to learn a second layout to read one. */}
+          <DaySummaryCells day={day} dayIndex={0} />
 
           <HourlyList layer="overview" hours={detail} sourceLabel={source} pastOnly />
         </Card>
       </ScrollView>
-    </View>
-  );
-}
-
-/** One of the day's headline numbers. Half the width each, so five of them fall into
- *  a tidy grid on every phone rather than a row that wraps one figure onto its own. */
-function Figure({
-  label, value, unit, color, lead,
-}: {
-  label: string;
-  value: string | number | null;
-  unit: string;
-  color: string;
-  lead?: ReactNode;
-}) {
-  const { palette } = useTheme();
-  return (
-    <View style={{ width: '33.33%', gap: 2 }}>
-      <Text variant="eyebrow" color={palette.muted} numberOfLines={1}>
-        {label}
-      </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-        {lead}
-        <Text variant="bodySm" weight="bold" color={value == null ? palette.inkDisabled : color} tabular>
-          {value ?? '—'}
-          {value != null ? (
-            <Text variant="caption" weight="semibold" color={palette.muted}>
-              {` ${unit}`}
-            </Text>
-          ) : null}
-        </Text>
-      </View>
     </View>
   );
 }
