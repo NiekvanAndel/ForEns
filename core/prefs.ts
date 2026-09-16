@@ -121,6 +121,23 @@ export interface Prefs {
   model: ModelPref;
   shortModel: ShortModelPref;
   showSpread: boolean;
+  /**
+   * Whether the significant-weather block appears on 'Nu' at all.
+   *
+   * The outer of the two layers: with it off there is no block and no notification
+   * of any kind, because a notification about something the app has been told not to
+   * show is a contradiction. See `core/model/alert`.
+   */
+  alertsEnabled: boolean;
+  /**
+   * Whether the same alerts are also delivered as push, from the server.
+   *
+   * The inner layer, and a different promise from the block: a block is read when
+   * the app is opened, and a push arrives whether it is or not. Off until someone
+   * asks for it, and asking is what triggers the permission prompt — see
+   * `core/push`.
+   */
+  pushEnabled: boolean;
   notifyRain: boolean;
   notifyWind: boolean;
   notifyFrost: boolean;
@@ -150,6 +167,8 @@ export const DEFAULT_PREFS: Prefs = {
   model: 'ecmwf',
   shortModel: 'nowcast',
   showSpread: true,
+  alertsEnabled: true,
+  pushEnabled: false,
   notifyRain: false,
   notifyWind: false,
   notifyFrost: false,
@@ -184,7 +203,7 @@ export function mergePrefs(stored: unknown): Prefs {
   take('model', oneOf('ecmwf', 'gfs', 'mix'));
   take('shortModel', oneOf('nowcast', 'radar'));
   for (const k of [
-    'useHarmonie', 'showSpread',
+    'useHarmonie', 'showSpread', 'alertsEnabled', 'pushEnabled',
     'notifyRain', 'notifyWind', 'notifyFrost', 'quietHours',
   ] as const) {
     take(k, bool);

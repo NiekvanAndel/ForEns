@@ -195,6 +195,9 @@ describe('quiet hours', () => {
 
 describe('planNotification', () => {
   const noon = Date.UTC(2026, 5, 15, 12, 0);
+  // Push is off by default — it is what the permission prompt hangs off, so nobody
+  // gets it without asking. Every case below is about what happens once they have.
+  const SUBSCRIBED = { ...DEFAULT_PREFS, alertsEnabled: true, pushEnabled: true };
   const alert = (over: Partial<WeatherAlert> = {}): WeatherAlert => ({
     kind: 'rain', severity: 'light', icon: 'cloud-rain', label: 'Neerslag',
     headline: 'Regen over 30 minuten', sub: 'Naar verwachting 2,0 mm.',
@@ -205,26 +208,39 @@ describe('planNotification', () => {
     expect(planNotification(null, DEFAULT_PREFS, { locationName: 'X' })).toBeNull();
   });
 
+  it('needs both layers, not one', () => {
+    // The blocks and the push are separate promises. Nothing is sent while push is
+    // off, and nothing while the alerts themselves are off — notifying about
+    // something the app has been told not to show is a contradiction.
+    const kind = { notifyRain: true };
+    const noPush = { ...DEFAULT_PREFS, ...kind, alertsEnabled: true, pushEnabled: false };
+    const noAlerts = { ...DEFAULT_PREFS, ...kind, alertsEnabled: false, pushEnabled: true };
+    const both = { ...DEFAULT_PREFS, ...kind, alertsEnabled: true, pushEnabled: true };
+    expect(planNotification(alert(), noPush, { locationName: 'X', nowMs: noon })).toBeNull();
+    expect(planNotification(alert(), noAlerts, { locationName: 'X', nowMs: noon })).toBeNull();
+    expect(planNotification(alert(), both, { locationName: 'X', nowMs: noon })).not.toBeNull();
+  });
+
   it('respects the per-kind preference', () => {
-    const off = { ...DEFAULT_PREFS, notifyRain: false };
+    const off = { ...SUBSCRIBED, notifyRain: false };
     expect(planNotification(alert(), off, { locationName: 'X', nowMs: noon })).toBeNull();
-    const on = { ...DEFAULT_PREFS, notifyRain: true };
+    const on = { ...SUBSCRIBED, notifyRain: true };
     expect(planNotification(alert(), on, { locationName: 'X', nowMs: noon })).not.toBeNull();
   });
 
   it('routes a storm through the rain preference', () => {
-    const on = { ...DEFAULT_PREFS, notifyRain: true, notifyWind: false };
+    const on = { ...SUBSCRIBED, notifyRain: true, notifyWind: false };
     expect(planNotification(alert({ kind: 'storm' }), on, { locationName: 'X', nowMs: noon })).not.toBeNull();
   });
 
   it('never notifies for kinds with no preference behind them', () => {
-    const all = { ...DEFAULT_PREFS, notifyRain: true, notifyWind: true, notifyFrost: true };
+    const all = { ...SUBSCRIBED, notifyRain: true, notifyWind: true, notifyFrost: true };
     expect(planNotification(alert({ kind: 'fog' }), all, { locationName: 'X', nowMs: noon })).toBeNull();
     expect(planNotification(alert({ kind: 'heat' }), all, { locationName: 'X', nowMs: noon })).toBeNull();
   });
 
   it('names the location, since alerts are per place', () => {
-    const on = { ...DEFAULT_PREFS, notifyRain: true };
+    const on = { ...SUBSCRIBED, notifyRain: true };
     const p = planNotification(alert(), on, { locationName: 'Westkapelle', nowMs: noon })!;
     expect(p.title).toContain('Westkapelle');
     expect(p.body).toContain('Regen over 30 minuten');
@@ -232,20 +248,20 @@ describe('planNotification', () => {
 
   it('drops an alert that quiet hours would delay past its usefulness', () => {
     // A shower at 23:00 held until 07:00 would announce rain that already fell.
-    const on = { ...DEFAULT_PREFS, notifyRain: true, quietHours: true };
+    const on = { ...SUBSCRIBED, notifyRain: true, quietHours: true };
     const lateNight = Date.UTC(2026, 5, 15, 23, 0);
     expect(planNotification(alert(), on, { locationName: 'X', nowMs: lateNight })).toBeNull();
   });
 
   it('fires immediately at night when quiet hours are off', () => {
-    const on = { ...DEFAULT_PREFS, notifyRain: true, quietHours: false };
+    const on = { ...SUBSCRIBED, notifyRain: true, quietHours: false };
     const lateNight = Date.UTC(2026, 5, 15, 23, 0);
     const p = planNotification(alert(), on, { locationName: 'X', nowMs: lateNight })!;
     expect(p.atMs).toBe(lateNight);
   });
 
   it('keys on kind and hour so a refresh does not re-notify the same event', () => {
-    const on = { ...DEFAULT_PREFS, notifyRain: true };
+    const on = { ...SUBSCRIBED, notifyRain: true };
     const a = planNotification(alert(), on, { locationName: 'X', nowMs: noon })!;
     const b = planNotification(alert(), on, { locationName: 'X', nowMs: noon + 60_000 })!;
     expect(a.id).toBe(b.id);

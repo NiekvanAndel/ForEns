@@ -19,6 +19,7 @@ import { processAll } from './model/process';
 import { deriveAlert } from './model/alert';
 import { activeProvider } from './radar';
 import { planNotification, scheduleNotification } from './notifications';
+import { syncPush } from './pushSync';
 import { mergePrefs, activeLocation, type Prefs } from './prefs';
 
 export const REFRESH_TASK = 'com.agroexact.exactcast.refresh';
@@ -80,7 +81,9 @@ TaskManager.defineTask(REFRESH_TASK, async () => {
       // The widget simply shows no nowcast bars.
     }
 
-    const alert = deriveAlert(model, profile);
+    // The same gate the app applies, so a widget refreshed in the background cannot
+    // show a block the app has been told not to show.
+    const alert = prefs.alertsEnabled ? deriveAlert(model, profile) : null;
 
     writeWidget?.({ model, prefs, location, alert, nowcastBars: bars });
 
@@ -89,6 +92,11 @@ TaskManager.defineTask(REFRESH_TASK, async () => {
       tzOffsetSec: s1.offsetSec,
     });
     if (plan) await scheduleNotification(plan);
+
+    // A token can be reissued by the system, and a device that has not opened the
+    // app in weeks would otherwise be registered under one the server can no longer
+    // deliver to. A no-op until an endpoint is configured.
+    await syncPush(prefs).catch(() => {});
 
     return BackgroundTask.BackgroundTaskResult.Success;
   } catch {

@@ -25,7 +25,6 @@ plumbing and tests all remain, so re-exposing one means restoring its rows in
 
 | Hidden | Where the code still lives | Why |
 | --- | --- | --- |
-| **Meldingen** (rain / wind / frost / quiet hours) | `core/notifications.ts`, `core/backgroundTask.ts` | To be worked out later — see the push limitation below |
 | **Korte termijn: Nowcast / Radar** | `prefs.shortModel` | Needs a second 0–2h source to choose between |
 | ~~**AgroExact integration**~~ | ~~`core/sources/agroexact.ts`, `state/stations.ts`~~ | **Done** — see below |
 | ~~App and widget icon~~ | ~~—~~ | **Done** — see `logos/README.md` |
@@ -535,20 +534,27 @@ on the overview rows and in the day sheet.
 
 ## Open
 
-### Notifications are local, not push
+### Push has a client and no server
 
-`core/notifications.ts` schedules **local** notifications from the forecast the device
-already holds, refreshed by `core/backgroundTask.ts`.
+Meldingen is back in Instellingen, with two layers: whether the app shows a
+significant-weather block at all, and whether the same alerts are pushed. The device's
+half of push is built and tested — `core/push.ts` (pure: what to register, whether
+anything changed), `core/pushSync.ts` (token, storage, endpoint), `state/push.ts` (the
+hook). The service is not.
 
-iOS decides when a background task runs — `BGTaskScheduler` typically grants a window
-every few hours, learned from usage, and never at a guaranteed interval. So the
-design's copy, *"Uiterlijk 20 minuten vooraf"*, is **not something local scheduling
-can honour**. Delivering on it needs a server that watches the forecast and sends real
-push, which was out of scope.
+**`extra.pushEndpoint` in `app.json` is empty, and that is the switch.** With it
+empty every sync is a no-op: no request, no error. Set it and devices start
+registering. `docs/push_contract.md` is the other side of the wire — payload, two
+endpoints, and what the service has to do with them.
 
-Two options when this is picked up:
-- Build a small push service (watch the ensemble per subscribed location, send APNs).
-- Or soften the settings copy to match what the app actually does.
+Until then, alerts are scheduled **locally** from whatever the background task last
+fetched. iOS grants that window every few hours and never on a schedule, so
+*"Uiterlijk 20 minuten vooraf"* is not a promise local scheduling can keep. The
+settings screen now says so on the page rather than leaving it to be found.
+
+One thing to fix before the service is worth building: `deriveAlert` writes its
+headlines as Dutch string literals, outside the i18n tables. The registration carries
+`lang`; the strings have to move into `core/i18n` before it means anything.
 
 ### Splash screen
 

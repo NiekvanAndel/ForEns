@@ -18,10 +18,18 @@
  * languages, four wind units and three temperature scales as rows of pills, none of
  * which could be read at a glance.
  *
- * One of the design's groups is still not shown, at the client's direction:
- * Meldingen. It is hidden rather than deleted — the preferences, the plumbing and
- * the tests all remain. See DEFERRED.md. Integraties is shown: it is how the
- * AgroExact account is connected, and there is no way to connect one without it.
+ * ## Meldingen, and its two layers
+ *
+ * The subject was hidden for a while at the client's direction; it is back, and with
+ * a distinction it did not have before. The outer layer is whether the app shows a
+ * significant-weather block at all — a thing you read when you open it. The inner one
+ * is whether the same alerts are also pushed, which is a different promise: it
+ * arrives whether the app is open or not, so it costs attention rather than screen.
+ *
+ * Push off is the default and turning it on is what asks for permission, rather than
+ * a prompt at launch. A refusal puts the toggle back: a switch left on over a
+ * permission that was never granted is a person waiting for notifications that
+ * cannot arrive.
  */
 import { useCallback, useState } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -38,6 +46,7 @@ import { LocationSearch } from '../../ui/settings/LocationSearch';
 import { IntegrationCard } from '../../ui/settings/IntegrationCard';
 import { SourceCard } from '../../ui/settings/SourceCard';
 import { usePrefs } from '../../state/prefs';
+import { enablePush, pushEndpoint } from '../../state/push';
 import { useForecast } from '../../state/forecast';
 import { t, ta, LANG_CODES, tempUnitLabel, windUnitLabel } from '../../core/i18n';
 import type { LangCode } from '../../core/i18n';
@@ -51,6 +60,7 @@ type Page =
   | 'display' | 'lang' | 'fontSize' | 'theme'
   | 'units' | 'windUnit' | 'tempUnit' | 'presUnit'
   | 'model' | 'source'
+  | 'notifications'
   | 'locations' | 'integrations';
 
 /** Which subject a page belongs to, so a subject stays presented while one of its
@@ -110,6 +120,34 @@ export default function SettingsScreen() {
   const modelLabel = prefs.useHarmonie ? 'HARMONIE-AROME' : 'ECMWF IFS';
   const agro = agroIntegration(prefs);
 
+  /**
+   * Turning push on is a request, not a setting: it asks iOS for permission and can
+   * be refused. Only a granted prompt flips the toggle, and a refusal leaves a line
+   * saying where to change one's mind — a switch that silently springs back reads as
+   * a bug.
+   */
+  const [pushDenied, setPushDenied] = useState(false);
+  const togglePush = useCallback(
+    async (on: boolean) => {
+      tap();
+      if (!on) {
+        setPushDenied(false);
+        setPref('pushEnabled', false);
+        return;
+      }
+      const granted = await enablePush();
+      setPushDenied(!granted);
+      if (granted) setPref('pushEnabled', true);
+    },
+    [setPref, tap]
+  );
+
+  const notifyLabel = !prefs.alertsEnabled
+    ? ta('settingsOff', prefs.lang)
+    : prefs.pushEnabled
+      ? ta('pushNotifications', prefs.lang)
+      : ta('settingsInApp', prefs.lang);
+
   return (
     <View style={{ flex: 1, backgroundColor: palette.appBg }}>
       <ScrollView
@@ -143,6 +181,12 @@ export default function SettingsScreen() {
               label={ta('weatherModel', prefs.lang)}
               value={modelLabel}
               onPress={() => { tap(); setPage('model'); }}
+            />
+            <NavRow
+              icon="bell"
+              label={ta('notifications', prefs.lang)}
+              value={notifyLabel}
+              onPress={() => { tap(); setPage('notifications'); }}
             />
             <NavRow
               icon="dots-six-vertical"
@@ -370,6 +414,100 @@ export default function SettingsScreen() {
         onClose={() => setPage(null)}
       >
         <SourceCard />
+      </SubjectPage>
+
+      {/* ── Meldingen ────────────────────────────────────────────────────────── */}
+      <SubjectPage
+        visible={page === 'notifications'}
+        title={ta('notifications', prefs.lang)}
+        onClose={() => setPage(null)}
+      >
+        {/* The outer layer: whether there is anything to notify about at all. With
+            this off the block goes and so does every notification, which is why it
+            is a group of its own above the rest rather than a fourth toggle in
+            among them. */}
+        <Group label={ta('settingsInApp', prefs.lang)}>
+          <Row
+            icon="warning"
+            label={ta('alertBlocks', prefs.lang)}
+            hint={ta('alertBlocksHint', prefs.lang)}
+            last
+          >
+            <Toggle
+              on={prefs.alertsEnabled}
+              onChange={(v) => { tap(); setPref('alertsEnabled', v); }}
+              label={ta('alertBlocks', prefs.lang)}
+            />
+          </Row>
+        </Group>
+
+        {/* The inner one, and everything it governs. Hidden rather than disabled
+            while the block is off: a row of greyed switches invites tapping at
+            something that cannot move, and the group above says why it is gone. */}
+        {prefs.alertsEnabled ? (
+          <>
+            <Group label={ta('pushNotifications', prefs.lang)}>
+              <Row
+                icon="bell-ringing"
+                label={ta('pushNotifications', prefs.lang)}
+                hint={ta('pushNotificationsHint', prefs.lang)}
+                last
+              >
+                <Toggle
+                  on={prefs.pushEnabled}
+                  onChange={(v) => { togglePush(v); }}
+                  label={ta('pushNotifications', prefs.lang)}
+                />
+              </Row>
+            </Group>
+
+            {pushDenied ? (
+              <Text variant="caption" color={palette.warnTitle} style={{ paddingHorizontal: 6 }}>
+                {ta('pushDenied', prefs.lang)}
+              </Text>
+            ) : null}
+
+            <Group label={ta('notifyAbout', prefs.lang)}>
+              <Row icon="cloud-rain" label={ta('notifyRain', prefs.lang)} hint={ta('notifyRainHint', prefs.lang)}>
+                <Toggle
+                  on={prefs.notifyRain}
+                  onChange={(v) => { tap(); setPref('notifyRain', v); }}
+                  label={ta('notifyRain', prefs.lang)}
+                />
+              </Row>
+              <Row icon="wind" label={ta('notifyWind', prefs.lang)} hint={ta('notifyWindHint', prefs.lang)}>
+                <Toggle
+                  on={prefs.notifyWind}
+                  onChange={(v) => { tap(); setPref('notifyWind', v); }}
+                  label={ta('notifyWind', prefs.lang)}
+                />
+              </Row>
+              <Row icon="thermometer-simple" label={ta('notifyFrost', prefs.lang)} hint={ta('notifyFrostHint', prefs.lang)}>
+                <Toggle
+                  on={prefs.notifyFrost}
+                  onChange={(v) => { tap(); setPref('notifyFrost', v); }}
+                  label={ta('notifyFrost', prefs.lang)}
+                />
+              </Row>
+              <Row icon="moon" label={ta('quietHours', prefs.lang)} hint={ta('quietHoursHint', prefs.lang)} last>
+                <Toggle
+                  on={prefs.quietHours}
+                  onChange={(v) => { tap(); setPref('quietHours', v); }}
+                  label={ta('quietHours', prefs.lang)}
+                />
+              </Row>
+            </Group>
+
+            {/* Said plainly rather than left for someone to discover: until the
+                server exists these are scheduled by the phone, and iOS decides when
+                it gets to run. See `core/push`. */}
+            {pushEndpoint() ? null : (
+              <Text variant="caption" color={palette.muted} style={{ paddingHorizontal: 6, lineHeight: 18 }}>
+                {ta('pushUnavailable', prefs.lang)}
+              </Text>
+            )}
+          </>
+        ) : null}
       </SubjectPage>
 
       {/* ── Integraties ──────────────────────────────────────────────────────── */}

@@ -1,15 +1,16 @@
 /**
  * Local weather notifications.
  *
- * These are *local* notifications scheduled from the forecast the device already
- * has, refreshed by the background task. No push server exists, and building one
- * was not in scope — the practical consequence is that an alert can only be as
- * fresh as the last background refresh iOS granted, which is typically every few
- * hours rather than the "uiterlijk 20 minuten vooraf" the design's copy promises.
- * That gap is real and is recorded in DEFERRED.md.
+ * These are *local* notifications scheduled from the forecast the device already has,
+ * refreshed by the background task — the stand-in until the push service exists. An
+ * alert can only be as fresh as the last background window iOS granted, which is
+ * typically every few hours, so "uiterlijk 20 minuten vooraf" is not something this
+ * can promise. The settings screen says as much while the endpoint is unset; the
+ * contract for the service that would fix it is `docs/push_contract.md`.
  *
  * Deciding *what* is worth alerting about is `core/model/alert`, so a notification
- * and the Nowcast hero can never disagree.
+ * and the Nowcast hero can never disagree. Whether the reader wants either is
+ * `Prefs.alertsEnabled` and `Prefs.pushEnabled` — see `planNotification`.
  */
 import type { WeatherAlert } from './model/alert';
 import type { Prefs } from './prefs';
@@ -73,6 +74,12 @@ export function planNotification(
   opts: PlanOptions
 ): PlannedNotification | null {
   if (!alert) return null;
+
+  // Both layers, in order. `alertsEnabled` off means the app shows no block, and
+  // notifying about something it has been told not to show is a contradiction;
+  // `pushEnabled` off means the reader asked not to be interrupted, and these local
+  // notifications are what stands in for push until the server exists.
+  if (!prefs.alertsEnabled || !prefs.pushEnabled) return null;
 
   const prefKey = KIND_PREF[alert.kind];
   if (!prefKey || !prefs[prefKey]) return null;

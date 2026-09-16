@@ -78,7 +78,8 @@
     },
     "extra": {
       "appGroup": "group.com.agroexact.exactcast",
-      "backgroundTaskId": "com.agroexact.exactcast.refresh"
+      "backgroundTaskId": "com.agroexact.exactcast.refresh",
+      "pushEndpoint": ""
     }
   }
 }

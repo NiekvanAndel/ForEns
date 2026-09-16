@@ -134,9 +134,12 @@ export function deriveAlert(
       severity: heavy ? 'heavy' : 'light',
       icon: 'cloud-rain', label: 'Neerslag',
       headline: heavy ? `Zware bui ${when}` : `Regen ${when}`,
-      sub: `Naar verwachting ${fmtMm(rainMm)} mm${
-        profile?.confidence != null ? ` · zekerheid ${profile.confidence}%` : ''
-      }.`,
+      // No confidence figure. The nowcast's `confidence` is a function of lead time
+      // alone — 95 falling to 50 as the shower moves out to the end of the run — and
+      // says nothing about how sure the model is of *this* shower. Printed as
+      // "zekerheid 91%" beside a millimetre total it reads as a verified probability,
+      // which is a good deal more than it is.
+      sub: `Naar verwachting ${fmtMm(rainMm)} mm.`,
       bars,
     };
   }
