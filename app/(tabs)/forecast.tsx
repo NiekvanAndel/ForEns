@@ -20,9 +20,8 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space, useTheme } from '../../theme';
-import { Columns, useSidePadding } from '../../ui/layout';
+import { usePagePadding } from '../../ui/layout';
 import { Card, Rule } from '../../ui/Card';
-import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
 import { Text } from '../../ui/Text';
@@ -50,7 +49,7 @@ function ForecastPage() {
   const { prefs, location } = usePrefs();
   const { model, phase, extendedLoaded, loadExtendedDays } = useForecast();
   const insets = useSafeAreaInsets();
-  const sidePadding = useSidePadding();
+  const pagePadding = usePagePadding();
   const router = useRouter();
   const peeking = usePeeking();
   const refreshControl = useRefreshControl();
@@ -124,95 +123,92 @@ function ForecastPage() {
     <>
     <ScrollView
       contentContainerStyle={{
-        ...sidePadding,
+        ...pagePadding,
         paddingTop: TOP_BAR_CLEARANCE + insets.top,
-        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
         gap: space[3],
       }}
       showsVerticalScrollIndicator={false}
       refreshControl={refreshControl}
     >
-      <Columns spanning={1}>
-        <LocationTitle />
+      <LocationTitle />
 
-        {!model ? (
-          <Card>
-            <View style={{ paddingVertical: space[8], alignItems: 'center' }}>
-              {phase === 'error' ? (
-                <Text variant="bodySm" color={palette.muted} align="center">
-                  {ta('noData', prefs.lang)}
-                </Text>
-              ) : (
-                <ActivityIndicator color={palette.accent} />
+      {!model ? (
+        <Card>
+          <View style={{ paddingVertical: space[8], alignItems: 'center' }}>
+            {phase === 'error' ? (
+              <Text variant="bodySm" color={palette.muted} align="center">
+                {ta('noData', prefs.lang)}
+              </Text>
+            ) : (
+              <ActivityIndicator color={palette.accent} />
+            )}
+          </View>
+        </Card>
+      ) : (
+        <>
+          <>
+            <LayerSwitcher active={layer} onChange={setLayer} />
+
+            <View>
+              {days.map((d, i) =>
+                // The overview tab is the web app's `overzicht`: every measurand at
+                // once, so it has no single bar to draw and its own row instead.
+                layer === 'overview' ? (
+                  <OverviewDayRow
+                    key={d.date}
+                    day={d}
+                    dayIndex={i}
+                    divider={i > 0}
+                    onPress={() => setSheetDay(d)}
+                  />
+                ) : (
+                  <LayerDayRow
+                    key={d.date}
+                    day={d}
+                    dayIndex={i}
+                    layer={layer}
+                    scale={scale}
+                    et0Max={et0Max}
+                    divider={i > 0}
+                    onPress={() => setSheetDay(d)}
+                  />
+                )
               )}
             </View>
-          </Card>
-        ) : (
-          <>
-            <>
-              <LayerSwitcher active={layer} onChange={setLayer} />
 
-              <View>
-                {days.map((d, i) =>
-                  // The overview tab is the web app's `overzicht`: every measurand at
-                  // once, so it has no single bar to draw and its own row instead.
-                  layer === 'overview' ? (
-                    <OverviewDayRow
-                      key={d.date}
-                      day={d}
-                      dayIndex={i}
-                      divider={i > 0}
-                      onPress={() => setSheetDay(d)}
-                    />
-                  ) : (
-                    <LayerDayRow
-                      key={d.date}
-                      day={d}
-                      dayIndex={i}
-                      layer={layer}
-                      scale={scale}
-                      et0Max={et0Max}
-                      divider={i > 0}
-                      onPress={() => setSheetDay(d)}
-                    />
-                  )
-                )}
-              </View>
-
-              <Rule soft style={{ marginTop: space[3] }} />
-              <Pressable
-                onPress={toggleExpanded}
-                accessibilityRole="button"
-                accessibilityState={{ expanded }}
-                style={{
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-                  gap: 6, paddingVertical: space[3],
-                }}
-              >
-                <Text variant="label" weight="semibold" color={palette.accentDark}>
-                  {expanded ? t('viewLess', prefs.lang) : t('viewMoreDays', prefs.lang)}
-                </Text>
-                {expanded && !extendedLoaded ? (
-                  <ActivityIndicator size="small" color={palette.accentDark} />
-                ) : (
-                  <Icon
-                    name={expanded ? 'arrow-up' : 'arrow-down'}
-                    size={13}
-                    color={palette.accentDark}
-                    weight="bold"
-                  />
-                )}
-              </Pressable>
-
-              <Text variant="caption" color={palette.muted} style={{ lineHeight: 18 }}>
-                {expanded ? 14 : COLLAPSED_DAYS} dagen · {modelLabel}
-                {'\n'}{ta('barsExplain', prefs.lang)}
+            <Rule soft style={{ marginTop: space[3] }} />
+            <Pressable
+              onPress={toggleExpanded}
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                gap: 6, paddingVertical: space[3],
+              }}
+            >
+              <Text variant="label" weight="semibold" color={palette.accentDark}>
+                {expanded ? t('viewLess', prefs.lang) : t('viewMoreDays', prefs.lang)}
               </Text>
-            </>
+              {expanded && !extendedLoaded ? (
+                <ActivityIndicator size="small" color={palette.accentDark} />
+              ) : (
+                <Icon
+                  name={expanded ? 'arrow-up' : 'arrow-down'}
+                  size={13}
+                  color={palette.accentDark}
+                  weight="bold"
+                />
+              )}
+            </Pressable>
 
+            <Text variant="caption" color={palette.muted} style={{ lineHeight: 18 }}>
+              {expanded ? 14 : COLLAPSED_DAYS} dagen · {modelLabel}
+              {'\n'}{ta('barsExplain', prefs.lang)}
+            </Text>
           </>
-        )}
-      </Columns>
+
+        </>
+      )}
     </ScrollView>
 
     <DaySheet

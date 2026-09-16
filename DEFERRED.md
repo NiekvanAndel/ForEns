@@ -701,14 +701,23 @@ prebuild picks this up with nothing to edit by hand.
 
 What landscape changes:
 
+- **The tab bar stands up against the right edge.** A row of tabs across the
+  bottom of a landscape screen is a hand's width of travel from the first to the
+  last, and it spends the dimension that is scarce. Pages take
+  `TAB_BAR_CLEARANCE_SIDE` as right padding instead of the bottom clearance —
+  `usePagePadding` adds up both claims on that edge.
 - **Pages lay out in two columns** (`ui/layout` → `Columns`, arithmetic in
   `core/layout`). Cards alternate left, right, left; a page says how many of its
   leading cards span the full width (its heading, an alert banner) and how many
-  trailing ones do (the chart on 'Grafiek', which is a time axis).
-- **Both map surfaces float their panel** over the map instead of stacking it
-  under, capped at 420pt. Sideways there is no height to give away, and a control
-  spanning a landscape screen puts its play button and the end of its track a
-  hand's width apart.
+  trailing ones do (the chart on 'Grafiek', which is a time axis). **'Verwachting'
+  opts out**: its day rows are rows, and two columns of them is two half-width
+  lists rather than one legible one.
+- **The blocks on 'Actueel' take as many columns as fit**, two to four, from a
+  measured width rather than an orientation switch — so the sizes between get what
+  fits too.
+- **Both map surfaces put their panel in a band at the bottom**, centred and
+  capped at 420pt, in the flow rather than over the map: a control floating on the
+  thing it controls covers the weather being scrubbed through.
 - **The chrome takes the side insets.** Turned sideways the notch is on one edge
   and the rounded corner on the other, so the top bar, the tab bar, the map's
   buttons and the legends inset by `insets.left`/`insets.right` on top of their

@@ -52,11 +52,11 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space, useTheme } from '../../theme';
-import { Columns, useSidePadding } from '../../ui/layout';
+import { Columns, usePagePadding } from '../../ui/layout';
+import { gridColumns } from '../../core/layout';
 import { Card } from '../../ui/Card';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
-import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
 import { ScreenFrame } from '../../ui/ScreenFrame';
@@ -72,15 +72,12 @@ import { modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
 import { measurementTimeLabel } from '../../core/model/station';
 import { ta } from '../../core/i18n';
 
-/** Two across. A third column puts a title like "Luchtvochtigheid" on three lines. */
-const COLUMNS = 2;
-
 function CurrentPage() {
   const { palette } = useTheme();
   const { prefs, location } = usePrefs();
   const { model, nowcast, phase, error, refresh, offsetSec } = useForecast();
   const insets = useSafeAreaInsets();
-  const sidePadding = useSidePadding();
+  const pagePadding = usePagePadding();
   const router = useRouter();
 
   const station = useLocationStation(location);
@@ -137,9 +134,8 @@ function CurrentPage() {
     <>
     <ScrollView
       contentContainerStyle={{
-        ...sidePadding,
+        ...pagePadding,
         paddingTop: TOP_BAR_CLEARANCE + insets.top,
-        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
         gap: space[4],
       }}
       showsVerticalScrollIndicator={false}
@@ -237,7 +233,7 @@ function CurrentPage() {
 }
 
 /**
- * The blocks, two to a row.
+ * The blocks, as many to a row as the width allows.
  *
  * Laid out as rows of fixed length rather than as a wrapping flex box, because a
  * wrap gives the last row's single block the full width and a grid with one wide
@@ -245,19 +241,26 @@ function CurrentPage() {
  * reads as what it is.
  */
 function Grid({ tiles, onOpen }: { tiles: Tile[]; onOpen: (tile: Tile) => void }) {
+  // Measured rather than assumed: the page's own padding and, sideways, the tab bar
+  // standing against the edge both come off the width before the blocks divide it.
+  const [width, setWidth] = useState(0);
+  const columns = gridColumns(width, space[3]);
   const rows: Tile[][] = [];
-  for (let i = 0; i < tiles.length; i += COLUMNS) rows.push(tiles.slice(i, i + COLUMNS));
+  for (let i = 0; i < tiles.length; i += columns) rows.push(tiles.slice(i, i + columns));
 
   return (
-    <View style={{ gap: space[3] }}>
+    <View
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      style={{ gap: space[3] }}
+    >
       {rows.map((row, i) => (
         <View key={i} style={{ flexDirection: 'row', gap: space[3] }}>
           {row.map((tile) => (
             <ConditionTile key={tile.id} tile={tile} onPress={() => onOpen(tile)} />
           ))}
           {/* Holds the missing half of an odd last row open. */}
-          {row.length < COLUMNS
-            ? Array.from({ length: COLUMNS - row.length }, (_, j) => (
+          {row.length < columns
+            ? Array.from({ length: columns - row.length }, (_, j) => (
                 <View key={`gap${j}`} style={{ flex: 1 }} />
               ))
             : null}

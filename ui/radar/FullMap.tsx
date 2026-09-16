@@ -104,6 +104,7 @@ import { frameAtFraction } from './useRadarFrames';
 import {
   forecastBoundary, frameClock, radarAxis, type NowcastProfile, type RadarFrame,
 } from '../../core/radar';
+import { TAB_BAR_CLEARANCE_SIDE } from '../GlassTabBar';
 import { useLandscape } from '../layout';
 import { usePrefs } from '../../state/prefs';
 import type { SavedLocation } from '../../core/prefs';
@@ -183,9 +184,10 @@ export function FullMap({
   const { prefs } = usePrefs();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  // Turned sideways there is barely any height to give away, so the panel stops being a
-  // band under the map and becomes a card floating on it. Bottom-left, which is the one
-  // corner nothing else claims: the legend is top-left, the layer picker top-right.
+  // Sideways the panel narrows to a card at the bottom centre rather than spanning the
+  // width. It stays in the flow — the map ends where the panel starts — because a
+  // control floating over the thing it controls covers the weather a reader is scrubbing
+  // through to see.
   const landscape = useLandscape();
   const chrome = mapChrome(palette, appearance);
   const [panelWidth, setPanelWidth] = useState(width);
@@ -438,12 +440,16 @@ export function FullMap({
           { backgroundColor: palette.appCard },
           landscape
             ? {
-                position: 'absolute',
-                left: insets.left + space[3],
-                bottom: insets.bottom + space[3],
+                alignSelf: 'center',
                 // Capped, because a control that spans a landscape screen puts its play
                 // button and the end of its track a hand's width apart.
-                width: Math.min(PANEL_MAX_WIDTH, width - insets.left - insets.right - space[6]),
+                width: Math.min(
+                  PANEL_MAX_WIDTH,
+                  width - insets.left - insets.right - TAB_BAR_CLEARANCE_SIDE - space[6]
+                ),
+                // Clear of the tab bar, which stands against the right edge.
+                marginRight: TAB_BAR_CLEARANCE_SIDE,
+                marginBottom: insets.bottom + space[3],
                 borderRadius: radius.appCard,
                 paddingBottom: space[3],
                 ...shadowFloat,

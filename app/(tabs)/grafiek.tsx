@@ -105,10 +105,9 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
-import { Columns, useSidePadding } from '../../ui/layout';
+import { Columns, usePagePadding } from '../../ui/layout';
 import { CardHeader } from '../../ui/Card';
 import { Text } from '../../ui/Text';
-import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
 import { ScreenFrame } from '../../ui/ScreenFrame';
@@ -188,7 +187,7 @@ function GraphPage() {
   const { prefs, location } = usePrefs();
   const { model, offsetSec, phase } = useForecast();
   const insets = useSafeAreaInsets();
-  const sidePadding = useSidePadding();
+  const pagePadding = usePagePadding();
   const peeking = usePeeking();
 
   const [preset, setPreset] = useState<PresetDays | null>(DEFAULT_PRESET);
@@ -319,9 +318,8 @@ function GraphPage() {
   return (
     <ScrollView
       contentContainerStyle={{
-        ...sidePadding,
+        ...pagePadding,
         paddingTop: TOP_BAR_CLEARANCE + insets.top,
-        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
         // The step between the page's three parts. It was 14 against an internal 12,
         // which is not a step at all: a heading sat as far from the section above it
         // as from its own content, and the three read as one long column. Twice the

@@ -15,6 +15,7 @@ import { View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space } from '../theme';
 import { cardsOf, splitColumns } from '../core/layout';
+import { TAB_BAR_CLEARANCE, TAB_BAR_CLEARANCE_SIDE } from './GlassTabBar';
 
 /**
  * Whether the screen is wider than it is tall.
@@ -30,16 +31,25 @@ export function useLandscape(): boolean {
 }
 
 /**
- * A page's own horizontal padding, plus whatever the hardware is taking.
+ * The room a scrolling page leaves around its content: the hardware's, and the tab bar's.
  *
- * In portrait the safe area is top and bottom and the sides are free; turned sideways,
- * the notch and the rounded corner move to one edge and the home indicator's sliver to
- * the other. A page that keeps a constant side padding puts its first card under the
- * camera on one side and against the bezel on the other.
+ * In portrait the safe area is top and bottom, the sides are free, and the floating tab
+ * bar is a band across the bottom. Turned sideways all three move: the notch and the
+ * rounded corner take the edges, and the bar stands up against the right one. A page
+ * that kept its portrait padding would put its first card under the camera and its last
+ * one behind the tabs.
+ *
+ * One hook rather than two, because the right-hand padding has two claims on it and
+ * something has to add them up.
  */
-export function useSidePadding(base = space[5]) {
+export function usePagePadding(base = space[5]) {
   const insets = useSafeAreaInsets();
-  return { paddingLeft: base + insets.left, paddingRight: base + insets.right };
+  const landscape = useLandscape();
+  return {
+    paddingLeft: base + insets.left,
+    paddingRight: base + insets.right + (landscape ? TAB_BAR_CLEARANCE_SIDE : 0),
+    paddingBottom: insets.bottom + (landscape ? space[4] : TAB_BAR_CLEARANCE),
+  };
 }
 
 export interface ColumnsProps {

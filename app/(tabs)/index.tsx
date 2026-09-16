@@ -14,9 +14,8 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
-import { Columns, useSidePadding } from '../../ui/layout';
+import { Columns, usePagePadding } from '../../ui/layout';
 import { Text } from '../../ui/Text';
-import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
 import { Card } from '../../ui/Card';
@@ -44,7 +43,7 @@ function NowcastPage() {
   } = useForecast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const sidePadding = useSidePadding();
+  const pagePadding = usePagePadding();
 
   const [expanded, setExpanded] = useState(false);
   const [sheetDay, setSheetDay] = useState<Day | null>(null);
@@ -116,9 +115,8 @@ function NowcastPage() {
     <>
     <ScrollView
       contentContainerStyle={{
-        ...sidePadding,
+        ...pagePadding,
         paddingTop: TOP_BAR_CLEARANCE + insets.top,
-        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
         gap: space[4],
       }}
       showsVerticalScrollIndicator={false}

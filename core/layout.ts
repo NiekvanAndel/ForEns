@@ -55,3 +55,32 @@ export function splitColumns<T>(cards: readonly T[], spanning = 0, spanningEnd =
     end: tail > 0 ? cards.slice(cards.length - tail) : [],
   };
 }
+
+/**
+ * The narrowest a block on 'Actueel' may get before its label starts wrapping.
+ *
+ * The grid takes as many columns as fit at this width rather than a fixed count, so it
+ * holds at the sizes between: two across a portrait phone, four turned sideways.
+ *
+ * The figure comes from the reason the grid was two across to begin with — a third
+ * column in portrait put a title like "Luchtvochtigheid" on three lines, at about 108
+ * points a block. Four columns of a landscape screen are still around 165, comfortably
+ * wider than the three that failed.
+ */
+export const MIN_TILE_WIDTH = 165;
+
+/** Never fewer than two, never more than four: one block a row is a list, and five is a
+ *  row of figures too small to read at arm's length. */
+export const TILE_COLUMN_RANGE = [2, 4] as const;
+
+/**
+ * How many blocks fit in the width a page has left for them.
+ *
+ * `available` is measured rather than derived from the screen: the page's own padding
+ * and, sideways, the tab bar standing against the edge both come off the width before
+ * the blocks divide it, and only the grid itself knows what is left.
+ */
+export function gridColumns(available: number, gap: number): number {
+  const fits = Math.floor((available + gap) / (MIN_TILE_WIDTH + gap));
+  return Math.min(TILE_COLUMN_RANGE[1], Math.max(TILE_COLUMN_RANGE[0], fits));
+}

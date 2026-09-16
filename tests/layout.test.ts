@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { createElement, Fragment, isValidElement, type ReactElement } from 'react';
-import { cardsOf, splitColumns } from '../core/layout';
+import { cardsOf, gridColumns, MIN_TILE_WIDTH, splitColumns } from '../core/layout';
 
 const page = ['title', 'alert', 'hero', 'hours', 'radar', 'forecast', 'footer'];
 
@@ -113,5 +113,48 @@ describe('cardsOf', () => {
     );
     expect(ids(cardsOf(deep))).toEqual(['buried']);
     expect(keys(cardsOf(deep))[0]).not.toBeNull();
+  });
+});
+
+describe('gridColumns', () => {
+  const gap = 12;
+
+  it('keeps a portrait phone at two across', () => {
+    // A 390pt screen less the page's 20pt either side. Two is what the design settled on
+    // and what a third column broke: "Luchtvochtigheid" on three lines.
+    expect(gridColumns(390 - 40, gap)).toBe(2);
+    // The smallest phone still in service, and the largest.
+    expect(gridColumns(320 - 40, gap)).toBe(2);
+    expect(gridColumns(440 - 40, gap)).toBe(2);
+  });
+
+  it('opens up to four when the phone is turned', () => {
+    // 844pt across, less the page's padding and the tab bar standing on the right edge.
+    expect(gridColumns(844 - 40 - 64, gap)).toBe(4);
+    expect(gridColumns(932 - 40 - 64, gap)).toBe(4);
+  });
+
+  it('passes through three on the widths between', () => {
+    // There is no orientation switch in here: the count follows the width, so the sizes
+    // between — a smaller landscape phone, a split view — get what fits.
+    expect(gridColumns(3 * MIN_TILE_WIDTH + 2 * gap, gap)).toBe(3);
+    expect(gridColumns(3 * MIN_TILE_WIDTH + 2 * gap + 40, gap)).toBe(3);
+  });
+
+  it('never goes below two or above four', () => {
+    // Zero is what the first render reports, before anything has been measured.
+    expect(gridColumns(0, gap)).toBe(2);
+    expect(gridColumns(120, gap)).toBe(2);
+    expect(gridColumns(4000, gap)).toBe(4);
+  });
+
+  it('gives each block at least its minimum, at every count it chooses', () => {
+    // The property the constant is for: whatever it answers, the blocks it implies are
+    // never narrower than the width a label needs.
+    for (let available = 200; available <= 1200; available += 7) {
+      const columns = gridColumns(available, gap);
+      const each = (available - (columns - 1) * gap) / columns;
+      if (columns > 2) expect(each, `${available}pt / ${columns}`).toBeGreaterThanOrEqual(MIN_TILE_WIDTH);
+    }
   });
 });

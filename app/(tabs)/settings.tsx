@@ -28,9 +28,8 @@ import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
-import { Columns, useSidePadding } from '../../ui/layout';
+import { Columns, usePagePadding } from '../../ui/layout';
 import { Card } from '../../ui/Card';
-import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { Text } from '../../ui/Text';
 import { ChoiceList, Group, NavRow, Row, Toggle } from '../../ui/settings/Controls';
 import { SubjectPage } from '../../ui/settings/SubjectPage';
@@ -68,7 +67,7 @@ const LANG_NAMES: Record<LangCode, string> = {
 export default function SettingsScreen() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
-  const sidePadding = useSidePadding();
+  const pagePadding = usePagePadding();
   const { prefs, setPref } = usePrefs();
   const { refresh } = useForecast();
   const [page, setPage] = useState<Page | null>(null);
@@ -115,9 +114,8 @@ export default function SettingsScreen() {
     <View style={{ flex: 1, backgroundColor: palette.appBg }}>
       <ScrollView
         contentContainerStyle={{
-          ...sidePadding,
+          ...pagePadding,
           paddingTop: insets.top + space[4],
-          paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
           gap: space[6],
         }}
         showsVerticalScrollIndicator={false}

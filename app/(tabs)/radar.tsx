@@ -31,7 +31,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { shadowFloat, space, useTheme } from '../../theme';
 import { Card } from '../../ui/Card';
-import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
+import { TAB_BAR_CLEARANCE_SIDE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { Text } from '../../ui/Text';
 import { Icon } from '../../ui/Icon';
@@ -45,7 +45,7 @@ import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { activeProvider, forecastBoundary, frameClock, radarAxis } from '../../core/radar';
 import { mapChrome } from '../../ui/radar/mapStyle';
-import { useLandscape, useSidePadding } from '../../ui/layout';
+import { useLandscape, usePagePadding } from '../../ui/layout';
 import { usePeeking } from '../../ui/peek';
 import { ta } from '../../core/i18n';
 
@@ -102,7 +102,7 @@ function RadarPage() {
     : 0;
 
   const landscape = useLandscape();
-  const sidePadding = useSidePadding();
+  const pagePadding = usePagePadding();
   const { width } = useWindowDimensions();
 
   /** A position along the shared axis, back to the frame nearest it. */
@@ -194,9 +194,10 @@ function RadarPage() {
       </Card>
   );
 
-  // Portrait stacks them and scrolls. Landscape has no height to give away, so the
-  // map fills the page and the panel floats on it — the arrangement the full-screen
-  // map makes, so the two read as one product.
+  // Portrait stacks them and scrolls. Landscape gives the map the page and puts the
+  // panel in a band beneath it, centred and capped — the arrangement the full-screen map
+  // makes, so the two read as one product. In the flow rather than over the map: a
+  // control floating on the thing it controls covers the weather being scrubbed through.
   if (landscape) {
     return (
       <View style={{ flex: 1 }}>
@@ -206,13 +207,14 @@ function RadarPage() {
             setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 2))
           }
           style={{
-            position: 'absolute',
-            left: insets.left + space[3],
-            bottom: TAB_BAR_CLEARANCE + insets.bottom,
+            alignSelf: 'center',
             width: Math.min(
               PANEL_MAX_WIDTH,
-              width - insets.left - insets.right - space[6]
+              width - insets.left - insets.right - TAB_BAR_CLEARANCE_SIDE - space[6]
             ),
+            // Clear of the tab bar, which stands against the right edge.
+            marginRight: TAB_BAR_CLEARANCE_SIDE,
+            marginBottom: insets.bottom + space[3],
           }}
         >
           {panel}
@@ -225,9 +227,8 @@ function RadarPage() {
     <ScrollView
       onLayout={(e) => setPanelWidth(Math.max(1, e.nativeEvent.layout.width - space[5] * 4))}
       contentContainerStyle={{
-        ...sidePadding,
+        ...pagePadding,
         paddingTop: TOP_BAR_CLEARANCE + insets.top,
-        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
         gap: space[4],
       }}
       showsVerticalScrollIndicator={false}
