@@ -157,6 +157,25 @@ describe('widgetRows', () => {
     expect(widgetRows([w('a', 'half'), w('b', 'full')]).map((r) => r.length)).toEqual([1, 1]);
     expect(widgetRows([w('a', 'half')]).map((r) => r.length)).toEqual([1]);
   });
+
+  it('puts two in every row turned sideways, whatever they asked for', () => {
+    // Half a landscape screen is about a portrait phone's width, which is all a
+    // 'full' widget was ever asking for — so honouring it sideways spends the second
+    // column on nothing and pushes the next widget below the fold.
+    const rows = widgetRows([w('a', 'full'), w('b', 'full'), w('c', 'half')], true);
+    expect(rows.map((r) => r.map((x) => x.id))).toEqual([['a', 'b'], ['c']]);
+  });
+
+  it('keeps every widget exactly once in either orientation', () => {
+    // The pairing is an index walk with a skip in it, which is where a widget goes
+    // missing on a page nobody has rotated yet.
+    const all = ['a', 'b', 'c', 'd', 'e'].map((id, i) => w(id, i % 2 ? 'half' : 'full'));
+    for (const wide of [false, true]) {
+      expect(widgetRows(all, wide).flat().map((x) => x.id)).toEqual(all.map((x) => x.id));
+    }
+    // An odd count still ends on a row of one rather than dropping the last.
+    expect(widgetRows(all, true).at(-1)).toHaveLength(1);
+  });
 });
 
 describe('tonightMinimum', () => {

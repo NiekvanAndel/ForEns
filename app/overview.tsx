@@ -38,6 +38,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { radius, space, useTheme } from '../theme';
+import { useLandscape } from '../ui/layout';
 import { Text } from '../ui/Text';
 import { Icon } from '../ui/Icon';
 import { TileEditor } from '../ui/current/TileEditor';
@@ -96,6 +97,7 @@ const WIDGET_LABEL: Record<string, AppStringKey> = {
 export default function OverviewScreen() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
+  const landscape = useLandscape();
   const router = useRouter();
   const { prefs, setPrefs, selectLocation } = usePrefs();
   const [editing, setEditing] = useState(false);
@@ -146,7 +148,9 @@ export default function OverviewScreen() {
   };
 
   const models = useMemo(() => conditions.map((c) => c.model), [conditions]);
-  const rowsOfWidgets = widgetRows(widgets);
+  // Sideways the page is two columns: a widget that asks for a full width is asking
+  // for a portrait phone's, which is what half of this is. See `widgetRows`.
+  const rowsOfWidgets = widgetRows(widgets, landscape);
 
   /** Everything a widget gets except its own settings, which differ per widget. */
   const shared = { rows, alerts, models, nowcasts, onOpen: open };
@@ -158,7 +162,8 @@ export default function OverviewScreen() {
         <View
           style={{
             flexDirection: 'row', alignItems: 'center', gap: space[3],
-            paddingHorizontal: space[5],
+            paddingLeft: space[5] + insets.left,
+            paddingRight: space[5] + insets.right,
             paddingTop: insets.top + space[3],
             paddingBottom: space[3],
           }}
@@ -205,7 +210,8 @@ export default function OverviewScreen() {
 
         <ScrollView
           contentContainerStyle={{
-            paddingHorizontal: space[5],
+            paddingLeft: space[5] + insets.left,
+            paddingRight: space[5] + insets.right,
             paddingBottom: insets.bottom + space[10],
             gap: space[4],
           }}
@@ -240,7 +246,9 @@ export default function OverviewScreen() {
                     </View>
                   );
                 })}
-                {row.length === 1 && row[0]?.size === 'half' ? <View style={{ flex: 1 }} /> : null}
+                {row.length === 1 && (landscape || row[0]?.size === 'half')
+                  ? <View style={{ flex: 1 }} />
+                  : null}
               </View>
             ))
           )}

@@ -223,14 +223,31 @@ export function neededSources(layout: TileLayout): Set<OverviewSource> {
  * in it — a half with a full after it, or a half at the end, has to stand alone
  * rather than stretch, and a half stretched to a full width is a widget claiming a
  * prominence its author did not ask for.
+ *
+ * ## Turned sideways, everything is a half
+ *
+ * `wide` is the landscape case, and the one place a widget's declared size is
+ * overruled. A `full` widget is asking for the width of a portrait phone, which is
+ * roughly what half a landscape screen is — so honouring `full` sideways gives a
+ * rainfall ranking seven hundred points to print five place names in, and pushes the
+ * next widget below the fold for nothing. Two columns is the same reasoning the
+ * blocks on 'Actueel' follow when they take four columns sideways instead of two.
+ *
+ * The declared sizes still decide the odd one out: a trailing widget stands alone at
+ * half the width rather than stretching, so a page ending on the map does not end
+ * with a map twice as wide as the one above it.
  */
-export function widgetRows(widgets: readonly OverviewWidget[]): OverviewWidget[][] {
+export function widgetRows(
+  widgets: readonly OverviewWidget[],
+  wide = false
+): OverviewWidget[][] {
   const rows: OverviewWidget[][] = [];
   for (let i = 0; i < widgets.length; i++) {
     const w = widgets[i] as OverviewWidget;
     const next = widgets[i + 1];
-    if (w.size === 'half' && next?.size === 'half') {
-      rows.push([w, next]);
+    const pairs = wide ? next != null : w.size === 'half' && next?.size === 'half';
+    if (pairs) {
+      rows.push([w, next as OverviewWidget]);
       i++;
     } else {
       rows.push([w]);

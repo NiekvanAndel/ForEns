@@ -585,6 +585,16 @@ almost every reading carries a small mark — a rainfall sparkline, a workabilit
 an ensemble band (`ui/overview/marks`). Each bar is the widget's own: worth mentioning
 means 0,1 mm for rain and 3 °C for frost.
 
+**Turned sideways the overview is two columns, and a widget's declared size gives
+way.** `widgetRows(widgets, wide)` pairs everything sideways rather than honouring
+`full`, because a `full` widget is asking for a portrait phone's width and that is
+roughly what half a landscape screen is — honouring it would give a rainfall ranking
+seven hundred points to print five place names in and push the next widget below the
+fold. The sizes still decide the odd one out, so a page ending on the map does not end
+with a map twice as wide as the one above it. The page does not use `Columns`, for the
+same reason 'Actueel' does not: it already answers the question `Columns` asks, over
+widgets that know their own width.
+
 **Height is spent per row, not per widget.** Two passes of compaction have been
 about the same thing: a row whose parts are sized to each other rather than to one
 another's habits. `LocationLine` gains `compact` where the reading is a sentence
