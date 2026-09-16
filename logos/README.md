@@ -5,11 +5,22 @@
 | File | Used as | Which is it |
 | --- | --- | --- |
 | `exactcast-icon-radar-light.png` | the default icon, and the widget's | navy cloud on cream |
-| `exactcast-icon-radar.png` | the dark home screen (iOS 18+) | cream cloud on navy |
+| `exactcast-icon-radar.png` | the dark home screen (iOS 18+) | cream cloud on near-black |
 
 `light` and `dark` name the *home screen's* appearance, not the artwork's — the icon
 shown on a light home screen is the one with the light background. Easy to invert,
 and nothing warns you if you do.
+
+The dark icon's ground is a flat near-black (`#0B0B0C`), not the navy it used to be,
+and not a gradient — the `.svg` beside it says the same, so regenerating from the
+source gives the same picture. **That colour is the icon's own, not the app's.** The
+dark theme's ground is still navy, so the splash colour below is deliberately not
+`#0B0B0C`; changing it to match the icon would make the launch screen a different
+black from every page behind it.
+
+The dark `.svg` carries a C2PA provenance manifest in a `<metadata>` block, which is
+most of its file size and none of its picture. Harmless to keep and safe to strip;
+the light one does not have one.
 
 Run `npm run check:icons` before a build. It reads the PNG headers and checks the
 two things that otherwise surface twenty minutes in, or at submission.
