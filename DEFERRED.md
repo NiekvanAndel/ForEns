@@ -591,7 +591,9 @@ another's habits. `LocationLine` gains `compact` where the reading is a sentence
 rather than a figure; the workability row writes out its own name line instead of
 nesting a `LocationLine` inside a block that already has padding, because two lots
 of padding cannot be made compact; the outlook puts a day's temperatures and rain on
-one line rather than stacked, which is two lines a location rather than four. Every
+one line rather than stacked, which is two lines a location rather than four; and the
+brief and the alerts dropped their headline figure and their body-sized names for
+caption-sized lines, which is also what made them read as prose. Every
 list widget now takes a `limit` as well, which is the reader's own answer to the
 same question.
 
@@ -603,6 +605,20 @@ ones a reader already knows. Each keeps its own play head, which `useRadarFrames
 explicit about: whoever owns the index owns the timer. The cost is that a page showing
 both lists the frames twice; they are a short list of URLs, and sharing them would
 mean sharing a play head that should not be shared.
+
+**Agro Intelligence is the page in sentences** (`core/overviewBrief`). It opened with
+a figure and a place — "7,2 mm · Almkerk" — which is quick to draw and slow to read: a
+figure says *what* without saying *of what*, so the eye has to fetch the heading back
+before it can use it. Seven sentences now, of which two or three are true on a given
+morning, in the order a grower asks them: what fell, what is coming (the radar first
+where it sees anything, because "over twintig minuten" is a different instruction from
+"vandaag"), how far apart the fields are, and where to go. Each has a bar under which
+it stays quiet — a wind range of one km/h is a line spent reporting that the wind is
+the same everywhere — and the bars are gathered in `DEFAULT_BRIEF_LIMITS` with the
+other rule sets that want revisiting. The figures are emboldened structurally rather
+than with markup in the string table: the template carries named blanks and
+`Sentence` splits on them, so a translator can move a blank around a sentence and the
+right words still come out bold.
 
 **Advies is the one widget that answers "so what do I do"** (`core/overviewAdvice`).
 Six rules, each a sentence a grower would say — the land is shut, there is no window

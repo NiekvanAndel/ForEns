@@ -47,14 +47,15 @@ import { ForecastPreview } from '../nowcast/ForecastPreview';
 import { RadarPreview } from '../nowcast/RadarPreview';
 import { NowcastPanel } from '../radar/NowcastPanel';
 import { frameAtFraction, useRadarFrames } from '../radar/useRadarFrames';
-import { LocationLine, Reading, StackedLine, WidgetCard, WidgetNote } from './parts';
+import {
+  LocationLine, Reading, Sentence, StackedLine, WidgetCard, WidgetNote,
+} from './parts';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { alertValueLabel } from '../settings/UserAlertList';
 import { measurementTimeLabel } from '../../core/model/station';
 import {
-  firstWorkRun, notableRows, rankRows, spreadOf, summariseOverview, workWindow,
-  type OverviewRow,
+  firstWorkRun, notableRows, rankRows, spreadOf, workWindow, type OverviewRow,
 } from '../../core/overviewData';
 import { dayAgreement } from '../../core/sources/ensembleOutlook';
 import { resolveWidgetLocation, type WidgetSettings } from '../../core/overview';
@@ -63,10 +64,12 @@ import {
 } from '../../core/radar';
 import type { ForecastModel } from '../../core/model/types';
 import { adviceFor, isOpportunity } from '../../core/overviewAdvice';
+import { briefFor, type Brief } from '../../core/overviewBrief';
 import { BarSpark, LineSpark, RestLine, Ring, SpreadBand } from './marks';
 import type { WeatherAlert } from '../../core/model/alert';
 import {
   convTemp, convWind, dayNames, fmtMm, ta, tempUnitLabel, windUnitLabel,
+  type AppStringKey,
 } from '../../core/i18n';
 
 export interface WidgetProps {
@@ -105,59 +108,83 @@ function useWidgetLocation(settings: WidgetSettings) {
   };
 }
 
-// ── The sentence at the top ───────────────────────────────────────────────────
+// ── The page in sentences ─────────────────────────────────────────────────────
 
-export function SummaryWidget({ rows }: WidgetProps) {
-  const { palette } = useTheme();
+/**
+ * Agro Intelligence: two or three sentences that say what the fields are doing.
+ *
+ * It opened with a figure and a place — "7,2 mm · Almkerk" — over two clipped lines.
+ * A figure is quick to draw and slow to read: it says *what* without saying *of
+ * what*, so the eye has to fetch the heading back to use it. A sentence carries its
+ * own subject, and the numbers in it can still be the bold thing the eye lands on.
+ *
+ * Which sentences apply is `core/overviewBrief`; this only words them, and converts
+ * their figures into whatever the reader set. Most mornings two or three of the seven
+ * are true, which is the point: a brief that always says six things says none.
+ */
+export function SummaryWidget({ rows, nowcasts }: WidgetProps) {
   const { prefs } = usePrefs();
-  const s = summariseOverview(rows);
+  const brief = briefFor(rows, nowcasts);
 
   const deg = (v: number) => `${convTemp(v, prefs.tempUnit)}${tempUnitLabel(prefs.tempUnit)}`;
+  const wind = (v: number) =>
+    `${convWind(v, prefs.windUnit)} ${windUnitLabel(prefs.windUnit, prefs.lang)}`;
 
-  /**
-   * Rain first, then temperature.
-   *
-   * Because that is the order an arable grower asks them in: whether the land is
-   * workable is a rainfall question, and the temperature qualifies it. The page led
-   * with the temperature spread at first, which reads as a weather app rather than as
-   * a working one.
-   */
-  const headline = s.wettest
-    ? `${fmtMm(s.wettest.value)} mm · ${s.wettest.name}`
-    : s.loading
-      ? ''
-      : ta('ovAllDry', prefs.lang);
+  /** Which template a fact uses, and what fills its blanks. */
+  const wording = (b: Brief): { key: AppStringKey; values: Record<string, string> } => {
+    switch (b.kind) {
+      case 'wettest':
+        return {
+          key: 'briWettest',
+          values: { place: b.place ?? '', mm: `${fmtMm(b.mm ?? 0)} mm` },
+        };
+      case 'rainSoon':
+        return {
+          key: 'briRainSoon',
+          values: {
+            place: b.place ?? '',
+            when: ta('briMinutes', prefs.lang).replace('{n}', String(b.minutes ?? 0)),
+          },
+        };
+      case 'rainAhead':
+        return {
+          key: b.place2 ? 'briRainAhead2' : 'briRainAhead',
+          values: { place: b.place ?? '', place2: b.place2 ?? '' },
+        };
+      case 'rainWidespread':
+        return { key: 'briRainWidespread', values: {} };
+      case 'rainEverywhere':
+        return { key: 'briRainEverywhere', values: {} };
+      case 'tempRange':
+        return {
+          key: 'briTempRange',
+          values: {
+            low: deg(b.low ?? 0), high: deg(b.high ?? 0),
+            place: b.place ?? '', place2: b.place2 ?? '',
+          },
+        };
+      case 'windRange':
+        return {
+          key: 'briWindRange',
+          values: { low: wind(b.low ?? 0), high: wind(b.high ?? 0) },
+        };
+      case 'workable':
+        return { key: 'briWorkable', values: { place: b.place ?? '' } };
+    }
+  };
 
-  const under: string[] = [];
-  if (s.rainAhead.length) {
-    under.push(`${ta('ovRainAhead', prefs.lang)} ${s.rainAhead.join(', ')}.`);
-  } else if (!s.loading && rows.some((r) => r.rainNext24 != null)) {
-    under.push(ta('ovNoRainAhead', prefs.lang));
-  }
-  if (s.warmest && s.coldest) {
-    under.push(
-      s.warmest.name === s.coldest.name
-        ? deg(s.warmest.value)
-        : `${deg(s.coldest.value)} ${s.coldest.name} — ${deg(s.warmest.value)} ${s.warmest.name}`
-    );
-  }
+  const loading = rows.length > 0 && rows.every((r) => r.loading);
 
   return (
-    <WidgetCard
-      title={ta('ovSummary', prefs.lang)}
-      hint={s.wettest ? ta('ovWettest', prefs.lang) : `${s.locations}`}
-    >
-      {headline ? (
-        <Text variant="stat" color={palette.inkHeading} tabular style={{ fontSize: 22 }}>
-          {headline}
-        </Text>
-      ) : null}
-      {under.map((line, i) => (
-        <Text key={i} variant="caption" color={palette.muted} style={{ lineHeight: 18 }}>
-          {line}
-        </Text>
-      ))}
-      {!headline && !under.length ? <WidgetNote>{ta('ovQuiet', prefs.lang)}</WidgetNote> : null}
+    <WidgetCard title={ta('ovSummary', prefs.lang)}>
+      {brief.length ? (
+        brief.map((b) => {
+          const { key, values } = wording(b);
+          return <Sentence key={b.kind} template={ta(key, prefs.lang)} values={values} />;
+        })
+      ) : loading ? null : (
+        <WidgetNote>{ta('ovQuiet', prefs.lang)}</WidgetNote>
+      )}
     </WidgetCard>
   );
 }
@@ -187,6 +214,8 @@ export function AlertsWidget({ rows, alerts, settings, onOpen }: WidgetProps) {
           name={row.name}
           measured={row.hasStation}
           divider={i > 0}
+          // The reading is a phrase, not a figure; see `LocationLine`.
+          compact
           onPress={() => onOpen(row.index, 'index')}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
@@ -211,6 +240,7 @@ export function AlertsWidget({ rows, alerts, settings, onOpen }: WidgetProps) {
           key={rule.id}
           name={rule.stationNames.join(' · ') || rule.stationIds.join(' · ')}
           divider={i > 0 || hits.length > 0}
+          compact
         >
           <Text variant="caption" weight="semibold" color={palette.muted} numberOfLines={1}>
             {`${rule.title} ${ta(rule.op === 'above' ? 'alertFiredAbove' : 'alertFiredBelow', prefs.lang)} `}

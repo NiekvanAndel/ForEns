@@ -134,7 +134,9 @@ export interface OverviewWidget {
 export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   // The page in a sentence. First, because it is the only thing here that can be read
   // without looking at anything.
-  { id: 'summary', size: 'full', needs: ['conditions'] },
+  // It reads all three: what fell (conditions), what is coming (outlook), and how
+  // soon (the radar). Seven sentences, two or three of which are true on a morning.
+  { id: 'summary', size: 'full', needs: ['conditions', 'outlook', 'nowcast'] },
   // And what to do about it. Second, because a summary that cannot be acted on is a
   // poster — see `core/overviewAdvice`.
   { id: 'advice', size: 'full', needs: ['conditions', 'outlook'], options: ['limit'] },

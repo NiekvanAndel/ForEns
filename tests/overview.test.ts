@@ -20,6 +20,7 @@ import {
 import { parseOutlook } from '../core/sources/outlook';
 import { dayAgreement, parseEnsembleOutlook } from '../core/sources/ensembleOutlook';
 import { adviceFor, adviceForRow, isOpportunity } from '../core/overviewAdvice';
+import { briefFor } from '../core/overviewBrief';
 import { mergePrefs } from '../core/prefs';
 
 const hour = (time: string, over: Partial<OutlookHour> = {}): OutlookHour =>
@@ -127,14 +128,17 @@ describe('neededSources', () => {
     expect([...withRain]).toEqual(['conditions']);
   });
 
-  it('turns the nowcast on for the two widgets that read it, and off with both', () => {
+  it('turns the nowcast on for the widgets that read it, and off with all of them', () => {
     // "Rain in seven minutes" is the sharpest thing the app says and the radar is
-    // where it comes from, so the alerts widget pays for it — as does the rain curve.
-    // A reader who switches off both stops paying.
+    // where it comes from, so the widgets that say it pay for it — the brief, the
+    // alerts and the rain curve. A reader who switches off all three stops paying.
+    const readers = OVERVIEW_WIDGETS.filter((w) => w.needs.includes('nowcast'));
+    expect(readers.map((w) => w.id)).toEqual(['summary', 'alerts', 'nowcast']);
+
     expect(neededSources(DEFAULT_OVERVIEW_LAYOUT).has('nowcast')).toBe(true);
     expect(neededSources({ order: [], hidden: ['alerts'] }).has('nowcast')).toBe(true);
     expect(
-      neededSources({ order: [], hidden: ['alerts', 'nowcast'] }).has('nowcast')
+      neededSources({ order: [], hidden: readers.map((w) => w.id) }).has('nowcast')
     ).toBe(false);
   });
 });
@@ -595,5 +599,96 @@ describe('stored widget settings', () => {
 
   it('starts empty, so every widget is on its default', () => {
     expect(mergePrefs({}).overviewSettings).toEqual({});
+  });
+});
+
+describe('briefFor', () => {
+  const kinds = (b: ReturnType<typeof briefFor>) => b.map((x) => x.kind);
+  const wet = (n: number) =>
+    Array.from({ length: 24 }, (_, i) => hour(`2026-04-10T${String(i).padStart(2, '0')}:00`, {
+      precip: i < n ? 2 : 0,
+    }));
+
+  it('names where most fell, and stays quiet over a damp morning', () => {
+    const rows = [row({ index: 0, name: 'Almkerk', rain24: 7.2 }), row({ index: 1, rain24: 1 })];
+    expect(briefFor(rows)[0]).toMatchObject({ kind: 'wettest', place: 'Almkerk', mm: 7.2 });
+    // A tenth of a millimetre is a wet windscreen, not a fact about the land.
+    expect(kinds(briefFor([row({ rain24: 0.1 })]))).not.toContain('wettest');
+  });
+
+  it('prefers what the radar can already see to what the day holds', () => {
+    // "In twenty minutes" is a different instruction from "today", and only one of
+    // them changes what happens next.
+    const rows = [
+      row({ index: 0, name: 'Venlo', rainNext24: 8 }),
+      row({ index: 1, name: 'Almkerk', rainNext24: 8 }),
+    ];
+    const b = briefFor(rows, [null, { wet: true, startsInMin: 20 }]);
+    expect(b.find((x) => x.kind === 'rainSoon')).toMatchObject({ place: 'Almkerk', minutes: 20 });
+    expect(kinds(b)).not.toContain('rainAhead');
+  });
+
+  it('falls back to the day once the radar is looking too far ahead', () => {
+    const rows = [row({ index: 0, name: 'Venlo', rainNext24: 8 }), row({ index: 1, rainNext24: 0 })];
+    const b = briefFor(rows, [{ wet: true, startsInMin: 110 }, null]);
+    expect(b.find((x) => x.kind === 'rainAhead')).toMatchObject({ place: 'Venlo' });
+  });
+
+  it('counts rather than lists once it is nearly everywhere', () => {
+    const many = (n: number, wetCount: number) =>
+      Array.from({ length: n }, (_, i) =>
+        row({ index: i, name: `L${i}`, rainNext24: i < wetCount ? 4 : 0 }));
+    expect(kinds(briefFor(many(4, 4)))).toContain('rainEverywhere');
+    expect(kinds(briefFor(many(4, 3)))).toContain('rainWidespread');
+    // Two is still worth naming; three of four is not.
+    expect(briefFor(many(4, 2)).find((b) => b.kind === 'rainAhead'))
+      .toMatchObject({ place: 'L0', place2: 'L1' });
+  });
+
+  it('names both ends of the temperature, coldest first', () => {
+    const rows = [
+      row({ index: 0, name: 'Venlo', tempC: 17 }),
+      row({ index: 1, name: 'Almkerk', tempC: 12 }),
+    ];
+    expect(briefFor(rows).find((b) => b.kind === 'tempRange')).toMatchObject({
+      low: 12, place: 'Almkerk', high: 17, place2: 'Venlo',
+    });
+  });
+
+  it('will not report that the weather is the same everywhere', () => {
+    // "De wind varieert tussen 11 en 12 km/u" is a line spent saying nothing.
+    const rows = [row({ index: 0, tempC: 12, windKmh: 11 }), row({ index: 1, tempC: 12.5, windKmh: 12 })];
+    const b = kinds(briefFor(rows));
+    expect(b).not.toContain('tempRange');
+    expect(b).not.toContain('windRange');
+  });
+
+  it('names the most workable location only when one stands out', () => {
+    const rows = [
+      row({ index: 0, name: 'Venlo', hours: wet(20) }),
+      row({ index: 1, name: 'Almkerk', hours: wet(2) }),
+    ];
+    expect(briefFor(rows).find((b) => b.kind === 'workable')).toMatchObject({ place: 'Almkerk' });
+
+    // A tie is not a "most": saying one of two identical fields would be wrong.
+    const tied = [
+      row({ index: 0, name: 'Venlo', hours: wet(2) }),
+      row({ index: 1, name: 'Almkerk', hours: wet(2) }),
+    ];
+    expect(kinds(briefFor(tied))).not.toContain('workable');
+    // And nothing workable anywhere has no "most" either.
+    expect(kinds(briefFor([row({ hours: wet(24) })]))).not.toContain('workable');
+  });
+
+  it('says rain before it says temperature', () => {
+    // Whether the land is workable is a rainfall question; everything else qualifies
+    // it. The page led with temperature at first, which reads as a weather app.
+    const rows = [
+      row({ index: 0, name: 'Venlo', rain24: 9, tempC: 18, rainNext24: 4 }),
+      row({ index: 1, name: 'Almkerk', rain24: 1, tempC: 11, rainNext24: 0 }),
+    ];
+    const order = kinds(briefFor(rows));
+    expect(order.indexOf('wettest')).toBeLessThan(order.indexOf('tempRange'));
+    expect(order.indexOf('rainAhead')).toBeLessThan(order.indexOf('tempRange'));
   });
 });

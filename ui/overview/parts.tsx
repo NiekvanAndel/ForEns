@@ -208,6 +208,44 @@ export function Reading({
   );
 }
 
+/**
+ * A sentence with its figures set in bold.
+ *
+ * The template comes from `core/i18n` with named blanks — `{place}`, `{mm}` — and
+ * the values are supplied here, so a translator moves the blanks around a sentence
+ * and this still emboldens the right words. Splitting on the blanks rather than
+ * building the string means the bold is structural: there is no markup in the string
+ * table to get out of step with the code that reads it.
+ *
+ * The runs are nested `Text`, which inherits the parent's size and colour, so a
+ * sentence wraps as one paragraph rather than as a row of words that break
+ * separately.
+ */
+export function Sentence({
+  template, values, color,
+}: { template: string; values: Record<string, string>; color?: string }) {
+  const { palette } = useTheme();
+  // The separators are kept, which is what lets one pass over the result tell a blank
+  // from the prose around it.
+  const parts = template.split(/(\{[a-zA-Z0-9]+\})/g);
+
+  return (
+    <Text variant="caption" color={color ?? palette.muted} style={{ lineHeight: 18 }}>
+      {parts.map((part, i) => {
+        const key = part.startsWith('{') && part.endsWith('}') ? part.slice(1, -1) : null;
+        if (key == null) return part;
+        // A blank with nothing for it prints nothing rather than its own name.
+        const value = values[key] ?? '';
+        return (
+          <Text key={i} variant="caption" weight="bold" color={palette.inkHeading} tabular>
+            {value}
+          </Text>
+        );
+      })}
+    </Text>
+  );
+}
+
 /** What a widget says when it has nothing to say. A sentence, not a blank card: an
  *  empty widget reads as a failure and a sentence reads as an answer. */
 export function WidgetNote({ children }: { children: ReactNode }) {
