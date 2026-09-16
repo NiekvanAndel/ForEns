@@ -677,6 +677,54 @@ describe('buildSeries', () => {
     const at12 = s.samples.find((x) => x.key === '2026-06-20T12:00');
     expect(at12?.value).toBe(24);
     expect(at12?.future).toBe(true);
+    expect(at12?.source).toBe('ifs');
+  });
+
+  it('records which forecast answered for each sample', () => {
+    // The ensemble band on the running rainfall total needs to know: the members are
+    // IFS, so they may only be carried over the part of the line that is IFS too.
+    const s = buildSeries({
+      key: 'temp', from: '2026-06-15', to: '2026-06-20',
+      measured: [measured('2026-06-15T10:00', { temp: 18 })],
+      // No model hours on the 15th, so that day is the station's alone — a day that
+      // mixes the two has no single source, which the next test pins.
+      model: model({
+        pastHours: [], futureHours: [],
+        hresHoursByDay: {
+          '2026-06-20': [
+            { time: '2026-06-20T12:00', hour: 12, precip: 0, wmo: 3, is3h: true,
+              temp: 24, dewpoint: 12, humidity: 55, wind: 14, windDir: 200,
+              gusts: 30, sunMin: 60, et0h: 0.2 },
+          ],
+        },
+      }),
+      includeForecast: true,
+    });
+    // Six days, so the samples are days; each carries the source of its hours.
+    expect(s.resolution).toBe('day');
+    expect(s.samples.find((x) => x.key === '2026-06-15')?.source).toBe('station');
+    expect(s.samples.find((x) => x.key === '2026-06-20')?.source).toBe('ifs');
+  });
+
+  it('gives a day no single source where its hours disagree', () => {
+    // Half the near-term run and half IFS is not an IFS day, and treating it as one
+    // is what would let a running total's band open a few hours early.
+    const s = buildSeries({
+      key: 'temp', from: '2026-06-15', to: '2026-06-19',
+      measured: [],
+      model: model({
+        futureHours: [hour('2026-06-19T09:00', { isPast: false, tempExact: 15 })],
+        hresHoursByDay: {
+          '2026-06-19': [
+            { time: '2026-06-19T15:00', hour: 15, precip: 0, wmo: 3, is3h: true,
+              temp: 24, dewpoint: 12, humidity: 55, wind: 14, windDir: 200,
+              gusts: 30, sunMin: 60, et0h: 0.2 },
+          ],
+        },
+      }),
+      includeForecast: true,
+    });
+    expect(s.samples.find((x) => x.key === '2026-06-19')?.source).toBeNull();
   });
 
   it('reports how far ahead the model can be asked about', () => {

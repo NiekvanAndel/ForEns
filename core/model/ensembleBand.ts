@@ -41,8 +41,8 @@
 import { percentile, round1 } from './stats';
 import type { EnsembleMembers } from '../sources/ensembleRange';
 
-/** Which quantity the band is for. Only these two: they are what the page bands. */
-export type BandField = 'temp' | 'precip';
+/** Which quantity the band is for. The three the page bands. */
+export type BandField = 'temp' | 'precip' | 'wind';
 
 /** How a member's hours are reduced to one value for a bucket. See the note above. */
 export type BucketStat = 'mean' | 'sum' | 'min' | 'max';
@@ -58,7 +58,13 @@ export interface Band {
 const MIN_MEMBERS = 2;
 
 /** What a field's band is of unless the caller says otherwise. */
-export const DEFAULT_STAT: Record<BandField, BucketStat> = { temp: 'mean', precip: 'sum' };
+export const DEFAULT_STAT: Record<BandField, BucketStat> = {
+  temp: 'mean', wind: 'mean', precip: 'sum',
+};
+
+/** The floor a field's band cannot go below, where it has one. Rain and wind speed
+ *  are both non-negative, and a band off the wrong side of the axis is noise. */
+const FLOOR: Partial<Record<BandField, number>> = { precip: 0, wind: 0 };
 
 /**
  * The key a sample looks its band up under.
@@ -105,7 +111,7 @@ export function memberBuckets(
   resolution: BandResolution,
   stat: BucketStat = DEFAULT_STAT[field]
 ): Map<string, (number | null)[]> {
-  const series = field === 'precip' ? members.precip : members.temp;
+  const series = field === 'precip' ? members.precip : field === 'wind' ? members.wind : members.temp;
   if (series.length < MIN_MEMBERS) return new Map();
 
   // Gathered in one pass, so a month at day resolution walks the members' rows once
@@ -154,7 +160,7 @@ export function ensembleBands(
   resolution: BandResolution,
   stat: BucketStat = DEFAULT_STAT[field]
 ): Map<string, Band> {
-  return bandsFrom(memberBuckets(members, field, resolution, stat), field === 'precip' ? 0 : undefined);
+  return bandsFrom(memberBuckets(members, field, resolution, stat), FLOOR[field]);
 }
 
 /** The shape of a sample, as far as a band cares. */
@@ -192,17 +198,32 @@ export function bandsForSamples(
  * It starts from what has already fallen. The measured half of the total is not in
  * doubt — it is a rain gauge, or the model's own record of hours that have passed —
  * so every member carries on from the last actual figure rather than from zero. The
- * band therefore begins as a point at the forecast boundary and widens from there,
- * which is the picture: how much *more* could still fall.
+ * band therefore begins as a point where the accumulation starts and widens from
+ * there, which is the picture: how much *more* could still fall.
+ *
+ * ## Where it starts, and why that is not simply "now"
+ *
+ * `accumulates` decides which future samples the members are allowed to add to. The
+ * line this band belongs to is not one model's: the first 48 hours are the near-term
+ * run — HARMONIE where it is available — and only past that does the deterministic
+ * line become IFS, the members' own sibling. Carrying ECMWF members over a HARMONIE
+ * total would be a spread around a number the members never produced, and on a total
+ * that error does not stay local: it is added in and every later point inherits it.
+ *
+ * So while another model speaks for the line there is no band at all, and the running
+ * totals are held at zero. The deterministic figure is still tracked through those
+ * samples, so when the band does open it opens from the total as it stands at that
+ * moment rather than from the forecast boundary hours earlier.
  *
  * A future sample whose bucket the members do not cover carries the running totals
  * forward unchanged, exactly as `withCumulative` carries the deterministic line
  * across a gap: an unknown hour did not undo the rain before it.
  */
-export function cumulativeBands(
+export function cumulativeBands<T extends BandSample>(
   buckets: Map<string, (number | null)[]>,
-  samples: readonly BandSample[],
-  resolution: BandResolution
+  samples: readonly T[],
+  resolution: BandResolution,
+  accumulates: (sample: T) => boolean = () => true
 ): (Band | null)[] {
   const memberCount = buckets.size ? (buckets.values().next().value as (number | null)[]).length : 0;
   if (memberCount < MIN_MEMBERS) return samples.map(() => null);
@@ -212,7 +233,9 @@ export function cumulativeBands(
   let base = 0;
 
   return samples.map((s) => {
-    if (!s.future) {
+    if (!s.future || !accumulates(s)) {
+      // Still following the deterministic total, so the fan opens from the right
+      // level rather than from whatever it stood at when the forecast began.
       if (s.cumulative != null) base = s.cumulative;
       return null;
     }

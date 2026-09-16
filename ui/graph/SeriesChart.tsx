@@ -87,9 +87,11 @@ const FORECAST_GAP_BRIDGE = 2;
  * Where a band may go: behind the central line, behind either of the band's own
  * edges, as a whisker on the bars, or around the running total.
  *
- * Every slot is optional and the chart draws whichever it is given. An edge's band is
- * drawn only where that edge is drawn, since a band around an invisible line is a
- * cloud with nothing in it.
+ * Every slot is optional and the chart draws whichever it is given, in that line's own
+ * ink where it has one. Whether an edge's band belongs on screen at all — its line may
+ * be switched off, or the series may draw no named edges — is the caller's call, for
+ * the same reason the slots exist: only the page knows which of these means something
+ * for the quantity on screen.
  */
 export interface ChartSpread {
   value?: (Band | null)[] | null;
@@ -480,12 +482,13 @@ function Lines({
   const areaFor = (bands: (Band | null)[] | null | undefined) =>
     bandArea(bands, samples.length, px, py);
 
-  // One per line the chart is drawing. An edge's band follows its edge: hidden line,
-  // no band, because a cloud around nothing says nothing.
+  // One per line the chart is drawing, each in that line's ink where it has its own —
+  // temperature's edges are blue and red, and a series with no named edges bands them
+  // in its own colour.
   const areas = [
     { d: areaFor(spread?.value), colour: color },
-    { d: lo ? areaFor(spread?.lo) : null, colour: lo ?? color },
-    { d: hi ? areaFor(spread?.hi) : null, colour: hi ?? color },
+    { d: areaFor(spread?.lo), colour: lo ?? color },
+    { d: areaFor(spread?.hi), colour: hi ?? color },
   ];
 
   const main = showValue ? splitRuns(samples, (s) => s.value, px, py) : [];

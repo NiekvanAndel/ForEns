@@ -15,8 +15,10 @@
  * 37 000 numbers per field — and that is the whole of the cost, since the two fields
  * the chart bands are fetched in one request.
  *
- * Only temperature and precipitation. They are what the page bands, and each extra
- * field is another 51 columns over the same window.
+ * Temperature, precipitation and wind — the three the page bands — in one request.
+ * Three fields is half as much again over the wire as two, and it is still the cheaper
+ * shape: a reader tapping through the measurement pills would otherwise pay a fresh
+ * 51-member request per tap, where this answers all three from one cached response.
  */
 import { tryFetchJson, type FetchOptions } from './http';
 import { memberSeries } from './ensembleHourly';
@@ -32,9 +34,10 @@ export interface EnsembleMembers {
   /** One row per member. Empty where the response carried the field for none. */
   temp: (number | null)[][];
   precip: (number | null)[][];
+  wind: (number | null)[][];
 }
 
-export const EMPTY_MEMBERS: EnsembleMembers = { times: [], temp: [], precip: [] };
+export const EMPTY_MEMBERS: EnsembleMembers = { times: [], temp: [], precip: [], wind: [] };
 
 interface EnsembleResponse {
   hourly?: Record<string, unknown>;
@@ -49,7 +52,7 @@ export async function fetchEnsembleRange(
 ): Promise<EnsembleMembers> {
   const url =
     `${ENSEMBLE}?latitude=${lat}&longitude=${lon}` +
-    `&hourly=temperature_2m,precipitation` +
+    `&hourly=temperature_2m,precipitation,windspeed_10m` +
     `&models=ecmwf_ifs025&start_date=${from}&end_date=${to}&timezone=auto`;
 
   const json = await tryFetchJson<EnsembleResponse>(url, 'ENS-reeks', opts);
@@ -66,5 +69,6 @@ export function parseEnsembleRange(json: EnsembleResponse | null): EnsembleMembe
     times,
     temp: memberSeries(hourly, 'temperature_2m'),
     precip: memberSeries(hourly, 'precipitation'),
+    wind: memberSeries(hourly, 'windspeed_10m'),
   };
 }

@@ -32,21 +32,24 @@
  *
  * ## The band around the forecast
  *
- * Temperature and rainfall carry the ensemble's p10–p90 over the forecast half. A
- * forecast line on its own claims a precision the model does not have, and the 51
+ * Temperature, rainfall and wind carry the ensemble's p10–p90 over the forecast half.
+ * A forecast line on its own claims a precision the model does not have, and the 51
  * members are what the app already carries to say where that claim is weak; the day
  * sheets show them a day at a time, and this is the same spread over whatever window
  * the reader picked.
  *
- * Where it goes is a different answer in each of the four cases, and the reasoning is
- * beside the code that decides it (`chartSpread`). In short: temperature per hour
- * behind the line; temperature per day behind the minimum and the maximum rather than
- * the mean; rainfall per hour on the running total alone, because an hour's band is
- * too small to read against an axis scaled to the wettest hour; rainfall per day on
- * both the bars and the total.
+ * Where it goes is a different answer per quantity and per grain, and the reasoning
+ * sits beside the code that decides it (`spread`). In short: temperature and wind per
+ * hour behind the line, and per day behind the minimum and the maximum rather than the
+ * mean; rainfall per hour on the running total alone, because an hour's band is too
+ * small to read against an axis scaled to the wettest hour; rainfall per day on both
+ * the bars and the total.
  *
  * Only the forecast half. A band around a measurement would say the thermometer might
- * have read something else.
+ * have read something else. And the running total's band only over the part of the
+ * line the members are the siblings of: the first 48 hours are the near-term run, and
+ * accumulating ECMWF members over a HARMONIE total is an error that every later point
+ * inherits. See `cumulativeBands`.
  *
  * It arrives separately from the line and may not arrive at all, so it is handed to
  * the chart as a parallel array rather than carried on the samples: the chart draws
@@ -189,15 +192,18 @@ const SERIES: {
 /**
  * The quantities that carry an ensemble band, and what the legend calls it.
  *
- * Temperature and rainfall: the two a grower plans around, and the two whose spread
- * changes a decision rather than decorating a line. Humidity and wind have members
- * too — the day sheets plot them — but a band on every series is four more requests
- * for a chart that is already answering a different question.
+ * Temperature, rainfall and wind: the three a grower plans around, and the three whose
+ * spread changes a decision rather than decorating a line. They travel in one request,
+ * so the set costs no more than any one of them. Humidity has members too — the day
+ * sheets plot them — but nobody schedules work around the spread of a humidity
+ * forecast, and gusts have no ensemble at all.
  *
  * Which of the chart's lines carries the band is decided per quantity and per grain,
  * in `chartSpread` below, because the answer is different in all four cases.
  */
-const BAND_FIELD: Partial<Record<SeriesKey, BandField>> = { temp: 'temp', precip: 'precip' };
+const BAND_FIELD: Partial<Record<SeriesKey, BandField>> = {
+  temp: 'temp', precip: 'precip', wind: 'wind',
+};
 
 /**
  * The page's vertical rhythm.
@@ -298,18 +304,27 @@ function GraphPage() {
     enabled: !!bandField && !peeking && range.to >= today,
   });
 
+  const meta = SERIES_META[key];
+
+  /** Only where the series has edges worth naming and something to draw them from. */
+  const hasEdges = !!meta.edges && series.samples.some((s) => s.band != null);
+
   /**
-   * Which of the chart's lines the band goes on — four different answers.
+   * Which of the chart's lines the band goes on — a different answer per quantity and
+   * per grain.
    *
    * Percentiles are taken at the grain the chart draws, never aggregated after the
    * fact; `core/model/ensembleBand` has that argument.
    *
-   * - **Temperature per hour** — behind the line. The line *is* the forecast, and the
-   *   band is how much the members disagree about it.
-   * - **Temperature per day** — behind the minimum and the maximum, not the mean. The
-   *   spread of a daily average is narrow by construction and nobody plans around it;
-   *   the spread of the coldest hour answers "could it freeze tonight", which is what
-   *   a week of temperatures is read for.
+   * - **Temperature and wind per hour** — behind the line. The line *is* the forecast,
+   *   and the band is how much the members disagree about it.
+   * - **Temperature and wind per day** — behind the minimum and the maximum, not the
+   *   mean. The spread of a daily average is narrow by construction and nobody plans
+   *   around it; the spread of the coldest hour answers "could it freeze tonight", and
+   *   of the windiest "can I spray", which is what a week of either is read for.
+   *   Temperature draws those two as named lines in their own colours and wind as the
+   *   top and bottom of one band, which changes how they are drawn and not what they
+   *   are — so both take the same pair.
    * - **Rainfall per hour** — on the running total only. An hour's band is a few
    *   millimetres tall on an axis scaled to the wettest hour of the window, which is
    *   a whisker too small to read; the total is where an hourly disagreement becomes
@@ -328,30 +343,38 @@ function GraphPage() {
         bars: perDay
           ? bandsForSamples(bandsFrom(buckets, 0), series.samples, res)
           : null,
-        cumulative: cumulativeBands(buckets, series.samples, res),
+        // Only across the part of the line the members are actually the siblings of.
+        // See `cumulativeBands`.
+        cumulative: cumulativeBands(buckets, series.samples, res, (s) => s.source === 'ifs'),
       };
     }
 
+    // Temperature and wind are the same picture: one line per bucket, with the day's
+    // own extremes as its edges. The floor is the field's, so a wind band cannot run
+    // below zero.
+    const floor = bandField === 'wind' ? 0 : undefined;
+    const edge = (stat: 'min' | 'max') =>
+      bandsForSamples(
+        bandsFrom(memberBuckets(ensemble.data!, bandField, res, stat), floor),
+        series.samples, res
+      );
+
     if (perDay) {
+      // Following the lines that are actually drawn: temperature's two edges are
+      // switchable and wind's are simply the top and bottom of its band.
       return {
-        lo: bandsForSamples(
-          bandsFrom(memberBuckets(ensemble.data, 'temp', res, 'min')),
-          series.samples, res
-        ),
-        hi: bandsForSamples(
-          bandsFrom(memberBuckets(ensemble.data, 'temp', res, 'max')),
-          series.samples, res
-        ),
+        lo: !hasEdges || lines.lo ? edge('min') : null,
+        hi: !hasEdges || lines.hi ? edge('max') : null,
       };
     }
 
     return {
       value: bandsForSamples(
-        bandsFrom(memberBuckets(ensemble.data, 'temp', res)),
+        bandsFrom(memberBuckets(ensemble.data, bandField, res), floor),
         series.samples, res
       ),
     };
-  }, [bandField, ensemble.data, series.resolution, series.samples]);
+  }, [bandField, ensemble.data, hasEdges, lines.lo, lines.hi, series.resolution, series.samples]);
 
   // The switch appears only where something would actually be drawn. On rainfall per
   // hour the band lives on the running total alone, so with the total switched off
@@ -361,7 +384,6 @@ function GraphPage() {
     : [];
   const hasSpread = drawnSlots.some((slot) => slot?.some(Boolean));
 
-  const meta = SERIES_META[key];
   const byDay = series.resolution === 'day';
 
   // Changing the period is a deliberate act, and the grain it lands on is what the
@@ -390,8 +412,6 @@ function GraphPage() {
       ? { lo: palette.valHigh, hi: palette.valLow }
       : { lo: palette.valLow, hi: palette.valHigh };
 
-  /** Only where the series has edges worth naming and something to draw them from. */
-  const hasEdges = !!meta.edges && series.samples.some((s) => s.band != null);
 
   // One line has to stay: a chart of nothing is a card with an axis in it.
   const toggleLine = (which: 'value' | 'lo' | 'hi') => {

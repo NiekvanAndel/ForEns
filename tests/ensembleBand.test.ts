@@ -8,8 +8,9 @@ import type { EnsembleMembers } from '../core/sources/ensembleRange';
 const members = (
   times: string[],
   temp: (number | null)[][],
-  precip: (number | null)[][]
-): EnsembleMembers => ({ times, temp, precip });
+  precip: (number | null)[][],
+  wind: (number | null)[][] = []
+): EnsembleMembers => ({ times, temp, precip, wind });
 
 describe('bandKey', () => {
   it('is the day at day resolution and the hour otherwise', () => {
@@ -106,7 +107,7 @@ describe('bandsForSamples', () => {
 });
 
 describe('parseEnsembleRange', () => {
-  it('collects the member columns for both fields', () => {
+  it('collects the member columns for all three fields', () => {
     const out = parseEnsembleRange({
       hourly: {
         time: ['2026-09-17T00:00'],
@@ -114,11 +115,14 @@ describe('parseEnsembleRange', () => {
         temperature_2m_member02: [12],
         precipitation_member01: [0],
         precipitation_member02: [1],
+        windspeed_10m_member01: [14],
+        windspeed_10m_member02: [22],
       },
     });
     expect(out.times).toEqual(['2026-09-17T00:00']);
     expect(out.temp).toEqual([[10], [12]]);
     expect(out.precip).toEqual([[0], [1]]);
+    expect(out.wind).toEqual([[14], [22]]);
   });
 
   it('is empty rather than wrong when there is no response', () => {
@@ -222,5 +226,92 @@ describe('cumulativeBands', () => {
 
   it('gives nothing at all without an ensemble', () => {
     expect(cumulativeBands(new Map(), [sample(times[0]!, true)], 'hour')).toEqual([null]);
+  });
+});
+
+describe('wind', () => {
+  const times = ['2026-09-17T00:00', '2026-09-17T12:00'];
+  // Three members: a calm night and a blustery afternoon, flat, and an extreme one.
+  const m = members(times, [], [], [[2, 22], [8, 16], [0, 30]]);
+
+  it('reads the wind column, not the temperature one', () => {
+    expect(ensembleBands(m, 'wind', 'hour').get('2026-09-17T12:00')).toEqual({ lo: 17.2, hi: 28.4 });
+    // Nothing in the temperature rows, so no temperature band at all.
+    expect(ensembleBands(m, 'temp', 'hour').size).toBe(0);
+  });
+
+  it('bands the calmest and windiest hour per day, as temperature does', () => {
+    const mins = bandsFrom(memberBuckets(m, 'wind', 'day', 'min'), 0);
+    const maxes = bandsFrom(memberBuckets(m, 'wind', 'day', 'max'), 0);
+    // Minima across members are 2, 8, 0; maxima are 22, 16, 30.
+    expect(mins.get('2026-09-17')).toEqual({ lo: 0.4, hi: 6.8 });
+    expect(maxes.get('2026-09-17')).toEqual({ lo: 17.2, hi: 28.4 });
+  });
+
+  it('never bands below a standstill', () => {
+    // p10 of a calm ensemble can land fractionally below zero on a rounded input;
+    // a negative wind speed is not a thing to draw.
+    const calm = members(times, [], [], [[0, 0], [0, 0], [0, 1]]);
+    expect(ensembleBands(calm, 'wind', 'hour').get('2026-09-17T00:00')!.lo)
+      .toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('cumulativeBands while another model speaks for the line', () => {
+  const times = ['2026-09-17T00:00', '2026-09-17T01:00', '2026-09-17T02:00'];
+  const buckets = memberBuckets(
+    members(times, [], [[1, 2, 3], [0, 0, 0], [2, 2, 2]]),
+    'precip',
+    'hour'
+  );
+  const ifs = (key: string, cumulative: number) =>
+    ({ key, future: true, cumulative, source: 'ifs' as const });
+  const near = (key: string, cumulative: number) =>
+    ({ key, future: true, cumulative, source: 'nearTerm' as const });
+
+  const onlyIfs = (s: { source: 'ifs' | 'nearTerm' }) => s.source === 'ifs';
+
+  it('draws nothing while the near-term run is the source', () => {
+    const out = cumulativeBands(
+      buckets,
+      [near(times[0]!, 3), near(times[1]!, 5), ifs(times[2]!, 5)],
+      'hour',
+      onlyIfs
+    );
+    expect(out[0]).toBeNull();
+    expect(out[1]).toBeNull();
+    expect(out[2]).not.toBeNull();
+  });
+
+  it('opens from the total as it stands when the source changes, not from the boundary', () => {
+    // 5 mm are already accounted for by the near-term run, which covered the first
+    // two hours. The band starts from that figure and adds only the hour the switch
+    // happens in — the members' third: 3, 0, 2 → p10 0.4, p90 2.8.
+    const out = cumulativeBands(
+      buckets,
+      [near(times[0]!, 3), near(times[1]!, 5), ifs(times[2]!, 6)],
+      'hour',
+      onlyIfs
+    );
+    expect(out[2]).toEqual({ lo: 5.4, hi: 7.8 });
+  });
+
+  it('bands the whole forecast when nothing is held back', () => {
+    const held = cumulativeBands(
+      buckets,
+      [near(times[0]!, 1), ifs(times[1]!, 2), ifs(times[2]!, 3)],
+      'hour',
+      onlyIfs
+    );
+    const free = cumulativeBands(
+      buckets,
+      [ifs(times[0]!, 1), ifs(times[1]!, 2), ifs(times[2]!, 3)],
+      'hour'
+    );
+    expect(held[0]).toBeNull();
+    expect(free[0]).not.toBeNull();
+    // And the held one is not merely shifted: it starts from a higher base and has
+    // one hour less of member spread in it.
+    expect(held[2]!.hi - held[2]!.lo).toBeLessThan(free[2]!.hi - free[2]!.lo);
   });
 });
