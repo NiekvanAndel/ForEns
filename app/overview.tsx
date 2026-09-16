@@ -42,9 +42,9 @@ import { Text } from '../ui/Text';
 import { Icon } from '../ui/Icon';
 import { TileEditor } from '../ui/current/TileEditor';
 import {
-  AlertsWidget, ConfidenceWidget, FrostWidget, MapWidget, NowcastWidget, OutlookWidget,
-  Rain24Widget, RainNextWidget, RulesWidget, SummaryWidget, TempWidget, WindWidget,
-  WorkWidget, type WidgetProps,
+  AdviceWidget, AlertsWidget, ConfidenceWidget, FrostWidget, HeroWidget, LongTermWidget,
+  MapWidget, NearTermWidget, NowcastWidget, OutlookWidget, Rain24Widget, RainNextWidget,
+  SummaryWidget, TempWidget, WindWidget, WorkWidget, type WidgetProps,
 } from '../ui/overview/widgets';
 import { usePrefs } from '../state/prefs';
 import {
@@ -62,8 +62,8 @@ import { ta, type AppStringKey } from '../core/i18n';
  *  what it looks like, and nothing else in the app has to know either. */
 const WIDGET_VIEWS: Record<string, (props: WidgetProps) => React.ReactElement | null> = {
   summary: SummaryWidget,
+  advice: AdviceWidget,
   alerts: AlertsWidget,
-  rules: RulesWidget,
   rain24: Rain24Widget,
   rainNext: RainNextWidget,
   temp: TempWidget,
@@ -72,17 +72,22 @@ const WIDGET_VIEWS: Record<string, (props: WidgetProps) => React.ReactElement | 
   workability: WorkWidget,
   outlook: OutlookWidget,
   confidence: ConfidenceWidget,
-  nowcast: NowcastWidget,
   map: MapWidget,
+  // The selected location's own cards. They take the same props and ignore them:
+  // their subject is `usePrefs().location`, not the rows.
+  hero: HeroWidget,
+  nowcast: NowcastWidget,
+  nearTerm: NearTermWidget,
+  longTerm: LongTermWidget,
 };
 
 /** What each widget is called, for its own heading and for the editor's list. */
 const WIDGET_LABEL: Record<string, AppStringKey> = {
-  summary: 'ovSummary', alerts: 'ovAlerts', rules: 'ovRules',
+  summary: 'ovSummary', advice: 'ovAdvice', alerts: 'ovAlerts',
   rain24: 'ovRain24', rainNext: 'ovRainNext', temp: 'ovTemp', wind: 'ovWind',
   frost: 'ovFrost', workability: 'ovWork', outlook: 'ovOutlook',
-  confidence: 'ovConfidence',
-  nowcast: 'ovNowcast', map: 'ovMap',
+  confidence: 'ovConfidence', map: 'ovMap',
+  hero: 'ovHero', nowcast: 'ovNowcast', nearTerm: 'ovNearTerm', longTerm: 'ovLongTerm',
 };
 
 export default function OverviewScreen() {

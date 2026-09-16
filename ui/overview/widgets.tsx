@@ -32,23 +32,30 @@
  * exactly as the rest of the app does. A grower reading m/s on the map and km/h here
  * would rightly wonder which one the app believes.
  */
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
 import { WindArrow } from '../WindArrow';
+import { ConditionsHero } from '../nowcast/ConditionsHero';
+import { HourSlider } from '../nowcast/HourSlider';
+import { ForecastPreview } from '../nowcast/ForecastPreview';
 import { LocationLine, Reading, WidgetCard, WidgetNote } from './parts';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { alertValueLabel } from '../settings/UserAlertList';
+import { measurementTimeLabel } from '../../core/model/station';
 import {
-  firstWorkRun, notableRows, rankRows, spreadOf, summariseOverview, trendOf, workWindow,
+  firstWorkRun, notableRows, rankRows, spreadOf, summariseOverview, workWindow,
   type OverviewRow,
 } from '../../core/overviewData';
 import { dayAgreement } from '../../core/sources/ensembleOutlook';
-import { BarSpark, LineSpark, RestLine, Ring, SpreadBand, TrendMark } from './marks';
+import { adviceFor, isOpportunity } from '../../core/overviewAdvice';
+import { BarSpark, LineSpark, RestLine, Ring, SpreadBand } from './marks';
 import type { WeatherAlert } from '../../core/model/alert';
 import {
   convTemp, convWind, dayNames, fmtMm, ta, tempUnitLabel, windUnitLabel,
@@ -124,42 +131,132 @@ export function SummaryWidget({ rows }: WidgetProps) {
 export function AlertsWidget({ rows, alerts, onOpen }: WidgetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
+
   const hits = rows
     .map((row, i) => ({ row, alert: alerts[i] ?? null }))
     .filter((x): x is { row: OverviewRow; alert: WeatherAlert } => x.alert != null);
+  const rules = prefs.userAlerts.filter((a) => a.enabled);
+
+  // Nothing at all draws nothing at all — not an empty card. A widget that says
+  // "niets bijzonders" every day is a widget that takes height to report silence,
+  // and the summary above already covers a quiet morning.
+  if (!hits.length && !rules.length) return null;
 
   return (
-    <WidgetCard title={ta('ovAlerts', prefs.lang)}>
-      {hits.length ? (
-        hits.map(({ row, alert }, i) => (
-          <LocationLine
-            key={row.index}
-            name={row.name}
-            measured={row.hasStation}
-            divider={i > 0}
-            onPress={() => onOpen(row.index, 'index')}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Icon
-                name={alert.icon}
-                size={14}
-                color={alert.severity === 'heavy' ? palette.valHigh : palette.accentDark}
-                weight="fill"
-              />
-              <Text variant="caption" weight="semibold" color={palette.inkHeading} numberOfLines={1}>
-                {alert.label}
-              </Text>
-            </View>
-          </LocationLine>
-        ))
-      ) : (
-        <WidgetNote>{ta('ovQuiet', prefs.lang)}</WidgetNote>
-      )}
+    <WidgetCard title={ta('notifications', prefs.lang)}>
+      {hits.map(({ row, alert }, i) => (
+        <LocationLine
+          key={`alert-${row.index}`}
+          name={row.name}
+          measured={row.hasStation}
+          divider={i > 0}
+          onPress={() => onOpen(row.index, 'index')}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+            <Icon
+              name={alert.icon}
+              size={14}
+              color={alert.severity === 'heavy' ? palette.valHigh : palette.accentDark}
+              weight="fill"
+            />
+            <Text variant="caption" weight="semibold" color={palette.inkHeading} numberOfLines={1}>
+              {alert.label}
+            </Text>
+          </View>
+        </LocationLine>
+      ))}
+
+      {/* The reader's own thresholds, under the app's own judgement rather than in a
+          widget of their own: both answer "what am I being told about", and two cards
+          asking that split the answer in half. */}
+      {rules.map((rule, i) => (
+        <LocationLine
+          key={rule.id}
+          name={rule.stationNames.join(' · ') || rule.stationIds.join(' · ')}
+          divider={i > 0 || hits.length > 0}
+        >
+          <Text variant="caption" weight="semibold" color={palette.muted} numberOfLines={1}>
+            {`${rule.title} ${ta(rule.op === 'above' ? 'alertFiredAbove' : 'alertFiredBelow', prefs.lang)} `}
+            <Text variant="caption" weight="bold" color={palette.accentDark} tabular>
+              {alertValueLabel(rule, prefs)}
+            </Text>
+          </Text>
+        </LocationLine>
+      ))}
     </WidgetCard>
   );
 }
 
-// ── Rankings ──────────────────────────────────────────────────────────────────
+// ── What to do about it ───────────────────────────────────────────────────────
+
+/**
+ * Which fields need attention, and which have an opening.
+ *
+ * The rules are in `core/overviewAdvice`; this only words them. Attention is inked in
+ * the reading's own colour and an opening in the station green, because a grower
+ * scanning this wants to know in one look whether it is a list of problems or a list
+ * of chances.
+ */
+export function AdviceWidget({ rows, onOpen }: WidgetProps) {
+  const { palette } = useTheme();
+  const { prefs } = usePrefs();
+  const advice = adviceFor(rows);
+
+  if (!advice.length) return null;
+
+  const sentence = (a: (typeof advice)[number]): string => {
+    const mm = a.mm != null ? `${fmtMm(a.mm)} mm` : '';
+    const hours = a.hours != null ? `${a.hours} ${ta('ovHours', prefs.lang)}` : '';
+    const deg = a.tempC != null
+      ? `${convTemp(a.tempC, prefs.tempUnit)} ${tempUnitLabel(prefs.tempUnit)}`
+      : '';
+    switch (a.kind) {
+      case 'soaked': return ta('advSoaked', prefs.lang).replace('{mm}', mm);
+      case 'noWindow': return ta('advNoWindow', prefs.lang);
+      case 'raceTheRain':
+        return ta('advRace', prefs.lang).replace('{mm}', mm).replace('{h}', hours);
+      case 'frost': return ta('advFrost', prefs.lang).replace('{t}', deg);
+      case 'windowNow': return ta('advNow', prefs.lang).replace('{h}', hours);
+      case 'windowLater':
+        return ta('advLater', prefs.lang).replace('{at}', a.at ?? '').replace('{h}', hours);
+    }
+  };
+
+  return (
+    <WidgetCard title={ta('ovAdvice', prefs.lang)}>
+      {advice.map((a, i) => {
+        const good = isOpportunity(a.kind);
+        return (
+          <LocationLine
+            key={`${a.index}-${a.kind}`}
+            name={a.name}
+            divider={i > 0}
+            onPress={() => onOpen(a.index, 'forecast')}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+              <View
+                style={{
+                  width: 6, height: 6, borderRadius: 3,
+                  backgroundColor: good ? palette.agroBright : palette.valHigh,
+                }}
+              />
+              <Text
+                variant="caption"
+                weight="semibold"
+                color={good ? palette.agroInk : palette.inkHeading}
+                numberOfLines={1}
+              >
+                {sentence(a)}
+              </Text>
+            </View>
+          </LocationLine>
+        );
+      })}
+    </WidgetCard>
+  );
+}
+
+// ── Rankings ─────────────────────────────────────────────────────────────────
 
 /** The shared shape of the four ranked widgets: sort, then a line each. Extracted
  *  because four near-copies is how two of them end up sorting differently. */
@@ -213,11 +310,10 @@ export function Rain24Widget({ rows, onOpen }: WidgetProps) {
           >
             {/* When it fell, beside how much — the shape is the half a total cannot
                 say, and it is the half that decides whether the land has drained. */}
-            <BarSpark values={row.rainTrail} color={palette.valPrecip} />
-            <TrendMark
-              trend={trendOf(row.rain24, row.rainNext24, 0.5)}
-              color={palette.valPrecip}
-            />
+            {/* No trend arrow. It cost the width a place name needs, and "wetter
+                than yesterday" is a question the widget beside this one answers
+                properly — this one is about what fell and when. */}
+            <BarSpark values={row.rainTrail} color={palette.valPrecip} width={52} />
             <Reading value={fmtMm(row.rain24 ?? 0)} unit="mm" color={palette.valPrecip} />
           </LocationLine>
         ))
@@ -466,133 +562,106 @@ export function OutlookWidget({ rows, onOpen }: WidgetProps) {
 
   return (
     <WidgetCard title={ta('ovOutlook', prefs.lang)}>
-      {rows.map((row, i) => (
-        <View
-          key={row.index}
-          style={{
-            paddingVertical: 9,
-            borderTopWidth: i > 0 ? 1 : 0,
-            borderTopColor: palette.hairlineSoft,
-            gap: 6,
-          }}
-        >
-          <LocationLine name={row.name} measured={row.hasStation} onPress={() => onOpen(row.index, 'forecast')}>
-            <Icon name="caret-right" size={12} color={palette.muted} weight="bold" />
-          </LocationLine>
-          <View style={{ flexDirection: 'row', gap: space[2] }}>
-            {row.days.slice(0, 3).map((day) => {
+      {rows.map((row, i) => {
+        // Tomorrow and the day after. Today is half over and every other widget on
+        // this page is already about it; a column repeating it is a column spent.
+        const days = row.days.slice(1, 3);
+        return (
+          <Pressable
+            key={row.index}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(row.index, 'forecast'); }}
+            accessibilityRole="button"
+            accessibilityLabel={row.name}
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: space[2],
+              paddingVertical: 10,
+              borderTopWidth: i > 0 ? 1 : 0,
+              borderTopColor: palette.hairlineSoft,
+            }}
+          >
+            {/* Name and both days on one line. It was a name above a row of three
+                columns, which is three lines of height per location — on a page with
+                eight of them, a screen and a half for two days of weather. */}
+            <View style={{ width: 84, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              {row.hasStation ? (
+                <View
+                  style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright }}
+                />
+              ) : null}
+              <Text variant="caption" weight="semibold" color={palette.ink} numberOfLines={1}>
+                {row.name}
+              </Text>
+            </View>
+
+            {days.map((day, d) => {
               const date = new Date(`${day.date}T12:00:00Z`);
+              // The ensemble's own day, where it has one — `days[0]` is today, so the
+              // offsets line up.
+              const ens = row.ensemble?.[d + 1] ?? null;
               return (
-                <View key={day.date} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
-                  <Text variant="caption" color={palette.muted}>
+                <View
+                  key={day.date}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                >
+                  <Text variant="caption" color={palette.muted} style={{ width: 20 }}>
                     {names[date.getUTCDay()]}
                   </Text>
-                  <WeatherIcon wmo={day.wmo ?? 0} isDay={1} size={22} />
-                  <Text variant="caption" weight="semibold" color={palette.inkHeading} tabular>
-                    {day.tempMin == null || day.tempMax == null
-                      ? '–'
-                      : `${convTemp(day.tempMin, prefs.tempUnit)}/${convTemp(day.tempMax, prefs.tempUnit)}°`}
-                  </Text>
-                  <Text
-                    variant="caption"
-                    color={day.precip ? palette.valPrecip : palette.valPrecipZero}
-                    tabular
-                  >
-                    {day.precip == null ? '–' : `${fmtMm(day.precip)} mm`}
-                  </Text>
+                  <WeatherIcon wmo={day.wmo ?? 0} isDay={1} size={18} />
+                  <View style={{ flex: 1, gap: 1 }}>
+                    <Text variant="caption" weight="semibold" color={palette.inkHeading} tabular numberOfLines={1}>
+                      {day.tempMin == null || day.tempMax == null
+                        ? '–'
+                        : `${convTemp(day.tempMin, prefs.tempUnit)}/${convTemp(day.tempMax, prefs.tempUnit)}°`}
+                    </Text>
+                    {/* How much, how likely, and how sure — the three the forecast
+                        row upstairs leaves out, and the three a travel decision is
+                        actually made on. */}
+                    <Text
+                      variant="caption"
+                      color={day.precip ? palette.valPrecip : palette.valPrecipZero}
+                      tabular
+                      numberOfLines={1}
+                      style={{ fontSize: 10 }}
+                    >
+                      {day.precip == null ? '–' : fmtMm(day.precip)}
+                      {ens ? ` · ${Math.round(ens.wetShare)}%` : ''}
+                    </Text>
+                  </View>
+                  {ens ? <AgreementDot agreement={dayAgreement(ens)} /> : null}
                 </View>
               );
             })}
-            {row.days.length ? null : <WidgetNote>–</WidgetNote>}
-          </View>
-        </View>
-      ))}
+
+            {days.length ? null : <WidgetNote>–</WidgetNote>}
+          </Pressable>
+        );
+      })}
     </WidgetCard>
   );
 }
 
-// ── The reader's own thresholds ───────────────────────────────────────────────
-
-/**
- * The rules a grower set themselves, as a reminder that they exist.
- *
- * Deliberately not their current state: evaluating them means reading the stations
- * they name, which is the background task's job and costs a request apiece. This says
- * what is being watched; the notification says when it trips. A widget that showed a
- * live figure would be the third place in the app computing the same comparison.
- */
-export function RulesWidget() {
+/** How sure the members are, as a dot. A word per day would not fit on the line the
+ *  whole point of this widget is fitting onto. */
+function AgreementDot({ agreement }: { agreement: ReturnType<typeof dayAgreement> }) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
-  const rules = prefs.userAlerts.filter((a) => a.enabled);
-
+  const color =
+    agreement === 'agree' ? palette.agroBright
+      : agreement === 'mixed' ? palette.valSun
+        : palette.valHigh;
   return (
-    <WidgetCard title={ta('ovRules', prefs.lang)}>
-      {rules.length ? (
-        rules.map((rule, i) => (
-          <LocationLine
-            key={rule.id}
-            name={rule.stationNames.join(' · ') || rule.stationIds.join(' · ')}
-            divider={i > 0}
-          >
-            <Text variant="caption" weight="semibold" color={palette.inkHeading} numberOfLines={1}>
-              {`${rule.title} ${ta(rule.op === 'above' ? 'alertFiredAbove' : 'alertFiredBelow', prefs.lang)} `}
-              <Text variant="caption" weight="bold" color={palette.accentDark} tabular>
-                {alertValueLabel(rule, prefs)}
-              </Text>
-            </Text>
-          </LocationLine>
-        ))
-      ) : (
-        <WidgetNote>{ta('alertNone', prefs.lang)}</WidgetNote>
+    <View
+      accessibilityLabel={ta(
+        agreement === 'agree' ? 'ovAgree' : agreement === 'mixed' ? 'ovMixed' : 'ovDisagree',
+        prefs.lang
       )}
-    </WidgetCard>
-  );
-}
-
-// ── Rain in the next two hours, where the reader is ───────────────────────────
-
-/**
- * The one widget here about a single location, and it says so.
- *
- * The nowcast is five-minutely over one point; there is no honest way to show eight
- * fields' worth of it in a card. So it answers for the location that is selected, and
- * the heading names it — a chart with no place attached on a page about every place
- * would be read as all of them.
- */
-export function NowcastWidget() {
-  const { palette } = useTheme();
-  const { prefs, location } = usePrefs();
-  const { nowcast } = useForecast();
-  const router = useRouter();
-
-  const mm = nowcast?.totalMm ?? null;
-  const starts = nowcast?.startsInMin ?? null;
-
-  return (
-    <WidgetCard
-      title={ta('ovNowcast', prefs.lang)}
-      hint={location.name}
-      onPress={() => router.push('/map')}
-    >
-      {nowcast?.wet ? (
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[2] }}>
-          <Text variant="stat" color={palette.valPrecip} tabular style={{ fontSize: 22 }}>
-            {fmtMm(mm ?? 0)}
-            <Text variant="caption" weight="semibold" color={palette.muted}>
-              {' mm'}
-            </Text>
-          </Text>
-          <Text variant="caption" color={palette.muted}>
-            {starts == null || starts === 0
-              ? ta('now', prefs.lang)
-              : `${ta('expected', prefs.lang)} +${starts} min`}
-          </Text>
-        </View>
-      ) : (
-        <WidgetNote>{ta('dryAt', prefs.lang)}</WidgetNote>
-      )}
-    </WidgetCard>
+      style={{
+        width: 7, height: 7, borderRadius: 3.5, backgroundColor: color,
+        // Hollow where they disagree: a filled dot reads as a fact and this is the
+        // mark that says the fact is soft.
+        opacity: agreement === 'disagree' ? 0.5 : 1,
+      }}
+    />
   );
 }
 
@@ -688,5 +757,166 @@ export function MapWidget() {
         </Text>
       </View>
     </WidgetCard>
+  );
+}
+
+// ── One location's own widgets ────────────────────────────────────────────────
+
+/**
+ * The pieces the tabs are built from, for the location that is selected.
+ *
+ * Everything above answers for every saved location at once, which is what this page
+ * is for. But a grower whose day is mostly about one field still wants that field's
+ * hero and its week here, on the page they open — and the app already draws both,
+ * well, on 'Nu'. So these widgets are the same components, not copies of them: one
+ * `ConditionsHero` in the app means a reading cannot be worded one way here and
+ * another way there.
+ *
+ * They all read `useForecast()`, which is the selected location's own data — already
+ * loaded, because it is what the tabs behind this page are showing. So they cost the
+ * overview nothing, which is why their `needs` are empty.
+ *
+ * Each names its location, because a card with no place on a page about every place
+ * would be read as all of them. Pinning one to a *particular* location, rather than
+ * to whichever is selected, is per-widget settings — written down, not built; see
+ * DEFERRED.
+ */
+
+/** The hero's two subtitles: where the reading came from, and when. Lifted from 'Nu'
+ *  so the same card carries the same provenance on both pages. */
+function useHeroLabels() {
+  const { location } = usePrefs();
+  const { model, harmonie, offsetSec } = useForecast();
+
+  const stationName = model?.station?.name ?? location.stationName ?? null;
+  const sourceLabel = model?.station
+    ? `AgroExact - ${stationName ?? 'station'}`
+    : harmonie.model
+      ? 'HARMONIE-AROME'
+      : 'ECMWF IFS';
+
+  const measured = model?.station?.current;
+  const timeLabel = measured
+    ? measurementTimeLabel(measured.measTime, offsetSec)
+    : model
+      ? model.nowHour.slice(11, 16)
+      : '';
+
+  return { sourceLabel, timeLabel };
+}
+
+export function HeroWidget() {
+  const { location } = usePrefs();
+  const { model } = useForecast();
+  const { sourceLabel, timeLabel } = useHeroLabels();
+  const router = useRouter();
+
+  if (!model) return null;
+  return (
+    <ConditionsHero
+      model={model}
+      location={location}
+      sourceLabel={sourceLabel}
+      timeLabel={timeLabel}
+      onPress={() => router.push('/actueel')}
+    />
+  );
+}
+
+/**
+ * Rain in the next two hours, where the reader is.
+ *
+ * The nowcast is five-minutely over one point; there is no honest way to show eight
+ * fields' worth of it in a card. So it answers for the location that is selected, and
+ * the heading names it.
+ */
+export function NowcastWidget() {
+  const { palette } = useTheme();
+  const { prefs, location } = usePrefs();
+  const { nowcast } = useForecast();
+  const router = useRouter();
+
+  const mm = nowcast?.totalMm ?? null;
+  const starts = nowcast?.startsInMin ?? null;
+
+  return (
+    <WidgetCard
+      title={ta('ovNowcast', prefs.lang)}
+      hint={location.name}
+      onPress={() => router.push('/map')}
+    >
+      {nowcast?.wet ? (
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[2] }}>
+          <Text variant="stat" color={palette.valPrecip} tabular style={{ fontSize: 22 }}>
+            {fmtMm(mm ?? 0)}
+            <Text variant="caption" weight="semibold" color={palette.muted}>
+              {' mm'}
+            </Text>
+          </Text>
+          <Text variant="caption" color={palette.muted}>
+            {starts == null || starts === 0
+              ? ta('now', prefs.lang)
+              : `${ta('expected', prefs.lang)} +${starts} min`}
+          </Text>
+        </View>
+      ) : (
+        <WidgetNote>{ta('dryAt', prefs.lang)}</WidgetNote>
+      )}
+    </WidgetCard>
+  );
+}
+
+/** The hour strip from 'Nu'. An hour opens that day on 'Verwachting', exactly as it
+ *  does there — the per-hour detail lives on the page that owns it. */
+export function NearTermWidget() {
+  const { prefs, location } = usePrefs();
+  const { model } = useForecast();
+  const router = useRouter();
+
+  if (!model) return null;
+  return (
+    <WidgetCard title={ta('ovNearTerm', prefs.lang)} hint={location.name}>
+      <View style={{ marginHorizontal: -space[5], marginBottom: -space[2] }}>
+        <HourSlider
+          model={model}
+          onPressHour={(hour) => {
+            Haptics.selectionAsync().catch(() => {});
+            router.push({ pathname: '/forecast', params: { day: hour.time.slice(0, 10) } });
+          }}
+        />
+      </View>
+    </WidgetCard>
+  );
+}
+
+/**
+ * The week, as 'Nu' draws it.
+ *
+ * The second week is behind the same toggle, and asking for it loads it — the
+ * fourteen-day fetch is not made until a reader opens the fold, here as there. A day
+ * goes to 'Verwachting' on that date rather than opening a sheet: this page is a way
+ * in, and a sheet over a summary is a dead end with a card behind it.
+ */
+export function LongTermWidget() {
+  const { model, extendedLoaded, loadExtendedDays } = useForecast();
+  const router = useRouter();
+  const [expanded, setExpanded] = useState(false);
+
+  if (!model) return null;
+  return (
+    <ForecastPreview
+      model={model}
+      onOpen={() => router.push('/forecast')}
+      expanded={expanded}
+      onToggleExpanded={() => {
+        const next = !expanded;
+        setExpanded(next);
+        if (next) loadExtendedDays();
+      }}
+      extendedLoading={!extendedLoaded}
+      onOpenDay={(day) =>
+        router.push({ pathname: '/forecast', params: { day: day.date } })
+      }
+    />
   );
 }

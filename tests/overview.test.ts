@@ -17,6 +17,7 @@ import {
 } from '../core/overviewData';
 import { parseOutlook } from '../core/sources/outlook';
 import { dayAgreement, parseEnsembleOutlook } from '../core/sources/ensembleOutlook';
+import { adviceFor, adviceForRow, isOpportunity } from '../core/overviewAdvice';
 import { mergePrefs } from '../core/prefs';
 
 const hour = (time: string, over: Partial<OutlookHour> = {}): OutlookHour =>
@@ -51,11 +52,27 @@ describe('the widget catalogue', () => {
     expect(arranged.map((w) => w.id)).not.toContain('map');
   });
 
-  it('starts with the heavier widgets off', () => {
-    // Twelve widgets is a scroll, not a summary; the pencil is how the rest arrive.
+  it('starts with the longer widgets off', () => {
+    // Sixteen widgets is a scroll, not a summary; the pencil is how the rest arrive.
     const shown = arrangeWidgets(DEFAULT_OVERVIEW_LAYOUT).map((w) => w.id);
     expect(shown).toContain('summary');
-    expect(shown).not.toContain('nowcast');
+    expect(shown).not.toContain('longTerm');
+    expect(shown).not.toContain('frost');
+  });
+
+  it("opens with the selected location's own cards, as the tab behind it draws them", () => {
+    const shown = arrangeWidgets(DEFAULT_OVERVIEW_LAYOUT).map((w) => w.id);
+    expect(shown).toContain('hero');
+    expect(shown).toContain('nowcast');
+    expect(shown).toContain('nearTerm');
+  });
+
+  it('costs nothing for a widget that reads the selected location', () => {
+    // They draw from the forecast the tabs behind this page already hold, so putting
+    // one on the page must not add a request per saved location.
+    const location = OVERVIEW_WIDGETS.filter((w) => w.scope === 'location');
+    expect(location.length).toBeGreaterThan(0);
+    for (const w of location) expect(w.needs).toEqual([]);
   });
 });
 
@@ -73,9 +90,12 @@ describe('neededSources', () => {
     expect([...withRain]).toEqual(['conditions']);
   });
 
-  it('turns the nowcast on only for the widget that reads it', () => {
-    expect(neededSources(DEFAULT_OVERVIEW_LAYOUT).has('nowcast')).toBe(false);
-    expect(neededSources({ order: [], hidden: [] }).has('nowcast')).toBe(true);
+  it('turns the nowcast on for the alerts, and off with them', () => {
+    // "Rain in seven minutes" is the sharpest thing the app says and the radar is
+    // where it comes from, so the alerts widget pays for it — and a reader who
+    // switches the alerts off stops paying.
+    expect(neededSources(DEFAULT_OVERVIEW_LAYOUT).has('nowcast')).toBe(true);
+    expect(neededSources({ order: [], hidden: ['alerts'] }).has('nowcast')).toBe(false);
   });
 });
 
@@ -373,5 +393,96 @@ describe('dayAgreement', () => {
   it('does not call a trace of drizzle a violent disagreement', () => {
     // The floor under the ratio: without it every near-dry day reads as uncertain.
     expect(dayAgreement(day(0, 0.2, 1.8))).toBe('mixed');
+  });
+});
+
+describe('adviceForRow', () => {
+  /** A day of workable hours from 08:00, so a rule that is not being tested cannot
+   *  be the one that fires. */
+  const workable = (n = 8) =>
+    Array.from({ length: n }, (_, i) =>
+      hour(`2026-04-10T${String(8 + i).padStart(2, '0')}:00`)
+    );
+
+  it('says the land is shut before it says anything about the forecast', () => {
+    // Eighteen millimetres is not a fact you plan around; it is a fact you stay off.
+    const a = adviceForRow(row({ rain24: 18, rainNext24: 20, hours: workable() }));
+    expect(a).toMatchObject({ kind: 'soaked', mm: 18 });
+  });
+
+  it('puts "nothing workable at all" ahead of the rain that causes it', () => {
+    const wet = workable().map((h) => ({ ...h, precip: 2 }));
+    expect(adviceForRow(row({ rainNext24: 20, hours: wet }))?.kind).toBe('noWindow');
+  });
+
+  it('tells a grower to go now when rain is coming and there are hours before it', () => {
+    const hours = [
+      ...workable(5),
+      ...Array.from({ length: 4 }, (_, i) =>
+        hour(`2026-04-10T${String(13 + i).padStart(2, '0')}:00`, { precip: 2 })),
+    ];
+    const a = adviceForRow(row({ rainNext24: 12, hours }));
+    expect(a).toMatchObject({ kind: 'raceTheRain', mm: 12, hours: 5 });
+  });
+
+  it('does not hurry anybody when the rain is already here', () => {
+    // An hour of dry before the wet is not a window; it is a gap between showers.
+    const hours = [hour('2026-04-10T08:00'), ...workable(6).slice(1).map((h) => ({ ...h, precip: 2 }))];
+    expect(adviceForRow(row({ rainNext24: 12, hours }))?.kind).not.toBe('raceTheRain');
+  });
+
+  it('names a frost, and only below the limit', () => {
+    expect(adviceForRow(row({ tonightMinC: -2, hours: workable() }))).toMatchObject({
+      kind: 'frost', tempC: -2,
+    });
+    expect(adviceForRow(row({ tonightMinC: 4, hours: workable() }))?.kind).not.toBe('frost');
+  });
+
+  it('offers the opening when there is nothing to warn about', () => {
+    const a = adviceForRow(row({ hours: workable() }));
+    expect(a).toMatchObject({ kind: 'windowNow', hours: 8 });
+    expect(isOpportunity(a!.kind)).toBe(true);
+  });
+
+  it('names when a later window opens, so it can be planned around', () => {
+    const hours = [
+      hour('2026-04-10T08:00', { precip: 2 }),
+      ...Array.from({ length: 4 }, (_, i) =>
+        hour(`2026-04-10T${String(9 + i).padStart(2, '0')}:00`)),
+    ];
+    expect(adviceForRow(row({ hours }))).toMatchObject({ kind: 'windowLater', at: '09:00' });
+  });
+
+  it('keeps quiet about a location with nothing to say', () => {
+    // Two workable hours is not a window anybody plans around, and a line saying so
+    // is the kind of noise that stops the widget being read.
+    expect(adviceForRow(row({ hours: workable(2) }))).toBeNull();
+  });
+});
+
+describe('adviceFor', () => {
+  it('ranks by how much it should change the day, not by saved order', () => {
+    const workable = Array.from({ length: 8 }, (_, i) =>
+      hour(`2026-04-10T${String(8 + i).padStart(2, '0')}:00`));
+    const rows = [
+      row({ index: 0, name: 'Open', hours: workable }),
+      row({ index: 1, name: 'Vorst', tonightMinC: -3, hours: workable }),
+      row({ index: 2, name: 'Nat', rain24: 22, hours: workable }),
+    ];
+    expect(adviceFor(rows).map((a) => a.name)).toEqual(['Nat', 'Vorst', 'Open']);
+  });
+
+  it('examines every location before it caps the list', () => {
+    // The cap is on the list, so the ones that surface are the ones that matter and
+    // not the first four in the saved order.
+    const workable = Array.from({ length: 8 }, (_, i) =>
+      hour(`2026-04-10T${String(8 + i).padStart(2, '0')}:00`));
+    const rows = [
+      ...Array.from({ length: 5 }, (_, i) => row({ index: i, name: `Open ${i}`, hours: workable })),
+      row({ index: 5, name: 'Nat', rain24: 22, hours: workable }),
+    ];
+    const out = adviceFor(rows);
+    expect(out).toHaveLength(4);
+    expect(out[0]!.name).toBe('Nat');
   });
 });

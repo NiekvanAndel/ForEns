@@ -50,10 +50,28 @@ export type OverviewSource =
  *  not, whatever is next to it. */
 export type OverviewSize = 'full' | 'half';
 
+/**
+ * Whether a widget speaks for every saved location or for one.
+ *
+ * Most of this page is `all` — that is what it is for. But the pieces that answer a
+ * place closely, the ones the tabs are built from, are worth having here too: a
+ * grower whose day is mostly about one field should be able to put its hero and its
+ * forecast on the page they open, without giving up the comparison widgets around
+ * them.
+ *
+ * A `location` widget draws for the selected location and names it in its heading —
+ * a card with no place on a page about every place would be read as all of them.
+ * Pinning one to a *particular* location is per-widget settings, which is written
+ * down rather than built; see DEFERRED.
+ */
+export type OverviewScope = 'all' | 'location';
+
 export interface OverviewWidget {
   id: string;
   size: OverviewSize;
   needs: readonly OverviewSource[];
+  /** Defaults to `all`. */
+  scope?: OverviewScope;
   /** Off for everybody until they ask for it. The page opens with a set that is worth
    *  reading rather than everything at once — twelve widgets is a scroll, not a
    *  summary — and the pencil is how the rest arrive. */
@@ -71,11 +89,15 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   // The page in a sentence. First, because it is the only thing here that can be read
   // without looking at anything.
   { id: 'summary', size: 'full', needs: ['conditions'] },
-  // Anything the app thinks is worth knowing, per location. Draws nothing when every
-  // location is quiet, which is most days and the point.
-  { id: 'alerts', size: 'full', needs: ['conditions'] },
-  // The reader's own thresholds, with what each station reads now.
-  { id: 'rules', size: 'full', needs: [] },
+  // And what to do about it. Second, because a summary that cannot be acted on is a
+  // poster — see `core/overviewAdvice`.
+  { id: 'advice', size: 'full', needs: ['conditions', 'outlook'] },
+  // Everything worth telling somebody about: the app's own judgement per location and
+  // the thresholds the reader set themselves, in one list. Draws nothing at all when
+  // there is nothing, which is most days and the point.
+  // It needs the nowcast as well as the conditions: "rain in seven minutes" is the
+  // sharpest thing the app says and the radar is where it comes from.
+  { id: 'alerts', size: 'full', needs: ['conditions', 'nowcast'] },
   // What fell. The first number an arable grower wants in the morning.
   { id: 'rain24', size: 'half', needs: ['conditions'] },
   // And what is coming, over the same ranking, so the two read as one column.
@@ -93,11 +115,22 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   // about confidence rather than weather, which is why it sits after the forecast it
   // qualifies rather than among the readings.
   { id: 'confidence', size: 'full', needs: ['ensemble'] },
-  // Rain in the next two hours, for the location in front. The sharpest thing the app
-  // has, and the only widget here that is about one place.
-  { id: 'nowcast', size: 'full', needs: ['nowcast'], defaultHidden: true },
   // Every location on one map, as a way in rather than as a map to read.
   { id: 'map', size: 'full', needs: [] },
+
+  // ── One location's own widgets ──────────────────────────────────────────────
+  // The pieces the tabs are built from, for the location that is selected. They come
+  // after the comparisons because this page's argument is that the comparison is what
+  // you cannot get elsewhere — but a grower with one main field wants these, and the
+  // pencil is how they move up.
+  //
+  // Their `needs` are empty: they read the selected location's own forecast, which
+  // the tabs behind this page have already loaded, so none of them costs a request.
+  { id: 'hero', size: 'full', needs: [], scope: 'location' },
+  // Rain in the next two hours. The sharpest thing the app has.
+  { id: 'nowcast', size: 'full', needs: [], scope: 'location' },
+  { id: 'nearTerm', size: 'full', needs: [], scope: 'location' },
+  { id: 'longTerm', size: 'full', needs: [], scope: 'location', defaultHidden: true },
 ];
 
 /** The arrangement a reader starts with: the catalogue's order, minus the ones that

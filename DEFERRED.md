@@ -536,7 +536,7 @@ on the overview rows and in the day sheet.
 
 `app/overview.tsx` answers the question the rest of the app cannot: across every
 saved location, what was it, what is it, what is coming, and can I get on the land.
-Twelve widgets, arranged by the reader through the same `TileLayout` machinery the
+Sixteen widgets, arranged by the reader through the same `TileLayout` machinery the
 blocks on 'Actueel' use — which now lives in `core/arrangement.ts` so both can reach
 it without importing each other.
 
@@ -553,7 +553,23 @@ What is deliberately not built yet:
 - **A widget's own settings.** Each entry in `OVERVIEW_WIDGETS` is order and
   visibility only. A rainfall ranking that could be set to 48 hours, or a work window
   to a different limit, needs a per-widget options bag — the catalogue is the place
-  to hang it.
+  to hang it. **The first thing that bag should carry is a location.** The page now
+  draws the selected location's own cards too — its hero, its nowcast, its hour strip
+  and its week, the same components 'Nu' is built from, marked `scope: 'location'` in
+  the catalogue. They follow whichever location is selected, which is the right
+  default and the wrong ceiling: a grower with a home field and four outlying ones
+  wants the home field's hero pinned, and two of them side by side. That is the same
+  options bag, with a location in it.
+- **All the rule sets want revisiting, together.** There are three now — the work
+  window (`DEFAULT_WORK_LIMITS`: dry, under 20 km/h, above 1 °C), the advice rules
+  (`DEFAULT_ADVICE_LIMITS`: 15 mm shuts the land, 10 mm coming is worth hurrying for,
+  a run under 3 hours is not a window, frost at or below 0 °C), and the app's own
+  significant-weather alerts. All three are first drafts written from the same
+  armchair, and they contradict each other quietly: a location can be "workable" by
+  one and "shut" by the other in the same hour. They are gathered at the top of their
+  modules so arguing with them is one edit each; what is missing is somebody who
+  farms saying which numbers are right, and per crop, and per soil. Until then every
+  figure in them is a placeholder that happens to be plausible.
 
 **Space is the page's hardest constraint**, not data. Widgets show the locations that
 clear their own bar and close with one line counting the rest (`notableRows`), a
@@ -561,6 +577,19 @@ comparison collapses to a single line where the locations agree (`spreadOf`), an
 almost every reading carries a small mark — a rainfall sparkline, a workability ring,
 an ensemble band (`ui/overview/marks`). Each bar is the widget's own: worth mentioning
 means 0,1 mm for rain and 3 °C for frost.
+
+**Advies is the one widget that answers "so what do I do"** (`core/overviewAdvice`).
+Six rules, each a sentence a grower would say — the land is shut, there is no window
+today, rain is coming and you have hours before it, it will freeze tonight, you can
+go now, you can go at nine — evaluated per location, one line each, most pressing
+first. No scoring: a rule either applies or it does not, so a rule that fires when it
+should not can be found and changed. The rules return figures and the widget words
+them, because sentences built outside `core/i18n` are sentences that stay Dutch.
+
+**Meldingen is one list, not two.** The app's own judgement per location and the
+thresholds the reader set on 'Actueel' are the same kind of thing to a reader, so
+they share a card — and it draws nothing at all when both are empty, which is most
+days and the point.
 
 Widgets worth considering next, in rough order of how often a grower would use them:
 soil temperature and moisture where a station reports them, a drying window
