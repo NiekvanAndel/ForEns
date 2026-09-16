@@ -8,6 +8,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import { deriveAlert } from '../core/model/alert';
+import { ALERT_PHRASES, alertPhrases } from '../core/i18n/alertStrings';
+import { LANG_CODES } from '../core/i18n';
 import type { ForecastModel, Hour } from '../core/model/types';
 import type { NowcastProfile } from '../core/radar/types';
 
@@ -127,10 +129,95 @@ describe('deriveAlert', () => {
     // A gale on hour 20 is outside the 12-hour window.
     const late = [...quiet, ...Array.from({ length: 10 }, () => ({ gusts: 90 }))];
     expect(deriveAlert(model(late), null)).toBeNull();
-    expect(deriveAlert(model(late), null, 24)!.kind).toBe('wind');
+    expect(deriveAlert(model(late), null, { hoursAhead: 24 })!.kind).toBe('wind');
   });
 
   it('returns null for an empty forecast', () => {
     expect(deriveAlert(model([]), profile())).toBeNull();
+  });
+});
+
+describe('alert wording', () => {
+  const gale = [{ gusts: 90 }];
+  const freezing = [{ temp: -3, gusts: 10 }];
+
+  it('writes in the language the app is set to', () => {
+    const nl = deriveAlert(model(gale), null, { lang: 'nl' })!;
+    const en = deriveAlert(model(gale), null, { lang: 'en' })!;
+    const de = deriveAlert(model(gale), null, { lang: 'de' })!;
+    expect(nl.label).toBe('Wind');
+    expect(nl.headline).toContain('Zware windstoten');
+    expect(en.headline).toContain('Severe gusts');
+    expect(de.headline).toContain('Schwere Böen');
+    // The advice line travels with it: it is the half that says what to do.
+    expect(en.sub).toContain('trees');
+    expect(de.sub).toContain('Bäumen');
+  });
+
+  it('keeps Dutch when nothing is asked for', () => {
+    // The widget writer and the background task both have preferences, but a caller
+    // that has none must still get a sentence rather than an empty one.
+    expect(deriveAlert(model(gale), null)!.headline).toContain('Zware windstoten');
+  });
+
+  it('converts the figures to the reader’s units', () => {
+    const kmh = deriveAlert(model(gale), null, { lang: 'en' })!;
+    const knots = deriveAlert(model(gale), null, { lang: 'en', windUnit: 'kn' })!;
+    expect(kmh.headline).toContain('90 km/h');
+    expect(knots.headline).toContain('49 kn');
+    // "km/u" is the Dutch spelling and stays behind with the Dutch.
+    expect(kmh.headline).not.toContain('km/u');
+    expect(deriveAlert(model(gale), null, { lang: 'nl' })!.headline).toContain('km/u');
+  });
+
+  it('converts a temperature too', () => {
+    const c = deriveAlert(model(freezing), null, { lang: 'en' })!;
+    const f = deriveAlert(model(freezing), null, { lang: 'en', tempUnit: 'F' })!;
+    expect(c.headline).toBe('Frost, down to -3 °C');
+    expect(f.headline).toBe('Frost, down to 27 °F');
+  });
+
+  it('translates every kind, in every language', () => {
+    // The point of the table: no kind may fall back to a Dutch literal because the
+    // one branch nobody tested still had one.
+    const cases: Record<string, Partial<import('../core/model/types').Hour>[]> = {
+      storm: [{ wmo: 95 }],
+      wind: [{ gusts: 70 }],
+      fog: [{ wmo: 45 }],
+      frost: [{ temp: -2 }],
+      heat: [{ temp: 33 }],
+    };
+    for (const lang of LANG_CODES) {
+      for (const [kind, hours] of Object.entries(cases)) {
+        const a = deriveAlert(model(hours), null, { lang })!;
+        expect(a, `${lang}/${kind}`).not.toBeNull();
+        expect(a.kind, `${lang}/${kind}`).toBe(kind);
+        for (const field of [a.label, a.headline, a.sub]) {
+          expect(field.trim().length, `${lang}/${kind}`).toBeGreaterThan(0);
+        }
+      }
+      // Rain comes from the nowcast rather than a weather code.
+      const rain = deriveAlert(model([{}]), profile({ wet: true, totalMm: 6, startsInMin: 20 }), { lang })!;
+      expect(rain.kind, `${lang}/rain`).toBe('rain');
+      expect(rain.headline, `${lang}/rain`).toContain(alertPhrases(lang).inMinutes(20));
+    }
+  });
+
+  it('agrees with its own count where a language declines', () => {
+    for (const lang of LANG_CODES) {
+      const p = alertPhrases(lang);
+      // One hour and two hours are different words in four of the five, and a
+      // placeholder table is exactly where that gets done once and forgotten.
+      expect(p.inHours(1)).toContain('1');
+      expect(p.inHours(3)).toContain('3');
+      if (lang !== 'nl') expect(p.inHours(1)).not.toBe(p.inHours(3).replace('3', '1'));
+    }
+  });
+
+  it('has a table for every language the app offers', () => {
+    for (const lang of LANG_CODES) expect(ALERT_PHRASES[lang]).toBeDefined();
+    // And an unknown one falls back rather than throwing: a stored preference
+    // outlives the code that wrote it.
+    expect(alertPhrases('xx' as never)).toBe(ALERT_PHRASES.nl);
   });
 });

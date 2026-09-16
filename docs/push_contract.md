@@ -64,14 +64,12 @@ only key that can be relied on.
    app gets its notifications switched off wholesale.
 
 Title and body follow the local fallback in `core/notifications.ts`:
-`"<label> · <place>"` and `"<headline>. <sub>"`.
+`"<label> · <place>"` and `"<headline>. <sub>"`. Both come out of `deriveAlert`, which
+takes `{ lang, tempUnit, windUnit }` — so a service that honours the registration's
+`lang`, `tempUnit` and `windUnit` writes exactly what the block on the device says.
 
 ## Known gaps
 
-- **`deriveAlert` writes Dutch only.** Its headlines and sub-lines are built as string
-  literals, outside the i18n tables, so the block and any notification stay Dutch on a
-  device set to English or German. The registration already carries `lang`; the
-  strings have to move into `core/i18n` before that means anything.
 - **Until the endpoint exists**, alerts are scheduled locally by the device from
   whatever the background task last fetched. iOS grants that window every few hours
   and never on a schedule, so *"uiterlijk 20 minuten vooraf"* is not a promise the app

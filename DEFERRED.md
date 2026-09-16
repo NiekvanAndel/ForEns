@@ -552,15 +552,15 @@ fetched. iOS grants that window every few hours and never on a schedule, so
 *"Uiterlijk 20 minuten vooraf"* is not a promise local scheduling can keep. The
 settings screen now says so on the page rather than leaving it to be found.
 
-Two things to fix in the same change as the endpoint:
+One thing to fix in the same change as the endpoint: `app.json` has no
+`extra.eas.projectId`, which `getExpoPushTokenAsync` requires, so no device can
+produce a token yet. Permission and token are asked for separately precisely so that
+this costs only the registration and not the notifications.
 
-- `deriveAlert` writes its headlines as Dutch string literals, outside the i18n
-  tables, so the block on 'Nu' and any notification stay Dutch whatever the app's
-  language is set to. The registration already carries `lang`; the strings have to
-  move into `core/i18n` before that means anything.
-- `app.json` has no `extra.eas.projectId`, which `getExpoPushTokenAsync` requires, so
-  no device can produce a token yet. Permission and token are asked for separately
-  precisely so that this costs only the registration and not the notifications.
+(The alert wording is no longer on this list. `core/i18n/alertStrings.ts` holds every
+headline, advice line and eyebrow in all five languages, and `deriveAlert` converts
+its figures to the reader's units — so a service honouring the registration's `lang`,
+`tempUnit` and `windUnit` writes what the device's own block says.)
 
 ### Alerts fire from the background task only
 

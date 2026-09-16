@@ -83,7 +83,11 @@ TaskManager.defineTask(REFRESH_TASK, async () => {
 
     // The same gate the app applies, so a widget refreshed in the background cannot
     // show a block the app has been told not to show.
-    const alert = prefs.alertsEnabled ? deriveAlert(model, profile) : null;
+    const alert = prefs.alertsEnabled
+      ? deriveAlert(model, profile, {
+          lang: prefs.lang, tempUnit: prefs.tempUnit, windUnit: prefs.windUnit,
+        })
+      : null;
 
     writeWidget?.({ model, prefs, location, alert, nowcastBars: bars });
 
