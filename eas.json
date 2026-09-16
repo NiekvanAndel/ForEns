@@ -1,6 +1,13 @@
 {
   "cli": { "version": ">= 12.0.0", "appVersionSource": "remote" },
   "build": {
+    "preview": {
+      "ios": {
+        "simulator": true,
+        "resourceClass": "m-medium"
+      },
+      "distribution": "internal"
+    },
     "production": {
       "ios": {
         "autoIncrement": "buildNumber",
