@@ -585,6 +585,16 @@ almost every reading carries a small mark — a rainfall sparkline, a workabilit
 an ensemble band (`ui/overview/marks`). Each bar is the widget's own: worth mentioning
 means 0,1 mm for rain and 3 °C for frost.
 
+**Height is spent per row, not per widget.** Two passes of compaction have been
+about the same thing: a row whose parts are sized to each other rather than to one
+another's habits. `LocationLine` gains `compact` where the reading is a sentence
+rather than a figure; the workability row writes out its own name line instead of
+nesting a `LocationLine` inside a block that already has padding, because two lots
+of padding cannot be made compact; the outlook puts a day's temperatures and rain on
+one line rather than stacked, which is two lines a location rather than four. Every
+list widget now takes a `limit` as well, which is the reader's own answer to the
+same question.
+
 **The radar is on this page twice, on purpose.** The curve (`nowcast`) says how hard
 and when, in a shape no total gets across; the square (`radar`) says where it is and
 which way it is going. They are the same components the radar page and 'Nu' carry —

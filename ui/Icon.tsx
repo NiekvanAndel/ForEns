@@ -10,7 +10,7 @@ import {
   ArrowDown, ArrowUp, ArrowsClockwise, ArrowsOut, Broadcast, CalendarBlank, CaretRight,
   CaretLeft, ChartLine, Check, CircleHalf, Clock, Cloud, CloudFog, CloudLightning, CloudRain, CloudSun,
   CloudSnow, Compass, Crosshair, DotsSixVertical, Drop, DropHalf, GearSix, Info, MagnifyingGlass,
-  Gauge, MapTrifold, Minus, PencilSimple, SquaresFour, Stack, TrendDown, TrendUp,
+  MapTrifold, Minus, PencilSimple, SquaresFour, Stack, TrendDown, TrendUp,
   Moon, MoonStars, Pause, Play, PlugsConnected, Plus, Ruler, Sun, TextAa,
   ThermometerSimple, Translate, Trash, Wind, X,
   type IconProps as PhosphorProps,
@@ -18,7 +18,46 @@ import {
   MapPin,
   Warning,
 } from 'phosphor-react-native';
+import Svg, { Rect } from 'react-native-svg';
 import type { ComponentType } from 'react';
+
+/**
+ * Three centred bars, narrowing downward — the mark for 'Overzicht'.
+ *
+ * Drawn rather than borrowed. Design rule 6 says Phosphor and no hand-drawn SVG, and
+ * this is the deliberate exception: the page's mark was supplied as artwork, and the
+ * nearest Phosphor glyph (`TextAlignCenter`) alternates its line lengths instead of
+ * stepping down, which reads as text and not as a summary narrowing to a point.
+ *
+ * It takes Phosphor's props so it can sit in the same table as the rest. `weight` is
+ * ignored: the bars are already the only stroke there is, and a bold variant of three
+ * rounded rectangles is three fatter rounded rectangles.
+ */
+function OverviewBars({ size = 20, color = '#000' }: PhosphorProps) {
+  const s = typeof size === 'number' ? size : 20;
+  // Fractions of the box, so it scales with whatever size a caller asks for.
+  const bars = [
+    { w: 0.72, y: 0.26 },
+    { w: 0.56, y: 0.45 },
+    { w: 0.36, y: 0.64 },
+  ];
+  const h = s * 0.1;
+  return (
+    <Svg width={s} height={s} viewBox={`0 0 ${s} ${s}`}>
+      {bars.map((b) => (
+        <Rect
+          key={b.y}
+          x={(s - s * b.w) / 2}
+          y={s * b.y}
+          width={s * b.w}
+          height={h}
+          rx={h / 2}
+          fill={color}
+        />
+      ))}
+    </Svg>
+  );
+}
 
 const ICONS = {
   'arrow-down': ArrowDown,
@@ -48,10 +87,10 @@ const ICONS = {
   info: Info,
   'magnifying-glass': MagnifyingGlass,
   'map-pin': MapPin,
+  overview: OverviewBars,
   'map-trifold': MapTrifold,
   'pencil-simple': PencilSimple,
   'squares-four': SquaresFour,
-  gauge: Gauge,
   'trend-up': TrendUp,
   'trend-down': TrendDown,
   minus: Minus,

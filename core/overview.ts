@@ -154,7 +154,7 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   // weeks a year and is noise for the rest.
   { id: 'frost', size: 'half', needs: ['outlook'], options: ['limit'], defaultHidden: true },
   // The one widget that answers "can I work" rather than "what is the weather".
-  { id: 'workability', size: 'full', needs: ['conditions', 'outlook'] },
+  { id: 'workability', size: 'full', needs: ['conditions', 'outlook'], options: ['limit'] },
   // The coming days, a row per location, each a way into that location's own page.
   { id: 'outlook', size: 'full', needs: ['outlook'], options: ['limit'] },
   // How much the members disagree about tomorrow's rain. The one widget here that is

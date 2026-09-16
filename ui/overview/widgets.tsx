@@ -548,7 +548,7 @@ export function FrostWidget({ rows, settings, onOpen }: WidgetProps) {
  * A strip rather than a sentence because the shape of the day is the answer. "Dry
  * from two until seven" is a plan; "workable later" is not.
  */
-export function WorkWidget({ rows, onOpen }: WidgetProps) {
+export function WorkWidget({ rows, settings, onOpen }: WidgetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
 
@@ -559,9 +559,12 @@ export function WorkWidget({ rows, onOpen }: WidgetProps) {
           : verdict === 'cold' ? palette.valLow
             : palette.hairline;
 
+  const shown = rows.slice(0, settings.limit);
+  const rest = rows.length - shown.length;
+
   return (
     <WidgetCard title={ta('ovWork', prefs.lang)} hint={ta('next24h', prefs.lang)}>
-      {rows.map((row, i) => {
+      {shown.map((row, i) => {
         const window = workWindow(row.hours);
         const run = firstWorkRun(window);
         const workable = window.filter((h) => h.verdict === 'yes').length;
@@ -575,11 +578,14 @@ export function WorkWidget({ rows, onOpen }: WidgetProps) {
               : `${ta('ovWorkFrom', prefs.lang)} ${run.from.slice(11, 16)} · ${run.hours} ${ta('ovHours', prefs.lang)}`;
 
         return (
-          <View
+          <Pressable
             key={row.index}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(row.index, 'forecast'); }}
+            accessibilityRole="button"
+            accessibilityLabel={`${row.name}, ${label}`}
             style={{
               flexDirection: 'row', alignItems: 'center', gap: space[3],
-              paddingVertical: 10,
+              paddingVertical: 7,
               borderTopWidth: i > 0 ? 1 : 0,
               borderTopColor: palette.hairlineSoft,
             }}
@@ -588,25 +594,35 @@ export function WorkWidget({ rows, onOpen }: WidgetProps) {
                 figure on this page that genuinely is one. The strip beside it says
                 *when*; the ring says *how much*, which is what decides whether the
                 day is worth planning around at all. */}
-            <Ring fraction={share} color={palette.agroBright} size={42}>
+            <Ring fraction={share} color={palette.agroBright} size={34}>
               <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
                 {window.length ? `${workable}` : '–'}
               </Text>
             </Ring>
 
-            <View style={{ flex: 1, gap: 6 }}>
-              <LocationLine
-                name={row.name}
-                measured={row.hasStation}
-                onPress={() => onOpen(row.index, 'forecast')}
-              >
+            <View style={{ flex: 1, gap: 4 }}>
+              {/* Name and verdict on one line, at one size, written out rather than
+                  built from `LocationLine` — the line inside this block carries its
+                  own padding, and a row with two lots of padding in it is a row that
+                  cannot be made compact. */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+                {row.hasStation ? (
+                  <View
+                    style={{
+                      width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright,
+                    }}
+                  />
+                ) : null}
+                <Text variant="caption" color={palette.ink} numberOfLines={1} style={{ flex: 1 }}>
+                  {row.name}
+                </Text>
                 <Text variant="caption" weight="semibold" color={palette.muted} numberOfLines={1}>
                   {label}
                 </Text>
-              </LocationLine>
+              </View>
               {/* One block an hour, flexed so the strip is the width of the card
                   whatever the forecast's length. */}
-              <View style={{ flexDirection: 'row', gap: 2, height: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 2, height: 6 }}>
                 {window.map((h) => (
                   <View
                     key={h.time}
@@ -615,9 +631,12 @@ export function WorkWidget({ rows, onOpen }: WidgetProps) {
                 ))}
               </View>
             </View>
-          </View>
+          </Pressable>
         );
       })}
+      {rest > 0 ? (
+        <RestLine>{ta('ovRest', prefs.lang).replace('{n}', String(rest))}</RestLine>
+      ) : null}
       {rows.every((r) => !r.hours.length) ? <WidgetNote>–</WidgetNote> : null}
     </WidgetCard>
   );
@@ -644,7 +663,7 @@ export function OutlookWidget({ rows, settings, onOpen }: WidgetProps) {
             accessibilityLabel={row.name}
             style={{
               flexDirection: 'row', alignItems: 'center', gap: space[2],
-              paddingVertical: 10,
+              paddingVertical: 6,
               borderTopWidth: i > 0 ? 1 : 0,
               borderTopColor: palette.hairlineSoft,
             }}
@@ -652,7 +671,7 @@ export function OutlookWidget({ rows, settings, onOpen }: WidgetProps) {
             {/* Name and both days on one line. It was a name above a row of three
                 columns, which is three lines of height per location — on a page with
                 eight of them, a screen and a half for two days of weather. */}
-            <View style={{ width: 84, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <View style={{ width: 78, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               {row.hasStation ? (
                 <View
                   style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright }}
@@ -671,32 +690,38 @@ export function OutlookWidget({ rows, settings, onOpen }: WidgetProps) {
               return (
                 <View
                   key={day.date}
-                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
-                  <Text variant="caption" color={palette.muted} style={{ width: 20 }}>
+                  <Text variant="caption" color={palette.muted} style={{ width: 18 }}>
                     {names[date.getUTCDay()]}
                   </Text>
-                  <WeatherIcon wmo={day.wmo ?? 0} isDay={1} size={18} />
-                  <View style={{ flex: 1, gap: 1 }}>
-                    <Text variant="caption" weight="semibold" color={palette.inkHeading} tabular numberOfLines={1}>
-                      {day.tempMin == null || day.tempMax == null
-                        ? '–'
-                        : `${convTemp(day.tempMin, prefs.tempUnit)}/${convTemp(day.tempMax, prefs.tempUnit)}°`}
-                    </Text>
-                    {/* How much, how likely, and how sure — the three the forecast
-                        row upstairs leaves out, and the three a travel decision is
-                        actually made on. */}
+                  <WeatherIcon wmo={day.wmo ?? 0} isDay={1} size={16} />
+                  {/* Temperatures and rain on one line, not stacked. Two caption
+                      lines a day is two lines a location and four lines a pair, and
+                      the second was carrying a figure the first had room beside it
+                      for. How much, how likely and how sure, in that order — the
+                      three a plan is actually made on. */}
+                  <Text
+                    variant="caption"
+                    weight="semibold"
+                    color={palette.inkHeading}
+                    tabular
+                    numberOfLines={1}
+                    style={{ flex: 1 }}
+                  >
+                    {day.tempMin == null || day.tempMax == null
+                      ? '–'
+                      : `${convTemp(day.tempMin, prefs.tempUnit)}/${convTemp(day.tempMax, prefs.tempUnit)}°`}
                     <Text
                       variant="caption"
+                      weight="semibold"
                       color={day.precip ? palette.valPrecip : palette.valPrecipZero}
                       tabular
-                      numberOfLines={1}
-                      style={{ fontSize: 10 }}
                     >
-                      {day.precip == null ? '–' : fmtMm(day.precip)}
-                      {ens ? ` · ${Math.round(ens.wetShare)}%` : ''}
+                      {`  ${day.precip == null ? '–' : fmtMm(day.precip)}`}
+                      {ens ? ` ${Math.round(ens.wetShare)}%` : ''}
                     </Text>
-                  </View>
+                  </Text>
                   {ens ? <AgreementDot agreement={dayAgreement(ens)} /> : null}
                 </View>
               );
