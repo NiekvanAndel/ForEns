@@ -6,8 +6,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  buildRegistration, httpTransport, registrationDigest, syncAction, syncRegistration,
-  type PushRegistration, type PushTransport,
+  buildRegistration, classifyPermission, httpTransport, registrationDigest, syncAction,
+  syncRegistration, type PushRegistration, type PushTransport,
 } from '../core/push';
 import { DEFAULT_PREFS } from '../core/prefs';
 
@@ -186,5 +186,31 @@ describe('httpTransport', () => {
     const { impl } = recorder(500);
     const t = httpTransport('https://push.example', impl);
     await expect(t.register(buildRegistration(ON, opts)!)).rejects.toThrow();
+  });
+});
+
+describe('classifyPermission', () => {
+  it('takes a standing grant without asking again', () => {
+    expect(classifyPermission({ granted: true }, null)).toBe('granted');
+  });
+
+  it('is granted once the prompt is answered yes', () => {
+    expect(classifyPermission({ granted: false, status: 'undetermined' }, { granted: true, status: 'granted' }))
+      .toBe('granted');
+  });
+
+  it('is denied only where somebody actually said no', () => {
+    expect(classifyPermission({ granted: false }, { granted: false, status: 'denied' })).toBe('denied');
+  });
+
+  it('calls an unanswerable ask unavailable, not a refusal', () => {
+    // The bug this exists to prevent: Expo Go cannot present the prompt, iOS answers
+    // `undetermined`, and a developer who granted permission was told they had
+    // refused it — with a switch that would not move however often they tapped.
+    expect(classifyPermission({ granted: false }, { granted: false, status: 'undetermined' }))
+      .toBe('unavailable');
+    // And a runtime with no notification module at all reaches here with nothing.
+    expect(classifyPermission(null, null)).toBe('unavailable');
+    expect(classifyPermission({ granted: false }, null)).toBe('unavailable');
   });
 });

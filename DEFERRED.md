@@ -552,6 +552,12 @@ fetched. iOS grants that window every few hours and never on a schedule, so
 *"Uiterlijk 20 minuten vooraf"* is not a promise local scheduling can keep. The
 settings screen now says so on the page rather than leaving it to be found.
 
+**Expo Go cannot deliver notifications at all**, whatever the toggle says. It ships
+without the native notification side, so the permission call comes back
+`undetermined` — nobody refused, the prompt was never presented. The settings screen
+now tells the three answers apart and says so; a development build
+(`npx expo run:ios`) is what actually exercises this.
+
 One thing to fix in the same change as the endpoint: `app.json` has no
 `extra.eas.projectId`, which `getExpoPushTokenAsync` requires, so no device can
 produce a token yet. Permission and token are asked for separately precisely so that

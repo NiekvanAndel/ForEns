@@ -122,23 +122,30 @@ export default function SettingsScreen() {
   const agro = agroIntegration(prefs);
 
   /**
-   * Turning push on is a request, not a setting: it asks iOS for permission and can
-   * be refused. Only a granted prompt flips the toggle, and a refusal leaves a line
-   * saying where to change one's mind — a switch that silently springs back reads as
-   * a bug.
+   * Turning push on asks iOS for permission, and there are three answers, not two.
+   *
+   * Granted flips the switch. Refused leaves it off with a line saying where to
+   * change one's mind — a switch that silently springs back reads as a bug. And
+   * *unavailable* — Expo Go, a simulator, anything without the native side — flips it
+   * anyway and says why nothing will arrive: the preference is what the reader wants,
+   * and what they want does not depend on which build they happen to be running.
+   *
+   * That third case is not hypothetical. It was collapsed into "refused", so a
+   * developer who granted permission in Expo Go was told they had denied it, and the
+   * switch would not move however often they tapped it.
    */
-  const [pushDenied, setPushDenied] = useState(false);
+  const [pushProblem, setPushProblem] = useState<'denied' | 'unavailable' | null>(null);
   const togglePush = useCallback(
     async (on: boolean) => {
       tap();
       if (!on) {
-        setPushDenied(false);
+        setPushProblem(null);
         setPref('pushEnabled', false);
         return;
       }
-      const granted = await enablePush();
-      setPushDenied(!granted);
-      if (granted) setPref('pushEnabled', true);
+      const result = await enablePush();
+      setPushProblem(result === 'granted' ? null : result);
+      if (result !== 'denied') setPref('pushEnabled', true);
     },
     [setPref, tap]
   );
@@ -462,9 +469,13 @@ export default function SettingsScreen() {
               </Row>
             </Group>
 
-            {pushDenied ? (
-              <Text variant="caption" color={palette.warnTitle} style={{ paddingHorizontal: 6 }}>
-                {ta('pushDenied', prefs.lang)}
+            {pushProblem ? (
+              <Text
+                variant="caption"
+                color={pushProblem === 'denied' ? palette.warnTitle : palette.muted}
+                style={{ paddingHorizontal: 6, lineHeight: 18 }}
+              >
+                {ta(pushProblem === 'denied' ? 'pushDenied' : 'pushUnsupported', prefs.lang)}
               </Text>
             ) : null}
 

@@ -19,7 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import {
   buildRegistration, httpTransport, requestNotificationPermission, requestPushToken,
-  syncRegistration, type PushTransport,
+  syncRegistration, type PermissionResult, type PushTransport,
 } from './push';
 import type { Prefs } from './prefs';
 
@@ -46,21 +46,25 @@ function appVersion(): string {
 /**
  * Switch notifications on, for the moment the toggle is tapped.
  *
- * **Permission is the answer; the token is a bonus.** Only a refused prompt returns
- * false, because only that means notifications cannot arrive. A token that cannot be
- * fetched — no EAS project, no network — costs the *server* registration and nothing
- * else, and there is no server yet: the local fallback works on permission alone.
+ * **Permission is the answer; the token is a bonus.** A token that cannot be fetched
+ * — no EAS project, no network — costs the *server* registration and nothing else,
+ * and there is no server yet: the local fallback works on permission alone. Getting
+ * that the other way round made the whole feature unreachable once already.
  *
- * Getting this the other way round made the whole feature unreachable. See
- * `requestPushToken`.
+ * The result is passed straight through, because the three answers need three
+ * different things said. Only `denied` is somebody's decision. `unavailable` is the
+ * runtime — Expo Go, a simulator — and the preference is still worth storing: it is
+ * what the reader wants, and what they want does not depend on which build they
+ * happen to be running. Refusing to record it there would leave a developer tapping a
+ * switch that cannot move, with a message blaming them for a choice they never made.
  */
-export async function enablePush(): Promise<boolean> {
-  const granted = await requestNotificationPermission();
-  if (!granted) return false;
+export async function enablePush(): Promise<PermissionResult> {
+  const result = await requestNotificationPermission();
+  if (result === 'denied') return result;
 
   const token = await requestPushToken(projectId());
   if (token) await AsyncStorage.setItem(TOKEN_KEY, token).catch(() => {});
-  return true;
+  return result;
 }
 
 /**

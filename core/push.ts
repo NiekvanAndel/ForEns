@@ -294,18 +294,67 @@ export function httpTransport(endpoint: string, fetchImpl: typeof fetch = fetch)
 }
 
 /**
+ * What came back when we asked whether this device may notify.
+ *
+ * Three answers, not two, and the third is the point. `denied` is a decision somebody
+ * made and can unmake in iOS Settings; `unavailable` is the runtime saying it cannot
+ * answer at all — Expo Go, which ships without the notification module, or a
+ * simulator. Collapsing them into one boolean tells a developer who has just granted
+ * permission that they refused it, which is both wrong and impossible to act on.
+ */
+export type PermissionResult = 'granted' | 'denied' | 'unavailable';
+
+/** The shape of a permission answer this cares about. Narrower than
+ *  `NotificationPermissionsStatus` so the decision below can be tested. */
+export interface PermissionAnswer {
+  granted: boolean;
+  status?: string;
+}
+
+/**
+ * What to make of the two answers iOS gives — pure, because this is the part that was
+ * wrong and the part worth pinning.
+ *
+ * `undetermined` after an ask is the case that caused it: nobody said no, the prompt
+ * never appeared. That is a runtime that cannot present one, not a refusal, and
+ * telling somebody they refused a prompt they were never shown leaves them tapping a
+ * switch that will not move.
+ */
+export function classifyPermission(
+  existing: PermissionAnswer | null,
+  asked: PermissionAnswer | null
+): PermissionResult {
+  if (existing?.granted) return 'granted';
+  if (!asked) return 'unavailable';
+  if (asked.granted) return 'granted';
+  return asked.status === 'undetermined' ? 'unavailable' : 'denied';
+}
+
+/**
  * Permission to notify at all. Asked at the moment the toggle is turned on rather
  * than at launch, which is both better practice and far more likely to be granted.
  *
  * Imports lazily so `core/` stays free of native modules for the tests.
  */
-export async function requestNotificationPermission(): Promise<boolean> {
+export async function requestNotificationPermission(): Promise<PermissionResult> {
+  let Notifications: typeof import('expo-notifications');
   try {
-    const Notifications = await import('expo-notifications');
-    const existing = await Notifications.getPermissionsAsync();
-    return existing.granted || (await Notifications.requestPermissionsAsync()).granted;
+    Notifications = await import('expo-notifications');
+    // Present but hollow: Expo Go stubs the module rather than omitting it, so the
+    // import succeeds and the method is missing.
+    if (typeof Notifications.getPermissionsAsync !== 'function') return 'unavailable';
   } catch {
-    return false;
+    return 'unavailable';
+  }
+
+  try {
+    const existing = await Notifications.getPermissionsAsync();
+    if (existing.granted) return classifyPermission(existing, null);
+    return classifyPermission(existing, await Notifications.requestPermissionsAsync());
+  } catch {
+    // `UnavailabilityError` from a runtime that has the module but not the native
+    // side. Not a refusal either.
+    return 'unavailable';
   }
 }
 
