@@ -10,6 +10,24 @@
  * Days 8–14 stay collapsed until asked for, because fetching them means a 16-day
  * deterministic run and a 14-day ensemble — the two slowest calls the app makes.
  *
+ * ## The table starts before today
+ *
+ * The last two days sit above the forecast, in the same rows. A grower reads this page
+ * to ask "how much rain did we get" at least as often as "how much are we getting",
+ * and the answer used to be on another page in another shape.
+ *
+ * They are measurements where the location has an AgroExact station and Open-Meteo's
+ * observation feed everywhere else — and per hour and per quantity, so a station that
+ * lost its rain gauge still speaks for the temperature. `core/model/pastDays` builds
+ * them as ordinary `Day` objects so the rows need to know nothing about any of it;
+ * `usePastDays` does the fetching. The footnote names which of the two spoke, because
+ * "2 mm fell" and "2 mm was modelled for you" are different claims.
+ *
+ * They do not open the day sheet. That sheet is an ensemble — where the members
+ * disagreed, and by how much — and there is nothing uncertain about a day that is
+ * over. A full rule rather than the rows' soft hairline marks the boundary, because
+ * that is the one line on this page a reader has to be able to find.
+ *
  * The list is not in a card. A card inset the rows by the card's padding on both
  * sides and drew a border around content that already fills the page — width the
  * beams could use. Which model and how many days is a footnote at the bottom now,
@@ -32,8 +50,10 @@ import { LayerSwitcher } from '../../ui/forecast/LayerSwitcher';
 import { LayerDayRow } from '../../ui/forecast/LayerDayRow';
 import { OverviewDayRow } from '../../ui/forecast/OverviewDayRow';
 import { DaySheet } from '../../ui/forecast/DaySheet';
+import { usePastDays } from '../../ui/forecast/usePastDays';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
+import { useLocationStation } from '../../state/stations';
 import { type LayerKey } from '../../core/model/layers';
 import { beamScale, et0Scale } from '../../core/model/beam';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
@@ -47,7 +67,7 @@ const COLLAPSED_DAYS = 7;
 function ForecastPage() {
   const { palette } = useTheme();
   const { prefs, location } = usePrefs();
-  const { model, phase, extendedLoaded, loadExtendedDays } = useForecast();
+  const { model, phase, extendedLoaded, loadExtendedDays, offsetSec } = useForecast();
   const insets = useSafeAreaInsets();
   const pagePadding = usePagePadding();
   const router = useRouter();
@@ -105,9 +125,21 @@ function ForecastPage() {
     [model, expanded]
   );
 
-  // One scale across every day shown, so the column can be read down.
-  const scale = useMemo(() => beamScale(days, layer, location.lat), [days, layer, location.lat]);
-  const et0Max = useMemo(() => et0Scale(days), [days]);
+  // What has already happened, above what is coming. See `usePastDays`.
+  const station = useLocationStation(location);
+  const past = usePastDays({
+    location,
+    stationId: station?.id ?? null,
+    offsetSec,
+    lat: location.lat,
+    enabled: !peeking,
+  });
+
+  // One scale across every day shown, past days included, so the column can be read
+  // down: a bar for Monday and a bar for Thursday have to mean the same millimetres.
+  const shown = useMemo(() => [...past.days, ...days], [past.days, days]);
+  const scale = useMemo(() => beamScale(shown, layer, location.lat), [shown, layer, location.lat]);
+  const et0Max = useMemo(() => et0Scale(shown), [shown]);
 
   const toggleExpanded = () => {
     const next = !expanded;
@@ -118,6 +150,14 @@ function ForecastPage() {
   const modelLabel = model?.hresRunLabel
     ? `ECMWF ${model.hresRunLabel}`
     : 'ECMWF IFS';
+
+  // Which of the two the rows above the rule came from, named rather than left to be
+  // guessed: "2 mm fell" and "2 mm was modelled for you" are different claims.
+  const pastLabel = `${past.days.length} ${ta('pastDaysNote', prefs.lang)} · ${
+    past.days.every((d) => d.pastMeasured)
+      ? station?.name ?? ta('measured', prefs.lang)
+      : ta('observations', prefs.lang)
+  }`;
 
   return (
     <>
@@ -150,6 +190,30 @@ function ForecastPage() {
             <LayerSwitcher active={layer} onChange={setLayer} />
 
             <View>
+              {/* The days that have happened, drawn exactly as the forecast is. They
+                  do not open the day sheet: that sheet is an ensemble, and there is
+                  nothing uncertain about a day that is over. */}
+              {past.days.map((d, i) => (
+                layer === 'overview' ? (
+                  <OverviewDayRow key={d.date} day={d} dayIndex={0} divider={i > 0} />
+                ) : (
+                  <LayerDayRow
+                    key={d.date}
+                    day={d}
+                    dayIndex={0}
+                    layer={layer}
+                    scale={scale}
+                    et0Max={et0Max}
+                    divider={i > 0}
+                  />
+                )
+              ))}
+
+              {/* Where the record stops and the forecast starts. A full rule rather
+                  than the soft hairline between rows, because that is the one
+                  boundary on this page a reader has to be able to find. */}
+              {past.days.length ? <Rule style={{ marginVertical: space[1] }} /> : null}
+
               {days.map((d, i) =>
                 // The overview tab is the web app's `overzicht`: every measurand at
                 // once, so it has no single bar to draw and its own row instead.
@@ -158,7 +222,7 @@ function ForecastPage() {
                     key={d.date}
                     day={d}
                     dayIndex={i}
-                    divider={i > 0}
+                    divider={i > 0 || past.days.length > 0}
                     onPress={() => setSheetDay(d)}
                   />
                 ) : (
@@ -169,7 +233,7 @@ function ForecastPage() {
                     layer={layer}
                     scale={scale}
                     et0Max={et0Max}
-                    divider={i > 0}
+                    divider={i > 0 || past.days.length > 0}
                     onPress={() => setSheetDay(d)}
                   />
                 )
@@ -203,6 +267,7 @@ function ForecastPage() {
 
             <Text variant="caption" color={palette.muted} style={{ lineHeight: 18 }}>
               {expanded ? 14 : COLLAPSED_DAYS} dagen · {modelLabel}
+              {past.days.length ? `\n${pastLabel}` : ''}
               {'\n'}{ta('barsExplain', prefs.lang)}
             </Text>
           </>

@@ -123,6 +123,12 @@ export interface HresHour {
 export interface Day {
   date: string;
   useHarm: boolean;
+  /** Set on a row for a day that has already happened — see `core/model/pastDays`.
+   *  Absent on every day the forecast produced, which is what tells the two apart. */
+  past?: boolean;
+  /** On a past day, whether an instrument rather than the model produced its
+   *  figures. Meaningless, and unset, on a forecast day. */
+  pastMeasured?: boolean;
   precipP10: number; precipP25: number; precipMedian: number;
   precipP75: number; precipP90: number;
   pChance: number; p5mm: number; p20mm: number;

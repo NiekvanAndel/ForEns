@@ -145,6 +145,8 @@ export const APP_STRINGS = {
     showForecast: 'Verwachting tonen',
     cumulative: 'Cumulatief',
     spread: 'Spreiding',
+    pastDaysNote: 'dagen terug',
+    observations: 'Waarnemingen',
     graphNoStation: 'Voor deze locatie is alleen de laatste 24 uur beschikbaar als historie',
   },
   en: {
@@ -206,6 +208,7 @@ export const APP_STRINGS = {
     noSeries: 'No data for this period.', perDay: 'Per day', perHour: 'Per hour', perTenMinutes: 'Per 10 minutes', peakStep: 'Peak', statMin: 'Min', statMax: 'Max',
     maxWind: 'Max wind', maxGust: 'Max gust', radiation: 'Radiation',
     showForecast: 'Show forecast', cumulative: 'Cumulative', spread: 'Spread',
+    pastDaysNote: 'days back', observations: 'Observations',
     graphNoStation: 'Only the last 24 hours are available as history for this location',
   },
   de: {
@@ -267,6 +270,7 @@ export const APP_STRINGS = {
     noSeries: 'Keine Daten für diesen Zeitraum.', perDay: 'Pro Tag', perHour: 'Pro Stunde', perTenMinutes: 'Pro 10 Minuten', peakStep: 'Spitze', statMin: 'Min', statMax: 'Max',
     maxWind: 'Max. Wind', maxGust: 'Max. Böe', radiation: 'Strahlung',
     showForecast: 'Vorhersage anzeigen', cumulative: 'Kumulativ', spread: 'Streuung',
+    pastDaysNote: 'Tage zurück', observations: 'Beobachtungen',
     graphNoStation: 'Für diesen Standort sind nur die letzten 24 Stunden als Historie verfügbar',
   },
   fr: {
@@ -328,6 +332,7 @@ export const APP_STRINGS = {
     noSeries: 'Aucune donnée pour cette période.', perDay: 'Par jour', perHour: 'Par heure', perTenMinutes: 'Par 10 minutes', peakStep: 'Pointe', statMin: 'Min', statMax: 'Max',
     maxWind: 'Vent max.', maxGust: 'Rafale max.', radiation: 'Rayonnement',
     showForecast: 'Afficher les prévisions', cumulative: 'Cumulé', spread: 'Dispersion',
+    pastDaysNote: 'jours passés', observations: 'Observations',
     graphNoStation: "Pour ce lieu, seules les dernières 24 heures sont disponibles en historique",
   },
   es: {
@@ -389,6 +394,7 @@ export const APP_STRINGS = {
     noSeries: 'No hay datos para este periodo.', perDay: 'Por día', perHour: 'Por hora', perTenMinutes: 'Por 10 minutos', peakStep: 'Punta', statMin: 'Mín', statMax: 'Máx',
     maxWind: 'Viento máx.', maxGust: 'Racha máx.', radiation: 'Radiación',
     showForecast: 'Mostrar previsión', cumulative: 'Acumulado', spread: 'Dispersión',
+    pastDaysNote: 'días atrás', observations: 'Observaciones',
     graphNoStation: 'Para esta ubicación solo están disponibles las últimas 24 horas como histórico',
   },
 } as const;
