@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildPastDays, mergePastHours, type PastHour } from '../core/model/pastDays';
+import {
+  buildPastDays, mergePastHours, pastDetailHours, type PastHour,
+} from '../core/model/pastDays';
 import { parsePastHours } from '../core/sources/pastWeather';
 import { resolveDayValues } from '../core/model/dayValues';
 import { beamScale } from '../core/model/beam';
@@ -202,5 +204,38 @@ describe('parsePastHours', () => {
     expect(parsePastHours(null)).toEqual([]);
     expect(parsePastHours({})).toEqual([]);
     expect(parsePastHours({ hourly: { time: [] } })).toEqual([]);
+  });
+});
+
+describe('pastDetailHours', () => {
+  const hours = [
+    modelHour('2026-09-13T23:00', { temp: 9 }),
+    modelHour('2026-09-14T08:00', { temp: 12, precip: 0.6, gusts: 30, wmo: 61 }),
+    modelHour('2026-09-14T09:00', { temp: 13 }),
+  ];
+
+  it('takes only the day asked for, in the shape the hourly list reads', () => {
+    const out = pastDetailHours(hours, '2026-09-14');
+    expect(out.map((h) => h.time)).toEqual(['2026-09-14T08:00', '2026-09-14T09:00']);
+    expect(out[0]).toMatchObject({
+      hour: 8, temp: 12, precip: 0.6, gusts: 30, wmo: 61, isPast: true, is3h: false,
+    });
+  });
+
+  it('reads a missing figure as no rain and no code, not as a hole', () => {
+    // `DetailHour` has precipitation and a weather code as plain numbers, because
+    // every forecast hour has both; an observation feed may not.
+    const out = pastDetailHours([modelHour('2026-09-14T08:00', { precip: null, wmo: null })], '2026-09-14');
+    expect(out[0]!.precip).toBe(0);
+    expect(out[0]!.wmo).toBe(0);
+  });
+
+  it('carries the station’s gusts and dew point through the merge', () => {
+    const merged = mergePastHours(
+      [stationHour('2026-09-14T08:00', { gusts: 41, dewpoint: 7 })],
+      [modelHour('2026-09-14T08:00', { gusts: 22 })]
+    );
+    const out = pastDetailHours(merged, '2026-09-14');
+    expect(out[0]).toMatchObject({ gusts: 41, dewpoint: 7 });
   });
 });

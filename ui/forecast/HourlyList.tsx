@@ -68,9 +68,18 @@ export interface HourlyListProps {
   hours: DetailHour[];
   /** Named in the header, so it is clear which model the column came from. */
   sourceLabel: string;
+  /**
+   * Every hour here has already happened — a day that is over, rather than today.
+   *
+   * It turns off the two marks that exist to separate the past from the rest of a
+   * mixed list: the dimming, which has nothing to contrast with when the whole list
+   * is dim, and the per-row "meting" label, which becomes twenty-four copies of one
+   * fact. The header says it once instead.
+   */
+  pastOnly?: boolean;
 }
 
-export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
+export function HourlyList({ layer, hours, sourceLabel, pastOnly }: HourlyListProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   if (!hours.length) return null;
@@ -95,7 +104,7 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
             paddingVertical: 8,
             borderTopWidth: i === 0 ? 0 : 1,
             borderTopColor: palette.hairlineSoft,
-            opacity: h.isPast ? 0.5 : 1,
+            opacity: h.isPast && !pastOnly ? 0.5 : 1,
           }}
         >
           <Text
@@ -117,7 +126,7 @@ export function HourlyList({ layer, hours, sourceLabel }: HourlyListProps) {
 
           {withEns && ensField ? <EnsembleColumns hour={h} field={ensField} /> : null}
 
-          {h.isPast ? (
+          {h.isPast && !pastOnly ? (
             <Text variant="caption" color={palette.muted} style={{ fontSize: 10 }}>
               {t('measurement', prefs.lang)}
             </Text>

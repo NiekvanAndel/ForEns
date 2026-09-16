@@ -17,6 +17,7 @@ import { fetchPastHours } from '../../core/sources/pastWeather';
 import { buildPastDays, mergePastHours } from '../../core/model/pastDays';
 import { dayKey } from '../../core/model/series';
 import { useStationRange } from '../../state/stations';
+import type { PastHour } from '../../core/model/pastDays';
 import type { Day } from '../../core/model/types';
 import type { SavedLocation } from '../../core/prefs';
 
@@ -46,7 +47,7 @@ export interface PastDaysQuery {
 
 export function usePastDays({
   location, stationId, offsetSec, lat, enabled,
-}: PastDaysQuery): { days: Day[]; loading: boolean } {
+}: PastDaysQuery): { days: Day[]; hours: PastHour[]; loading: boolean } {
   const dates = useMemo(() => pastDates(), []);
   const range = { from: dates[0] as string, to: dates[dates.length - 1] as string };
 
@@ -62,19 +63,22 @@ export function usePastDays({
   // minimum, maximum and total, and an hour is as fine as that needs.
   const measured = useStationRange(stationId, offsetSec, range, enabled && !!stationId, false);
 
+  // Kept as well as aggregated: the day rows read the days, and the sheet a row
+  // opens reads the hours behind that same day. Deriving them twice would be two
+  // merges of the same two responses, and a chance for the two to disagree.
+  const hours = useMemo(
+    () => mergePastHours(measured.data ?? [], modelled.data ?? []),
+    [measured.data, modelled.data]
+  );
+
   const days = useMemo(
-    () =>
-      buildPastDays({
-        dates,
-        hours: mergePastHours(measured.data ?? [], modelled.data ?? []),
-        lat,
-        offsetSec: offsetSec ?? 0,
-      }),
-    [dates, measured.data, modelled.data, lat, offsetSec]
+    () => buildPastDays({ dates, hours, lat, offsetSec: offsetSec ?? 0 }),
+    [dates, hours, lat, offsetSec]
   );
 
   return {
     days,
+    hours,
     // Only while there is nothing to show. A row drawn from the model and refined
     // when the station lands is better than a spinner for both.
     loading: days.length === 0 && (modelled.isLoading || (!!stationId && measured.isLoading)),

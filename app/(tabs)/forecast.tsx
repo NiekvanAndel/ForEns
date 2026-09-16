@@ -23,10 +23,21 @@
  * `usePastDays` does the fetching. The footnote names which of the two spoke, because
  * "2 mm fell" and "2 mm was modelled for you" are different claims.
  *
- * They do not open the day sheet. That sheet is an ensemble — where the members
- * disagreed, and by how much — and there is nothing uncertain about a day that is
- * over. A full rule rather than the rows' soft hairline marks the boundary, because
- * that is the one line on this page a reader has to be able to find.
+ * They are drawn back, so the table reads as a record behind a forecast rather than
+ * as fourteen equal days. A full rule rather than the rows' soft hairline marks the
+ * boundary, because that is the one line on this page a reader has to be able to find.
+ *
+ * ## Only on the overview, and into a sheet of their own
+ *
+ * The per-measurand tabs are about the ensemble: each row is a beam of where the
+ * members fell with the reported value marked on it. A day that has happened has no
+ * members, so it would be a lone dot on an empty track — saying less than the overview
+ * row already says, in more space. The overview has no beam to leave empty, so that is
+ * where the record lives.
+ *
+ * Tapping one opens `PastDaySheet` rather than `DaySheet`, for the same reason: what
+ * is left of the forecast sheet once the ensemble is taken out of it is the day's
+ * figures and its hours, which is a smaller sheet and a different one.
  *
  * The list is not in a card. A card inset the rows by the card's padding on both
  * sides and drew a border around content that already fills the page — width the
@@ -50,6 +61,7 @@ import { LayerSwitcher } from '../../ui/forecast/LayerSwitcher';
 import { LayerDayRow } from '../../ui/forecast/LayerDayRow';
 import { OverviewDayRow } from '../../ui/forecast/OverviewDayRow';
 import { DaySheet } from '../../ui/forecast/DaySheet';
+import { PastDaySheet } from '../../ui/forecast/PastDaySheet';
 import { usePastDays } from '../../ui/forecast/usePastDays';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
@@ -79,6 +91,9 @@ function ForecastPage() {
   const [layer, setLayer] = useState<LayerKey>('overview');
   const [expanded, setExpanded] = useState(false);
   const [sheetDay, setSheetDay] = useState<Day | null>(null);
+  /** A day that has already happened, opened from a row above the rule. Its own
+   *  state, because it opens its own sheet — see `PastDaySheet`. */
+  const [pastSheetDay, setPastSheetDay] = useState<Day | null>(null);
   const [dayEnsemble, setDayEnsemble] = useState<DayEnsemble | undefined>();
   const [ensembleLoading, setEnsembleLoading] = useState(false);
   // Kept across renders so reopening a sheet is instant, and cleared when the
@@ -135,9 +150,25 @@ function ForecastPage() {
     enabled: !peeking,
   });
 
-  // One scale across every day shown, past days included, so the column can be read
-  // down: a bar for Monday and a bar for Thursday have to mean the same millimetres.
-  const shown = useMemo(() => [...past.days, ...days], [past.days, days]);
+  /**
+   * The past rows, which only the overview shows.
+   *
+   * The per-measurand tabs are about the ensemble: each row is a beam of where the
+   * members fell with the reported value marked on it, and a day that has happened
+   * has no members and no spread — it would be a lone dot on an empty track, saying
+   * less than the overview row already says. The overview has no beam to leave empty,
+   * so that is where the record belongs.
+   */
+  const pastRows = useMemo(
+    () => (layer === 'overview' ? past.days : []),
+    [layer, past.days]
+  );
+
+  // One scale across every day *shown*, so the column can be read down: a bar for
+  // Monday and a bar for Thursday have to mean the same millimetres. Past days count
+  // only where they are drawn, or a tab that hides them would still be scaled to fit
+  // them and every bar on it would be short.
+  const shown = useMemo(() => [...pastRows, ...days], [pastRows, days]);
   const scale = useMemo(() => beamScale(shown, layer, location.lat), [shown, layer, location.lat]);
   const et0Max = useMemo(() => et0Scale(shown), [shown]);
 
@@ -153,7 +184,7 @@ function ForecastPage() {
 
   // Which of the two the rows above the rule came from, named rather than left to be
   // guessed: "2 mm fell" and "2 mm was modelled for you" are different claims.
-  const pastLabel = `${past.days.length} ${ta('pastDaysNote', prefs.lang)} · ${
+  const pastLabel = `${pastRows.length} ${ta('pastDaysNote', prefs.lang)} · ${
     past.days.every((d) => d.pastMeasured)
       ? station?.name ?? ta('measured', prefs.lang)
       : ta('observations', prefs.lang)
@@ -190,29 +221,25 @@ function ForecastPage() {
             <LayerSwitcher active={layer} onChange={setLayer} />
 
             <View>
-              {/* The days that have happened, drawn exactly as the forecast is. They
-                  do not open the day sheet: that sheet is an ensemble, and there is
-                  nothing uncertain about a day that is over. */}
-              {past.days.map((d, i) => (
-                layer === 'overview' ? (
-                  <OverviewDayRow key={d.date} day={d} dayIndex={0} divider={i > 0} />
-                ) : (
-                  <LayerDayRow
-                    key={d.date}
-                    day={d}
-                    dayIndex={0}
-                    layer={layer}
-                    scale={scale}
-                    et0Max={et0Max}
-                    divider={i > 0}
-                  />
-                )
+              {/* The days that have happened, drawn back so they read as behind the
+                  forecast rather than beside it. They open a sheet of their own: the
+                  forecast's is built around the ensemble, and there is nothing
+                  uncertain about a day that is over. */}
+              {pastRows.map((d, i) => (
+                <OverviewDayRow
+                  key={d.date}
+                  day={d}
+                  dayIndex={0}
+                  divider={i > 0}
+                  subdued
+                  onPress={() => setPastSheetDay(d)}
+                />
               ))}
 
               {/* Where the record stops and the forecast starts. A full rule rather
                   than the soft hairline between rows, because that is the one
                   boundary on this page a reader has to be able to find. */}
-              {past.days.length ? <Rule style={{ marginVertical: space[1] }} /> : null}
+              {pastRows.length ? <Rule style={{ marginVertical: space[1] }} /> : null}
 
               {days.map((d, i) =>
                 // The overview tab is the web app's `overzicht`: every measurand at
@@ -222,7 +249,7 @@ function ForecastPage() {
                     key={d.date}
                     day={d}
                     dayIndex={i}
-                    divider={i > 0 || past.days.length > 0}
+                    divider={i > 0 || pastRows.length > 0}
                     onPress={() => setSheetDay(d)}
                   />
                 ) : (
@@ -233,7 +260,7 @@ function ForecastPage() {
                     layer={layer}
                     scale={scale}
                     et0Max={et0Max}
-                    divider={i > 0 || past.days.length > 0}
+                    divider={i > 0 || pastRows.length > 0}
                     onPress={() => setSheetDay(d)}
                   />
                 )
@@ -267,7 +294,7 @@ function ForecastPage() {
 
             <Text variant="caption" color={palette.muted} style={{ lineHeight: 18 }}>
               {expanded ? 14 : COLLAPSED_DAYS} dagen · {modelLabel}
-              {past.days.length ? `\n${pastLabel}` : ''}
+              {pastRows.length ? `\n${pastLabel}` : ''}
               {'\n'}{ta('barsExplain', prefs.lang)}
             </Text>
           </>
@@ -275,6 +302,14 @@ function ForecastPage() {
         </>
       )}
     </ScrollView>
+
+    <PastDaySheet
+      visible={pastSheetDay != null}
+      day={pastSheetDay}
+      hours={past.hours}
+      stationName={station?.name ?? null}
+      onClose={() => setPastSheetDay(null)}
+    />
 
     <DaySheet
       visible={sheetDay != null}

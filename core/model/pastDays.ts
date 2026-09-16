@@ -37,6 +37,7 @@
  * would drag a week's temperature axis down to freezing.
  */
 import { isHourDay } from '../solar';
+import type { DetailHour } from './dayDetail';
 import type { Day } from './types';
 import type { MeasuredHour } from '../sources/agroexact';
 
@@ -58,7 +59,10 @@ export interface PastHour {
   humidityMax?: number | null;
   precip: number | null;
   wind: number | null;
+  /** The hour's peak gust, where the source reports one. */
+  gusts?: number | null;
   windDir: number | null;
+  dewpoint?: number | null;
   /** Model only. See the note above. */
   wmo?: number | null;
   sunMin?: number | null;
@@ -105,7 +109,9 @@ export function mergePastHours(
       humidityMax: num(m.humidityMax),
       precip: num(m.precip) ?? model?.precip ?? null,
       wind: num(m.wind) ?? model?.wind ?? null,
+      gusts: num(m.gusts) ?? model?.gusts ?? null,
       windDir: num(m.windDir) ?? model?.windDir ?? null,
+      dewpoint: num(m.dewpoint) ?? model?.dewpoint ?? null,
       wmo: model?.wmo ?? null,
       sunMin: model?.sunMin ?? null,
       et0: model?.et0 ?? null,
@@ -313,4 +319,36 @@ function pastDay(f: PastDayFigures): Day {
     sunOpacityDerived: false,
     sun6Hourly: null,
   };
+}
+
+/**
+ * A past day's hours, in the shape the hourly list already reads.
+ *
+ * `HourlyList` is written against `DetailHour`, which is what `buildDayDetail`
+ * produces for a forecast day. A day that has happened has the same hours in it and
+ * nothing extra — no ensemble, and no three-hourly stretch where the model thins out —
+ * so it is a conversion rather than a second list component.
+ */
+export function pastDetailHours(
+  hours: readonly PastHour[],
+  date: string
+): DetailHour[] {
+  return hours
+    .filter((h) => h.time.slice(0, 10) === date)
+    .map((h) => ({
+      time: h.time,
+      hour: parseInt(h.time.slice(11, 13), 10),
+      precip: num(h.precip) ?? 0,
+      wmo: num(h.wmo) ?? 0,
+      temp: num(h.temp),
+      wind: num(h.wind),
+      gusts: num(h.gusts),
+      windDir: num(h.windDir),
+      humidity: num(h.humidity),
+      dewpoint: num(h.dewpoint),
+      sunMin: num(h.sunMin),
+      et0h: num(h.et0),
+      isPast: true,
+      is3h: false,
+    }));
 }

@@ -42,6 +42,9 @@ import type { Day } from '../../core/model/types';
 
 /** Room for the longest weekday abbreviation and a two-digit date. */
 const DAY_WIDTH = 40;
+/** How far back a past day is drawn. Faded enough to read as behind the forecast,
+ *  dark enough that the numbers on it are still numbers. */
+const SUBDUED_OPACITY = 0.55;
 /** Tight, because five columns share what is left after the day and the icon. */
 const COL_GAP = 5;
 
@@ -80,10 +83,22 @@ export interface OverviewDayRowProps {
   dayIndex: number;
   /** A hairline above the row, so a run of them reads as one table. */
   divider?: boolean;
+  /**
+   * Drawn back, for a day that has already happened.
+   *
+   * One opacity over the whole row rather than a muted colour per reading: the row's
+   * colours mean things — a red maximum, a blue minimum, a grey zero — and recolouring
+   * them to say "this is the past" would spend the colour system on a second message.
+   * Fading says it without touching what the colours are for, and it is the mark
+   * `HourlyList` already uses on an hour that has gone.
+   */
+  subdued?: boolean;
   onPress?: () => void;
 }
 
-export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayRowProps) {
+export function OverviewDayRow({
+  day, dayIndex, divider, subdued, onPress,
+}: OverviewDayRowProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const v = resolveDayValues(day, { dayIndex });
@@ -105,6 +120,7 @@ export function OverviewDayRow({ day, dayIndex, divider, onPress }: OverviewDayR
         gap: COL_GAP,
         borderTopWidth: divider ? 1 : 0,
         borderTopColor: palette.hairlineSoft,
+        opacity: subdued ? SUBDUED_OPACITY : 1,
       }}
     >
       <View style={{ width: DAY_WIDTH }}>

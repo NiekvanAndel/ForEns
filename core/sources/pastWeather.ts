@@ -54,7 +54,9 @@ export function parsePastHours(json: WeatherResponse | null): PastHour[] {
     humidity: at(hourly.relativehumidity_2m, i),
     precip: at(hourly.precipitation, i),
     wind: at(hourly.windspeed_10m, i),
+    gusts: at(hourly.windgusts_10m, i) ?? at(hourly.wind_gusts_10m, i),
     windDir: at(hourly.winddirection_10m, i),
+    dewpoint: at(hourly.dewpoint_2m, i),
     wmo: at(hourly.weather_code, i) ?? at(hourly.weathercode, i),
     // Reported in seconds; the rows want hours, and the day builder divides minutes.
     sunMin: (() => {
