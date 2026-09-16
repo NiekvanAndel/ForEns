@@ -14,7 +14,7 @@ import type { ReactNode } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space } from '../theme';
-import { cardsOf, splitColumns } from '../core/layout';
+import { cardsOf, splitColumns, TWO_COLUMN_WIDTH } from '../core/layout';
 import { TAB_BAR_CLEARANCE, TAB_BAR_CLEARANCE_SIDE } from './GlassTabBar';
 
 /**
@@ -28,6 +28,19 @@ import { TAB_BAR_CLEARANCE, TAB_BAR_CLEARANCE_SIDE } from './GlassTabBar';
 export function useLandscape(): boolean {
   const { width, height } = useWindowDimensions();
   return width > height;
+}
+
+/**
+ * Whether there is room for two columns of cards.
+ *
+ * What pages should ask instead of `useLandscape` when the question is "how many
+ * columns", because the honest answer depends on how wide the window is and nothing
+ * else. `useLandscape` stays for the questions that really are about shape — where a
+ * floating panel goes, how much height a map may take.
+ */
+export function useWideLayout(): boolean {
+  const { width } = useWindowDimensions();
+  return width >= TWO_COLUMN_WIDTH;
 }
 
 /**

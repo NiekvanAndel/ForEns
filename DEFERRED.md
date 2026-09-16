@@ -585,6 +585,21 @@ almost every reading carries a small mark — a rainfall sparkline, a workabilit
 an ensemble band (`ui/overview/marks`). Each bar is the widget's own: worth mentioning
 means 0,1 mm for rain and 3 °C for frost.
 
+**The iPad is a supported device now** (`ios.supportsTablet`), which is mostly a
+warning: nothing but the overview has been looked at on that width, and
+`requireFullScreen` is false, so the app also has to survive a split-view pane at any
+width the reader drags it to. The tab bar, the map panels and the hero were all drawn
+for a phone. Submitting with this flag on also means Apple wants iPad screenshots.
+
+**Two columns is a question about width, not orientation.** `useWideLayout` replaces
+`useLandscape` wherever the question is "how many columns", against
+`TWO_COLUMN_WIDTH` (700, in `core/layout` so it is checkable without a phone). An
+iPad upright is not landscape and is 810 points wide, and a column of cards that wide
+is exactly what two columns exist to avoid; a split-view pane at half an iPad falls
+back to one column, which is right, because at that width it is a phone-shaped space
+again. `useLandscape` stays for the questions that really are about shape — where a
+floating panel goes, how much height a map may take.
+
 **Turned sideways the overview is two columns, and a widget's declared size gives
 way.** `widgetRows(widgets, wide)` pairs everything sideways rather than honouring
 `full`, because a `full` widget is asking for a portrait phone's width and that is

@@ -38,7 +38,7 @@ import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { radius, space, useTheme } from '../theme';
-import { useLandscape } from '../ui/layout';
+import { useWideLayout } from '../ui/layout';
 import { Text } from '../ui/Text';
 import { Icon } from '../ui/Icon';
 import { TileEditor } from '../ui/current/TileEditor';
@@ -97,7 +97,7 @@ const WIDGET_LABEL: Record<string, AppStringKey> = {
 export default function OverviewScreen() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
-  const landscape = useLandscape();
+  const wide = useWideLayout();
   const router = useRouter();
   const { prefs, setPrefs, selectLocation } = usePrefs();
   const [editing, setEditing] = useState(false);
@@ -148,9 +148,10 @@ export default function OverviewScreen() {
   };
 
   const models = useMemo(() => conditions.map((c) => c.model), [conditions]);
-  // Sideways the page is two columns: a widget that asks for a full width is asking
-  // for a portrait phone's, which is what half of this is. See `widgetRows`.
-  const rowsOfWidgets = widgetRows(widgets, landscape);
+  // Two columns wherever there is room for them — sideways on a phone, and on an iPad
+  // in either orientation. A widget that asks for a full width is asking for a
+  // portrait phone's, which is what half of this is. See `widgetRows`.
+  const rowsOfWidgets = widgetRows(widgets, wide);
 
   /** Everything a widget gets except its own settings, which differ per widget. */
   const shared = { rows, alerts, models, nowcasts, onOpen: open };
@@ -246,7 +247,7 @@ export default function OverviewScreen() {
                     </View>
                   );
                 })}
-                {row.length === 1 && (landscape || row[0]?.size === 'half')
+                {row.length === 1 && (wide || row[0]?.size === 'half')
                   ? <View style={{ flex: 1 }} />
                   : null}
               </View>

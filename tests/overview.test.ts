@@ -22,6 +22,7 @@ import { dayAgreement, parseEnsembleOutlook } from '../core/sources/ensembleOutl
 import { adviceFor, adviceForRow, isOpportunity } from '../core/overviewAdvice';
 import { briefFor } from '../core/overviewBrief';
 import { greetingFor, greetingName } from '../core/greeting';
+import { TWO_COLUMN_WIDTH } from '../core/layout';
 import { mergePrefs } from '../core/prefs';
 
 const hour = (time: string, over: Partial<OutlookHour> = {}): OutlookHour =>
@@ -800,5 +801,15 @@ describe('a widget declares every source it reads', () => {
     expect(
       neededSources({ order: [], hidden: readers.map((w) => w.id) }).has('ensemble')
     ).toBe(false);
+  });
+});
+
+describe('when a page of cards takes two columns', () => {
+  it('goes by width, so an iPad held upright is not a single column', () => {
+    // The mistake this replaces: asking whether the screen is landscape. An iPad in
+    // portrait is 810 points wide and is not landscape, and a 810-point column of
+    // cards is exactly the too-wide-to-read column two columns exist to avoid.
+    expect(TWO_COLUMN_WIDTH).toBeLessThan(744);   // the narrowest iPad, upright
+    expect(TWO_COLUMN_WIDTH).toBeGreaterThan(440); // the widest phone, upright
   });
 });

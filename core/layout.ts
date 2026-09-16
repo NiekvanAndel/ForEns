@@ -86,6 +86,25 @@ export function gridColumns(available: number, gap: number): number {
 }
 
 /**
+ * The width below which a page of cards is one column.
+ *
+ * Here rather than beside the hook that reads it, for the reason everything else in
+ * this file is: it is the part with a judgement in it, and it must be checkable
+ * without a phone.
+ *
+ * Every phone upright is under it and every phone turned sideways is over it. An iPad
+ * is over it in *both* orientations, which is the point of measuring width rather than
+ * asking which way round the screen is: a 1024-point column of cards held upright is
+ * exactly the too-wide-to-read column that two columns exist to avoid, and it is not
+ * landscape.
+ *
+ * The figure is the narrowest iPad upright (744 on a mini) less a little, so that a
+ * split-view pane at half an iPad's width falls back to one column — which is right,
+ * because at that width it is a phone-shaped space again.
+ */
+export const TWO_COLUMN_WIDTH = 700;
+
+/**
  * The width below which a day row on 'Verwachting' and 'Nu' prints its readings a
  * size down.
  *
