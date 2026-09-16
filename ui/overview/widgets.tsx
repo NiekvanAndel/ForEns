@@ -434,10 +434,8 @@ export function Rain24Widget({ rows, settings, onOpen }: WidgetProps) {
                 say, and it is the half that decides whether the land has drained.
                 The name is on the line above: at half a row, a name, a chart and a
                 figure do not fit across, and the name is what was losing. */}
-            <BarSpark values={row.rainTrail} color={palette.valPrecip} width={70} />
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <Reading value={fmtMm(fell(row) ?? 0)} unit="mm" color={palette.valPrecip} />
-            </View>
+            <BarSpark values={row.rainTrail} color={palette.valPrecip} grow />
+            <Reading value={fmtMm(fell(row) ?? 0)} unit="mm" color={palette.valPrecip} />
           </StackedLine>
         ))
       )}
@@ -473,11 +471,9 @@ export function RainNextWidget({ rows, settings, onOpen }: WidgetProps) {
             <BarSpark
               values={row.hours.slice(0, 24).map((h) => h.precip)}
               color={palette.valPrecip}
-              width={70}
+              grow
             />
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <Reading value={fmtMm(row.rainNext24 ?? 0)} unit="mm" color={palette.valPrecip} />
-            </View>
+            <Reading value={fmtMm(row.rainNext24 ?? 0)} unit="mm" color={palette.valPrecip} />
           </StackedLine>
         ))
       )}

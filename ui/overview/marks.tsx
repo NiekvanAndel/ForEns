@@ -11,12 +11,16 @@
  * off — the figure beside them is for that — they are for the shape. Anything that
  * needed an axis belongs on 'Grafiek', which is one tap away from every line here.
  */
+import { useState } from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import type { Trend } from '../../core/overviewData';
+
+/** How wide one bar may get, however much room the mark is given. See `grow`. */
+const MAX_BAR_WIDTH = 4;
 
 /**
  * A row of bars, one per sample, scaled to the tallest.
@@ -27,7 +31,7 @@ import type { Trend } from '../../core/overviewData';
  * twelve. The figure beside it is what makes them comparable.
  */
 export function BarSpark({
-  values, color, width = 64, height = 18, floor = 0.2,
+  values, color, width = 64, height = 18, floor = 0.2, grow,
 }: {
   values: readonly (number | null)[];
   color: string;
@@ -35,23 +39,52 @@ export function BarSpark({
   height?: number;
   /** The tallest bar stands for at least this, so a trace does not fill the mark. */
   floor?: number;
+  /**
+   * Take whatever width the row has left instead of a fixed one.
+   *
+   * A fixed width is right where the mark shares a line with a name and a figure —
+   * it must not push either out. Where the mark has the line to itself, as in the
+   * rainfall widgets, a fixed width leaves half a card empty turned sideways, and
+   * twenty-four hours squeezed into seventy points loses exactly the shape the mark
+   * is there for.
+   *
+   * It costs a frame: SVG needs a number, and the number is not known until the row
+   * has been laid out. The mark draws nothing on that first frame rather than
+   * flashing at its fallback width and jumping.
+   */
+  grow?: boolean;
 }) {
   const { palette } = useTheme();
+  const [measured, setMeasured] = useState(0);
   const nums = values.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0));
-  if (!nums.length) return <View style={{ width, height }} />;
+
+  const box = grow ? measured : width;
+  if (!nums.length || box <= 0) {
+    return (
+      <View
+        onLayout={grow ? (e) => setMeasured(e.nativeEvent.layout.width) : undefined}
+        style={grow ? { flex: 1, height } : { width, height }}
+      />
+    );
+  }
 
   const max = Math.max(floor, ...nums);
-  const slot = width / nums.length;
-  const barW = Math.max(1, slot - 1);
+  const slot = box / nums.length;
+  // Wide, the bars stay slim and the air between them grows, rather than the bars
+  // fattening into a bar chart: twenty-four sixteen-point blocks is a different kind
+  // of drawing from the one this mark is, and it is not the kind that reads at a
+  // glance. Each bar is centred in its slot so the spacing stays even.
+  const barW = Math.max(1, Math.min(slot - 1, MAX_BAR_WIDTH));
+  const inset = (slot - barW) / 2;
 
-  return (
-    <Svg width={width} height={height}>
+  const svg = (
+    <Svg width={box} height={height}>
       {nums.map((v, i) => {
         const h = v > 0 ? Math.max(1.5, (v / max) * height) : 0;
         return h > 0 ? (
           <Rect
             key={i}
-            x={i * slot}
+            x={i * slot + inset}
             y={height - h}
             width={barW}
             height={h}
@@ -63,7 +96,7 @@ export function BarSpark({
           // still read as hours that were measured.
           <Rect
             key={i}
-            x={i * slot}
+            x={i * slot + inset}
             y={height - 1}
             width={barW}
             height={1}
@@ -72,6 +105,16 @@ export function BarSpark({
         );
       })}
     </Svg>
+  );
+
+  if (!grow) return svg;
+  return (
+    <View
+      onLayout={(e) => setMeasured(e.nativeEvent.layout.width)}
+      style={{ flex: 1, height }}
+    >
+      {svg}
+    </View>
   );
 }
 
