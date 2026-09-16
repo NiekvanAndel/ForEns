@@ -606,7 +606,11 @@ explicit about: whoever owns the index owns the timer. The cost is that a page s
 both lists the frames twice; they are a short list of URLs, and sharing them would
 mean sharing a play head that should not be shared.
 
-**Agro Intelligence is the page in sentences** (`core/overviewBrief`). It opened with
+**Agro Intelligence is the page in sentences** (`core/overviewBrief`). Its heading is
+the station green, because the block is the app speaking rather than a reading being
+labelled, and each figure inside it keeps the colour its quantity has everywhere else
+— rain blue, temperature amber, the workable field green. A sentence is not the one
+place in the app where rain stops being blue. It opened with
 a figure and a place — "7,2 mm · Almkerk" — which is quick to draw and slow to read: a
 figure says *what* without saying *of what*, so the eye has to fetch the heading back
 before it can use it. Seven sentences now, of which two or three are true on a given

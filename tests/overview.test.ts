@@ -680,6 +680,33 @@ describe('briefFor', () => {
     expect(kinds(briefFor([row({ hours: wet(24) })]))).not.toContain('workable');
   });
 
+  it('leads with a warning, and closes with the reader\'s own thresholds', () => {
+    // A brief that opens with the rainfall while a squall is on its way has buried
+    // the lead; a line about the app itself belongs at the end, not before the
+    // weather it is watching for.
+    const rows = [row({ index: 0, name: 'Venlo', rain24: 9, tempC: 18 })];
+    const b = briefFor(rows, [], { warnings: ['Zware regen'], rules: 2 });
+    expect(kinds(b)[0]).toBe('warnings');
+    expect(kinds(b)[kinds(b).length - 1]).toBe('rules');
+    expect(b[0]).toMatchObject({ count: 1, what: 'Zware regen' });
+  });
+
+  it('stays quiet about warnings and thresholds there are none of', () => {
+    const b = kinds(briefFor([row({ rain24: 9 })], [], { warnings: [], rules: 0 }));
+    expect(b).not.toContain('warnings');
+    expect(b).not.toContain('rules');
+  });
+
+  it('names both ends of the wind too', () => {
+    const rows = [
+      row({ index: 0, name: 'Venlo', windKmh: 26 }),
+      row({ index: 1, name: 'Almkerk', windKmh: 9 }),
+    ];
+    expect(briefFor(rows).find((b) => b.kind === 'windRange')).toMatchObject({
+      low: 9, place: 'Almkerk', high: 26, place2: 'Venlo',
+    });
+  });
+
   it('says rain before it says temperature', () => {
     // Whether the land is workable is a rainfall question; everything else qualifies
     // it. The page led with temperature at first, which reads as a weather app.

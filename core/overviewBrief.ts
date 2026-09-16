@@ -28,6 +28,8 @@ import { firstWorkRun, rankRows, workWindow, type OverviewRow } from './overview
 
 /** Which sentence, and therefore which blanks are filled. */
 export type BriefKind =
+  /** Significant weather the app itself is flagging, right now. */
+  | 'warnings'
   /** Where most fell over the last 24 hours. */
   | 'wettest'
   /** Rain reaching one location within the hour, off the radar nowcast. */
@@ -43,7 +45,9 @@ export type BriefKind =
   /** And on wind. */
   | 'windRange'
   /** Where the most of the coming day is workable. */
-  | 'workable';
+  | 'workable'
+  /** How many thresholds the reader has set themselves. */
+  | 'rules';
 
 export interface Brief {
   kind: BriefKind;
@@ -58,6 +62,27 @@ export interface Brief {
   /** The two ends of a range, canonical (°C, km/h). */
   low?: number;
   high?: number;
+  /** How many of something — warnings standing, thresholds set. */
+  count?: number;
+  /** What the first of them says, so the line is a fact and not a tally. */
+  what?: string;
+}
+
+/**
+ * What the brief knows that the rows do not.
+ *
+ * The warnings are worded by `deriveAlert` and the thresholds are the reader's own,
+ * so both are handed in rather than recomputed — a brief that decided for itself what
+ * counts as a warning would be a second opinion under the widget that holds the
+ * first.
+ */
+export interface BriefContext {
+  /** The label of every significant-weather warning standing, in the rows' order. */
+  warnings?: readonly string[];
+  /** How many of the reader's own thresholds are switched on. */
+  rules?: number;
+  nowcasts?: readonly (BriefNowcast | null)[];
+  limits?: BriefLimits;
 }
 
 /**
@@ -110,10 +135,19 @@ export interface BriefNowcast {
 export function briefFor(
   rows: readonly OverviewRow[],
   nowcasts: readonly (BriefNowcast | null)[] = [],
-  limits: BriefLimits = DEFAULT_BRIEF_LIMITS
+  context: BriefContext = {}
 ): Brief[] {
+  const limits = context.limits ?? DEFAULT_BRIEF_LIMITS;
   const out: Brief[] = [];
   const isNum = (v: number | null | undefined): v is number => typeof v === 'number';
+
+  // ── What is being flagged ──────────────────────────────────────────────────
+  // First, because a warning outranks every reading that qualifies it: a brief that
+  // opens with the rainfall while a squall is on its way has buried the lead.
+  const warnings = context.warnings ?? [];
+  if (warnings.length) {
+    out.push({ kind: 'warnings', count: warnings.length, what: warnings[0] });
+  }
 
   // ── What fell ──────────────────────────────────────────────────────────────
   const wettest = rankRows(rows, (r) => r.rain24)[0];
@@ -172,14 +206,20 @@ export function briefFor(
   if (strong && calm && strong !== calm) {
     const low = calm.windKmh as number;
     const high = strong.windKmh as number;
-    // No places on this one: a grower reads the wind as a range over the whole day's
-    // work, and naming two fields for it is two names nobody asked for.
-    if (high - low >= limits.windSpanKmh) out.push({ kind: 'windRange', low, high });
+    if (high - low >= limits.windSpanKmh) {
+      out.push({ kind: 'windRange', low, high, place: calm.name, place2: strong.name });
+    }
   }
 
   // ── Where to go ────────────────────────────────────────────────────────────
   const best = bestWorkable(rows);
   if (best) out.push({ kind: 'workable', place: best });
+
+  // ── And what the reader asked to be told ───────────────────────────────────
+  // Last, because it is about the app rather than about the weather. It is here at
+  // all so that somebody who set a threshold weeks ago and has heard nothing since
+  // knows it is still watching, rather than wondering whether it ever saved.
+  if (context.rules) out.push({ kind: 'rules', count: context.rules });
 
   return out;
 }

@@ -19,6 +19,10 @@ import { Icon } from '../Icon';
 
 export interface WidgetCardProps {
   title: string;
+  /** The heading's own colour, where a widget's name is part of what it is — the
+   *  brief's is the station green, because it is the app speaking rather than a
+   *  reading being labelled. */
+  titleColor?: string;
   /** A word or two under the title: the window, the unit, the source. */
   hint?: string;
   /** Draws a chevron and makes the whole card a way in. */
@@ -26,7 +30,7 @@ export interface WidgetCardProps {
   children: ReactNode;
 }
 
-export function WidgetCard({ title, hint, onPress, children }: WidgetCardProps) {
+export function WidgetCard({ title, titleColor, hint, onPress, children }: WidgetCardProps) {
   const { palette } = useTheme();
 
   const body = (
@@ -44,7 +48,12 @@ export function WidgetCard({ title, hint, onPress, children }: WidgetCardProps) 
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
         <View style={{ flex: 1, gap: 1 }}>
-          <Text variant="label" weight="bold" color={palette.inkHeading} numberOfLines={1}>
+          <Text
+            variant="label"
+            weight="bold"
+            color={titleColor ?? palette.inkHeading}
+            numberOfLines={1}
+          >
             {title}
           </Text>
           {hint ? (
@@ -221,9 +230,13 @@ export function Reading({
  * sentence wraps as one paragraph rather than as a row of words that break
  * separately.
  */
+/** A blank's filling: the text, and optionally the colour the quantity is drawn in
+ *  everywhere else in the app. A plain string takes the heading's ink. */
+export type SentenceValue = string | { text: string; color?: string };
+
 export function Sentence({
   template, values, color,
-}: { template: string; values: Record<string, string>; color?: string }) {
+}: { template: string; values: Record<string, SentenceValue>; color?: string }) {
   const { palette } = useTheme();
   // The separators are kept, which is what lets one pass over the result tell a blank
   // from the prose around it.
@@ -236,9 +249,21 @@ export function Sentence({
         if (key == null) return part;
         // A blank with nothing for it prints nothing rather than its own name.
         const value = values[key] ?? '';
+        const { text, tint } = typeof value === 'string'
+          ? { text: value, tint: undefined }
+          : { text: value.text, tint: value.color };
         return (
-          <Text key={i} variant="caption" weight="bold" color={palette.inkHeading} tabular>
-            {value}
+          <Text
+            key={i}
+            variant="caption"
+            weight="bold"
+            // A figure keeps the colour its quantity has everywhere else: rain is the
+            // rain blue on this page, on the map and in the charts, and a sentence is
+            // not the one place it stops being.
+            color={tint ?? palette.inkHeading}
+            tabular
+          >
+            {text}
           </Text>
         );
       })}

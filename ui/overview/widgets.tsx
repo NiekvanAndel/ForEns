@@ -49,6 +49,7 @@ import { NowcastPanel } from '../radar/NowcastPanel';
 import { frameAtFraction, useRadarFrames } from '../radar/useRadarFrames';
 import {
   LocationLine, Reading, Sentence, StackedLine, WidgetCard, WidgetNote,
+  type SentenceValue,
 } from './parts';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
@@ -122,22 +123,46 @@ function useWidgetLocation(settings: WidgetSettings) {
  * their figures into whatever the reader set. Most mornings two or three of the seven
  * are true, which is the point: a brief that always says six things says none.
  */
-export function SummaryWidget({ rows, nowcasts }: WidgetProps) {
+export function SummaryWidget({ rows, alerts, nowcasts }: WidgetProps) {
+  const { palette } = useTheme();
   const { prefs } = usePrefs();
-  const brief = briefFor(rows, nowcasts);
+
+  // The warnings and the thresholds are wherever they are already decided — the same
+  // `deriveAlert` the block on 'Nu' runs, and the reader's own list — so the brief
+  // repeats them rather than forming a second opinion under the widget holding the
+  // first.
+  const standing = rows
+    .map((row, i) => ({ row, alert: alerts[i] ?? null }))
+    .filter((x) => x.alert != null);
+  const brief = briefFor(rows, nowcasts, {
+    warnings: standing.map((x) => x.alert!.label),
+    rules: prefs.userAlerts.filter((a) => a.enabled).length,
+  });
 
   const deg = (v: number) => `${convTemp(v, prefs.tempUnit)}${tempUnitLabel(prefs.tempUnit)}`;
   const wind = (v: number) =>
     `${convWind(v, prefs.windUnit)} ${windUnitLabel(prefs.windUnit, prefs.lang)}`;
 
+  // A quantity keeps the colour it has everywhere else in the app, so the sentence is
+  // not the one place rain stops being blue.
+  const mm = (v: number) => ({ text: `${fmtMm(v)} mm`, color: palette.valPrecip });
+  const temp = (v: number) => ({ text: deg(v), color: palette.valTemp });
+  const kmh = (v: number) => ({ text: wind(v), color: palette.valWind });
+
   /** Which template a fact uses, and what fills its blanks. */
-  const wording = (b: Brief): { key: AppStringKey; values: Record<string, string> } => {
+  const wording = (b: Brief): { key: AppStringKey; values: Record<string, SentenceValue> } => {
     switch (b.kind) {
-      case 'wettest':
+      case 'warnings':
         return {
-          key: 'briWettest',
-          values: { place: b.place ?? '', mm: `${fmtMm(b.mm ?? 0)} mm` },
+          key: b.count === 1 ? 'briWarning' : 'briWarnings',
+          values: {
+            n: String(b.count ?? 0),
+            what: { text: b.what ?? '', color: palette.valHigh },
+            place: standing[0]?.row.name ?? '',
+          },
         };
+      case 'wettest':
+        return { key: 'briWettest', values: { place: b.place ?? '', mm: mm(b.mm ?? 0) } };
       case 'rainSoon':
         return {
           key: 'briRainSoon',
@@ -159,24 +184,35 @@ export function SummaryWidget({ rows, nowcasts }: WidgetProps) {
         return {
           key: 'briTempRange',
           values: {
-            low: deg(b.low ?? 0), high: deg(b.high ?? 0),
+            low: temp(b.low ?? 0), high: temp(b.high ?? 0),
             place: b.place ?? '', place2: b.place2 ?? '',
           },
         };
       case 'windRange':
         return {
           key: 'briWindRange',
-          values: { low: wind(b.low ?? 0), high: wind(b.high ?? 0) },
+          values: {
+            low: kmh(b.low ?? 0), high: kmh(b.high ?? 0),
+            place: b.place ?? '', place2: b.place2 ?? '',
+          },
         };
       case 'workable':
-        return { key: 'briWorkable', values: { place: b.place ?? '' } };
+        return {
+          key: 'briWorkable',
+          values: { place: { text: b.place ?? '', color: palette.agroInk } },
+        };
+      case 'rules':
+        return {
+          key: b.count === 1 ? 'briRule' : 'briRules',
+          values: { n: String(b.count ?? 0) },
+        };
     }
   };
 
   const loading = rows.length > 0 && rows.every((r) => r.loading);
 
   return (
-    <WidgetCard title={ta('ovSummary', prefs.lang)}>
+    <WidgetCard title={ta('ovSummary', prefs.lang)} titleColor={palette.agroInk}>
       {brief.length ? (
         brief.map((b) => {
           const { key, values } = wording(b);
