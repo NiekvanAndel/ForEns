@@ -781,3 +781,24 @@ describe('the greeting', () => {
     expect(greetingName('N. van Andel')).toBeNull();
   });
 });
+
+describe('a widget declares every source it reads', () => {
+  it('asks for the ensemble wherever a widget shows the members', () => {
+    // The outlook draws each day's rain chance and agreement from `row.ensemble`. It
+    // used to read that without asking for it, which worked only while the
+    // confidence widget happened to be switched on — so hiding one widget blanked
+    // half of another.
+    for (const id of ['outlook', 'confidence']) {
+      const w = OVERVIEW_WIDGETS.find((x) => x.id === id);
+      expect(w?.needs).toContain('ensemble');
+    }
+  });
+
+  it('switches the ensemble off only when nothing reads it', () => {
+    const readers = OVERVIEW_WIDGETS.filter((w) => w.needs.includes('ensemble'));
+    expect(neededSources({ order: [], hidden: ['confidence'] }).has('ensemble')).toBe(true);
+    expect(
+      neededSources({ order: [], hidden: readers.map((w) => w.id) }).has('ensemble')
+    ).toBe(false);
+  });
+});

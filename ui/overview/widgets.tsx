@@ -750,17 +750,15 @@ export function OutlookWidget({ rows, settings, onOpen }: WidgetProps) {
             accessibilityRole="button"
             accessibilityLabel={row.name}
             style={{
-              gap: 6,
+              gap: 5,
               paddingVertical: 9,
               borderTopWidth: i > 0 ? 1 : 0,
               borderTopColor: palette.hairlineSoft,
             }}
           >
-            {/* The name gets its own line back. Squeezed beside two days it had
-                seventy-eight points, which is a truncated place name — and the days
-                beside it had to drop the rain chance and the temperatures onto one
-                run of text to fit. A location a grower cannot identify is a row they
-                cannot use, so the line is worth its height. */}
+            {/* The name keeps its own line. Squeezed into a column beside two days it
+                had seventy-eight points, which is a truncated place name, and a
+                location a grower cannot identify is a row they cannot use. */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
               {row.hasStation ? (
                 <View
@@ -780,11 +778,13 @@ export function OutlookWidget({ rows, settings, onOpen }: WidgetProps) {
               </Text>
             </View>
 
-            {/* One row a day, with room for all four things the widget promises:
-                what it will be, how much rain, how likely, and how much the members
-                agree. */}
-            {days.length ? (
-              days.map((day, d) => {
+            {/* The two days beside each other, not under each other: they are the same
+                kind of thing at two moments, and a pair read left to right is one
+                comparison where a pair read downward is two readings. Each is a small
+                stack — what it will be, then how much rain and how likely — which is
+                what fits a half-width column at this size. */}
+            <View style={{ flexDirection: 'row', gap: space[3] }}>
+              {days.length ? days.map((day, d) => {
                 const date = new Date(`${day.date}T12:00:00Z`);
                 // The ensemble's own day, where it has one — `days[0]` is today, so
                 // the offsets line up.
@@ -792,56 +792,42 @@ export function OutlookWidget({ rows, settings, onOpen }: WidgetProps) {
                 return (
                   <View
                     key={day.date}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5 }}
                   >
-                    <Text variant="label" color={palette.muted} style={{ width: 34 }}>
+                    <Text variant="label" color={palette.muted} style={{ width: 30 }}>
                       {names[date.getUTCDay()]}
                     </Text>
                     <WeatherIcon wmo={day.wmo ?? 0} isDay={1} size={20} />
-
-                    <Text
-                      variant="label"
-                      weight="semibold"
-                      color={palette.inkHeading}
-                      tabular
-                      numberOfLines={1}
-                      style={{ flex: 1 }}
-                    >
-                      {day.tempMin == null || day.tempMax == null
-                        ? '–'
-                        : `${convTemp(day.tempMin, prefs.tempUnit)}° / ${convTemp(day.tempMax, prefs.tempUnit)}°`}
-                    </Text>
-
-                    <Text
-                      variant="label"
-                      weight="semibold"
-                      color={day.precip ? palette.valPrecip : palette.valPrecipZero}
-                      tabular
-                      numberOfLines={1}
-                    >
-                      {day.precip == null ? '–' : `${fmtMm(day.precip)} mm`}
-                    </Text>
-
-                    {/* The chance, spelled out rather than implied by the dot beside
-                        it: they are different questions — how often the members are
-                        wet, and how much they agree about it. */}
-                    <Text
-                      variant="label"
-                      color={palette.muted}
-                      tabular
-                      numberOfLines={1}
-                      style={{ width: 40, textAlign: 'right' }}
-                    >
-                      {ens ? `${Math.round(ens.wetShare)}%` : '–'}
-                    </Text>
-
+                    <View style={{ flex: 1, gap: 1 }}>
+                      <Text
+                        variant="label"
+                        weight="semibold"
+                        color={palette.inkHeading}
+                        tabular
+                        numberOfLines={1}
+                      >
+                        {day.tempMin == null || day.tempMax == null
+                          ? '–'
+                          : `${convTemp(day.tempMin, prefs.tempUnit)}/${convTemp(day.tempMax, prefs.tempUnit)}°`}
+                      </Text>
+                      {/* How much, and how likely. The dot beside them answers a
+                          third question — how much the members agree — which is not
+                          the same as how often they are wet. */}
+                      <Text
+                        variant="label"
+                        color={day.precip ? palette.valPrecip : palette.valPrecipZero}
+                        tabular
+                        numberOfLines={1}
+                      >
+                        {day.precip == null ? '–' : fmtMm(day.precip)}
+                        {ens ? ` · ${Math.round(ens.wetShare)}%` : ''}
+                      </Text>
+                    </View>
                     {ens ? <AgreementDot agreement={dayAgreement(ens)} /> : null}
                   </View>
                 );
-              })
-            ) : (
-              <WidgetNote>–</WidgetNote>
-            )}
+              }) : <WidgetNote>–</WidgetNote>}
+            </View>
           </Pressable>
         );
       })}

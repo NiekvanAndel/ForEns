@@ -158,7 +158,10 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   // The one widget that answers "can I work" rather than "what is the weather".
   { id: 'workability', size: 'full', needs: ['conditions', 'outlook'], options: ['limit'] },
   // The coming days, a row per location, each a way into that location's own page.
-  { id: 'outlook', size: 'full', needs: ['outlook'], options: ['limit'] },
+  // The ensemble as well as the forecast: each day carries the members' rain chance
+  // and how much they agree, and reading those from a source another widget happened
+  // to switch on is a widget that goes blank when somebody hides a different one.
+  { id: 'outlook', size: 'full', needs: ['outlook', 'ensemble'], options: ['limit'] },
   // How much the members disagree about tomorrow's rain. The one widget here that is
   // about confidence rather than weather, which is why it sits after the forecast it
   // qualifies rather than among the readings.

@@ -651,6 +651,13 @@ the first thing drawn after a cold start. An email is refused rather than trimme
 bare initial; without a name the greeting still goes out, because the time of day was
 always the half that was true.
 
+**A widget declares every source it reads, not only the obvious one.** The outlook
+drew each day's rain chance and agreement from `row.ensemble` while asking only for
+`outlook`, which worked exactly as long as the confidence widget happened to be
+switched on — hiding one widget blanked half of another, and `neededSources` cannot
+see a dependency nobody wrote down. A test now checks that every widget touching the
+members asks for them.
+
 **Advies is the one widget that answers "so what do I do"** (`core/overviewAdvice`).
 Six rules, each a sentence a grower would say — the land is shut, there is no window
 today, rain is coming and you have hours before it, it will freeze tonight, you can
