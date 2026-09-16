@@ -255,7 +255,7 @@ export function SpreadBand({
 export function RestLine({ children }: { children: React.ReactNode }) {
   const { palette } = useTheme();
   return (
-    <Text variant="caption" color={palette.muted} style={{ paddingTop: 6 }}>
+    <Text variant="label" weight="regular" color={palette.muted} style={{ paddingTop: 6 }}>
       {children}
     </Text>
   );

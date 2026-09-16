@@ -53,6 +53,9 @@ import {
 } from './parts';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
+import { useAgroAuth } from '../../state/auth';
+import { agroIntegration } from '../../core/prefs';
+import { greetingFor, greetingName, type GreetingKind } from '../../core/greeting';
 import { alertValueLabel } from '../settings/UserAlertList';
 import { measurementTimeLabel } from '../../core/model/station';
 import {
@@ -109,6 +112,15 @@ function useWidgetLocation(settings: WidgetSettings) {
   };
 }
 
+/** Which string greets which part of the day. Here rather than in `core/greeting`,
+ *  because that module returns facts and this file words them. */
+const GREETING_KEY: Record<GreetingKind, AppStringKey> = {
+  night: 'greetNight',
+  morning: 'greetMorning',
+  afternoon: 'greetAfternoon',
+  evening: 'greetEvening',
+};
+
 // ── The page in sentences ─────────────────────────────────────────────────────
 
 /**
@@ -126,6 +138,13 @@ function useWidgetLocation(settings: WidgetSettings) {
 export function SummaryWidget({ rows, alerts, nowcasts }: WidgetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
+  const { account } = useAgroAuth();
+
+  // The live account where the context has caught up, the stored name where it has
+  // not — this widget is usually the first thing drawn after a cold start, and a
+  // greeting that appears a second late is worse than one that was always there.
+  const who = greetingName(account?.name ?? agroIntegration(prefs).accountName ?? null);
+  const greeting = ta(GREETING_KEY[greetingFor()], prefs.lang);
 
   // The warnings and the thresholds are wherever they are already decided — the same
   // `deriveAlert` the block on 'Nu' runs, and the reader's own list — so the brief
@@ -213,6 +232,13 @@ export function SummaryWidget({ rows, alerts, nowcasts }: WidgetProps) {
 
   return (
     <WidgetCard title={ta('ovSummary', prefs.lang)} titleColor={palette.agroInk}>
+      {/* The one line here that is not about the weather. A name makes the page
+          theirs rather than a dashboard, and it costs a line — so it is a line, not
+          a header. Without a name it is still a greeting: the time of day is the
+          half that was always true. */}
+      <Text variant="body" weight="bold" color={palette.inkHeading}>
+        {who ? `${greeting}, ${who}` : greeting}
+      </Text>
       {brief.length ? (
         brief.map((b) => {
           const { key, values } = wording(b);
@@ -261,7 +287,7 @@ export function AlertsWidget({ rows, alerts, settings, onOpen }: WidgetProps) {
               color={alert.severity === 'heavy' ? palette.valHigh : palette.accentDark}
               weight="fill"
             />
-            <Text variant="caption" weight="semibold" color={palette.inkHeading} numberOfLines={1}>
+            <Text variant="label" weight="semibold" color={palette.inkHeading} numberOfLines={1}>
               {alert.label}
             </Text>
           </View>
@@ -278,9 +304,9 @@ export function AlertsWidget({ rows, alerts, settings, onOpen }: WidgetProps) {
           divider={i > 0 || hits.length > 0}
           compact
         >
-          <Text variant="caption" weight="semibold" color={palette.muted} numberOfLines={1}>
+          <Text variant="label" weight="semibold" color={palette.muted} numberOfLines={1}>
             {`${rule.title} ${ta(rule.op === 'above' ? 'alertFiredAbove' : 'alertFiredBelow', prefs.lang)} `}
-            <Text variant="caption" weight="bold" color={palette.accentDark} tabular>
+            <Text variant="label" weight="bold" color={palette.accentDark} tabular>
               {alertValueLabel(rule, prefs)}
             </Text>
           </Text>
@@ -347,7 +373,7 @@ export function AdviceWidget({ rows, settings, onOpen }: WidgetProps) {
                 }}
               />
               <Text
-                variant="caption"
+                variant="label"
                 weight="semibold"
                 color={good ? palette.agroInk : palette.inkHeading}
                 numberOfLines={1}
@@ -498,7 +524,7 @@ export function TempWidget({ rows, settings, onOpen }: WidgetProps) {
         <Text variant="stat" color={palette.inkHeading} tabular style={{ fontSize: 24 }}>
           {deg(spread.max)}
         </Text>
-        <Text variant="caption" color={palette.muted}>
+        <Text variant="label" color={palette.muted}>
           {`${ta('ovEverywhere', prefs.lang)} ${deg(spread.min)}–${deg(spread.max)}`}
         </Text>
       </WidgetCard>
@@ -657,7 +683,7 @@ export function WorkWidget({ rows, settings, onOpen }: WidgetProps) {
                 *when*; the ring says *how much*, which is what decides whether the
                 day is worth planning around at all. */}
             <Ring fraction={share} color={palette.agroBright} size={34}>
-              <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
+              <Text variant="label" weight="bold" color={palette.inkHeading} tabular>
                 {window.length ? `${workable}` : '–'}
               </Text>
             </Ring>
@@ -675,10 +701,10 @@ export function WorkWidget({ rows, settings, onOpen }: WidgetProps) {
                     }}
                   />
                 ) : null}
-                <Text variant="caption" color={palette.ink} numberOfLines={1} style={{ flex: 1 }}>
+                <Text variant="label" color={palette.ink} numberOfLines={1} style={{ flex: 1 }}>
                   {row.name}
                 </Text>
-                <Text variant="caption" weight="semibold" color={palette.muted} numberOfLines={1}>
+                <Text variant="label" weight="semibold" color={palette.muted} numberOfLines={1}>
                   {label}
                 </Text>
               </View>
@@ -712,7 +738,7 @@ export function OutlookWidget({ rows, settings, onOpen }: WidgetProps) {
   const names = dayNames(prefs.lang);
 
   return (
-    <WidgetCard title={ta('ovOutlook', prefs.lang)}>
+    <WidgetCard title={ta('ovOutlook', prefs.lang)} hint={ta('ovNextTwoDays', prefs.lang)}>
       {rows.slice(0, settings.limit).map((row, i) => {
         // Tomorrow and the day after. Today is half over and every other widget on
         // this page is already about it; a column repeating it is a column spent.
@@ -724,72 +750,98 @@ export function OutlookWidget({ rows, settings, onOpen }: WidgetProps) {
             accessibilityRole="button"
             accessibilityLabel={row.name}
             style={{
-              flexDirection: 'row', alignItems: 'center', gap: space[2],
-              paddingVertical: 6,
+              gap: 6,
+              paddingVertical: 9,
               borderTopWidth: i > 0 ? 1 : 0,
               borderTopColor: palette.hairlineSoft,
             }}
           >
-            {/* Name and both days on one line. It was a name above a row of three
-                columns, which is three lines of height per location — on a page with
-                eight of them, a screen and a half for two days of weather. */}
-            <View style={{ width: 78, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            {/* The name gets its own line back. Squeezed beside two days it had
+                seventy-eight points, which is a truncated place name — and the days
+                beside it had to drop the rain chance and the temperatures onto one
+                run of text to fit. A location a grower cannot identify is a row they
+                cannot use, so the line is worth its height. */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
               {row.hasStation ? (
                 <View
-                  style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright }}
+                  style={{
+                    width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright,
+                  }}
                 />
               ) : null}
-              <Text variant="caption" weight="semibold" color={palette.ink} numberOfLines={1}>
+              <Text
+                variant="bodySm"
+                weight="semibold"
+                color={palette.ink}
+                numberOfLines={1}
+                style={{ flex: 1 }}
+              >
                 {row.name}
               </Text>
             </View>
 
-            {days.map((day, d) => {
-              const date = new Date(`${day.date}T12:00:00Z`);
-              // The ensemble's own day, where it has one — `days[0]` is today, so the
-              // offsets line up.
-              const ens = row.ensemble?.[d + 1] ?? null;
-              return (
-                <View
-                  key={day.date}
-                  style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                >
-                  <Text variant="caption" color={palette.muted} style={{ width: 18 }}>
-                    {names[date.getUTCDay()]}
-                  </Text>
-                  <WeatherIcon wmo={day.wmo ?? 0} isDay={1} size={16} />
-                  {/* Temperatures and rain on one line, not stacked. Two caption
-                      lines a day is two lines a location and four lines a pair, and
-                      the second was carrying a figure the first had room beside it
-                      for. How much, how likely and how sure, in that order — the
-                      three a plan is actually made on. */}
-                  <Text
-                    variant="caption"
-                    weight="semibold"
-                    color={palette.inkHeading}
-                    tabular
-                    numberOfLines={1}
-                    style={{ flex: 1 }}
+            {/* One row a day, with room for all four things the widget promises:
+                what it will be, how much rain, how likely, and how much the members
+                agree. */}
+            {days.length ? (
+              days.map((day, d) => {
+                const date = new Date(`${day.date}T12:00:00Z`);
+                // The ensemble's own day, where it has one — `days[0]` is today, so
+                // the offsets line up.
+                const ens = row.ensemble?.[d + 1] ?? null;
+                return (
+                  <View
+                    key={day.date}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}
                   >
-                    {day.tempMin == null || day.tempMax == null
-                      ? '–'
-                      : `${convTemp(day.tempMin, prefs.tempUnit)}/${convTemp(day.tempMax, prefs.tempUnit)}°`}
+                    <Text variant="label" color={palette.muted} style={{ width: 34 }}>
+                      {names[date.getUTCDay()]}
+                    </Text>
+                    <WeatherIcon wmo={day.wmo ?? 0} isDay={1} size={20} />
+
                     <Text
-                      variant="caption"
+                      variant="label"
+                      weight="semibold"
+                      color={palette.inkHeading}
+                      tabular
+                      numberOfLines={1}
+                      style={{ flex: 1 }}
+                    >
+                      {day.tempMin == null || day.tempMax == null
+                        ? '–'
+                        : `${convTemp(day.tempMin, prefs.tempUnit)}° / ${convTemp(day.tempMax, prefs.tempUnit)}°`}
+                    </Text>
+
+                    <Text
+                      variant="label"
                       weight="semibold"
                       color={day.precip ? palette.valPrecip : palette.valPrecipZero}
                       tabular
+                      numberOfLines={1}
                     >
-                      {`  ${day.precip == null ? '–' : fmtMm(day.precip)}`}
-                      {ens ? ` ${Math.round(ens.wetShare)}%` : ''}
+                      {day.precip == null ? '–' : `${fmtMm(day.precip)} mm`}
                     </Text>
-                  </Text>
-                  {ens ? <AgreementDot agreement={dayAgreement(ens)} /> : null}
-                </View>
-              );
-            })}
 
-            {days.length ? null : <WidgetNote>–</WidgetNote>}
+                    {/* The chance, spelled out rather than implied by the dot beside
+                        it: they are different questions — how often the members are
+                        wet, and how much they agree about it. */}
+                    <Text
+                      variant="label"
+                      color={palette.muted}
+                      tabular
+                      numberOfLines={1}
+                      style={{ width: 40, textAlign: 'right' }}
+                    >
+                      {ens ? `${Math.round(ens.wetShare)}%` : '–'}
+                    </Text>
+
+                    {ens ? <AgreementDot agreement={dayAgreement(ens)} /> : null}
+                  </View>
+                );
+              })
+            ) : (
+              <WidgetNote>–</WidgetNote>
+            )}
           </Pressable>
         );
       })}
@@ -877,7 +929,7 @@ export function ConfidenceWidget({ rows, onOpen }: WidgetProps) {
                 max={widest}
                 color={palette.valPrecip}
               />
-              <Text variant="caption" weight="semibold" color={ink(agreement)}>
+              <Text variant="label" weight="semibold" color={ink(agreement)}>
                 {word(agreement)}
               </Text>
               <Reading

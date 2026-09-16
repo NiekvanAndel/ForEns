@@ -72,6 +72,10 @@ export interface AgroIntegration {
   connected: boolean;
   /** Whoever is signed in, for the settings row. Null when AuthKit gave no email. */
   account: string | null;
+  /** Their display name, when AuthKit gave one. Kept beside the email because the
+   *  greeting on the overview page is drawn before the auth context is ready, and an
+   *  email is not a name — see `greetingName`. */
+  accountName?: string | null;
   /**
    * Opt-in: let the device's own page use a station within `AGRO_MAX_DISTANCE_KM`.
    *
@@ -243,6 +247,7 @@ export function mergePrefs(stored: unknown): Prefs {
       agroexact: {
         connected: typeof agro.connected === 'boolean' ? agro.connected : false,
         account: typeof agro.account === 'string' ? agro.account : null,
+        accountName: typeof agro.accountName === 'string' ? agro.accountName : null,
         useForCurrentLocation:
           typeof agro.useForCurrentLocation === 'boolean' ? agro.useForCurrentLocation : false,
         lastSyncMs: typeof agro.lastSyncMs === 'number' ? agro.lastSyncMs : null,

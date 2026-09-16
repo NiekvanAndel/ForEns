@@ -595,6 +595,13 @@ with a map twice as wide as the one above it. The page does not use `Columns`, f
 same reason 'Actueel' does not: it already answers the question `Columns` asks, over
 widgets that know their own width.
 
+**The page has a type floor: 14 points, the size of the tabs on 'Verwachting'.**
+Nothing on the overview is drawn at `caption` (12,5) any more — readings and compact
+labels take `label` (14, the `PillSwitcher`'s own size) and prose takes `bodySm` (15),
+with card titles a step above at `bodySm` bold. Two rounds of compaction had been paid
+for partly in type size, which is the one saving a reader notices and cannot undo.
+Height now comes out of padding, structure and the `limit` setting instead.
+
 **Height is spent per row, not per widget.** Two passes of compaction have been
 about the same thing: a row whose parts are sized to each other rather than to one
 another's habits. `LocationLine` gains `compact` where the reading is a sentence
@@ -633,6 +640,16 @@ other rule sets that want revisiting. The figures are emboldened structurally ra
 than with markup in the string table: the template carries named blanks and
 `Sentence` splits on them, so a translator can move a blank around a sentence and the
 right words still come out bold.
+
+**The brief opens with a greeting** (`core/greeting`): the part of the day plus a
+first name, taken from the AgroExact account. It is the one line on the page that is
+not about the weather, and it is a line rather than a header for that reason. The name
+comes from the live auth context where it has caught up and from
+`integrations.agroexact.accountName` where it has not, because this widget is usually
+the first thing drawn after a cold start. An email is refused rather than trimmed —
+"Goedemorgen, niek" derived from a mailbox is a guess at somebody's name — and so is a
+bare initial; without a name the greeting still goes out, because the time of day was
+always the half that was true.
 
 **Advies is the one widget that answers "so what do I do"** (`core/overviewAdvice`).
 Six rules, each a sentence a grower would say — the land is shut, there is no window

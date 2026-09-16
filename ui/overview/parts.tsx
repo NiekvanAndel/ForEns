@@ -49,7 +49,7 @@ export function WidgetCard({ title, titleColor, hint, onPress, children }: Widge
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
         <View style={{ flex: 1, gap: 1 }}>
           <Text
-            variant="label"
+            variant="bodySm"
             weight="bold"
             color={titleColor ?? palette.inkHeading}
             numberOfLines={1}
@@ -57,7 +57,7 @@ export function WidgetCard({ title, titleColor, hint, onPress, children }: Widge
             {title}
           </Text>
           {hint ? (
-            <Text variant="caption" color={palette.muted} numberOfLines={1}>
+            <Text variant="label" weight="regular" color={palette.muted} numberOfLines={1}>
               {hint}
             </Text>
           ) : null}
@@ -173,7 +173,7 @@ export function StackedLine({ name, measured, divider, onPress, children }: Loca
             style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright }}
           />
         ) : null}
-        <Text variant="caption" color={palette.muted} numberOfLines={1} style={{ flex: 1 }}>
+        <Text variant="label" weight="regular" color={palette.muted} numberOfLines={1} style={{ flex: 1 }}>
           {name}
         </Text>
       </View>
@@ -209,7 +209,7 @@ export function Reading({
     >
       {value}
       {unit ? (
-        <Text variant="caption" weight="semibold" color={palette.muted}>
+        <Text variant="label" weight="semibold" color={palette.muted}>
           {` ${unit}`}
         </Text>
       ) : null}
@@ -243,7 +243,7 @@ export function Sentence({
   const parts = template.split(/(\{[a-zA-Z0-9]+\})/g);
 
   return (
-    <Text variant="caption" color={color ?? palette.muted} style={{ lineHeight: 18 }}>
+    <Text variant="bodySm" color={color ?? palette.muted}>
       {parts.map((part, i) => {
         const key = part.startsWith('{') && part.endsWith('}') ? part.slice(1, -1) : null;
         if (key == null) return part;
@@ -255,7 +255,7 @@ export function Sentence({
         return (
           <Text
             key={i}
-            variant="caption"
+            variant="bodySm"
             weight="bold"
             // A figure keeps the colour its quantity has everywhere else: rain is the
             // rain blue on this page, on the map and in the charts, and a sentence is

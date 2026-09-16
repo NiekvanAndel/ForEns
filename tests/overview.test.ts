@@ -21,6 +21,7 @@ import { parseOutlook } from '../core/sources/outlook';
 import { dayAgreement, parseEnsembleOutlook } from '../core/sources/ensembleOutlook';
 import { adviceFor, adviceForRow, isOpportunity } from '../core/overviewAdvice';
 import { briefFor } from '../core/overviewBrief';
+import { greetingFor, greetingName } from '../core/greeting';
 import { mergePrefs } from '../core/prefs';
 
 const hour = (time: string, over: Partial<OutlookHour> = {}): OutlookHour =>
@@ -736,5 +737,47 @@ describe('briefFor', () => {
     const order = kinds(briefFor(rows));
     expect(order.indexOf('wettest')).toBeLessThan(order.indexOf('tempRange'));
     expect(order.indexOf('rainAhead')).toBeLessThan(order.indexOf('tempRange'));
+  });
+});
+
+describe('the greeting', () => {
+  const at = (h: number) => {
+    const d = new Date('2026-04-10T12:00:00');
+    d.setHours(h, 0, 0, 0);
+    return d;
+  };
+
+  it('splits the day where Dutch does', () => {
+    expect(greetingFor(at(0))).toBe('night');
+    expect(greetingFor(at(5))).toBe('night');
+    expect(greetingFor(at(6))).toBe('morning');
+    expect(greetingFor(at(11))).toBe('morning');
+    expect(greetingFor(at(12))).toBe('afternoon');
+    expect(greetingFor(at(17))).toBe('afternoon');
+    expect(greetingFor(at(18))).toBe('evening');
+    expect(greetingFor(at(23))).toBe('evening');
+  });
+
+  it('greets a grower up at four with the night they are having', () => {
+    expect(greetingFor(at(4))).toBe('night');
+  });
+
+  it('uses the first name only', () => {
+    expect(greetingName('Niek van Andel')).toBe('Niek');
+    expect(greetingName('  Niek  ')).toBe('Niek');
+  });
+
+  it('refuses an email rather than trimming one into a name', () => {
+    // The integration stores the email in `account`, so the fallback path can hand
+    // this an address. "Goedemorgen, niek" from niek@agroexact.nl is a guess at
+    // somebody's name from a mailbox.
+    expect(greetingName('niek@agroexact.nl')).toBeNull();
+    expect(greetingName(null)).toBeNull();
+    expect(greetingName('')).toBeNull();
+    expect(greetingName('   ')).toBeNull();
+  });
+
+  it('will not greet somebody by an initial', () => {
+    expect(greetingName('N. van Andel')).toBeNull();
   });
 });
