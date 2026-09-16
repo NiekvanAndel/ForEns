@@ -18,12 +18,20 @@ import { loadStage1, loadStage2 } from './sources/openMeteo';
 import { processAll } from './model/process';
 import { deriveAlert } from './model/alert';
 import { activeProvider } from './radar';
-import { planNotification, scheduleNotification } from './notifications';
+import {
+  planNotification, planUserAlertNotification, scheduleNotification,
+} from './notifications';
+import { fetchAlertReadings } from './alertFetch';
+import { runUserAlerts, sanitiseStates } from './alertRun';
 import { syncPush } from './pushSync';
 import { mergePrefs, activeLocation, type Prefs } from './prefs';
 
 export const REFRESH_TASK = 'com.agroexact.exactcast.refresh';
 const PREFS_KEY = 'exactcast.prefs.v1';
+/** Which of the reader's own rules were tripped at the last run, so a standing
+ *  condition notifies once rather than every half hour. Not in preferences: it is
+ *  bookkeeping, and it would re-register the device on every shower. */
+const ALERT_STATE_KEY = 'exactcast.alertState.v1';
 
 /** Injected by the app so the task can write the widget payload without this
  *  module depending on a native target helper. */
@@ -97,6 +105,8 @@ TaskManager.defineTask(REFRESH_TASK, async () => {
     });
     if (plan) await scheduleNotification(plan);
 
+    await runOwnRules(prefs, s1.offsetSec, model.nowHour);
+
     // A token can be reissued by the system, and a device that has not opened the
     // app in weeks would otherwise be registered under one the server can no longer
     // deliver to. A no-op until an endpoint is configured.
@@ -125,4 +135,45 @@ export async function unregisterBackgroundRefresh(): Promise<void> {
   } catch {
     /* nothing registered */
   }
+}
+
+
+/**
+ * The reader's own thresholds, evaluated against the stations they name.
+ *
+ * Separate from the task body because it is a different job with a different failure
+ * mode: the forecast above is for the widget and must run, and this needs an
+ * AgroExact account most devices do not have. It fails soft all the way down — no
+ * account, no token, no rules, a station that would not answer: each of those is a
+ * run that does nothing, never a run that fails.
+ *
+ * The state file is read and written whole. A rule deleted between runs simply stops
+ * appearing in it, which is what keeps it from growing for ever.
+ */
+async function runOwnRules(prefs: Prefs, offsetSec: number, nowKey: string): Promise<void> {
+  const alerts = prefs.userAlerts.filter((a) => a.enabled);
+  if (!alerts.length) return;
+
+  const { readings, ok } = await fetchAlertReadings(alerts, offsetSec, nowKey);
+  // Nothing could be read. Leave every rule's memory exactly as it was: a run that
+  // could not see is not a run that saw nothing wrong, and clearing here would make
+  // the next successful run notify about a condition that never went away.
+  if (!ok) return;
+
+  let previous = {};
+  try {
+    const raw = await AsyncStorage.getItem(ALERT_STATE_KEY);
+    previous = sanitiseStates(raw ? JSON.parse(raw) : null, alerts);
+  } catch {
+    // An unreadable state file costs one round of over-notifying, not the run.
+  }
+
+  const { fired, states } = runUserAlerts(alerts, readings, previous);
+
+  for (const tripped of fired) {
+    const plan = planUserAlertNotification(tripped, prefs, { locationName: '', tzOffsetSec: offsetSec });
+    if (plan) await scheduleNotification(plan);
+  }
+
+  await AsyncStorage.setItem(ALERT_STATE_KEY, JSON.stringify(states)).catch(() => {});
 }

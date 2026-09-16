@@ -71,7 +71,11 @@ only key that can be relied on.
    that would make people distrust both. Port the module, or expose it.
 3. For each device subscribed to that kind at that place, and outside its quiet
    hours, send one notification.
-4. For each `rule`, poll its stations and compare. A reading that is missing is not a
+4. For each `rule`, poll its stations and compare. The device does this too, in
+   `core/alertFetch` and `core/alertRun`, whenever iOS grants a background window —
+   so a service taking over should match its edge behaviour (fire when a rule first
+   becomes true, stay quiet while it holds, re-arm when the reading returns, repeat
+   after twelve hours) or the two will disagree about how often to speak. A reading that is missing is not a
    reading that is safe: do not fire on a gap. `core/alerts.ts` has the comparison and
    its tests; `evaluateAlert` is four lines and worth porting rather than rewriting.
 5. Deduplicate per device, per kind, per event — the local fallback keys on `kind`

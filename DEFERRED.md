@@ -562,18 +562,37 @@ headline, advice line and eyebrow in all five languages, and `deriveAlert` conve
 its figures to the reader's units — so a service honouring the registration's `lang`,
 `tempUnit` and `windUnit` writes what the device's own block says.)
 
-### The reader's own thresholds are stored and sent, not yet evaluated
+### The reader's own thresholds evaluate on the device
 
 A rule made from a block on 'Actueel' (`core/alerts.ts`, `ui/current/TileAlertForm`)
-is stored in preferences, listed in Instellingen → Meldingen, and travels in the push
-registration as `rules`. Nothing evaluates it yet.
+is stored in preferences, listed in Instellingen → Meldingen, travels in the push
+registration as `rules`, **and is evaluated by the background task**.
 
-Evaluating one on the device is a bigger job than it looks: a rule names AgroExact
-stations, which are not the location the app is showing, so the background task would
-need station readings — and that means an access token from SecureStore plus the
-refresh logic that currently lives in the React provider. That is worth doing
-deliberately or not at all. The comparison itself is done and tested
-(`evaluateAlert`), so whichever side ends up running it, the rule means one thing.
+The chain: `core/auth/store` hands out an access token outside React (refreshing and
+persisting the rotated pair, since a refresh token is single-use); `core/alertFetch`
+reads each watched station once, at most twelve a run; `core/model/stationTiles`
+computes the block's figure from that station alone; `core/alertRun` decides which
+rules tripped and which are worth saying. All of it is pure except the two fetching
+modules, and those take injected dependencies so the tests need no network.
+
+Two things to know when reading it:
+
+- **A station's figure is the station's, not the merged model's.** `modelTiles`
+  answers for a *location*, with the weather model filling whatever the instrument
+  did not report. That is right for a page and wrong for a rule — somebody who ticked
+  a station wants that station's number, not one a forecast contributed to. So the
+  aggregation is written out again in `stationTiles`, and the tests hold the two to
+  the same windows.
+- **A rule notifies on the edge.** "Below two" holds all night; a run every half hour
+  saying so is how notifications get switched off. It fires when it first becomes
+  true, goes quiet while it stays true, arms again when the reading comes back, and
+  may repeat after twelve hours (`REARM_AFTER_MS`). The bookkeeping lives in its own
+  AsyncStorage key, not in preferences, because preferences sync to the push server
+  and a shower crossing a threshold should not re-register the device.
+
+What is still iOS's to decide is *when*. The task gets a window every few hours at
+best, so a rule can trip long before anyone hears about it. That is the same ceiling
+the built-in alerts have and the reason the push service is still worth building.
 
 ### Alerts fire from the background task only
 
