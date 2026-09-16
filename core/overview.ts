@@ -42,7 +42,9 @@ export type OverviewSource =
   /** The radar nowcast per saved location. The heaviest of the three. */
   | 'nowcast'
   /** A short forecast per saved location: the coming days, and tonight. */
-  | 'outlook';
+  | 'outlook'
+  /** The 51 members' daily rainfall per location — how much they disagree. */
+  | 'ensemble';
 
 /** How much of a row a widget wants. Two halves sit side by side; a full one does
  *  not, whatever is next to it. */
@@ -87,6 +89,10 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   { id: 'workability', size: 'full', needs: ['conditions', 'outlook'] },
   // The coming days, a row per location, each a way into that location's own page.
   { id: 'outlook', size: 'full', needs: ['outlook'] },
+  // How much the members disagree about tomorrow's rain. The one widget here that is
+  // about confidence rather than weather, which is why it sits after the forecast it
+  // qualifies rather than among the readings.
+  { id: 'confidence', size: 'full', needs: ['ensemble'] },
   // Rain in the next two hours, for the location in front. The sharpest thing the app
   // has, and the only widget here that is about one place.
   { id: 'nowcast', size: 'full', needs: ['nowcast'], defaultHidden: true },

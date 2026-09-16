@@ -10,6 +10,7 @@
  * Pure, and in canonical units — °C, km/h, mm. The page converts where it draws, as
  * every other surface in this app does.
  */
+import type { EnsembleOutlook } from './sources/ensembleOutlook';
 import type { ForecastModel, Hour } from './model/types';
 
 /** A short forecast for one location, beyond what the observation feed carries. */
@@ -64,6 +65,15 @@ export interface OverviewRow {
   tonightMinC: number | null;
   days: OutlookDay[];
   hours: OutlookHour[];
+
+  /** The last 24 hours of rainfall, hour by hour, for a sparkline. Oldest first. */
+  rainTrail: (number | null)[];
+  /** The same for temperature, so a card can show the shape of the day behind the
+   *  figure rather than only the figure. */
+  tempTrail: (number | null)[];
+
+  /** Where the members put the coming days' rain. Null without the ensemble source. */
+  ensemble: EnsembleOutlook | null;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -81,6 +91,7 @@ export interface BuildRowInput {
   loading: boolean;
   model: ForecastModel | null;
   outlook: LocationOutlook | null;
+  ensemble?: EnsembleOutlook | null;
 }
 
 /**
@@ -123,6 +134,11 @@ export function buildOverviewRow(input: BuildRowInput): OverviewRow {
     tonightMinC: outlook ? tonightMinimum(outlook.hours) : null,
     days: outlook?.days ?? [],
     hours: outlook?.hours ?? [],
+
+    rainTrail: past24.map((h) => h.precip ?? null),
+    tempTrail: past24.map((h) => h.tempExact ?? h.temp ?? null),
+
+    ensemble: input.ensemble ?? null,
   };
 }
 
@@ -282,4 +298,82 @@ export function summariseOverview(rows: readonly OverviewRow[]): OverviewSummary
       .map((r) => r.name),
     loading: rows.length > 0 && rows.every((r) => r.loading),
   };
+}
+
+
+// ── Which locations are worth the space ──────────────────────────────────────
+
+/**
+ * A widget's rows, split into the ones with something to say and a count of the rest.
+ *
+ * The page's hardest constraint is not data, it is height. A grower with eight fields
+ * scrolling past eight lines of "0,0 mm" learns that the rainfall widget is mostly
+ * noise, and stops reading it on the morning it is not. So a widget shows the
+ * locations that clear its own bar and closes with one line for the others — which is
+ * both shorter and more informative, because "and five others dry" is a fact and five
+ * zeroes are a list.
+ *
+ * The bar is the widget's to choose, because "worth mentioning" is different for
+ * rainfall and for frost. What is shared is the shape of the answer.
+ */
+export interface NotableRows {
+  shown: OverviewRow[];
+  /** How many were left out — never listed, only counted. */
+  rest: number;
+  /** True where nothing cleared the bar, so the widget can say so in a sentence
+   *  rather than draw an empty card. */
+  empty: boolean;
+}
+
+export function notableRows(
+  rows: readonly OverviewRow[],
+  pick: (row: OverviewRow) => number | null,
+  /** Clears the bar at or above this. */
+  atLeast: number,
+  direction: 'desc' | 'asc' = 'desc',
+  /** Never show more than this many, however many clear it — a widget is a summary
+   *  and eight lines is a page. */
+  limit = 5
+): NotableRows {
+  const worth = rankRows(rows, pick, direction).filter((r) => {
+    const v = pick(r);
+    if (v == null) return false;
+    return direction === 'desc' ? v >= atLeast : v <= atLeast;
+  });
+  const shown = worth.slice(0, limit);
+  return { shown, rest: rows.length - shown.length, empty: worth.length === 0 };
+}
+
+/**
+ * How far apart the locations are on one reading.
+ *
+ * A comparison widget earns its lines by showing a difference. Where every field is
+ * within a degree of every other, the honest and shorter thing is one line saying so
+ * — which is what `spreadOf` lets a widget decide.
+ */
+export function spreadOf(
+  rows: readonly OverviewRow[],
+  pick: (row: OverviewRow) => number | null
+): { min: number; max: number; span: number } | null {
+  const values = rows.map(pick).filter((v): v is number => v != null && Number.isFinite(v));
+  if (!values.length) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  return { min, max, span: max - min };
+}
+
+/**
+ * Which way a reading is going: the next 24 hours against the last 24.
+ *
+ * A real trend rather than a decorative arrow — for rainfall it answers "is it about
+ * to get wetter than it has been", which is the question behind most of the others on
+ * this page. Flat below a tenth, so a trace of drizzle does not point an arrow.
+ */
+export type Trend = 'up' | 'down' | 'flat';
+
+export function trendOf(before: number | null, after: number | null, deadband = 0.1): Trend {
+  if (before == null || after == null) return 'flat';
+  const change = after - before;
+  if (Math.abs(change) < deadband) return 'flat';
+  return change > 0 ? 'up' : 'down';
 }

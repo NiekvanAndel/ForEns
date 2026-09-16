@@ -42,13 +42,14 @@ import { Text } from '../ui/Text';
 import { Icon } from '../ui/Icon';
 import { TileEditor } from '../ui/current/TileEditor';
 import {
-  AlertsWidget, FrostWidget, MapWidget, NowcastWidget, OutlookWidget, Rain24Widget,
-  RainNextWidget, RulesWidget, SummaryWidget, TempWidget, WindWidget, WorkWidget,
-  type WidgetProps,
+  AlertsWidget, ConfidenceWidget, FrostWidget, MapWidget, NowcastWidget, OutlookWidget,
+  Rain24Widget, RainNextWidget, RulesWidget, SummaryWidget, TempWidget, WindWidget,
+  WorkWidget, type WidgetProps,
 } from '../ui/overview/widgets';
 import { usePrefs } from '../state/prefs';
 import {
-  useAllLocationConditions, useAllLocationNowcasts, useAllLocationOutlooks,
+  useAllLocationConditions, useAllLocationEnsembles, useAllLocationNowcasts,
+  useAllLocationOutlooks,
 } from '../state/allLocations';
 import {
   arrangeWidgets, neededSources, OVERVIEW_WIDGETS, widgetRows,
@@ -70,6 +71,7 @@ const WIDGET_VIEWS: Record<string, (props: WidgetProps) => React.ReactElement | 
   frost: FrostWidget,
   workability: WorkWidget,
   outlook: OutlookWidget,
+  confidence: ConfidenceWidget,
   nowcast: NowcastWidget,
   map: MapWidget,
 };
@@ -79,6 +81,7 @@ const WIDGET_LABEL: Record<string, AppStringKey> = {
   summary: 'ovSummary', alerts: 'ovAlerts', rules: 'ovRules',
   rain24: 'ovRain24', rainNext: 'ovRainNext', temp: 'ovTemp', wind: 'ovWind',
   frost: 'ovFrost', workability: 'ovWork', outlook: 'ovOutlook',
+  confidence: 'ovConfidence',
   nowcast: 'ovNowcast', map: 'ovMap',
 };
 
@@ -96,6 +99,7 @@ export default function OverviewScreen() {
   const conditions = useAllLocationConditions(sources.has('conditions'));
   const nowcasts = useAllLocationNowcasts(sources.has('nowcast'));
   const outlooks = useAllLocationOutlooks(sources.has('outlook'));
+  const ensembles = useAllLocationEnsembles(sources.has('ensemble'));
 
   const rows = useMemo(
     () =>
@@ -107,9 +111,10 @@ export default function OverviewScreen() {
           loading: c.loading,
           model: c.model,
           outlook: outlooks[i] ?? null,
+          ensemble: ensembles[i] ?? null,
         })
       ),
-    [conditions, outlooks]
+    [conditions, outlooks, ensembles]
   );
 
   // The same judgement the block on 'Nu' makes, per location — so a warning here and

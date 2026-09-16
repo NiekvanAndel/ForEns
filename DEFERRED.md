@@ -555,6 +555,13 @@ What is deliberately not built yet:
   to a different limit, needs a per-widget options bag — the catalogue is the place
   to hang it.
 
+**Space is the page's hardest constraint**, not data. Widgets show the locations that
+clear their own bar and close with one line counting the rest (`notableRows`), a
+comparison collapses to a single line where the locations agree (`spreadOf`), and
+almost every reading carries a small mark — a rainfall sparkline, a workability ring,
+an ensemble band (`ui/overview/marks`). Each bar is the widget's own: worth mentioning
+means 0,1 mm for rain and 3 °C for frost.
+
 Widgets worth considering next, in rough order of how often a grower would use them:
 soil temperature and moisture where a station reports them, a drying window
 (evaporation against rainfall), degree-day accumulation per crop, a spray-drift

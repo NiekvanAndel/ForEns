@@ -5,6 +5,20 @@
  * the page builds once. None of them fetches anything: the page knows which sources
  * the arrangement justifies and loads those, and a widget draws whatever has landed.
  *
+ * ## Space is the constraint, not data
+ *
+ * A grower with eight fields scrolling past eight lines of "0,0 mm" learns that the
+ * rainfall widget is mostly noise, and stops reading it on the morning it is not. So
+ * a widget shows the locations that clear its own bar and closes with one line
+ * counting the rest — shorter *and* more informative, because "and five others dry"
+ * is a fact where five zeroes are a list. `notableRows` is the shared shape of that;
+ * each widget picks its own bar, because worth mentioning means something different
+ * for rainfall than for frost.
+ *
+ * Almost every reading carries a small mark beside it — a sparkline, a ring, a band —
+ * because a figure says one thing and a figure with the shape of the day behind it
+ * says three. See `./marks`.
+ *
  * ## Every line is a way in
  *
  * A summary that cannot be acted on is a poster. So a location's line goes to that
@@ -30,9 +44,11 @@ import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { alertValueLabel } from '../settings/UserAlertList';
 import {
-  firstWorkRun, rankRows, summariseOverview, workWindow,
+  firstWorkRun, notableRows, rankRows, spreadOf, summariseOverview, trendOf, workWindow,
   type OverviewRow,
 } from '../../core/overviewData';
+import { dayAgreement } from '../../core/sources/ensembleOutlook';
+import { BarSpark, LineSpark, RestLine, Ring, SpreadBand, TrendMark } from './marks';
 import type { WeatherAlert } from '../../core/model/alert';
 import {
   convTemp, convWind, dayNames, fmtMm, ta, tempUnitLabel, windUnitLabel,
@@ -55,45 +71,50 @@ export function SummaryWidget({ rows }: WidgetProps) {
 
   const deg = (v: number) => `${convTemp(v, prefs.tempUnit)}${tempUnitLabel(prefs.tempUnit)}`;
 
-  const lines: string[] = [];
+  /**
+   * Rain first, then temperature.
+   *
+   * Because that is the order an arable grower asks them in: whether the land is
+   * workable is a rainfall question, and the temperature qualifies it. The page led
+   * with the temperature spread at first, which reads as a weather app rather than as
+   * a working one.
+   */
+  const headline = s.wettest
+    ? `${fmtMm(s.wettest.value)} mm · ${s.wettest.name}`
+    : s.loading
+      ? ''
+      : ta('ovAllDry', prefs.lang);
+
+  const under: string[] = [];
+  if (s.rainAhead.length) {
+    under.push(`${ta('ovRainAhead', prefs.lang)} ${s.rainAhead.join(', ')}.`);
+  } else if (!s.loading && rows.some((r) => r.rainNext24 != null)) {
+    under.push(ta('ovNoRainAhead', prefs.lang));
+  }
   if (s.warmest && s.coldest) {
-    lines.push(
+    under.push(
       s.warmest.name === s.coldest.name
-        ? `${deg(s.warmest.value)} · ${s.warmest.name}`
+        ? deg(s.warmest.value)
         : `${deg(s.coldest.value)} ${s.coldest.name} — ${deg(s.warmest.value)} ${s.warmest.name}`
     );
-  }
-  if (s.wettest) {
-    lines.push(`${ta('ovWettest', prefs.lang)}: ${fmtMm(s.wettest.value)} mm · ${s.wettest.name}`);
-  } else if (!s.loading) {
-    lines.push(ta('ovAllDry', prefs.lang));
-  }
-  if (s.rainAhead.length) {
-    lines.push(`${ta('ovRainAhead', prefs.lang)} ${s.rainAhead.join(', ')}.`);
   }
 
   return (
     <WidgetCard
       title={ta('ovSummary', prefs.lang)}
-      hint={`${s.locations} ${s.locations === 1 ? 'locatie' : 'locaties'}`}
+      hint={s.wettest ? ta('ovWettest', prefs.lang) : `${s.locations}`}
     >
-      {lines.length ? (
-        <View style={{ gap: 4 }}>
-          {lines.map((line, i) => (
-            <Text
-              key={i}
-              variant={i === 0 ? 'bodySm' : 'caption'}
-              weight={i === 0 ? 'semibold' : 'regular'}
-              color={i === 0 ? palette.inkHeading : palette.muted}
-              style={{ lineHeight: 19 }}
-            >
-              {line}
-            </Text>
-          ))}
-        </View>
-      ) : (
-        <WidgetNote>{ta('ovQuiet', prefs.lang)}</WidgetNote>
-      )}
+      {headline ? (
+        <Text variant="stat" color={palette.inkHeading} tabular style={{ fontSize: 22 }}>
+          {headline}
+        </Text>
+      ) : null}
+      {under.map((line, i) => (
+        <Text key={i} variant="caption" color={palette.muted} style={{ lineHeight: 18 }}>
+          {line}
+        </Text>
+      ))}
+      {!headline && !under.length ? <WidgetNote>{ta('ovQuiet', prefs.lang)}</WidgetNote> : null}
     </WidgetCard>
   );
 }
@@ -174,64 +195,118 @@ function RankedWidget({
 export function Rain24Widget({ rows, onOpen }: WidgetProps) {
   const { prefs } = usePrefs();
   const { palette } = useTheme();
+  // A tenth of a millimetre is the point below which "it rained" is not worth a line.
+  const { shown, rest, empty } = notableRows(rows, (r) => r.rain24, 0.1);
+
   return (
-    <RankedWidget
-      title={ta('ovRain24', prefs.lang)}
-      hint={ta('last24h', prefs.lang)}
-      rows={rows}
-      pick={(r) => r.rain24}
-      onPress={(r) => onOpen(r.index, 'grafiek')}
-      render={(r) => (
-        <Reading
-          value={r.rain24 == null ? '–' : fmtMm(r.rain24)}
-          unit={r.rain24 == null ? undefined : 'mm'}
-          color={r.rain24 ? palette.valPrecip : palette.valPrecipZero}
-          dim={r.rain24 == null}
-        />
+    <WidgetCard title={ta('ovRain24', prefs.lang)} hint={ta('last24h', prefs.lang)}>
+      {empty ? (
+        <WidgetNote>{ta('ovAllDry', prefs.lang)}</WidgetNote>
+      ) : (
+        shown.map((row, i) => (
+          <LocationLine
+            key={row.index}
+            name={row.name}
+            measured={row.hasStation}
+            divider={i > 0}
+            onPress={() => onOpen(row.index, 'grafiek')}
+          >
+            {/* When it fell, beside how much — the shape is the half a total cannot
+                say, and it is the half that decides whether the land has drained. */}
+            <BarSpark values={row.rainTrail} color={palette.valPrecip} />
+            <TrendMark
+              trend={trendOf(row.rain24, row.rainNext24, 0.5)}
+              color={palette.valPrecip}
+            />
+            <Reading value={fmtMm(row.rain24 ?? 0)} unit="mm" color={palette.valPrecip} />
+          </LocationLine>
+        ))
       )}
-    />
+      {rest > 0 && !empty ? (
+        <RestLine>{ta('ovRestDry', prefs.lang).replace('{n}', String(rest))}</RestLine>
+      ) : null}
+    </WidgetCard>
   );
 }
 
 export function RainNextWidget({ rows, onOpen }: WidgetProps) {
   const { prefs } = usePrefs();
   const { palette } = useTheme();
+  // Half a millimetre: below that nobody changes a plan, and a line that says they
+  // might is a line that trains people to skip the widget.
+  const { shown, rest, empty } = notableRows(rows, (r) => r.rainNext24, 0.5);
+
   return (
-    <RankedWidget
-      title={ta('ovRainNext', prefs.lang)}
-      hint={ta('next24h', prefs.lang)}
-      rows={rows}
-      pick={(r) => r.rainNext24}
-      onPress={(r) => onOpen(r.index, 'forecast')}
-      render={(r) => (
-        <Reading
-          value={r.rainNext24 == null ? '–' : fmtMm(r.rainNext24)}
-          unit={r.rainNext24 == null ? undefined : 'mm'}
-          color={r.rainNext24 ? palette.valPrecip : palette.valPrecipZero}
-          dim={r.rainNext24 == null}
-        />
+    <WidgetCard title={ta('ovRainNext', prefs.lang)} hint={ta('next24h', prefs.lang)}>
+      {empty ? (
+        <WidgetNote>{ta('ovNoRainAhead', prefs.lang)}</WidgetNote>
+      ) : (
+        shown.map((row, i) => (
+          <LocationLine
+            key={row.index}
+            name={row.name}
+            measured={row.hasStation}
+            divider={i > 0}
+            onPress={() => onOpen(row.index, 'forecast')}
+          >
+            <BarSpark
+              values={row.hours.slice(0, 24).map((h) => h.precip)}
+              color={palette.valPrecip}
+            />
+            <Reading value={fmtMm(row.rainNext24 ?? 0)} unit="mm" color={palette.valPrecip} />
+          </LocationLine>
+        ))
       )}
-    />
+      {rest > 0 && !empty ? (
+        <RestLine>{ta('ovRestDry', prefs.lang).replace('{n}', String(rest))}</RestLine>
+      ) : null}
+    </WidgetCard>
   );
 }
 
 export function TempWidget({ rows, onOpen }: WidgetProps) {
   const { prefs } = usePrefs();
+  const { palette } = useTheme();
+  const spread = spreadOf(rows, (r) => r.tempC);
+  const deg = (v: number) => `${convTemp(v, prefs.tempUnit)}${tempUnitLabel(prefs.tempUnit)}`;
+
+  // Within two degrees of each other there is no comparison to draw, and a column of
+  // near-identical numbers is height spent saying "the same". One line says it.
+  if (spread && spread.span < 2) {
+    return (
+      <WidgetCard title={ta('ovTemp', prefs.lang)} hint={ta('ovSpread', prefs.lang)}>
+        <Text variant="stat" color={palette.inkHeading} tabular style={{ fontSize: 24 }}>
+          {deg(spread.max)}
+        </Text>
+        <Text variant="caption" color={palette.muted}>
+          {`${ta('ovEverywhere', prefs.lang)} ${deg(spread.min)}–${deg(spread.max)}`}
+        </Text>
+      </WidgetCard>
+    );
+  }
+
+  const ranked = rankRows(rows, (r) => r.tempC);
   return (
-    <RankedWidget
-      title={ta('ovTemp', prefs.lang)}
-      hint={ta('ovSpread', prefs.lang)}
-      rows={rows}
-      pick={(r) => r.tempC}
-      onPress={(r) => onOpen(r.index, 'actueel')}
-      render={(r) => (
-        <Reading
-          value={r.tempC == null ? '–' : String(convTemp(r.tempC, prefs.tempUnit))}
-          unit={r.tempC == null ? undefined : tempUnitLabel(prefs.tempUnit)}
-          dim={r.tempC == null}
-        />
-      )}
-    />
+    <WidgetCard title={ta('ovTemp', prefs.lang)} hint={ta('ovSpread', prefs.lang)}>
+      {ranked.map((row, i) => (
+        <LocationLine
+          key={row.index}
+          name={row.name}
+          measured={row.hasStation}
+          divider={i > 0}
+          onPress={() => onOpen(row.index, 'actueel')}
+        >
+          {/* The last 24 hours behind the reading: a field at 4° that has been falling
+              all evening is a different night from one that has been climbing. */}
+          <LineSpark values={row.tempTrail} color={palette.valTemp} />
+          <Reading
+            value={row.tempC == null ? '–' : String(convTemp(row.tempC, prefs.tempUnit))}
+            unit={row.tempC == null ? undefined : tempUnitLabel(prefs.tempUnit)}
+            dim={row.tempC == null}
+          />
+        </LocationLine>
+      ))}
+    </WidgetCard>
   );
 }
 
@@ -262,25 +337,39 @@ export function WindWidget({ rows, onOpen }: WidgetProps) {
 export function FrostWidget({ rows, onOpen }: WidgetProps) {
   const { prefs } = usePrefs();
   const { palette } = useTheme();
+  // Three degrees, not zero: a field forecast for 2° is the one somebody wants to
+  // know about, because that is where a forecast being wrong costs a crop.
+  const { shown, rest, empty } = notableRows(rows, (r) => r.tonightMinC, 3, 'asc');
+
   return (
-    <RankedWidget
-      title={ta('ovFrost', prefs.lang)}
-      hint={ta('ovTonight', prefs.lang)}
-      rows={rows}
-      // Coldest first: the point of this widget is the field that freezes, and a
-      // ranking that put the mildest at the top would bury it.
-      direction="asc"
-      pick={(r) => r.tonightMinC}
-      onPress={(r) => onOpen(r.index, 'forecast')}
-      render={(r) => (
-        <Reading
-          value={r.tonightMinC == null ? '–' : String(convTemp(r.tonightMinC, prefs.tempUnit))}
-          unit={r.tonightMinC == null ? undefined : tempUnitLabel(prefs.tempUnit)}
-          color={r.tonightMinC != null && r.tonightMinC < 0 ? palette.valLow : undefined}
-          dim={r.tonightMinC == null}
-        />
+    <WidgetCard title={ta('ovFrost', prefs.lang)} hint={ta('ovTonight', prefs.lang)}>
+      {empty ? (
+        <WidgetNote>{ta('ovNothingNotable', prefs.lang)}</WidgetNote>
+      ) : (
+        shown.map((row, i) => (
+          <LocationLine
+            key={row.index}
+            name={row.name}
+            measured={row.hasStation}
+            divider={i > 0}
+            onPress={() => onOpen(row.index, 'forecast')}
+          >
+            <Reading
+              value={String(convTemp(row.tonightMinC as number, prefs.tempUnit))}
+              unit={tempUnitLabel(prefs.tempUnit)}
+              color={(row.tonightMinC as number) < 0 ? palette.valLow : palette.inkHeading}
+            />
+          </LocationLine>
+        ))
       )}
-    />
+      {rest > 0 && !empty ? (
+        <RestLine>
+          {ta('ovRestMild', prefs.lang)
+            .replace('{n}', String(rest))
+            .replace('{v}', `${convTemp(3, prefs.tempUnit)}${tempUnitLabel(prefs.tempUnit)}`)}
+        </RestLine>
+      ) : null}
+    </WidgetCard>
   );
 }
 
@@ -309,6 +398,8 @@ export function WorkWidget({ rows, onOpen }: WidgetProps) {
       {rows.map((row, i) => {
         const window = workWindow(row.hours);
         const run = firstWorkRun(window);
+        const workable = window.filter((h) => h.verdict === 'yes').length;
+        const share = window.length ? workable / window.length : 0;
         const label = !window.length
           ? '–'
           : run == null
@@ -321,25 +412,42 @@ export function WorkWidget({ rows, onOpen }: WidgetProps) {
           <View
             key={row.index}
             style={{
-              gap: 6, paddingVertical: 9,
+              flexDirection: 'row', alignItems: 'center', gap: space[3],
+              paddingVertical: 10,
               borderTopWidth: i > 0 ? 1 : 0,
               borderTopColor: palette.hairlineSoft,
             }}
           >
-            <LocationLine name={row.name} measured={row.hasStation} onPress={() => onOpen(row.index, 'forecast')}>
-              <Text variant="caption" weight="semibold" color={palette.muted} numberOfLines={1}>
-                {label}
+            {/* How much of the day is workable at all, as a proportion — the one
+                figure on this page that genuinely is one. The strip beside it says
+                *when*; the ring says *how much*, which is what decides whether the
+                day is worth planning around at all. */}
+            <Ring fraction={share} color={palette.agroBright} size={42}>
+              <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
+                {window.length ? `${workable}` : '–'}
               </Text>
-            </LocationLine>
-            {/* One block an hour. Flexed rather than fixed so the strip is the width
-                of the card whatever the forecast's length. */}
-            <View style={{ flexDirection: 'row', gap: 2, height: 8 }}>
-              {window.map((h) => (
-                <View
-                  key={h.time}
-                  style={{ flex: 1, borderRadius: 2, backgroundColor: colour(h.verdict) }}
-                />
-              ))}
+            </Ring>
+
+            <View style={{ flex: 1, gap: 6 }}>
+              <LocationLine
+                name={row.name}
+                measured={row.hasStation}
+                onPress={() => onOpen(row.index, 'forecast')}
+              >
+                <Text variant="caption" weight="semibold" color={palette.muted} numberOfLines={1}>
+                  {label}
+                </Text>
+              </LocationLine>
+              {/* One block an hour, flexed so the strip is the width of the card
+                  whatever the forecast's length. */}
+              <View style={{ flexDirection: 'row', gap: 2, height: 8 }}>
+                {window.map((h) => (
+                  <View
+                    key={h.time}
+                    style={{ flex: 1, borderRadius: 2, backgroundColor: colour(h.verdict) }}
+                  />
+                ))}
+              </View>
             </View>
           </View>
         );
@@ -483,6 +591,79 @@ export function NowcastWidget() {
         </View>
       ) : (
         <WidgetNote>{ta('dryAt', prefs.lang)}</WidgetNote>
+      )}
+    </WidgetCard>
+  );
+}
+
+// ── How much the members agree ────────────────────────────────────────────────
+
+/**
+ * Where the 51 members put tomorrow's rain, per location.
+ *
+ * The only widget here about confidence rather than weather, and the reason it earns
+ * a place: "4 mm tomorrow" from a run the members are split down the middle on is a
+ * different sentence from the same figure they all agree with, and a grower deciding
+ * whether to travel deserves to be told which. The band shows how unevenly; the word
+ * beside it says which of the three it is.
+ *
+ * Tomorrow rather than today, because today is largely settled and tomorrow is the
+ * day a decision is still open on.
+ */
+export function ConfidenceWidget({ rows, onOpen }: WidgetProps) {
+  const { palette } = useTheme();
+  const { prefs } = usePrefs();
+
+  const tomorrow = rows
+    .map((row) => ({ row, day: row.ensemble?.[1] ?? row.ensemble?.[0] ?? null }))
+    .filter((x): x is { row: OverviewRow; day: NonNullable<typeof x.day> } => x.day != null);
+
+  // One scale down the column, so two bands of the same width mean the same
+  // disagreement — a track scaled per row would make every location look equally
+  // uncertain.
+  const widest = Math.max(1, ...tomorrow.map(({ day }) => day.p90));
+
+  const word = (a: ReturnType<typeof dayAgreement>) =>
+    ta(a === 'agree' ? 'ovAgree' : a === 'mixed' ? 'ovMixed' : 'ovDisagree', prefs.lang);
+  const ink = (a: ReturnType<typeof dayAgreement>) =>
+    a === 'agree' ? palette.agroInk : a === 'mixed' ? palette.muted : palette.valHigh;
+
+  return (
+    <WidgetCard
+      title={ta('ovConfidence', prefs.lang)}
+      hint={tomorrow[0] ? `${ta('ovRainNext', prefs.lang)} · ${tomorrow[0].day.members} ${ta('ovMembers', prefs.lang)}` : undefined}
+    >
+      {tomorrow.length ? (
+        tomorrow.map(({ row, day }, i) => {
+          const agreement = dayAgreement(day);
+          return (
+            <LocationLine
+              key={row.index}
+              name={row.name}
+              measured={row.hasStation}
+              divider={i > 0}
+              onPress={() => onOpen(row.index, 'forecast')}
+            >
+              <SpreadBand
+                lo={day.p10}
+                hi={day.p90}
+                mid={day.p50}
+                max={widest}
+                color={palette.valPrecip}
+              />
+              <Text variant="caption" weight="semibold" color={ink(agreement)}>
+                {word(agreement)}
+              </Text>
+              <Reading
+                value={`${Math.round(day.wetShare)}`}
+                unit="%"
+                color={day.wetShare >= 50 ? palette.valPrecip : palette.muted}
+              />
+            </LocationLine>
+          );
+        })
+      ) : (
+        <WidgetNote>–</WidgetNote>
       )}
     </WidgetCard>
   );

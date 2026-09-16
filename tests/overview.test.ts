@@ -11,10 +11,12 @@ import {
   arrangeWidgets, DEFAULT_OVERVIEW_LAYOUT, neededSources, OVERVIEW_WIDGETS, widgetRows,
 } from '../core/overview';
 import {
-  buildOverviewRow, DEFAULT_WORK_LIMITS, firstWorkRun, rankRows, summariseOverview,
-  tonightMinimum, workWindow, type OutlookHour, type OverviewRow,
+  buildOverviewRow, DEFAULT_WORK_LIMITS, firstWorkRun, notableRows, rankRows, spreadOf,
+  summariseOverview, tonightMinimum, trendOf, workWindow,
+  type OutlookHour, type OverviewRow,
 } from '../core/overviewData';
 import { parseOutlook } from '../core/sources/outlook';
+import { dayAgreement, parseEnsembleOutlook } from '../core/sources/ensembleOutlook';
 import { mergePrefs } from '../core/prefs';
 
 const hour = (time: string, over: Partial<OutlookHour> = {}): OutlookHour =>
@@ -24,6 +26,7 @@ const row = (over: Partial<OverviewRow> = {}): OverviewRow => ({
   index: 0, name: 'Hedikhuizen', hasStation: false, loading: false,
   tempC: 15, humidity: 70, windKmh: 12, gustKmh: 20, windDir: 180, wmo: 1,
   rain24: 0, rainToday: 0, rainNext24: 0, tonightMinC: 5, days: [], hours: [],
+  rainTrail: [], tempTrail: [], ensemble: null,
   ...over,
 });
 
@@ -256,5 +259,119 @@ describe('the stored arrangement', () => {
     expect(kept.overview).toEqual({ order: ['map'], hidden: ['temp'] });
     // Half a layout must not cost the reader the other half.
     expect(mergePrefs({ overview: { order: ['map'] } }).overview).toEqual({ order: ['map'], hidden: [] });
+  });
+});
+
+describe('notableRows', () => {
+  const at = (name: string, rain: number | null) => row({ name, rain24: rain });
+
+  it('shows what clears the bar and counts the rest', () => {
+    // Eight lines of "0,0 mm" teach a reader that the widget is noise, and they stop
+    // looking on the morning it is not. "And five others dry" is a fact.
+    const out = notableRows(
+      [at('A', 0), at('B', 4), at('C', 0.05), at('D', 1.2)],
+      (r) => r.rain24,
+      0.1
+    );
+    expect(out.shown.map((r) => r.name)).toEqual(['B', 'D']);
+    expect(out.rest).toBe(2);
+    expect(out.empty).toBe(false);
+  });
+
+  it('says when nothing cleared it rather than drawing an empty card', () => {
+    const out = notableRows([at('A', 0), at('B', 0)], (r) => r.rain24, 0.1);
+    expect(out.empty).toBe(true);
+    expect(out.shown).toEqual([]);
+  });
+
+  it('counts a location with no reading among the rest, not among the shown', () => {
+    const out = notableRows([at('A', null), at('B', 3)], (r) => r.rain24, 0.1);
+    expect(out.shown.map((r) => r.name)).toEqual(['B']);
+    expect(out.rest).toBe(1);
+  });
+
+  it('caps the list, because a widget is a summary', () => {
+    const many = Array.from({ length: 9 }, (_, i) => at(`L${i}`, i + 1));
+    const out = notableRows(many, (r) => r.rain24, 0.1);
+    expect(out.shown).toHaveLength(5);
+    expect(out.rest).toBe(4);
+  });
+
+  it('can count the other way, for the coldest', () => {
+    const out = notableRows(
+      [row({ name: 'A', tonightMinC: 8 }), row({ name: 'B', tonightMinC: -1 })],
+      (r) => r.tonightMinC,
+      3,
+      'asc'
+    );
+    expect(out.shown.map((r) => r.name)).toEqual(['B']);
+  });
+});
+
+describe('spreadOf', () => {
+  it('is what lets a comparison collapse to one line', () => {
+    // Within a couple of degrees there is no comparison to draw, and a column of
+    // near-identical numbers is height spent saying "the same".
+    expect(spreadOf([row({ tempC: 15 }), row({ tempC: 16 })], (r) => r.tempC))
+      .toEqual({ min: 15, max: 16, span: 1 });
+    expect(spreadOf([row({ tempC: null })], (r) => r.tempC)).toBeNull();
+  });
+});
+
+describe('trendOf', () => {
+  it('points only where something actually moved', () => {
+    expect(trendOf(1, 4)).toBe('up');
+    expect(trendOf(4, 1)).toBe('down');
+    expect(trendOf(1, 1.05)).toBe('flat');
+    expect(trendOf(null, 4)).toBe('flat');
+  });
+});
+
+describe('parseEnsembleOutlook', () => {
+  const daily = {
+    time: ['2026-04-10', '2026-04-11'],
+    precipitation_sum_member01: [0, 8],
+    precipitation_sum_member02: [0, 0],
+    precipitation_sum_member03: [0.4, 2],
+  };
+
+  it('reads where the members land, and how many are wet at all', () => {
+    // Two separate questions: "will it rain" and "how much", and the second does not
+    // answer the first — a median of nothing with a third of the members wet is a day
+    // worth knowing about.
+    const out = parseEnsembleOutlook({ daily })!;
+    expect(out).toHaveLength(2);
+    expect(out[0]!.wetShare).toBe(33);
+    expect(out[1]!.p50).toBe(2);
+    expect(out[1]!.members).toBe(3);
+  });
+
+  it('refuses a deterministic run dressed as an ensemble', () => {
+    // One column is the plain series passed through, and a spread of one member is a
+    // point pretending to be a range.
+    expect(parseEnsembleOutlook({ daily: { time: ['2026-04-10'], precipitation_sum: [3] } })).toBeNull();
+    expect(parseEnsembleOutlook(null)).toBeNull();
+  });
+});
+
+describe('dayAgreement', () => {
+  const day = (p10: number, p50: number, p90: number) =>
+    ({ date: 'x', p10, p50, p90, wetShare: 50, members: 51 });
+
+  it('calls a narrow band agreement whatever the total', () => {
+    expect(dayAgreement(day(0, 0, 0))).toBe('agree');
+    expect(dayAgreement(day(11.5, 12, 12.2))).toBe('agree');
+  });
+
+  it('reads the band against how much rain there is', () => {
+    // Five millimetres of disagreement means something different under a dry forecast
+    // than under a wet one, so it is a ratio and not a threshold in millimetres.
+    expect(dayAgreement(day(0, 1, 6))).toBe('disagree');
+    expect(dayAgreement(day(8, 12, 16))).toBe('mixed');
+  });
+
+  it('does not call a trace of drizzle a violent disagreement', () => {
+    // The floor under the ratio: without it every near-dry day reads as uncertain.
+    expect(dayAgreement(day(0, 0.2, 1.8))).toBe('mixed');
   });
 });

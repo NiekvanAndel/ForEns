@@ -35,6 +35,7 @@ import { activeProvider, type NowcastProfile } from '../core/radar';
 import { applyStationObservations, stationForLocation } from '../core/model/station';
 import { loadObservations } from '../core/sources/openMeteo';
 import { fetchOutlook } from '../core/sources/outlook';
+import { fetchEnsembleOutlook, type EnsembleOutlook } from '../core/sources/ensembleOutlook';
 import type { LocationOutlook } from '../core/overviewData';
 import {
   AgroAuthError, fetchStationObservations, withAgroToken,
@@ -182,6 +183,37 @@ export function useAllLocationOutlooks(enabled: boolean): (LocationOutlook | nul
       staleTime: OUTLOOK_STALE_MS,
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         fetchOutlook({ lat: l.lat, lon: l.lon }, { signal }),
+    })),
+  });
+
+  return prefs.locations.map((_, i) => results[i]?.data ?? null);
+}
+
+
+/** An ensemble run lands a few times a day; within the hour it is the same answer. */
+const ENSEMBLE_STALE_MS = 60 * 60_000;
+
+export const ensembleOutlookKey = (lat: number, lon: number) =>
+  ['ensemble-outlook', lat.toFixed(3), lon.toFixed(3)] as const;
+
+/**
+ * How much the members disagree about each saved location's coming rain.
+ *
+ * The fourth of these hooks and the heaviest per response, which is why it is its own
+ * source in `OVERVIEW_WIDGETS` and only fetched for the widget that reads it. Nothing
+ * else on the page needs it: the rankings and the outlook are deterministic runs, and
+ * this is the qualifier on them.
+ */
+export function useAllLocationEnsembles(enabled: boolean): (EnsembleOutlook | null)[] {
+  const { prefs } = usePrefs();
+
+  const results = useQueries({
+    queries: prefs.locations.map((l) => ({
+      queryKey: ensembleOutlookKey(l.lat, l.lon),
+      enabled,
+      staleTime: ENSEMBLE_STALE_MS,
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        fetchEnsembleOutlook({ lat: l.lat, lon: l.lon }, { signal }),
     })),
   });
 

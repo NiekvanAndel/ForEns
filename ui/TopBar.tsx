@@ -215,7 +215,9 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
           this is the question you open the app with. */}
       <View style={{ flex: 1, alignItems: 'flex-start' }}>
         <RoundButton
-          icon="squares-four"
+          // A dial, not a grid: 'Actueel' is the grid of blocks and already owns
+          // that picture, and two buttons with one icon is a button nobody learns.
+          icon="gauge"
           label={ta('ovTitle', prefs.lang)}
           onPress={openOverview}
         />
