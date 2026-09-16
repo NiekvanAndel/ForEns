@@ -1,0 +1,285 @@
+/**
+ * What the overview page's widgets are made of: one row per saved location, and the
+ * handful of readings every widget picks from.
+ *
+ * Built once and passed down, rather than each widget reaching into a `ForecastModel`
+ * and working out "the last 24 hours" for itself. Twelve widgets each deriving the
+ * same figure is twelve chances for two of them to disagree about the same field on
+ * the same screen, which is the one thing a summary page must not do.
+ *
+ * Pure, and in canonical units — °C, km/h, mm. The page converts where it draws, as
+ * every other surface in this app does.
+ */
+import type { ForecastModel, Hour } from './model/types';
+
+/** A short forecast for one location, beyond what the observation feed carries. */
+export interface LocationOutlook {
+  /** The coming days, nearest first. */
+  days: OutlookDay[];
+  /** Hour by hour from now, for the spray window and tonight's minimum. */
+  hours: OutlookHour[];
+}
+
+export interface OutlookDay {
+  /** `YYYY-MM-DD`, local. */
+  date: string;
+  tempMin: number | null;
+  tempMax: number | null;
+  precip: number | null;
+  windMax: number | null;
+  wmo: number | null;
+}
+
+export interface OutlookHour {
+  /** Local wall-clock, `YYYY-MM-DDTHH:MM`. */
+  time: string;
+  temp: number | null;
+  precip: number | null;
+  wind: number | null;
+  gusts: number | null;
+}
+
+/** One saved location, as every widget on the page reads it. */
+export interface OverviewRow {
+  /** Its slot in the saved list — what selecting it needs. */
+  index: number;
+  name: string;
+  /** True where an AgroExact station speaks for it, for the green dot. */
+  hasStation: boolean;
+  loading: boolean;
+
+  tempC: number | null;
+  humidity: number | null;
+  windKmh: number | null;
+  gustKmh: number | null;
+  windDir: number | null;
+  wmo: number | null;
+
+  /** Millimetres over the trailing 24 hours, and over the calendar day so far. */
+  rain24: number | null;
+  rainToday: number | null;
+
+  /** Everything below needs the outlook, and is null without it. */
+  rainNext24: number | null;
+  tonightMinC: number | null;
+  days: OutlookDay[];
+  hours: OutlookHour[];
+}
+
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+const sumPrecip = (hours: readonly { precip?: number | null }[]): number | null => {
+  const v = hours.map((h) => h.precip).filter(isNum);
+  return v.length ? round1(v.reduce((a, b) => a + b, 0)) : null;
+};
+
+export interface BuildRowInput {
+  index: number;
+  name: string;
+  hasStation: boolean;
+  loading: boolean;
+  model: ForecastModel | null;
+  outlook: LocationOutlook | null;
+}
+
+/**
+ * One row from whatever has landed for that location.
+ *
+ * Every field is independently null, because the sources land independently: the
+ * conditions arrive before the outlook, and a widget that reads only the first should
+ * not wait on the second. A row is therefore always drawable and never complete —
+ * which is the honest shape for a page assembled from a request per location.
+ */
+export function buildOverviewRow(input: BuildRowInput): OverviewRow {
+  const { model, outlook } = input;
+  const now: Hour | undefined = model?.allHours.find((h) => h.time === model.nowHour)
+    ?? model?.pastHours[model.pastHours.length - 1];
+
+  const past24 = model?.pastHours.slice(-24) ?? [];
+  const today = model
+    ? model.allHours.filter(
+        (h) => h.time.slice(0, 10) === model.nowHour.slice(0, 10) && h.time <= model.nowHour
+      )
+    : [];
+
+  return {
+    index: input.index,
+    name: input.name,
+    hasStation: input.hasStation,
+    loading: input.loading,
+
+    tempC: now?.tempExact ?? now?.temp ?? null,
+    humidity: now?.humidity ?? null,
+    windKmh: now?.windExact ?? now?.wind ?? null,
+    gustKmh: now?.gusts ?? null,
+    windDir: now?.windDir ?? null,
+    wmo: now?.wmo ?? null,
+
+    rain24: sumPrecip(past24),
+    rainToday: sumPrecip(today),
+
+    rainNext24: outlook ? sumPrecip(outlook.hours.slice(0, 24)) : null,
+    tonightMinC: outlook ? tonightMinimum(outlook.hours) : null,
+    days: outlook?.days ?? [],
+    hours: outlook?.hours ?? [],
+  };
+}
+
+/**
+ * The lowest temperature between this evening and tomorrow morning.
+ *
+ * The night hours inside the next eighteen, rather than "the lowest of the next
+ * twelve". A grower asking this is asking about *the coming night*, and the answer
+ * must not change meaning with the time of day: asked at noon it looks ahead to
+ * tonight, asked at three in the morning it is already inside the window it is about.
+ * Eighteen hours is what reaches tomorrow morning from an evening glance without
+ * reaching the night after.
+ */
+export function tonightMinimum(hours: readonly OutlookHour[], count = 18): number | null {
+  const temps = hours
+    .slice(0, count)
+    .filter((h) => {
+      const hour = Number(h.time.slice(11, 13));
+      return hour >= NIGHT_FROM || hour <= NIGHT_TO;
+    })
+    .map((h) => h.temp)
+    .filter(isNum);
+  return temps.length ? Math.min(...temps) : null;
+}
+
+/** The night, in local hours. Wide enough that a late frost at 08:00 is inside it. */
+const NIGHT_FROM = 18;
+const NIGHT_TO = 9;
+
+/** Sort rows by a reading, largest first, with the ones that have none at the back —
+ *  a location that is not reporting is not a location with the least rain. */
+export function rankRows(
+  rows: readonly OverviewRow[],
+  pick: (row: OverviewRow) => number | null,
+  direction: 'desc' | 'asc' = 'desc'
+): OverviewRow[] {
+  return [...rows].sort((a, b) => {
+    const x = pick(a);
+    const y = pick(b);
+    if (x == null && y == null) return 0;
+    if (x == null) return 1;
+    if (y == null) return -1;
+    return direction === 'desc' ? y - x : x - y;
+  });
+}
+
+/**
+ * When a field can be worked, hour by hour.
+ *
+ * Three conditions, and they are the three a sprayer's label and a grower's judgement
+ * actually name: it has to be dry, the wind has to be down, and it must not be
+ * freezing. Anything more — a drying window, a soil temperature, a crop stage — needs
+ * data the app does not have, and inventing it here would be a confident answer to a
+ * question nobody asked.
+ *
+ * The thresholds are arguments rather than constants because they are the first thing
+ * a grower will want to set for themselves, and the second thing a crop will want
+ * different from another.
+ */
+export interface WorkWindowLimits {
+  /** Millimetres in the hour that makes it too wet. */
+  wetMm: number;
+  /** Wind, km/h, above which spraying drifts. */
+  windKmh: number;
+  /** Below this it is too cold, °C. */
+  minTempC: number;
+}
+
+export const DEFAULT_WORK_LIMITS: WorkWindowLimits = {
+  wetMm: 0.1,
+  windKmh: 20,
+  minTempC: 1,
+};
+
+export type WorkVerdict = 'yes' | 'wet' | 'windy' | 'cold' | 'unknown';
+
+export interface WorkHour {
+  time: string;
+  verdict: WorkVerdict;
+}
+
+/**
+ * The verdict per hour, for the next `count` hours.
+ *
+ * Ordered: wet beats windy beats cold, because that is the order in which they stop
+ * the work. An hour missing any of the three is `unknown` rather than `yes` — a gap
+ * in the forecast is not a green light.
+ */
+export function workWindow(
+  hours: readonly OutlookHour[],
+  limits: WorkWindowLimits = DEFAULT_WORK_LIMITS,
+  count = 24
+): WorkHour[] {
+  return hours.slice(0, count).map((h) => {
+    if (!isNum(h.precip) || !isNum(h.wind) || !isNum(h.temp)) {
+      return { time: h.time, verdict: 'unknown' as const };
+    }
+    if (h.precip >= limits.wetMm) return { time: h.time, verdict: 'wet' as const };
+    if (h.wind > limits.windKmh) return { time: h.time, verdict: 'windy' as const };
+    if (h.temp < limits.minTempC) return { time: h.time, verdict: 'cold' as const };
+    return { time: h.time, verdict: 'yes' as const };
+  });
+}
+
+/** The first run of workable hours, as a start and a length — what a grower plans
+ *  around, rather than a count of scattered green hours. */
+export function firstWorkRun(window: readonly WorkHour[]): { from: string; hours: number } | null {
+  let start = -1;
+  for (let i = 0; i < window.length; i++) {
+    const ok = window[i]?.verdict === 'yes';
+    if (ok && start < 0) start = i;
+    if (!ok && start >= 0) return { from: window[start]!.time, hours: i - start };
+  }
+  return start >= 0 ? { from: window[start]!.time, hours: window.length - start } : null;
+}
+
+/**
+ * The page in facts, for the sentence at the top.
+ *
+ * Facts and not a sentence: the wording belongs in `core/i18n` with every other
+ * string, and a summariser that returned Dutch would be the third thing in this app
+ * to have to be translated after the fact.
+ */
+export interface OverviewSummary {
+  locations: number;
+  /** Coldest and warmest reading across the locations, right now. */
+  coldest: { name: string; value: number } | null;
+  warmest: { name: string; value: number } | null;
+  /** Where most fell over the last 24 hours, when anywhere did. */
+  wettest: { name: string; value: number } | null;
+  /** Locations expecting a millimetre or more in the next 24. */
+  rainAhead: string[];
+  /** True while nothing has landed yet, so the sentence can wait rather than claim
+   *  every field is dry. */
+  loading: boolean;
+}
+
+/** A millimetre is the point below which "it rains" is not worth saying to somebody
+ *  deciding whether to go out. */
+const RAIN_AHEAD_MM = 1;
+
+export function summariseOverview(rows: readonly OverviewRow[]): OverviewSummary {
+  const withTemp = rows.filter((r) => isNum(r.tempC));
+  const ranked = rankRows(withTemp, (r) => r.tempC);
+  const wet = rankRows(rows.filter((r) => isNum(r.rain24) && (r.rain24 as number) > 0), (r) => r.rain24);
+  const top = wet[0];
+
+  return {
+    locations: rows.length,
+    warmest: ranked[0] ? { name: ranked[0].name, value: ranked[0].tempC as number } : null,
+    coldest: ranked.length
+      ? { name: ranked[ranked.length - 1]!.name, value: ranked[ranked.length - 1]!.tempC as number }
+      : null,
+    wettest: top ? { name: top.name, value: top.rain24 as number } : null,
+    rainAhead: rows
+      .filter((r) => isNum(r.rainNext24) && (r.rainNext24 as number) >= RAIN_AHEAD_MM)
+      .map((r) => r.name),
+    loading: rows.length > 0 && rows.every((r) => r.loading),
+  };
+}

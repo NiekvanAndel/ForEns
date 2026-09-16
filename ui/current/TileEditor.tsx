@@ -35,7 +35,6 @@ import { Icon } from '../Icon';
 import { Rule } from '../Card';
 import { usePrefs } from '../../state/prefs';
 import { arrangeAllTiles, reorderTiles, toggleTile, type TileLayout } from '../../core/prefs';
-import type { Tile } from '../../core/model/tiles';
 import { ta } from '../../core/i18n';
 
 /** Every row is this tall, which is what turns a drag distance into a slot. */
@@ -44,19 +43,44 @@ const ROW_HEIGHT = 62;
  *  tap that meant to toggle, short enough not to feel stuck. */
 const HOLD_MS = 220;
 
+/**
+ * The least a thing needs to be arrangeable: an id, a name, and a word about it.
+ *
+ * Generic on purpose. This editor started life bound to `Tile`, and the overview
+ * page wanted exactly the same drag-to-reorder-and-switch-off over a different kind
+ * of thing — so it takes the shape rather than the type, and there is one
+ * implementation of this gesture rather than two that drift.
+ */
+export interface EditableItem {
+  id: string;
+  title: string;
+  /** The line under the name: a window for a block, what it shows for a widget. */
+  hint?: string;
+}
+
 export interface TileEditorProps {
   visible: boolean;
   onClose: () => void;
-  /** Every block the app can draw, in its natural order. */
-  all: Tile[];
+  /** Every item that can be drawn, in its natural order. */
+  all: EditableItem[];
+  /** The arrangement being edited, and how to write it back. Defaults to the
+   *  'Actueel' grid's, which is what this was built for. */
+  layout?: TileLayout;
+  onChange?: (next: (layout: TileLayout) => TileLayout) => void;
+  /** The sheet's own heading. */
+  title?: string;
+  hint?: string;
 }
 
-export function TileEditor({ visible, onClose, all }: TileEditorProps) {
+export function TileEditor({
+  visible, onClose, all, layout: layoutProp, onChange, title, hint,
+}: TileEditorProps) {
   const { palette } = useTheme();
   const { prefs, setTileLayout } = usePrefs();
   const insets = useSafeAreaInsets();
 
-  const layout: TileLayout = prefs.tiles;
+  const layout: TileLayout = layoutProp ?? prefs.tiles;
+  const write = onChange ?? setTileLayout;
   // Hidden blocks included: this list is the arrangement, not the result of it.
   const rows = arrangeAllTiles(all, layout);
   const ids = rows.map((r) => r.id);
@@ -67,14 +91,14 @@ export function TileEditor({ visible, onClose, all }: TileEditorProps) {
 
   const commit = (from: number, to: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    if (from !== to) setTileLayout((l) => reorderTiles(l, ids, from, to));
+    if (from !== to) write((l) => reorderTiles(l, ids, from, to));
   };
 
   const toggle = (id: string) => {
     // The last one standing cannot be switched off; see the note at the top.
     if (shown === 1 && !layout.hidden.includes(id)) return;
     Haptics.selectionAsync().catch(() => {});
-    setTileLayout((l) => toggleTile(l, id));
+    write((l) => toggleTile(l, id));
   };
 
   return (
@@ -99,7 +123,7 @@ export function TileEditor({ visible, onClose, all }: TileEditorProps) {
             }}
           >
             <Text variant="locationName" color={palette.inkHeading} style={{ flex: 1 }}>
-              {ta('editBlocks', prefs.lang)}
+              {title ?? ta('editBlocks', prefs.lang)}
             </Text>
             <Pressable onPress={onClose} accessibilityRole="button" hitSlop={10}>
               <Text variant="body" weight="semibold" color={palette.accentDark}>
@@ -132,7 +156,7 @@ export function TileEditor({ visible, onClose, all }: TileEditorProps) {
               color={palette.muted}
               style={{ paddingHorizontal: space[5], paddingVertical: space[4] }}
             >
-              {ta('editBlocksHint', prefs.lang)}
+              {hint ?? ta('editBlocksHint', prefs.lang)}
             </Text>
           </ScrollView>
         </View>
@@ -144,7 +168,7 @@ export function TileEditor({ visible, onClose, all }: TileEditorProps) {
 function EditorRow({
   tile, index, count, hidden, dragging, dragY, onToggle, onCommit,
 }: {
-  tile: Tile;
+  tile: EditableItem;
   index: number;
   count: number;
   hidden: boolean;
@@ -205,7 +229,7 @@ function EditorRow({
           onPress={onToggle}
           accessibilityRole="switch"
           accessibilityState={{ checked: !hidden }}
-          accessibilityLabel={`${tile.title}, ${tile.timeLabel}`}
+          accessibilityLabel={tile.hint ? `${tile.title}, ${tile.hint}` : tile.title}
           style={({ pressed }) => ({
             flex: 1,
             flexDirection: 'row', alignItems: 'center', gap: space[3],
@@ -224,9 +248,11 @@ function EditorRow({
             >
               {tile.title}
             </Text>
-            <Text variant="caption" color={palette.muted} numberOfLines={1}>
-              {tile.timeLabel}
-            </Text>
+            {tile.hint ? (
+              <Text variant="caption" color={palette.muted} numberOfLines={1}>
+                {tile.hint}
+              </Text>
+            ) : null}
           </View>
 
           <View

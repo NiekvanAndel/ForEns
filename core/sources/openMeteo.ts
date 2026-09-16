@@ -73,6 +73,21 @@ export const urls = {
     `${FORECAST}?${base(c)}&hourly=weather_code&models=ecmwf_ifs&forecast_days=${days}`,
   ifsHourlyDetail: (c: Coords, days: number) =>
     `${ECMWF}?${base(c)}&models=ecmwf_ifs&hourly=${IFS_HOURLY_VARS}&forecast_days=${days}`,
+  /**
+   * A short forecast for one location, for the overview page's rows.
+   *
+   * Deliberately not `observations` with more days, and not the staged build the
+   * forecast context makes. The overview asks a narrow question of *every* saved
+   * location at once — how much rain is coming, how cold tonight, when can I work —
+   * so this is the smallest call that answers it: three days of the fields those
+   * widgets read and nothing else. A grower with eight fields pays eight of these,
+   * which is why it carries no ensemble, no cloud layers and no radiation.
+   */
+  outlook: (c: Coords, days: number) =>
+    `${FORECAST}?${base(c)}` +
+    `&hourly=temperature_2m,precipitation,windspeed_10m,windgusts_10m` +
+    `&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,weather_code` +
+    `&forecast_days=${days}`,
   ensemble: (c: Coords, days: number) =>
     `${ENSEMBLE}?${base(c)}&daily=${ENS_DAILY_VARS}&models=ecmwf_ifs025&forecast_days=${days}`,
 };

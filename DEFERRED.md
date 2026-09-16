@@ -532,6 +532,35 @@ Where the deterministic IFS run falls outside the ensemble band, the ensemble me
 is shown instead and marked with a small `~`, exactly as `index.html` does. It appears
 on the overview rows and in the day sheet.
 
+### The overview page, and the wizard it is groundwork for
+
+`app/overview.tsx` answers the question the rest of the app cannot: across every
+saved location, what was it, what is it, what is coming, and can I get on the land.
+Twelve widgets, arranged by the reader through the same `TileLayout` machinery the
+blocks on 'Actueel' use — which now lives in `core/arrangement.ts` so both can reach
+it without importing each other.
+
+What is deliberately not built yet:
+
+- **The set-up wizard.** Everything it would write already exists: a wizard is a
+  first-run path that picks locations and stores an arrangement, and both are one
+  `setPrefs` away. What is missing is the decision about when it should appear and
+  what it should ask.
+- **Per-crop work limits.** `workWindow` takes its thresholds as an argument for
+  exactly this reason — dry, under 20 km/h, above 1 °C is a sprayer's default and not
+  every crop's. They belong in preferences, per location or per crop, once somebody
+  has said which.
+- **A widget's own settings.** Each entry in `OVERVIEW_WIDGETS` is order and
+  visibility only. A rainfall ranking that could be set to 48 hours, or a work window
+  to a different limit, needs a per-widget options bag — the catalogue is the place
+  to hang it.
+
+Widgets worth considering next, in rough order of how often a grower would use them:
+soil temperature and moisture where a station reports them, a drying window
+(evaporation against rainfall), degree-day accumulation per crop, a spray-drift
+advisory that reads gusts rather than mean wind, and a "what changed since yesterday"
+line that names the forecast that moved.
+
 ## Open
 
 ### Push has a client and no server

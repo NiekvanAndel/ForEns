@@ -34,6 +34,8 @@ import { processAll } from '../core/model/process';
 import { activeProvider, type NowcastProfile } from '../core/radar';
 import { applyStationObservations, stationForLocation } from '../core/model/station';
 import { loadObservations } from '../core/sources/openMeteo';
+import { fetchOutlook } from '../core/sources/outlook';
+import type { LocationOutlook } from '../core/overviewData';
 import {
   AgroAuthError, fetchStationObservations, withAgroToken,
 } from '../core/sources/agroexact';
@@ -145,6 +147,41 @@ export function useAllLocationNowcasts(enabled: boolean): (NowcastProfile | null
         activeProvider()
           .nowcastProfile(l.lat, l.lon, signal)
           .catch(() => null),
+    })),
+  });
+
+  return prefs.locations.map((_, i) => results[i]?.data ?? null);
+}
+
+
+/** An outlook is a forecast run; within the hour it is the same answer. */
+const OUTLOOK_STALE_MS = 30 * 60_000;
+
+export const outlookKey = (lat: number, lon: number) =>
+  ['outlook', lat.toFixed(3), lon.toFixed(3)] as const;
+
+/**
+ * A short forecast for every saved location, for the overview page.
+ *
+ * The third of these hooks and the same shape as the other two: one query per
+ * location so a slow one costs its own row, and `enabled` so nothing is fetched for a
+ * widget the reader has switched off. See `neededSources`, which is what decides that.
+ *
+ * The conditions hook above answers "what was it and what is it" from the observation
+ * feed. This is the "what will it be" half, and it is separate because most of the
+ * page does not need it — the rainfall ranking, the alerts and the current readings
+ * all come from the other one.
+ */
+export function useAllLocationOutlooks(enabled: boolean): (LocationOutlook | null)[] {
+  const { prefs } = usePrefs();
+
+  const results = useQueries({
+    queries: prefs.locations.map((l) => ({
+      queryKey: outlookKey(l.lat, l.lon),
+      enabled,
+      staleTime: OUTLOOK_STALE_MS,
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        fetchOutlook({ lat: l.lat, lon: l.lon }, { signal }),
     })),
   });
 

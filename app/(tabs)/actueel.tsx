@@ -230,7 +230,13 @@ function CurrentPage() {
 
     <TileSheet tile={compared} labels={labels} onClose={() => setCompared(null)} />
 
-    <TileEditor visible={editing} onClose={() => setEditing(false)} all={allTiles} />
+    {/* The editor takes a shape rather than a `Tile`, since the overview page
+        arranges its widgets through the same one. */}
+    <TileEditor
+      visible={editing}
+      onClose={() => setEditing(false)}
+      all={allTiles.map((t) => ({ id: t.id, title: t.title, hint: t.timeLabel }))}
+    />
     </>
   );
 }

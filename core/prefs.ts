@@ -11,6 +11,16 @@
 import type { LangCode } from './i18n/strings';
 import type { PresUnit, TempUnit, WindUnit, FontSizePref } from './i18n/units';
 import { sanitiseAlerts, type UserAlert } from './alerts';
+import { DEFAULT_OVERVIEW_LAYOUT } from './overview';
+import { DEFAULT_TILE_LAYOUT, type TileLayout } from './arrangement';
+
+// Re-exported so the many callers that reach for these through `core/prefs` keep
+// working: they are preferences to everything that uses them, and only the module
+// graph cares that they are defined elsewhere.
+export {
+  arrangeTiles, arrangeAllTiles, reorderTiles, toggleTile, DEFAULT_TILE_LAYOUT,
+} from './arrangement';
+export type { TileLayout } from './arrangement';
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
 /** Which deterministic model drives days 3–14. */
@@ -97,15 +107,7 @@ export const DEFAULT_AGRO_INTEGRATION: AgroIntegration = {
  *
  * Both lists are ids, and an id the app no longer knows is simply skipped.
  */
-export interface TileLayout {
-  /** Block ids in the order they are shown. Anything not named here follows, in the
-   *  order `modelTiles` produced it. */
-  order: string[];
-  /** Block ids switched off. */
-  hidden: string[];
-}
 
-export const DEFAULT_TILE_LAYOUT: TileLayout = { order: [], hidden: [] };
 
 export interface Prefs {
   lang: LangCode;
@@ -153,6 +155,10 @@ export interface Prefs {
   quietHours: boolean;
   /** The 'Actueel' grid's arrangement. See `TileLayout`. */
   tiles: TileLayout;
+  /** The overview page's, in the same shape and through the same machinery — see
+   *  `core/overview`. One implementation of "your order, minus what you switched
+   *  off", reused rather than written twice. */
+  overview: TileLayout;
 }
 
 /** 's-Hertogenbosch is the web app's default and the design's station-backed example. */
@@ -184,6 +190,7 @@ export const DEFAULT_PREFS: Prefs = {
   notifyFrost: false,
   quietHours: true,
   tiles: DEFAULT_TILE_LAYOUT,
+  overview: DEFAULT_OVERVIEW_LAYOUT,
 };
 
 /**
@@ -246,6 +253,10 @@ export function mergePrefs(stored: unknown): Prefs {
   const tiles = s.tiles as TileLayout | undefined;
   if (tiles && typeof tiles === 'object') {
     out.tiles = { order: ids(tiles.order), hidden: ids(tiles.hidden) };
+  }
+  const overview = s.overview as TileLayout | undefined;
+  if (overview && typeof overview === 'object') {
+    out.overview = { order: ids(overview.order), hidden: ids(overview.hidden) };
   }
 
   if (Array.isArray(s.locations)) {
@@ -406,56 +417,6 @@ export function unlinkStationLocations(prefs: Prefs): Prefs {
   };
 }
 
-/**
- * The blocks to draw, in the reader's order, with the hidden ones dropped.
- *
- * `all` is every block the app can draw, in its natural order. Ids in `order` come
- * first, in that order; anything the layout has never heard of keeps its natural
- * place behind them, which is what lets a new block appear for someone who arranged
- * their grid before it existed.
- */
-export function arrangeTiles<T extends { id: string }>(
-  all: readonly T[],
-  layout: TileLayout
-): T[] {
-  const byId = new Map(all.map((t) => [t.id, t]));
-  const named = layout.order
-    .map((id) => byId.get(id))
-    .filter((t): t is T => t !== undefined);
-  const seen = new Set(named.map((t) => t.id));
-  const rest = all.filter((t) => !seen.has(t.id));
-  const hidden = new Set(layout.hidden);
-  return [...named, ...rest].filter((t) => !hidden.has(t.id));
-}
 
-/** The same, but keeping the hidden blocks — what the editor lists. */
-export function arrangeAllTiles<T extends { id: string }>(
-  all: readonly T[],
-  layout: TileLayout
-): T[] {
-  return arrangeTiles(all, { order: layout.order, hidden: [] });
-}
 
-/**
- * Move a block, writing the whole arrangement back.
- *
- * `visibleIds` is what the editor is showing, hidden blocks included, so the stored
- * order is rewritten from the list the reader was actually looking at. Storing only
- * the moved pair instead would leave the rest of the order implicit, and the next
- * new block would land in the middle of somebody's carefully arranged grid.
- */
-export function reorderTiles(layout: TileLayout, ids: string[], from: number, to: number): TileLayout {
-  if (from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) return layout;
-  const order = [...ids];
-  const [moved] = order.splice(from, 1);
-  order.splice(to, 0, moved as string);
-  return { ...layout, order };
-}
 
-/** Switch one block on or off. */
-export function toggleTile(layout: TileLayout, id: string): TileLayout {
-  const hidden = layout.hidden.includes(id)
-    ? layout.hidden.filter((h) => h !== id)
-    : [...layout.hidden, id];
-  return { ...layout, hidden };
-}
