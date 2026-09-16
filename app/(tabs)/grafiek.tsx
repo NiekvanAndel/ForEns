@@ -32,11 +32,18 @@
  *
  * ## The band around the forecast
  *
- * Temperature and rainfall carry the ensemble's p10–p90 over the forecast half —
- * shaded behind the temperature line, a whisker on each rainfall bar. A forecast line
- * on its own claims a precision the model does not have, and the 51 members are what
- * the app already carries to say where that claim is weak; the day sheets show them a
- * day at a time, and this is the same spread over whatever window the reader picked.
+ * Temperature and rainfall carry the ensemble's p10–p90 over the forecast half. A
+ * forecast line on its own claims a precision the model does not have, and the 51
+ * members are what the app already carries to say where that claim is weak; the day
+ * sheets show them a day at a time, and this is the same spread over whatever window
+ * the reader picked.
+ *
+ * Where it goes is a different answer in each of the four cases, and the reasoning is
+ * beside the code that decides it (`chartSpread`). In short: temperature per hour
+ * behind the line; temperature per day behind the minimum and the maximum rather than
+ * the mean; rainfall per hour on the running total alone, because an hour's band is
+ * too small to read against an axis scaled to the wettest hour; rainfall per day on
+ * both the bars and the total.
  *
  * Only the forecast half. A band around a measurement would say the thermometer might
  * have read something else.
@@ -134,7 +141,7 @@ import { LocationTitle } from '../../ui/LocationTitle';
 import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
 import { usePeeking } from '../../ui/peek';
-import { SeriesChart } from '../../ui/graph/SeriesChart';
+import { SeriesChart, type ChartSpread } from '../../ui/graph/SeriesChart';
 import { useEnsembleMembers } from '../../ui/graph/useEnsembleBand';
 import { PillSwitcher, type PillItem } from '../../ui/PillSwitcher';
 import type { IconName } from '../../ui/Icon';
@@ -150,7 +157,7 @@ import {
   type Sample, type SeriesKey,
 } from '../../core/model/series';
 import {
-  bandsForSamples, ensembleBands, type BandField,
+  bandsFrom, bandsForSamples, cumulativeBands, memberBuckets, type BandField,
 } from '../../core/model/ensembleBand';
 import {
   degToCompass, fmtMm, fmtTempValue, fmtWindValue, tempUnitLabel, windUnitLabel, ta,
@@ -187,13 +194,10 @@ const SERIES: {
  * too — the day sheets plot them — but a band on every series is four more requests
  * for a chart that is already answering a different question.
  *
- * The label is the statistic's own name rather than a word for it. "Onzekerheid"
- * would be a claim about how wrong the forecast is; "P10–P90" says exactly what is
- * drawn, reads the same in both languages, and is the label the day sheets already
- * use for the same two numbers.
+ * Which of the chart's lines carries the band is decided per quantity and per grain,
+ * in `chartSpread` below, because the answer is different in all four cases.
  */
 const BAND_FIELD: Partial<Record<SeriesKey, BandField>> = { temp: 'temp', precip: 'precip' };
-const BAND_LABEL = 'P10–P90';
 
 /**
  * The page's vertical rhythm.
@@ -294,20 +298,68 @@ function GraphPage() {
     enabled: !!bandField && !peeking && range.to >= today,
   });
 
-  // Percentiles at the grain the chart draws, never percentiles aggregated after the
-  // fact — see `core/model/ensembleBand`.
-  const spread = useMemo(
-    () =>
-      bandField && ensemble.data
-        ? bandsForSamples(
-            ensembleBands(ensemble.data, bandField, series.resolution),
-            series.samples,
-            series.resolution
-          )
-        : null,
-    [bandField, ensemble.data, series.resolution, series.samples]
-  );
-  const hasSpread = !!spread?.some(Boolean);
+  /**
+   * Which of the chart's lines the band goes on — four different answers.
+   *
+   * Percentiles are taken at the grain the chart draws, never aggregated after the
+   * fact; `core/model/ensembleBand` has that argument.
+   *
+   * - **Temperature per hour** — behind the line. The line *is* the forecast, and the
+   *   band is how much the members disagree about it.
+   * - **Temperature per day** — behind the minimum and the maximum, not the mean. The
+   *   spread of a daily average is narrow by construction and nobody plans around it;
+   *   the spread of the coldest hour answers "could it freeze tonight", which is what
+   *   a week of temperatures is read for.
+   * - **Rainfall per hour** — on the running total only. An hour's band is a few
+   *   millimetres tall on an axis scaled to the wettest hour of the window, which is
+   *   a whisker too small to read; the total is where an hourly disagreement becomes
+   *   a difference a reader can see.
+   * - **Rainfall per day** — both. A day's bars are tall enough to carry a whisker,
+   *   and the total still answers the question the bars cannot.
+   */
+  const spread: ChartSpread | null = useMemo(() => {
+    if (!bandField || !ensemble.data) return null;
+    const res = series.resolution;
+    const perDay = res === 'day';
+
+    if (bandField === 'precip') {
+      const buckets = memberBuckets(ensemble.data, 'precip', res);
+      return {
+        bars: perDay
+          ? bandsForSamples(bandsFrom(buckets, 0), series.samples, res)
+          : null,
+        cumulative: cumulativeBands(buckets, series.samples, res),
+      };
+    }
+
+    if (perDay) {
+      return {
+        lo: bandsForSamples(
+          bandsFrom(memberBuckets(ensemble.data, 'temp', res, 'min')),
+          series.samples, res
+        ),
+        hi: bandsForSamples(
+          bandsFrom(memberBuckets(ensemble.data, 'temp', res, 'max')),
+          series.samples, res
+        ),
+      };
+    }
+
+    return {
+      value: bandsForSamples(
+        bandsFrom(memberBuckets(ensemble.data, 'temp', res)),
+        series.samples, res
+      ),
+    };
+  }, [bandField, ensemble.data, series.resolution, series.samples]);
+
+  // The switch appears only where something would actually be drawn. On rainfall per
+  // hour the band lives on the running total alone, so with the total switched off
+  // there is nothing for a spread switch to do.
+  const drawnSlots = spread
+    ? [spread.value, spread.lo, spread.hi, spread.bars, showCumulative ? spread.cumulative : null]
+    : [];
+  const hasSpread = drawnSlots.some((slot) => slot?.some(Boolean));
 
   const meta = SERIES_META[key];
   const byDay = series.resolution === 'day';
@@ -520,7 +572,7 @@ function GraphPage() {
                   cumulativeLabel={ta('cumulative', prefs.lang)}
                   cumulativeColor={palette.inkHeading}
                   spread={showSpread ? spread : null}
-                  spreadLabel={BAND_LABEL}
+                  spreadLabel={ta('spread', prefs.lang)}
                   background={palette.appBg}
                   emptyLabel={ta('noSeries', prefs.lang)}
                 />
@@ -592,7 +644,7 @@ function GraphPage() {
                 {hasSpread ? (
                   <Legend
                     color={color}
-                    label={BAND_LABEL}
+                    label={ta('spread', prefs.lang)}
                     on={showSpread}
                     onPress={() => {
                       Haptics.selectionAsync().catch(() => {});
