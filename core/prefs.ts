@@ -10,6 +10,7 @@
  */
 import type { LangCode } from './i18n/strings';
 import type { PresUnit, TempUnit, WindUnit, FontSizePref } from './i18n/units';
+import { sanitiseAlerts, type UserAlert } from './alerts';
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
 /** Which deterministic model drives days 3–14. */
@@ -138,6 +139,14 @@ export interface Prefs {
    * `core/push`.
    */
   pushEnabled: boolean;
+  /**
+   * Thresholds the reader set themselves, from a block on 'Actueel'.
+   *
+   * Alongside the six built-in conditions rather than instead of them: those are the
+   * app's judgement about weather worth knowing, these are one person's about their
+   * own crop. See `core/alerts`.
+   */
+  userAlerts: UserAlert[];
   notifyRain: boolean;
   notifyWind: boolean;
   notifyFrost: boolean;
@@ -168,6 +177,7 @@ export const DEFAULT_PREFS: Prefs = {
   shortModel: 'nowcast',
   showSpread: true,
   alertsEnabled: true,
+  userAlerts: [],
   pushEnabled: false,
   notifyRain: false,
   notifyWind: false,
@@ -208,6 +218,10 @@ export function mergePrefs(stored: unknown): Prefs {
   ] as const) {
     take(k, bool);
   }
+
+  // One malformed rule must not cost the reader the others, so they are taken one
+  // at a time rather than as a block. See `sanitiseAlerts`.
+  out.userAlerts = sanitiseAlerts(s.userAlerts);
 
   // Integrations are stored state that outlives the code that wrote them, so each
   // field is taken on its own and anything missing falls back to the default rather

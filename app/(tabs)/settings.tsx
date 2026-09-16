@@ -45,6 +45,7 @@ import { LocationList } from '../../ui/settings/LocationList';
 import { LocationSearch } from '../../ui/settings/LocationSearch';
 import { IntegrationCard } from '../../ui/settings/IntegrationCard';
 import { SourceCard } from '../../ui/settings/SourceCard';
+import { UserAlertList } from '../../ui/settings/UserAlertList';
 import { usePrefs } from '../../state/prefs';
 import { enablePush, pushEndpoint } from '../../state/push';
 import { useForecast } from '../../state/forecast';
@@ -496,6 +497,14 @@ export default function SettingsScreen() {
                   label={ta('quietHours', prefs.lang)}
                 />
               </Row>
+            </Group>
+
+            {/* The reader's own thresholds, made from a block on 'Actueel'. Listed
+                here and not there: a list of rules belongs with the other
+                notification settings, and the page the weather is on is no place to
+                keep one. */}
+            <Group label={ta('alertMine', prefs.lang)}>
+              <UserAlertList />
             </Group>
 
             {/* Said plainly rather than left for someone to discover: until the

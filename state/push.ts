@@ -24,6 +24,7 @@ export function usePushSync(prefs: Prefs): void {
     prefs.notifyRain, prefs.notifyWind, prefs.notifyFrost,
     prefs.lang, prefs.tempUnit, prefs.windUnit,
     prefs.locations.map((l) => `${l.name}|${l.lat}|${l.lon}`),
+    prefs.userAlerts.map((a) => `${a.id}|${a.enabled}|${a.op}|${a.value}|${a.stationIds.join('+')}`),
   ]);
   const last = useRef<string | null>(null);
 

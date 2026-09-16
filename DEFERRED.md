@@ -562,6 +562,19 @@ headline, advice line and eyebrow in all five languages, and `deriveAlert` conve
 its figures to the reader's units — so a service honouring the registration's `lang`,
 `tempUnit` and `windUnit` writes what the device's own block says.)
 
+### The reader's own thresholds are stored and sent, not yet evaluated
+
+A rule made from a block on 'Actueel' (`core/alerts.ts`, `ui/current/TileAlertForm`)
+is stored in preferences, listed in Instellingen → Meldingen, and travels in the push
+registration as `rules`. Nothing evaluates it yet.
+
+Evaluating one on the device is a bigger job than it looks: a rule names AgroExact
+stations, which are not the location the app is showing, so the background task would
+need station readings — and that means an access token from SecureStore plus the
+refresh logic that currently lives in the React provider. That is worth doing
+deliberately or not at all. The comparison itself is done and tested
+(`evaluateAlert`), so whichever side ends up running it, the rule means one thing.
+
 ### Alerts fire from the background task only
 
 `planNotification` is called in `core/backgroundTask.ts` and nowhere else, so nothing

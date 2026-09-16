@@ -19,6 +19,9 @@ today — every sync is a no-op: no request, no error, no retry.
   "platform": "ios",
   "kinds": ["rain", "storm", "wind"],
   "places": [{ "name": "Wageningen", "lat": 51.969, "lon": 5.665 }],
+  "rules": [
+    { "id": "m1k2j3-a7f0", "tileId": "temp", "op": "below", "value": 2, "stationIds": ["1234"] }
+  ],
   "lang": "nl",
   "tempUnit": "C",
   "windUnit": "kmh",
@@ -35,6 +38,15 @@ today — every sync is a no-op: no request, no error, no retry.
   reader can subscribe to (`PUSH_KINDS`). Sorted, always. Fog and heat are absent
   deliberately — they earn a block on the screen, not a buzz.
 - **`places`** are every saved location, rounded to three decimals (~100 m).
+- **`rules`** are thresholds the reader set themselves, from a block on 'Actueel'.
+  Empty on most devices. `tileId` identifies the quantity *and its window* — `temp` is
+  the current temperature, `rain-24h` the last 24 hours' total, `temp-min` the lowest
+  of the last 24 — and the mapping is `modelTiles` in `core/model/tiles.ts`. `value`
+  is in canonical units (°C, km/h, mm, %, degrees) whatever the phone is set to
+  display, and `op` is strict: `above` fires over the value, never at it. A rule names
+  AgroExact station ids, so evaluating them needs station access as well as a
+  forecast. Rules alone are reason enough for a device to be registered — someone may
+  want their own threshold and none of the built-in kinds.
 - **`tzOffsetSec`** and **`quietHours`** are for the 22:00–07:00 window. Enforce it
   server-side: a push that arrives at 03:00 has already woken someone, and dropping
   it on receipt is too late.
@@ -59,11 +71,14 @@ only key that can be relied on.
    that would make people distrust both. Port the module, or expose it.
 3. For each device subscribed to that kind at that place, and outside its quiet
    hours, send one notification.
-4. Deduplicate per device, per kind, per event — the local fallback keys on `kind`
+4. For each `rule`, poll its stations and compare. A reading that is missing is not a
+   reading that is safe: do not fire on a gap. `core/alerts.ts` has the comparison and
+   its tests; `evaluateAlert` is four lines and worth porting rather than rewriting.
+5. Deduplicate per device, per kind, per event — the local fallback keys on `kind`
    plus the hour for the same reason. Three notifications for one shower is how an
    app gets its notifications switched off wholesale.
 
-Title and body follow the local fallback in `core/notifications.ts`:
+Title and body for the built-in kinds follow the local fallback in `core/notifications.ts`:
 `"<label> · <place>"` and `"<headline>. <sub>"`. Both come out of `deriveAlert`, which
 takes `{ lang, tempUnit, windUnit }` — so a service that honours the registration's
 `lang`, `tempUnit` and `windUnit` writes exactly what the block on the device says.

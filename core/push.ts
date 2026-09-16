@@ -45,6 +45,25 @@ export const PUSH_KINDS = {
 
 export type PushKind = keyof typeof PUSH_KINDS;
 
+/**
+ * One threshold the reader set themselves, as the server needs it.
+ *
+ * Flattened out of `UserAlert`: the titles and window labels it carries are for the
+ * list on the phone, and a service has no use for a Dutch block name. What is left is
+ * the measurement, the comparison and the stations — and the id, so a notification
+ * can say which rule it came from and the service can drop one that has gone.
+ */
+export interface PushRule {
+  id: string;
+  /** The block it came from — `Tile.id`, which is what defines the quantity and its
+   *  window. The service needs the same mapping the app has; see the contract. */
+  tileId: string;
+  op: 'above' | 'below';
+  /** In the app's canonical units: °C, km/h, mm, %, degrees. Never the reader's. */
+  value: number;
+  stationIds: string[];
+}
+
 /** One place the server watches on this device's behalf. */
 export interface PushPlace {
   name: string;
@@ -68,6 +87,14 @@ export interface PushRegistration {
   /** Which alert kinds this device wants, in a stable order. */
   kinds: PushKind[];
   places: PushPlace[];
+  /**
+   * The reader's own thresholds. Empty is normal — most devices will have none.
+   *
+   * They do not gate the registration the way `kinds` does: somebody with a rule on
+   * one station and no interest in the built-in weather alerts still wants their
+   * rule, so a registration is worth making for either.
+   */
+  rules: PushRule[];
   /** So the server writes in the language the app is set to, not the phone's. */
   lang: Prefs['lang'];
   /** Units, so a body reads "18 °C" or "64 °F" as the reader expects. */
@@ -107,10 +134,24 @@ export function buildRegistration(prefs: Prefs, opts: BuildOptions): PushRegistr
   const kinds = (Object.keys(PUSH_KINDS) as PushKind[])
     .filter((kind) => prefs[PUSH_KINDS[kind]] === true)
     .sort();
-  if (!kinds.length) return null;
+
+  const rules: PushRule[] = prefs.userAlerts
+    .filter((a) => a.enabled && a.stationIds.length)
+    .map((a) => ({
+      id: a.id,
+      tileId: a.tileId,
+      op: a.op,
+      value: a.value,
+      stationIds: [...a.stationIds].sort(),
+    }))
+    .sort((a, b) => (a.id < b.id ? -1 : 1));
+
+  // Either half is reason enough to register: a grower watching one station's
+  // temperature and nothing else still wants to hear about it.
+  if (!kinds.length && !rules.length) return null;
 
   const places = prefs.locations.map(toPlace);
-  if (!places.length) return null;
+  if (!places.length && !rules.length) return null;
 
   return {
     v: 1,
@@ -118,6 +159,7 @@ export function buildRegistration(prefs: Prefs, opts: BuildOptions): PushRegistr
     platform: opts.platform ?? 'ios',
     kinds,
     places,
+    rules,
     lang: prefs.lang,
     tempUnit: prefs.tempUnit,
     windUnit: prefs.windUnit,
@@ -150,8 +192,13 @@ const round3 = (v: number): number => Math.round(v * 1000) / 1000;
 export function registrationDigest(reg: PushRegistration | null): string {
   if (!reg) return 'none';
   const places = reg.places.map((p) => `${p.lat},${p.lon}`).join(';');
+  // Everything a rule is evaluated on. Its title is not in here, because renaming a
+  // block on the phone changes nothing the server does.
+  const rules = reg.rules
+    .map((r) => `${r.id}:${r.tileId}:${r.op}:${r.value}:${r.stationIds.join('+')}`)
+    .join(';');
   return [
-    reg.v, reg.token, reg.kinds.join(','), places,
+    reg.v, reg.token, reg.kinds.join(','), places, rules,
     reg.lang, reg.tempUnit, reg.windUnit, reg.tzOffsetSec, reg.quietHours ? 'q' : '-',
   ].join('|');
 }

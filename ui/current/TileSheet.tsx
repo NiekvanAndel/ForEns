@@ -19,16 +19,20 @@
  * Rows appear as their locations land rather than all at once. Each is its own
  * request, so one slow place holds up its own row and not the sheet.
  */
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { radius, shadowCard, space, useTheme } from '../../theme';
 import { Text } from '../Text';
+import { Icon } from '../Icon';
 import { Rule } from '../Card';
 import { usePrefs } from '../../state/prefs';
 import { useAllLocationConditions, useAllLocationNowcasts } from '../../state/allLocations';
 import { modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
 import { ta } from '../../core/i18n';
 import { tileReading } from './ConditionTile';
+import { TileAlertForm } from './TileAlertSheet';
 
 export interface TileSheetProps {
   /** The block to compare, or null when the sheet is shut. */
@@ -51,8 +55,20 @@ export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
   const insets = useSafeAreaInsets();
   // Nothing is fetched until the sheet is actually open — and the nowcast, which is
   // the heavier of the two, only for the one block that reads it.
-  const conditions = useAllLocationConditions(tile != null);
-  const nowcasts = useAllLocationNowcasts(tile?.id === 'rain-next-1h');
+  /**
+   * Which face is up: the block across every location, or the form for an alert on
+   * it. One sheet with two bodies rather than two sheets, because a modal presented
+   * in the same frame as another is dismissed does not reliably survive it on iOS —
+   * see `TileAlertForm`.
+   */
+  const [mode, setMode] = useState<'compare' | 'alert'>('compare');
+  // Every opening starts on the comparison, whichever face the last one was left on.
+  useEffect(() => {
+    if (tile) setMode('compare');
+  }, [tile]);
+
+  const conditions = useAllLocationConditions(tile != null && mode === 'compare');
+  const nowcasts = useAllLocationNowcasts(tile?.id === 'rain-next-1h' && mode === 'compare');
 
   const rows: Row[] = conditions.map(({ location, model, loading }, i) => {
     // The same blocks the grid behind is drawing, for this location; the one
@@ -116,8 +132,32 @@ export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
             </Text>
           </View>
 
+          {/* Where an alert on this block is made. Here rather than in Instellingen
+              because this is where somebody is standing when the thought occurs:
+              "sixteen degrees — tell me when it drops below two" is one tap from the
+              number that prompted it. The list of them still lives in Instellingen,
+              which is where a list belongs. */}
+          {mode === 'compare' ? (
+            <Pressable
+              onPress={() => { Haptics.selectionAsync().catch(() => {}); setMode('alert'); }}
+              accessibilityRole="button"
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: space[2],
+                paddingHorizontal: space[5], paddingBottom: space[4],
+              }}
+            >
+              <Icon name="bell-ringing" size={15} color={palette.accentDark} weight="bold" />
+              <Text variant="label" weight="semibold" color={palette.accentDark}>
+                {ta('alertAdd', prefs.lang)}
+              </Text>
+            </Pressable>
+          ) : null}
+
           <Rule />
 
+          {tile && mode === 'alert' ? (
+            <TileAlertForm tile={tile} onDone={() => setMode('compare')} />
+          ) : (
           <ScrollView
             contentContainerStyle={{ paddingHorizontal: space[5] }}
             showsVerticalScrollIndicator={false}
@@ -152,6 +192,7 @@ export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
               </View>
             ))}
           </ScrollView>
+          )}
         </Pressable>
       </Pressable>
     </Modal>
