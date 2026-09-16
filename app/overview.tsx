@@ -43,16 +43,17 @@ import { Icon } from '../ui/Icon';
 import { TileEditor } from '../ui/current/TileEditor';
 import {
   AdviceWidget, AlertsWidget, ConfidenceWidget, FrostWidget, HeroWidget, LongTermWidget,
-  MapWidget, NearTermWidget, NowcastWidget, OutlookWidget, Rain24Widget, RainNextWidget,
-  SummaryWidget, TempWidget, WindWidget, WorkWidget, type WidgetProps,
+  MapWidget, NearTermWidget, NowcastWidget, OutlookWidget, RadarWidget, Rain24Widget,
+  RainNextWidget, SummaryWidget, TempWidget, WindWidget, WorkWidget, type WidgetProps,
 } from '../ui/overview/widgets';
+import { WidgetSettingsForm } from '../ui/overview/WidgetSettingsForm';
 import { usePrefs } from '../state/prefs';
 import {
   useAllLocationConditions, useAllLocationEnsembles, useAllLocationNowcasts,
   useAllLocationOutlooks,
 } from '../state/allLocations';
 import {
-  arrangeWidgets, neededSources, OVERVIEW_WIDGETS, widgetRows,
+  arrangeWidgets, neededSources, OVERVIEW_WIDGETS, widgetRows, widgetSettings,
 } from '../core/overview';
 import { buildOverviewRow } from '../core/overviewData';
 import { deriveAlert } from '../core/model/alert';
@@ -77,6 +78,7 @@ const WIDGET_VIEWS: Record<string, (props: WidgetProps) => React.ReactElement | 
   // their subject is `usePrefs().location`, not the rows.
   hero: HeroWidget,
   nowcast: NowcastWidget,
+  radar: RadarWidget,
   nearTerm: NearTermWidget,
   longTerm: LongTermWidget,
 };
@@ -87,7 +89,8 @@ const WIDGET_LABEL: Record<string, AppStringKey> = {
   rain24: 'ovRain24', rainNext: 'ovRainNext', temp: 'ovTemp', wind: 'ovWind',
   frost: 'ovFrost', workability: 'ovWork', outlook: 'ovOutlook',
   confidence: 'ovConfidence', map: 'ovMap',
-  hero: 'ovHero', nowcast: 'ovNowcast', nearTerm: 'ovNearTerm', longTerm: 'ovLongTerm',
+  hero: 'ovHero', nowcast: 'ovNowcast', radar: 'ovRadar',
+  nearTerm: 'ovNearTerm', longTerm: 'ovLongTerm',
 };
 
 export default function OverviewScreen() {
@@ -142,8 +145,11 @@ export default function OverviewScreen() {
     router.push(page === 'index' ? '/' : `/${page}`);
   };
 
-  const props: WidgetProps = { rows, alerts, onOpen: open };
+  const models = useMemo(() => conditions.map((c) => c.model), [conditions]);
   const rowsOfWidgets = widgetRows(widgets);
+
+  /** Everything a widget gets except its own settings, which differ per widget. */
+  const shared = { rows, alerts, models, nowcasts, onOpen: open };
 
   return (
     <>
@@ -222,6 +228,10 @@ export default function OverviewScreen() {
                 {row.map((w) => {
                   const View_ = WIDGET_VIEWS[w.id];
                   if (!View_) return null;
+                  const props: WidgetProps = {
+                    ...shared,
+                    settings: widgetSettings(prefs.overviewSettings, w.id),
+                  };
                   return (
                     // A half in a row of one still takes half the width: stretching it
                     // would give it a prominence its author did not ask for.
@@ -244,9 +254,18 @@ export default function OverviewScreen() {
           all={OVERVIEW_WIDGETS.map((w) => ({
             id: w.id,
             title: ta(WIDGET_LABEL[w.id] ?? 'ovSummary', prefs.lang),
+            settings: !!w.options?.length,
           }))}
           layout={layout}
           onChange={(next) => setPrefs({ overview: next(prefs.overview) })}
+          // The settings of one widget, as a face of this same sheet. See
+          // `WidgetSettingsForm` for why it is not a modal of its own.
+          renderSettings={(id) => (
+            <WidgetSettingsForm
+              id={id}
+              title={ta(WIDGET_LABEL[id] ?? 'ovSummary', prefs.lang)}
+            />
+          )}
         />
       </View>
     </>

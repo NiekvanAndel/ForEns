@@ -536,7 +536,7 @@ on the overview rows and in the day sheet.
 
 `app/overview.tsx` answers the question the rest of the app cannot: across every
 saved location, what was it, what is it, what is coming, and can I get on the land.
-Sixteen widgets, arranged by the reader through the same `TileLayout` machinery the
+Seventeen widgets, arranged by the reader through the same `TileLayout` machinery the
 blocks on 'Actueel' use — which now lives in `core/arrangement.ts` so both can reach
 it without importing each other.
 
@@ -550,16 +550,23 @@ What is deliberately not built yet:
   exactly this reason — dry, under 20 km/h, above 1 °C is a sprayer's default and not
   every crop's. They belong in preferences, per location or per crop, once somebody
   has said which.
-- **A widget's own settings.** Each entry in `OVERVIEW_WIDGETS` is order and
-  visibility only. A rainfall ranking that could be set to 48 hours, or a work window
-  to a different limit, needs a per-widget options bag — the catalogue is the place
-  to hang it. **The first thing that bag should carry is a location.** The page now
-  draws the selected location's own cards too — its hero, its nowcast, its hour strip
-  and its week, the same components 'Nu' is built from, marked `scope: 'location'` in
-  the catalogue. They follow whichever location is selected, which is the right
-  default and the wrong ceiling: a grower with a home field and four outlying ones
-  wants the home field's hero pinned, and two of them side by side. That is the same
-  options bag, with a location in it.
+- **Per-widget settings beyond the three there are.** A widget now declares which of
+  `location`, `limit` and `window` its sheet offers, and the gear beside it in the
+  editor swaps the list for those controls (`WidgetSettingsForm`, a face of the same
+  sheet rather than a second modal — see the note there). Three keys is a deliberate
+  ceiling: a settings screen that renders any shape a widget invents is one nobody
+  can keep consistent. A fourth wants arguing for in `WidgetSettings`, where the cost
+  is visible. What is stored is only what a reader changed, so a default the app later
+  thinks better of still moves for everybody who never opened the sheet.
+- **A pinned location only reaches three widgets, and the line is data, not taste.**
+  `location` pins the hero, the rain curve and the radar square, because what this
+  page fetches for every location — an observation model and a nowcast profile — is
+  enough to draw those. The hour strip and the week follow the selection and offer no
+  control at all, because the fortnight behind them exists only for the selected
+  location (the forecast cache holds three, and `useAllLocationConditions` makes an
+  observations-only model on purpose). Widening it means a real forecast fetch per
+  pinned location, which is the decision, not the plumbing: `ForecastOverrideProvider`
+  already exists to render a card against a model it is handed.
 - **All the rule sets want revisiting, together.** There are three now — the work
   window (`DEFAULT_WORK_LIMITS`: dry, under 20 km/h, above 1 °C), the advice rules
   (`DEFAULT_ADVICE_LIMITS`: 15 mm shuts the land, 10 mm coming is worth hurrying for,
@@ -577,6 +584,15 @@ comparison collapses to a single line where the locations agree (`spreadOf`), an
 almost every reading carries a small mark — a rainfall sparkline, a workability ring,
 an ensemble band (`ui/overview/marks`). Each bar is the widget's own: worth mentioning
 means 0,1 mm for rain and 3 °C for frost.
+
+**The radar is on this page twice, on purpose.** The curve (`nowcast`) says how hard
+and when, in a shape no total gets across; the square (`radar`) says where it is and
+which way it is going. They are the same components the radar page and 'Nu' carry —
+`NowcastPanel` and `RadarPreview` — so the loop, the scrub and the clock badge are the
+ones a reader already knows. Each keeps its own play head, which `useRadarFrames` is
+explicit about: whoever owns the index owns the timer. The cost is that a page showing
+both lists the frames twice; they are a short list of URLs, and sharing them would
+mean sharing a play head that should not be shared.
 
 **Advies is the one widget that answers "so what do I do"** (`core/overviewAdvice`).
 Six rules, each a sentence a grower would say — the land is shut, there is no window

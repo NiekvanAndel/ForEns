@@ -32,11 +32,11 @@
  * exactly as the rest of the app does. A grower reading m/s on the map and km/h here
  * would rightly wonder which one the app believes.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import { space, useTheme } from '../../theme';
+import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
@@ -44,6 +44,9 @@ import { WindArrow } from '../WindArrow';
 import { ConditionsHero } from '../nowcast/ConditionsHero';
 import { HourSlider } from '../nowcast/HourSlider';
 import { ForecastPreview } from '../nowcast/ForecastPreview';
+import { RadarPreview } from '../nowcast/RadarPreview';
+import { NowcastPanel } from '../radar/NowcastPanel';
+import { frameAtFraction, useRadarFrames } from '../radar/useRadarFrames';
 import { LocationLine, Reading, WidgetCard, WidgetNote } from './parts';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
@@ -54,6 +57,11 @@ import {
   type OverviewRow,
 } from '../../core/overviewData';
 import { dayAgreement } from '../../core/sources/ensembleOutlook';
+import { resolveWidgetLocation, type WidgetSettings } from '../../core/overview';
+import {
+  activeProvider, forecastBoundary, frameClock, radarAxis, type NowcastProfile,
+} from '../../core/radar';
+import type { ForecastModel } from '../../core/model/types';
 import { adviceFor, isOpportunity } from '../../core/overviewAdvice';
 import { BarSpark, LineSpark, RestLine, Ring, SpreadBand } from './marks';
 import type { WeatherAlert } from '../../core/model/alert';
@@ -65,8 +73,36 @@ export interface WidgetProps {
   rows: OverviewRow[];
   /** One per row, in the same order; null where nothing is worth saying. */
   alerts: (WeatherAlert | null)[];
+  /** The observation model per saved location, same order again. What a widget
+   *  pinned to a location other than the selected one draws from. */
+  models: (ForecastModel | null)[];
+  /** And its rain profile, for the same reason. */
+  nowcasts: (NowcastProfile | null)[];
+  /** What this widget is set to, defaults already filled in. */
+  settings: WidgetSettings;
   /** Selects a location and leaves the page. */
   onOpen: (index: number, page: 'index' | 'forecast' | 'grafiek' | 'actueel') => void;
+}
+
+/**
+ * Which saved location a `scope: 'location'` widget is drawing, and whether that is
+ * the one the rest of the app is on.
+ *
+ * The distinction is the whole of the difference between the two data paths. The
+ * selected location has a full staged model behind it — a fortnight of forecast, the
+ * ensemble, the nowcast — because the tabs behind this page loaded it. Any other has
+ * only what this page fetches for every location: observations and a rain profile.
+ * Enough for a hero, a radar square and a curve; not enough for a week, which is why
+ * the week has no location control.
+ */
+function useWidgetLocation(settings: WidgetSettings) {
+  const { prefs } = usePrefs();
+  const index = resolveWidgetLocation(settings, prefs.activeLocation, prefs.locations.length);
+  return {
+    index,
+    location: prefs.locations[index] ?? prefs.locations[0]!,
+    selected: index === prefs.activeLocation,
+  };
 }
 
 // ── The sentence at the top ───────────────────────────────────────────────────
@@ -128,14 +164,15 @@ export function SummaryWidget({ rows }: WidgetProps) {
 
 // ── Significant weather, per location ─────────────────────────────────────────
 
-export function AlertsWidget({ rows, alerts, onOpen }: WidgetProps) {
+export function AlertsWidget({ rows, alerts, settings, onOpen }: WidgetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
 
   const hits = rows
     .map((row, i) => ({ row, alert: alerts[i] ?? null }))
-    .filter((x): x is { row: OverviewRow; alert: WeatherAlert } => x.alert != null);
-  const rules = prefs.userAlerts.filter((a) => a.enabled);
+    .filter((x): x is { row: OverviewRow; alert: WeatherAlert } => x.alert != null)
+    .slice(0, settings.limit);
+  const rules = prefs.userAlerts.filter((a) => a.enabled).slice(0, settings.limit);
 
   // Nothing at all draws nothing at all — not an empty card. A widget that says
   // "niets bijzonders" every day is a widget that takes height to report silence,
@@ -197,10 +234,10 @@ export function AlertsWidget({ rows, alerts, onOpen }: WidgetProps) {
  * scanning this wants to know in one look whether it is a list of problems or a list
  * of chances.
  */
-export function AdviceWidget({ rows, onOpen }: WidgetProps) {
+export function AdviceWidget({ rows, settings, onOpen }: WidgetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
-  const advice = adviceFor(rows);
+  const advice = adviceFor(rows, undefined, settings.limit);
 
   if (!advice.length) return null;
 
@@ -261,7 +298,7 @@ export function AdviceWidget({ rows, onOpen }: WidgetProps) {
 /** The shared shape of the four ranked widgets: sort, then a line each. Extracted
  *  because four near-copies is how two of them end up sorting differently. */
 function RankedWidget({
-  title, hint, rows, pick, render, onPress, direction = 'desc',
+  title, hint, rows, pick, render, onPress, direction = 'desc', limit,
 }: {
   title: string;
   hint?: string;
@@ -270,8 +307,13 @@ function RankedWidget({
   render: (row: OverviewRow) => React.ReactNode;
   onPress: (row: OverviewRow) => void;
   direction?: 'desc' | 'asc';
+  /** How many lines the reader allows it. The rest are counted, not dropped. */
+  limit?: number;
 }) {
-  const ranked = rankRows(rows, pick, direction);
+  const { prefs } = usePrefs();
+  const all = rankRows(rows, pick, direction);
+  const ranked = limit ? all.slice(0, limit) : all;
+  const rest = all.length - ranked.length;
   return (
     <WidgetCard title={title} hint={hint}>
       {ranked.map((row, i) => (
@@ -285,18 +327,29 @@ function RankedWidget({
           {render(row)}
         </LocationLine>
       ))}
+      {rest > 0 ? (
+        <RestLine>{ta('ovRest', prefs.lang).replace('{n}', String(rest))}</RestLine>
+      ) : null}
     </WidgetCard>
   );
 }
 
-export function Rain24Widget({ rows, onOpen }: WidgetProps) {
+export function Rain24Widget({ rows, settings, onOpen }: WidgetProps) {
   const { prefs } = usePrefs();
   const { palette } = useTheme();
+  // Since midnight or over the last 24 hours — both are on the row already, and which
+  // one a grower means by "how much fell" depends on whether they are looking back at
+  // a night or at a day.
+  const today = settings.window === 'today';
+  const fell = (r: OverviewRow) => (today ? r.rainToday : r.rain24);
   // A tenth of a millimetre is the point below which "it rained" is not worth a line.
-  const { shown, rest, empty } = notableRows(rows, (r) => r.rain24, 0.1);
+  const { shown, rest, empty } = notableRows(rows, fell, 0.1, 'desc', settings.limit);
 
   return (
-    <WidgetCard title={ta('ovRain24', prefs.lang)} hint={ta('last24h', prefs.lang)}>
+    <WidgetCard
+      title={ta('ovRain24', prefs.lang)}
+      hint={ta(today ? 'today' : 'last24h', prefs.lang)}
+    >
       {empty ? (
         <WidgetNote>{ta('ovAllDry', prefs.lang)}</WidgetNote>
       ) : (
@@ -314,7 +367,7 @@ export function Rain24Widget({ rows, onOpen }: WidgetProps) {
                 than yesterday" is a question the widget beside this one answers
                 properly — this one is about what fell and when. */}
             <BarSpark values={row.rainTrail} color={palette.valPrecip} width={52} />
-            <Reading value={fmtMm(row.rain24 ?? 0)} unit="mm" color={palette.valPrecip} />
+            <Reading value={fmtMm(fell(row) ?? 0)} unit="mm" color={palette.valPrecip} />
           </LocationLine>
         ))
       )}
@@ -325,12 +378,14 @@ export function Rain24Widget({ rows, onOpen }: WidgetProps) {
   );
 }
 
-export function RainNextWidget({ rows, onOpen }: WidgetProps) {
+export function RainNextWidget({ rows, settings, onOpen }: WidgetProps) {
   const { prefs } = usePrefs();
   const { palette } = useTheme();
   // Half a millimetre: below that nobody changes a plan, and a line that says they
   // might is a line that trains people to skip the widget.
-  const { shown, rest, empty } = notableRows(rows, (r) => r.rainNext24, 0.5);
+  const { shown, rest, empty } = notableRows(
+    rows, (r) => r.rainNext24, 0.5, 'desc', settings.limit
+  );
 
   return (
     <WidgetCard title={ta('ovRainNext', prefs.lang)} hint={ta('next24h', prefs.lang)}>
@@ -360,7 +415,7 @@ export function RainNextWidget({ rows, onOpen }: WidgetProps) {
   );
 }
 
-export function TempWidget({ rows, onOpen }: WidgetProps) {
+export function TempWidget({ rows, settings, onOpen }: WidgetProps) {
   const { prefs } = usePrefs();
   const { palette } = useTheme();
   const spread = spreadOf(rows, (r) => r.tempC);
@@ -381,7 +436,9 @@ export function TempWidget({ rows, onOpen }: WidgetProps) {
     );
   }
 
-  const ranked = rankRows(rows, (r) => r.tempC);
+  const all = rankRows(rows, (r) => r.tempC);
+  const ranked = settings.limit ? all.slice(0, settings.limit) : all;
+  const rest = all.length - ranked.length;
   return (
     <WidgetCard title={ta('ovTemp', prefs.lang)} hint={ta('ovSpread', prefs.lang)}>
       {ranked.map((row, i) => (
@@ -402,11 +459,14 @@ export function TempWidget({ rows, onOpen }: WidgetProps) {
           />
         </LocationLine>
       ))}
+      {rest > 0 ? (
+        <RestLine>{ta('ovRest', prefs.lang).replace('{n}', String(rest))}</RestLine>
+      ) : null}
     </WidgetCard>
   );
 }
 
-export function WindWidget({ rows, onOpen }: WidgetProps) {
+export function WindWidget({ rows, settings, onOpen }: WidgetProps) {
   const { prefs } = usePrefs();
   const { palette } = useTheme();
   return (
@@ -414,6 +474,7 @@ export function WindWidget({ rows, onOpen }: WidgetProps) {
       title={ta('ovWind', prefs.lang)}
       hint={ta('ovSpread', prefs.lang)}
       rows={rows}
+      limit={settings.limit}
       pick={(r) => r.windKmh}
       onPress={(r) => onOpen(r.index, 'actueel')}
       render={(r) => (
@@ -430,12 +491,14 @@ export function WindWidget({ rows, onOpen }: WidgetProps) {
   );
 }
 
-export function FrostWidget({ rows, onOpen }: WidgetProps) {
+export function FrostWidget({ rows, settings, onOpen }: WidgetProps) {
   const { prefs } = usePrefs();
   const { palette } = useTheme();
   // Three degrees, not zero: a field forecast for 2° is the one somebody wants to
   // know about, because that is where a forecast being wrong costs a crop.
-  const { shown, rest, empty } = notableRows(rows, (r) => r.tonightMinC, 3, 'asc');
+  const { shown, rest, empty } = notableRows(
+    rows, (r) => r.tonightMinC, 3, 'asc', settings.limit
+  );
 
   return (
     <WidgetCard title={ta('ovFrost', prefs.lang)} hint={ta('ovTonight', prefs.lang)}>
@@ -555,14 +618,14 @@ export function WorkWidget({ rows, onOpen }: WidgetProps) {
 
 // ── The coming days ───────────────────────────────────────────────────────────
 
-export function OutlookWidget({ rows, onOpen }: WidgetProps) {
+export function OutlookWidget({ rows, settings, onOpen }: WidgetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const names = dayNames(prefs.lang);
 
   return (
     <WidgetCard title={ta('ovOutlook', prefs.lang)}>
-      {rows.map((row, i) => {
+      {rows.slice(0, settings.limit).map((row, i) => {
         // Tomorrow and the day after. Today is half over and every other widget on
         // this page is already about it; a column repeating it is a column spent.
         const days = row.days.slice(1, 3);
@@ -772,25 +835,32 @@ export function MapWidget() {
  * `ConditionsHero` in the app means a reading cannot be worded one way here and
  * another way there.
  *
- * They all read `useForecast()`, which is the selected location's own data — already
- * loaded, because it is what the tabs behind this page are showing. So they cost the
- * overview nothing, which is why their `needs` are empty.
- *
  * Each names its location, because a card with no place on a page about every place
- * would be read as all of them. Pinning one to a *particular* location, rather than
- * to whichever is selected, is per-widget settings — written down, not built; see
- * DEFERRED.
+ * would be read as all of them — and three of them can be pinned to a location other
+ * than the selected one, through the `location` setting.
+ *
+ * That split is where the honesty is, and `useWidgetLocation` is where it is decided.
+ * The selected location has a full staged model behind it, loaded by the tabs, so the
+ * widgets that follow it cost this page nothing. A pinned location has only what this
+ * page fetches for every location: an observation model and a rain profile. Enough
+ * for a hero, a curve and a radar square; not enough for a week, which is why the
+ * hour strip and the week offer no location control rather than offering one and
+ * quietly drawing three days where a fortnight was asked for.
  */
 
-/** The hero's two subtitles: where the reading came from, and when. Lifted from 'Nu'
- *  so the same card carries the same provenance on both pages. */
-function useHeroLabels() {
-  const { location } = usePrefs();
-  const { model, harmonie, offsetSec } = useForecast();
+/**
+ * The hero's two subtitles: where the reading came from, and when.
+ *
+ * Lifted from 'Nu' so the same card carries the same provenance on both pages, and
+ * taking the model rather than reading the context so it can word a pinned
+ * location's card too.
+ */
+function useHeroLabels(model: ForecastModel | null, stationName: string | null) {
+  const { harmonie, offsetSec } = useForecast();
 
-  const stationName = model?.station?.name ?? location.stationName ?? null;
+  const name = model?.station?.name ?? stationName ?? null;
   const sourceLabel = model?.station
-    ? `AgroExact - ${stationName ?? 'station'}`
+    ? `AgroExact - ${name ?? 'station'}`
     : harmonie.model
       ? 'HARMONIE-AROME'
       : 'ECMWF IFS';
@@ -805,11 +875,13 @@ function useHeroLabels() {
   return { sourceLabel, timeLabel };
 }
 
-export function HeroWidget() {
-  const { location } = usePrefs();
-  const { model } = useForecast();
-  const { sourceLabel, timeLabel } = useHeroLabels();
-  const router = useRouter();
+export function HeroWidget({ models, settings, onOpen }: WidgetProps) {
+  const { index, location, selected } = useWidgetLocation(settings);
+  const { model: own } = useForecast();
+  // The selected location's full staged model where there is one; the page's own
+  // observation model for any other. Both draw this card; only one holds a fortnight.
+  const model = selected ? own : models[index] ?? null;
+  const { sourceLabel, timeLabel } = useHeroLabels(model, location.stationName ?? null);
 
   if (!model) return null;
   return (
@@ -818,51 +890,103 @@ export function HeroWidget() {
       location={location}
       sourceLabel={sourceLabel}
       timeLabel={timeLabel}
-      onPress={() => router.push('/actueel')}
+      onPress={() => onOpen(index, 'actueel')}
     />
   );
 }
 
 /**
- * Rain in the next two hours, where the reader is.
+ * Rain in the next two hours, as the curve under the full-screen radar draws it.
  *
- * The nowcast is five-minutely over one point; there is no honest way to show eight
- * fields' worth of it in a card. So it answers for the location that is selected, and
- * the heading names it.
+ * It was a figure and a word — "0,0 mm, droog" — which is the one thing a rain
+ * nowcast is bad at saying. Two hours of rain is a *shape*: a shower that starts in
+ * twenty minutes and is gone by the hour reads as a bump, and no wording of its total
+ * gets that across. So the widget draws `NowcastPanel`, the same chart the radar page
+ * and the full-screen map carry, with the same axis, the same boundary rule between
+ * observation and forecast, and the same drag to scrub the loop.
+ *
+ * The radar frames come from `useRadarFrames`, this page's own copy — the hook's
+ * whole argument is that the play head belongs to whoever owns the index, and a
+ * widget on a page the reader may scroll past is exactly such an owner.
+ *
+ * The nowcast is one point, so it answers for one location: the selected one, or
+ * whichever the reader pinned in its settings.
  */
-export function NowcastWidget() {
+export function NowcastWidget({ nowcasts, settings }: WidgetProps) {
   const { palette } = useTheme();
-  const { prefs, location } = usePrefs();
-  const { nowcast } = useForecast();
-  const router = useRouter();
+  const { prefs } = usePrefs();
+  const { index: at, location, selected } = useWidgetLocation(settings);
+  const { nowcast: own } = useForecast();
+  const { frames, index, setIndex, playing, togglePlay, fetch } = useRadarFrames();
+  const [width, setWidth] = useState(0);
 
-  const mm = nowcast?.totalMm ?? null;
-  const starts = nowcast?.startsInMin ?? null;
+  const profile = selected ? own : nowcasts[at] ?? null;
+  const covered = activeProvider().coversPoint(location.lat, location.lon);
+
+  // Outside the radar's coverage there is no loop to fetch, and no axis to draw the
+  // curve against — the panel would be a chart with nothing under it.
+  useEffect(() => {
+    if (!covered) return;
+    const control = new AbortController();
+    fetch(control.signal);
+    return () => control.abort();
+  }, [fetch, covered]);
+
+  const axis = radarAxis(frames);
+  const offsetMin = frames[index]
+    ? Math.round((frames[index]!.timeMs - Date.now()) / 60_000)
+    : 0;
 
   return (
-    <WidgetCard
-      title={ta('ovNowcast', prefs.lang)}
-      hint={location.name}
-      onPress={() => router.push('/map')}
+    <View
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+      style={{ backgroundColor: palette.appCard, borderRadius: radius.appCard, overflow: 'hidden' }}
     >
-      {nowcast?.wet ? (
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[2] }}>
-          <Text variant="stat" color={palette.valPrecip} tabular style={{ fontSize: 22 }}>
-            {fmtMm(mm ?? 0)}
-            <Text variant="caption" weight="semibold" color={palette.muted}>
-              {' mm'}
-            </Text>
-          </Text>
-          <Text variant="caption" color={palette.muted}>
-            {starts == null || starts === 0
-              ? ta('now', prefs.lang)
-              : `${ta('expected', prefs.lang)} +${starts} min`}
-          </Text>
+      {!covered ? (
+        <View style={{ padding: space[5] }}>
+          <WidgetNote>{ta('radarOutside', prefs.lang)}</WidgetNote>
         </View>
-      ) : (
-        <WidgetNote>{ta('dryAt', prefs.lang)}</WidgetNote>
-      )}
-    </WidgetCard>
+      ) : width > 0 ? (
+        <NowcastPanel
+          profile={profile}
+          offsetMin={offsetMin}
+          timeLabel={frameClock(frames[index])}
+          width={width}
+          domain={axis ? { from: axis.from, to: axis.to } : undefined}
+          locationName={location.name}
+          onScrubFraction={(fraction) => {
+            const to = frameAtFraction(axis?.positions, fraction);
+            if (to != null) setIndex(to);
+          }}
+          boundaryFraction={forecastBoundary(frames, axis?.positions)}
+          playing={playing}
+          onTogglePlay={togglePlay}
+          playDisabled={frames.length < 2}
+          compact
+        />
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * The radar, at the size of a block on 'Actueel'.
+ *
+ * Half a row rather than the full one the card takes on 'Nu'. A radar square is read
+ * for one thing here — is there anything coming, and from where — and that survives
+ * being small in a way a chart does not. It is the same `RadarPreview` component, so
+ * the loop, the pin and the clock badge are the ones the reader already knows.
+ */
+export function RadarWidget({ settings, onOpen }: WidgetProps) {
+  const { index, location } = useWidgetLocation(settings);
+  const router = useRouter();
+  return (
+    <RadarPreview
+      lat={location.lat}
+      lon={location.lon}
+      stationName={location.stationName}
+      onOpen={() => { onOpen(index, 'index'); router.push('/radar'); }}
+    />
   );
 }
 

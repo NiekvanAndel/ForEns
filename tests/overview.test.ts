@@ -8,7 +8,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  arrangeWidgets, DEFAULT_OVERVIEW_LAYOUT, neededSources, OVERVIEW_WIDGETS, widgetRows,
+  arrangeWidgets, DEFAULT_OVERVIEW_LAYOUT, neededSources, OVERVIEW_WIDGETS,
+  resolveWidgetLocation, setWidgetSetting, widgetRows, widgetSettings,
 } from '../core/overview';
 import {
   buildOverviewRow, DEFAULT_WORK_LIMITS, firstWorkRun, notableRows, rankRows, spreadOf,
@@ -67,12 +68,36 @@ describe('the widget catalogue', () => {
     expect(shown).toContain('nearTerm');
   });
 
-  it('costs nothing for a widget that reads the selected location', () => {
-    // They draw from the forecast the tabs behind this page already hold, so putting
-    // one on the page must not add a request per saved location.
-    const location = OVERVIEW_WIDGETS.filter((w) => w.scope === 'location');
-    expect(location.length).toBeGreaterThan(0);
-    for (const w of location) expect(w.needs).toEqual([]);
+  it('costs nothing for a location widget that cannot be pinned', () => {
+    // A widget that only ever draws the selected location reads the forecast the tabs
+    // behind this page already hold, so putting it on the page adds no request.
+    const following = OVERVIEW_WIDGETS.filter(
+      (w) => w.scope === 'location' && !w.options?.includes('location')
+    );
+    expect(following.length).toBeGreaterThan(0);
+    for (const w of following) expect(w.needs).toEqual([]);
+  });
+
+  it('will not offer a location it has no data for', () => {
+    // Pinning is served by what this page fetches for every location, not by the
+    // selected location's own context — so a widget that offers the control must
+    // declare the source that fills it, or it would pin and then draw nothing.
+    const pinnable = OVERVIEW_WIDGETS.filter((w) => w.options?.includes('location'));
+    expect(pinnable.map((w) => w.id)).toEqual(['hero', 'nowcast', 'radar']);
+    for (const w of pinnable) {
+      // The radar needs only a point, which every saved location already carries.
+      if (w.id === 'radar') continue;
+      expect(w.needs.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('only offers settings a widget can honour', () => {
+    // An option on the catalogue is a control in the sheet, so an id here that the
+    // sheet cannot draw is a blank row a reader would press.
+    const known = ['location', 'limit', 'window'];
+    for (const w of OVERVIEW_WIDGETS) {
+      for (const o of w.options ?? []) expect(known).toContain(o);
+    }
   });
 });
 
@@ -90,12 +115,15 @@ describe('neededSources', () => {
     expect([...withRain]).toEqual(['conditions']);
   });
 
-  it('turns the nowcast on for the alerts, and off with them', () => {
+  it('turns the nowcast on for the two widgets that read it, and off with both', () => {
     // "Rain in seven minutes" is the sharpest thing the app says and the radar is
-    // where it comes from, so the alerts widget pays for it — and a reader who
-    // switches the alerts off stops paying.
+    // where it comes from, so the alerts widget pays for it — as does the rain curve.
+    // A reader who switches off both stops paying.
     expect(neededSources(DEFAULT_OVERVIEW_LAYOUT).has('nowcast')).toBe(true);
-    expect(neededSources({ order: [], hidden: ['alerts'] }).has('nowcast')).toBe(false);
+    expect(neededSources({ order: [], hidden: ['alerts'] }).has('nowcast')).toBe(true);
+    expect(
+      neededSources({ order: [], hidden: ['alerts', 'nowcast'] }).has('nowcast')
+    ).toBe(false);
   });
 });
 
@@ -484,5 +512,76 @@ describe('adviceFor', () => {
     const out = adviceFor(rows);
     expect(out).toHaveLength(4);
     expect(out[0]!.name).toBe('Nat');
+  });
+});
+
+describe('a widget\'s own settings', () => {
+  it('fills in the defaults it was not given', () => {
+    expect(widgetSettings({}, 'rain24')).toMatchObject({ limit: 5, window: '24h' });
+    expect(widgetSettings({ rain24: { window: 'today' } }, 'rain24').window).toBe('today');
+  });
+
+  it('stores only what was actually changed', () => {
+    // A default written into storage the first time a sheet opens is a default that
+    // can never be improved for the people who never touched it.
+    const set = setWidgetSetting({}, 'rain24', 'window', 'today');
+    expect(set).toEqual({ rain24: { window: 'today' } });
+
+    const back = setWidgetSetting(set, 'rain24', 'window', '24h');
+    expect(back).toEqual({});
+  });
+
+  it('keeps a widget\'s other settings when one is cleared', () => {
+    const both = setWidgetSetting(
+      setWidgetSetting({}, 'rain24', 'window', 'today'), 'rain24', 'limit', 3
+    );
+    expect(both).toEqual({ rain24: { window: 'today', limit: 3 } });
+    // Back to the default limit; the window the reader also chose stays.
+    expect(setWidgetSetting(both, 'rain24', 'limit', 5))
+      .toEqual({ rain24: { window: 'today' } });
+  });
+
+  it('does not touch the bag it was handed', () => {
+    const before = { rain24: { limit: 3 } };
+    setWidgetSetting(before, 'rain24', 'limit', 8);
+    expect(before).toEqual({ rain24: { limit: 3 } });
+  });
+});
+
+describe('resolveWidgetLocation', () => {
+  it('follows the selection when nothing is pinned', () => {
+    expect(resolveWidgetLocation({}, 2, 4)).toBe(2);
+  });
+
+  it('answers for the pinned location', () => {
+    expect(resolveWidgetLocation({ location: 1 }, 2, 4)).toBe(1);
+  });
+
+  it('falls back to the selection when the pinned location is gone', () => {
+    // A widget quietly answering for somebody else's field, because the list got
+    // shorter, is worse than one that follows the reader.
+    expect(resolveWidgetLocation({ location: 5 }, 1, 3)).toBe(1);
+    expect(resolveWidgetLocation({ location: -1 }, 1, 3)).toBe(1);
+  });
+});
+
+describe('stored widget settings', () => {
+  it('survives a bag of nonsense, key by key', () => {
+    const merged = mergePrefs({
+      overviewSettings: {
+        rain24: { limit: 'three', window: 'today' },
+        temp: { limit: 8 },
+        junk: null,
+        other: 'nope',
+      },
+    } as unknown as Record<string, unknown>);
+    expect(merged.overviewSettings).toEqual({
+      rain24: { window: 'today' },
+      temp: { limit: 8 },
+    });
+  });
+
+  it('starts empty, so every widget is on its default', () => {
+    expect(mergePrefs({}).overviewSettings).toEqual({});
   });
 });

@@ -11,7 +11,7 @@
 import type { LangCode } from './i18n/strings';
 import type { PresUnit, TempUnit, WindUnit, FontSizePref } from './i18n/units';
 import { sanitiseAlerts, type UserAlert } from './alerts';
-import { DEFAULT_OVERVIEW_LAYOUT } from './overview';
+import { DEFAULT_OVERVIEW_LAYOUT, type WidgetSettings } from './overview';
 import { DEFAULT_TILE_LAYOUT, type TileLayout } from './arrangement';
 
 // Re-exported so the many callers that reach for these through `core/prefs` keep
@@ -159,6 +159,9 @@ export interface Prefs {
    *  `core/overview`. One implementation of "your order, minus what you switched
    *  off", reused rather than written twice. */
   overview: TileLayout;
+  /** What each overview widget is set to, by widget id — sparse, holding only what a
+   *  reader actually changed. See `widgetSettings` in `core/overview`. */
+  overviewSettings: Record<string, WidgetSettings>;
 }
 
 /** 's-Hertogenbosch is the web app's default and the design's station-backed example. */
@@ -191,6 +194,7 @@ export const DEFAULT_PREFS: Prefs = {
   quietHours: true,
   tiles: DEFAULT_TILE_LAYOUT,
   overview: DEFAULT_OVERVIEW_LAYOUT,
+  overviewSettings: {},
 };
 
 /**
@@ -257,6 +261,24 @@ export function mergePrefs(stored: unknown): Prefs {
   const overview = s.overview as TileLayout | undefined;
   if (overview && typeof overview === 'object') {
     out.overview = { order: ids(overview.order), hidden: ids(overview.hidden) };
+  }
+
+  // Per-widget settings, read key by key. A stored bag that picked up a value of the
+  // wrong type — a `limit` that came back a string from some older writer — must cost
+  // that one key and not every setting the reader has.
+  const bag = s.overviewSettings;
+  if (bag && typeof bag === 'object' && !Array.isArray(bag)) {
+    const settings: Record<string, WidgetSettings> = {};
+    for (const [id, raw] of Object.entries(bag as Record<string, unknown>)) {
+      if (!raw || typeof raw !== 'object') continue;
+      const w = raw as WidgetSettings;
+      const one: WidgetSettings = {};
+      if (Number.isInteger(w.location) && (w.location as number) >= 0) one.location = w.location;
+      if (Number.isInteger(w.limit) && (w.limit as number) > 0) one.limit = w.limit;
+      if (w.window === 'today' || w.window === '24h') one.window = w.window;
+      if (Object.keys(one).length) settings[id] = one;
+    }
+    out.overviewSettings = settings;
   }
 
   if (Array.isArray(s.locations)) {
