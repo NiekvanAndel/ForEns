@@ -96,6 +96,19 @@ export function WidgetSettingsForm({ id, title }: WidgetSettingsFormProps) {
           </Field>
         ) : null}
 
+        {options.includes('hours') ? (
+          <Field label={ta('wsHours', prefs.lang)}>
+            {WIDGET_OPTION_CHOICES.hours.map((n) => (
+              <Choice
+                key={n}
+                label={`${n} ${ta('ovHours', prefs.lang)}`}
+                on={settings.hours === n}
+                onPress={() => write('hours', n)}
+              />
+            ))}
+          </Field>
+        ) : null}
+
         {options.includes('window') ? (
           <Field label={ta('wsWindow', prefs.lang)}>
             {WIDGET_OPTION_CHOICES.window.map((w) => (

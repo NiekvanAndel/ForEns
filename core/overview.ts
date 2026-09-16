@@ -86,6 +86,8 @@ export interface WidgetSettings {
   location?: number;
   /** How many lines a list may take before it stops and counts the rest. */
   limit?: number;
+  /** How far ahead an hour-by-hour widget runs. */
+  hours?: number;
   /** Which past window a rainfall widget totals. */
   window?: 'today' | '24h';
 }
@@ -94,12 +96,15 @@ export interface WidgetSettings {
  *  choices and the defaults cannot drift apart. */
 export const WIDGET_OPTION_CHOICES = {
   limit: [3, 5, 8] as const,
+  hours: [12, 24, 48] as const,
   window: ['24h', 'today'] as const,
 };
 
 /** What a widget does when the reader has said nothing. */
-export const WIDGET_OPTION_DEFAULTS: Required<Pick<WidgetSettings, 'limit' | 'window'>> = {
+export const WIDGET_OPTION_DEFAULTS:
+  Required<Pick<WidgetSettings, 'limit' | 'hours' | 'window'>> = {
   limit: 5,
+  hours: 24,
   window: '24h',
 };
 
@@ -177,9 +182,11 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   { id: 'hero', size: 'full', needs: ['conditions'], scope: 'location', options: ['location'] },
   // Rain in the next two hours, as the curve under the full-screen radar draws it.
   { id: 'nowcast', size: 'full', needs: ['nowcast'], scope: 'location', options: ['location'] },
-  // The radar itself, at the size of a block on 'Actueel'.
-  { id: 'radar', size: 'half', needs: [], scope: 'location', options: ['location'] },
-  { id: 'nearTerm', size: 'full', needs: [], scope: 'location' },
+  // The radar itself. Full width, at the height it had as a block — a square that
+  // wide would be half a screen, and the strip shows more of the weather coming in
+  // from the west for the same room.
+  { id: 'radar', size: 'full', needs: [], scope: 'location', options: ['location'] },
+  { id: 'nearTerm', size: 'full', needs: [], scope: 'location', options: ['hours'] },
   { id: 'longTerm', size: 'full', needs: [], scope: 'location', defaultHidden: true },
 ];
 

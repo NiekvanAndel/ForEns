@@ -47,7 +47,7 @@ import { ForecastPreview } from '../nowcast/ForecastPreview';
 import { RadarPreview } from '../nowcast/RadarPreview';
 import { NowcastPanel } from '../radar/NowcastPanel';
 import { frameAtFraction, useRadarFrames } from '../radar/useRadarFrames';
-import { LocationLine, Reading, WidgetCard, WidgetNote } from './parts';
+import { LocationLine, Reading, StackedLine, WidgetCard, WidgetNote } from './parts';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { alertValueLabel } from '../settings/UserAlertList';
@@ -268,6 +268,9 @@ export function AdviceWidget({ rows, settings, onOpen }: WidgetProps) {
             key={`${a.index}-${a.kind}`}
             name={a.name}
             divider={i > 0}
+            // The reading here is a sentence, not a figure, so the name matches it and
+            // the rows close up. See `LocationLine`.
+            compact
             onPress={() => onOpen(a.index, 'forecast')}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
@@ -354,7 +357,7 @@ export function Rain24Widget({ rows, settings, onOpen }: WidgetProps) {
         <WidgetNote>{ta('ovAllDry', prefs.lang)}</WidgetNote>
       ) : (
         shown.map((row, i) => (
-          <LocationLine
+          <StackedLine
             key={row.index}
             name={row.name}
             measured={row.hasStation}
@@ -362,13 +365,14 @@ export function Rain24Widget({ rows, settings, onOpen }: WidgetProps) {
             onPress={() => onOpen(row.index, 'grafiek')}
           >
             {/* When it fell, beside how much — the shape is the half a total cannot
-                say, and it is the half that decides whether the land has drained. */}
-            {/* No trend arrow. It cost the width a place name needs, and "wetter
-                than yesterday" is a question the widget beside this one answers
-                properly — this one is about what fell and when. */}
-            <BarSpark values={row.rainTrail} color={palette.valPrecip} width={52} />
-            <Reading value={fmtMm(fell(row) ?? 0)} unit="mm" color={palette.valPrecip} />
-          </LocationLine>
+                say, and it is the half that decides whether the land has drained.
+                The name is on the line above: at half a row, a name, a chart and a
+                figure do not fit across, and the name is what was losing. */}
+            <BarSpark values={row.rainTrail} color={palette.valPrecip} width={70} />
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Reading value={fmtMm(fell(row) ?? 0)} unit="mm" color={palette.valPrecip} />
+            </View>
+          </StackedLine>
         ))
       )}
       {rest > 0 && !empty ? (
@@ -393,7 +397,7 @@ export function RainNextWidget({ rows, settings, onOpen }: WidgetProps) {
         <WidgetNote>{ta('ovNoRainAhead', prefs.lang)}</WidgetNote>
       ) : (
         shown.map((row, i) => (
-          <LocationLine
+          <StackedLine
             key={row.index}
             name={row.name}
             measured={row.hasStation}
@@ -403,9 +407,12 @@ export function RainNextWidget({ rows, settings, onOpen }: WidgetProps) {
             <BarSpark
               values={row.hours.slice(0, 24).map((h) => h.precip)}
               color={palette.valPrecip}
+              width={70}
             />
-            <Reading value={fmtMm(row.rainNext24 ?? 0)} unit="mm" color={palette.valPrecip} />
-          </LocationLine>
+            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+              <Reading value={fmtMm(row.rainNext24 ?? 0)} unit="mm" color={palette.valPrecip} />
+            </View>
+          </StackedLine>
         ))
       )}
       {rest > 0 && !empty ? (
@@ -977,22 +984,40 @@ export function NowcastWidget({ nowcasts, settings }: WidgetProps) {
  * being small in a way a chart does not. It is the same `RadarPreview` component, so
  * the loop, the pin and the clock badge are the ones the reader already knows.
  */
+/** `Card`'s own padding, which stands between the widget's width and its map's. */
+const CARD_PAD = 16;
+
 export function RadarWidget({ settings, onOpen }: WidgetProps) {
   const { index, location } = useWidgetLocation(settings);
   const router = useRouter();
+  const [width, setWidth] = useState(0);
+
+  // The height it had as a half-width block, kept now that it runs the full width.
+  // Half the page less the gap a pair of halves leaves between them is what the card
+  // would have been; the map inside it is that less the card's own padding on both
+  // sides. Measured rather than assumed, because the page's padding and the phone
+  // both have a say in the first term.
+  const height =
+    width > 0 ? Math.round((width - space[4]) / 2) - 2 * CARD_PAD : undefined;
+
   return (
-    <RadarPreview
-      lat={location.lat}
-      lon={location.lon}
-      stationName={location.stationName}
-      onOpen={() => { onOpen(index, 'index'); router.push('/radar'); }}
-    />
+    <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+      {height == null ? null : (
+        <RadarPreview
+          lat={location.lat}
+          lon={location.lon}
+          stationName={location.stationName}
+          height={height}
+          onOpen={() => { onOpen(index, 'index'); router.push('/radar'); }}
+        />
+      )}
+    </View>
   );
 }
 
 /** The hour strip from 'Nu'. An hour opens that day on 'Verwachting', exactly as it
  *  does there — the per-hour detail lives on the page that owns it. */
-export function NearTermWidget() {
+export function NearTermWidget({ settings }: WidgetProps) {
   const { prefs, location } = usePrefs();
   const { model } = useForecast();
   const router = useRouter();
@@ -1003,6 +1028,7 @@ export function NearTermWidget() {
       <View style={{ marginHorizontal: -space[5], marginBottom: -space[2] }}>
         <HourSlider
           model={model}
+          ahead={settings.hours}
           onPressHour={(hour) => {
             Haptics.selectionAsync().catch(() => {});
             router.push({ pathname: '/forecast', params: { day: hour.time.slice(0, 10) } });

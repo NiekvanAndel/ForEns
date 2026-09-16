@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   arrangeWidgets, DEFAULT_OVERVIEW_LAYOUT, neededSources, OVERVIEW_WIDGETS,
   resolveWidgetLocation, setWidgetSetting, widgetRows, widgetSettings,
+  WIDGET_OPTION_CHOICES, WIDGET_OPTION_DEFAULTS,
 } from '../core/overview';
 import {
   buildOverviewRow, DEFAULT_WORK_LIMITS, firstWorkRun, notableRows, rankRows, spreadOf,
@@ -94,9 +95,20 @@ describe('the widget catalogue', () => {
   it('only offers settings a widget can honour', () => {
     // An option on the catalogue is a control in the sheet, so an id here that the
     // sheet cannot draw is a blank row a reader would press.
-    const known = ['location', 'limit', 'window'];
+    // Mirrors the controls `WidgetSettingsForm` draws, which vitest cannot load. Add
+    // an option here and this fails until the sheet grows the control for it.
+    const known = ['location', 'limit', 'hours', 'window'];
     for (const w of OVERVIEW_WIDGETS) {
       for (const o of w.options ?? []) expect(known).toContain(o);
+    }
+  });
+
+  it('gives every option but the location a default and a set of choices', () => {
+    // `location` is the exception by nature: its default is "follow the selection",
+    // which is the absence of a value, and its choices are the reader's own list.
+    for (const key of ['limit', 'hours', 'window'] as const) {
+      expect(WIDGET_OPTION_DEFAULTS[key]).toBeDefined();
+      expect(WIDGET_OPTION_CHOICES[key]).toContain(WIDGET_OPTION_DEFAULTS[key]);
     }
   });
 });

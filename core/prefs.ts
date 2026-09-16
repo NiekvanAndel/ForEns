@@ -275,6 +275,7 @@ export function mergePrefs(stored: unknown): Prefs {
       const one: WidgetSettings = {};
       if (Number.isInteger(w.location) && (w.location as number) >= 0) one.location = w.location;
       if (Number.isInteger(w.limit) && (w.limit as number) > 0) one.limit = w.limit;
+      if (Number.isInteger(w.hours) && (w.hours as number) > 0) one.hours = w.hours;
       if (w.window === 'today' || w.window === '24h') one.window = w.window;
       if (Object.keys(one).length) settings[id] = one;
     }
