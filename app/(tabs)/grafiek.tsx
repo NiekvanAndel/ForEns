@@ -30,6 +30,27 @@
  * chart could, and starting with it off meant the page's most-used window opened
  * showing half of what it had.
  *
+ * ## The band around the forecast
+ *
+ * Temperature and rainfall carry the ensemble's p10–p90 over the forecast half —
+ * shaded behind the temperature line, a whisker on each rainfall bar. A forecast line
+ * on its own claims a precision the model does not have, and the 51 members are what
+ * the app already carries to say where that claim is weak; the day sheets show them a
+ * day at a time, and this is the same spread over whatever window the reader picked.
+ *
+ * Only the forecast half. A band around a measurement would say the thermometer might
+ * have read something else.
+ *
+ * It arrives separately from the line and may not arrive at all, so it is handed to
+ * the chart as a parallel array rather than carried on the samples: the chart draws
+ * as soon as the series is ready and takes the band when it lands. The legend switch
+ * appears with it, for the same reason the others are switches — three claims over
+ * one line is a lot of ink for a reader who came to look at one of them.
+ *
+ * The percentiles are taken at the grain the chart draws, never aggregated after the
+ * fact. That is the one subtle thing in the whole feature; `core/model/ensembleBand`
+ * has the reasoning.
+ *
  * ## One day is read at the grain a station reports on
  *
  * A station measures about every ten minutes, and over a single day that is what the
@@ -114,6 +135,7 @@ import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
 import { usePeeking } from '../../ui/peek';
 import { SeriesChart } from '../../ui/graph/SeriesChart';
+import { useEnsembleMembers } from '../../ui/graph/useEnsembleBand';
 import { PillSwitcher, type PillItem } from '../../ui/PillSwitcher';
 import type { IconName } from '../../ui/Icon';
 import {
@@ -127,6 +149,9 @@ import {
   buildSeries, dayKey, daySpan, forecastHorizon, SERIES_META,
   type Sample, type SeriesKey,
 } from '../../core/model/series';
+import {
+  bandsForSamples, ensembleBands, type BandField,
+} from '../../core/model/ensembleBand';
 import {
   degToCompass, fmtMm, fmtTempValue, fmtWindValue, tempUnitLabel, windUnitLabel, ta,
   type AppStringKey,
@@ -153,6 +178,22 @@ const SERIES: {
   { key: 'windDir', labelKey: 'windDirection', icon: 'compass', color: (p) => p.wind },
   { key: 'radiation', labelKey: 'radiation', icon: 'sun', color: (p) => p.radiation },
 ];
+
+/**
+ * The quantities that carry an ensemble band, and what the legend calls it.
+ *
+ * Temperature and rainfall: the two a grower plans around, and the two whose spread
+ * changes a decision rather than decorating a line. Humidity and wind have members
+ * too — the day sheets plot them — but a band on every series is four more requests
+ * for a chart that is already answering a different question.
+ *
+ * The label is the statistic's own name rather than a word for it. "Onzekerheid"
+ * would be a claim about how wrong the forecast is; "P10–P90" says exactly what is
+ * drawn, reads the same in both languages, and is the label the day sheets already
+ * use for the same two numbers.
+ */
+const BAND_FIELD: Partial<Record<SeriesKey, BandField>> = { temp: 'temp', precip: 'precip' };
+const BAND_LABEL = 'P10–P90';
 
 /**
  * The page's vertical rhythm.
@@ -207,6 +248,9 @@ function GraphPage() {
    * there, until the period changes and the grain with it.
    */
   const [lines, setLines] = useState({ value: true, lo: true, hi: true });
+  /** Whether the ensemble band is drawn. On by default: a forecast line without one
+   *  claims a precision the model does not have, which is the reason it is here. */
+  const [showSpread, setShowSpread] = useState(true);
 
   const station = useLocationStation(location);
   // A single day gets the station's raw readings; anything longer, the hourly
@@ -231,7 +275,39 @@ function GraphPage() {
   );
 
   // As far ahead as the model can be asked about.
-  const maxDay = forecastHorizon(model) ?? dayKey(new Date());
+  const today = dayKey(new Date());
+  const maxDay = forecastHorizon(model) ?? today;
+
+  /**
+   * The members behind the band, for the forecast part of the window only.
+   *
+   * Clamped to today at the near end: a band around a measurement would say the
+   * thermometer might have read something else. A window entirely in the past asks
+   * for nothing at all, and so does a quantity that carries no band.
+   */
+  const bandField = BAND_FIELD[key];
+  const ensemble = useEnsembleMembers({
+    lat: location.lat,
+    lon: location.lon,
+    from: range.from > today ? range.from : today,
+    to: range.to,
+    enabled: !!bandField && !peeking && range.to >= today,
+  });
+
+  // Percentiles at the grain the chart draws, never percentiles aggregated after the
+  // fact — see `core/model/ensembleBand`.
+  const spread = useMemo(
+    () =>
+      bandField && ensemble.data
+        ? bandsForSamples(
+            ensembleBands(ensemble.data, bandField, series.resolution),
+            series.samples,
+            series.resolution
+          )
+        : null,
+    [bandField, ensemble.data, series.resolution, series.samples]
+  );
+  const hasSpread = !!spread?.some(Boolean);
 
   const meta = SERIES_META[key];
   const byDay = series.resolution === 'day';
@@ -443,6 +519,8 @@ function GraphPage() {
                   showCumulative={meta.shape === 'bar' && showCumulative}
                   cumulativeLabel={ta('cumulative', prefs.lang)}
                   cumulativeColor={palette.inkHeading}
+                  spread={showSpread ? spread : null}
+                  spreadLabel={BAND_LABEL}
                   background={palette.appBg}
                   emptyLabel={ta('noSeries', prefs.lang)}
                 />
@@ -506,6 +584,21 @@ function GraphPage() {
                     and there is no half to turn off. */}
                 {series.forecastFrom >= 0 ? (
                   <Legend color={color} label={ta('forecastPart', prefs.lang)} dashed />
+                ) : null}
+
+                {/* Only once there is a band to talk about. A switch for something
+                    that has not loaded is a switch that does nothing, and one for a
+                    quantity that never bands is a promise the page cannot keep. */}
+                {hasSpread ? (
+                  <Legend
+                    color={color}
+                    label={BAND_LABEL}
+                    on={showSpread}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setShowSpread((v) => !v);
+                    }}
+                  />
                 ) : null}
 
                 {series.anyMeasured ? null : (
