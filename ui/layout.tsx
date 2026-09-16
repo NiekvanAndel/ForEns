@@ -10,11 +10,11 @@
  * Two things live here: the question every screen asks (`useLandscape`), and the layout
  * that answers it for a page of cards (`Columns`).
  */
-import { Children, Fragment, isValidElement, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space } from '../theme';
-import { splitColumns } from '../core/layout';
+import { cardsOf, splitColumns } from '../core/layout';
 
 /**
  * Whether the screen is wider than it is tall.
@@ -40,25 +40,6 @@ export function useLandscape(): boolean {
 export function useSidePadding(base = space[5]) {
   const insets = useSafeAreaInsets();
   return { paddingLeft: base + insets.left, paddingRight: base + insets.right };
-}
-
-/**
- * Flatten a page's children into the cards it is actually made of.
- *
- * A page is written as a fragment holding a conditional holding more fragments — the
- * loading branch, the error branch, the real one — so its "top-level children" as React
- * sees them are two or three nodes, not the eight cards a reader sees. Fragments are
- * expanded so the column split works on the cards.
- *
- * `Children.toArray` already drops nulls and flattens arrays, and keys what it returns,
- * so only fragments need the recursion.
- */
-function cardsOf(node: ReactNode): ReactNode[] {
-  return Children.toArray(node).flatMap((child) =>
-    isValidElement(child) && child.type === Fragment
-      ? cardsOf((child.props as { children?: ReactNode }).children)
-      : [child]
-  );
 }
 
 export interface ColumnsProps {
