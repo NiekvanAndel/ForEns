@@ -18,8 +18,8 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import {
-  buildRegistration, httpTransport, requestPushToken, syncRegistration,
-  type PushTransport,
+  buildRegistration, httpTransport, requestNotificationPermission, requestPushToken,
+  syncRegistration, type PushTransport,
 } from './push';
 import type { Prefs } from './prefs';
 
@@ -44,16 +44,22 @@ function appVersion(): string {
 }
 
 /**
- * The permission prompt and the token, for the moment a toggle is switched on.
+ * Switch notifications on, for the moment the toggle is tapped.
  *
- * Separate from the sync on purpose: asking is something a person did, and it has to
- * be able to fail visibly — a refused prompt puts the toggle back rather than leaving
- * it on over a registration that can never be made.
+ * **Permission is the answer; the token is a bonus.** Only a refused prompt returns
+ * false, because only that means notifications cannot arrive. A token that cannot be
+ * fetched — no EAS project, no network — costs the *server* registration and nothing
+ * else, and there is no server yet: the local fallback works on permission alone.
+ *
+ * Getting this the other way round made the whole feature unreachable. See
+ * `requestPushToken`.
  */
 export async function enablePush(): Promise<boolean> {
+  const granted = await requestNotificationPermission();
+  if (!granted) return false;
+
   const token = await requestPushToken(projectId());
-  if (!token) return false;
-  await AsyncStorage.setItem(TOKEN_KEY, token).catch(() => {});
+  if (token) await AsyncStorage.setItem(TOKEN_KEY, token).catch(() => {});
   return true;
 }
 

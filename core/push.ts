@@ -247,26 +247,48 @@ export function httpTransport(endpoint: string, fetchImpl: typeof fetch = fetch)
 }
 
 /**
- * Permission, and the token it unlocks.
+ * Permission to notify at all. Asked at the moment the toggle is turned on rather
+ * than at launch, which is both better practice and far more likely to be granted.
  *
- * Asked at the moment the toggle is turned on rather than at launch, which is both
- * better practice and far more likely to be granted. Imports lazily so `core/` stays
- * free of native modules for the tests.
+ * Imports lazily so `core/` stays free of native modules for the tests.
+ */
+export async function requestNotificationPermission(): Promise<boolean> {
+  try {
+    const Notifications = await import('expo-notifications');
+    const existing = await Notifications.getPermissionsAsync();
+    return existing.granted || (await Notifications.requestPermissionsAsync()).granted;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The push token, if one can be had.
  *
- * Returns null on refusal, on a simulator, and on any failure — the caller's job is
- * then to put the toggle back, not to retry.
+ * **Deliberately separate from the permission above, and deliberately allowed to
+ * fail.** They answer different questions: permission is whether this phone may show
+ * a notification at all, which is what the local fallback needs and all it needs; a
+ * token is an address a *server* can deliver to, and is useless until one exists.
+ *
+ * Conflating them is not hypothetical — it is the bug this split fixes.
+ * `getExpoPushTokenAsync` throws without an EAS `projectId`, and the app has none, so
+ * a device whose owner had just granted permission was told its notifications were
+ * refused and the toggle sprang back. Notifications that work perfectly well were
+ * unreachable because the address for a server that does not exist could not be
+ * looked up.
+ *
+ * Null therefore means "no registration can be sent", not "no notifications" — see
+ * `buildRegistration`, which already treats a missing token as nothing to register.
  */
 export async function requestPushToken(projectId?: string): Promise<string | null> {
   try {
     const Notifications = await import('expo-notifications');
-    const existing = await Notifications.getPermissionsAsync();
-    const granted = existing.granted || (await Notifications.requestPermissionsAsync()).granted;
-    if (!granted) return null;
     const token = await Notifications.getExpoPushTokenAsync(
       projectId ? { projectId } : undefined
     );
     return token.data ?? null;
   } catch {
+    // No EAS project, no network, a simulator: all of them mean the same thing here.
     return null;
   }
 }

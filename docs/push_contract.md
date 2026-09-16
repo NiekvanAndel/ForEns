@@ -77,6 +77,12 @@ Title and body follow the local fallback in `core/notifications.ts`:
   and never on a schedule, so *"uiterlijk 20 minuten vooraf"* is not a promise the app
   can keep on its own. The settings screen says so rather than leaving it to be
   discovered.
+- **No EAS `projectId`.** `getExpoPushTokenAsync` needs one and `app.json` has none,
+  so no device can currently produce a token. That is survivable only because
+  permission and token are asked for separately: permission alone switches the local
+  fallback on, and a missing token means a registration cannot be *sent*, which
+  matters exactly as much as the absent server does. Add `extra.eas.projectId` in the
+  same change as the endpoint.
 - **No silent push.** `enableBackgroundRemoteNotifications` is off in `app.json`. If
   the service should be able to wake the app to refresh the widget, that flag and a
   `content-available` payload are the change.

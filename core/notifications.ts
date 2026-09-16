@@ -104,24 +104,9 @@ export function planNotification(
   };
 }
 
-/**
- * Ask for notification permission.
- *
- * Split out so the settings screen can request it at the moment a toggle is turned
- * on rather than at launch, which is both better practice and more likely to be
- * granted. Imports lazily so `core/` stays free of native modules for the tests.
- */
-export async function requestNotificationPermission(): Promise<boolean> {
-  try {
-    const Notifications = await import('expo-notifications');
-    const existing = await Notifications.getPermissionsAsync();
-    if (existing.granted) return true;
-    const asked = await Notifications.requestPermissionsAsync();
-    return asked.granted;
-  } catch {
-    return false;
-  }
-}
+/** Asking for permission lives with the push client now, since both layers need
+ *  the same answer and two copies of a prompt is two chances to drift. */
+export { requestNotificationPermission } from './push';
 
 /** Schedule a planned notification, replacing any earlier one with the same id. */
 export async function scheduleNotification(plan: PlannedNotification): Promise<void> {

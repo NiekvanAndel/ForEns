@@ -552,9 +552,25 @@ fetched. iOS grants that window every few hours and never on a schedule, so
 *"Uiterlijk 20 minuten vooraf"* is not a promise local scheduling can keep. The
 settings screen now says so on the page rather than leaving it to be found.
 
-One thing to fix before the service is worth building: `deriveAlert` writes its
-headlines as Dutch string literals, outside the i18n tables. The registration carries
-`lang`; the strings have to move into `core/i18n` before it means anything.
+Two things to fix in the same change as the endpoint:
+
+- `deriveAlert` writes its headlines as Dutch string literals, outside the i18n
+  tables, so the block on 'Nu' and any notification stay Dutch whatever the app's
+  language is set to. The registration already carries `lang`; the strings have to
+  move into `core/i18n` before that means anything.
+- `app.json` has no `extra.eas.projectId`, which `getExpoPushTokenAsync` requires, so
+  no device can produce a token yet. Permission and token are asked for separately
+  precisely so that this costs only the registration and not the notifications.
+
+### Alerts fire from the background task only
+
+`planNotification` is called in `core/backgroundTask.ts` and nowhere else, so nothing
+is scheduled while the app is in the foreground. That is defensible — someone looking
+at the app can see the block — but it also means the only way to observe a
+notification on a device is to wait for iOS to grant a background window. Scheduling
+one on a foreground refresh as well would make the feature testable and more prompt;
+the de-duplication key in `planNotification` (kind plus hour) already makes it safe to
+call more often.
 
 ### Splash screen
 
