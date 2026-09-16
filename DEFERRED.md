@@ -655,6 +655,43 @@ line that names the forecast that moved.
 
 ## Open
 
+### Expo SDK 57 cannot launch when built against the iOS 27 SDK
+
+Built with Xcode 27 the app traps before React runs, on a black screen:
+
+    Application failed to launch: UIScene life cycle is required for apps
+    built with this SDK.
+
+The iOS 27 SDK makes `UIScene` adoption mandatory, and **nothing in this stack
+adopts it**. In the installed tree, `expo/ios/AppDelegates/ExpoAppDelegate.swift`
+still carries `// TODO: - Configuring and Discarding Scenes`; react-native 0.86.3
+ships no scene delegate; and neither writes a `UIApplicationSceneManifest` into the
+generated `Info.plist`. The newest patch on this line, expo 57.0.23, carries the
+same TODO, so there is nothing to upgrade to within SDK 57.
+
+**It is fixed upstream, in SDK 58.** `expo@58.0.0-preview.2` adds
+`ios/Expo/ExpoAppSceneDelegate.swift`, `SceneEventForwarder.swift` and an
+`ExpoReactNativeFactoryProvider` protocol, and its own doc comment names the cause:
+"Required by the iOS 27, which asserts at launch unless the app adopts the
+scene-based life cycle." That preview pairs with react-native 0.88.0-rc.0, so
+taking it means moving both to release candidates.
+
+So, until SDK 58 is stable, **build with Xcode 26 (the iOS 26 SDK)**, which is what
+this SDK line is designed for and needs no change here. `ios.deploymentTarget` is
+26.0, so a device on iOS 27 still runs it; the deployment target is a floor, and it
+is the *SDK* that enforces scenes.
+
+A half-measure was tried and reverted: declaring `UIApplicationSceneManifest` with
+an empty `UISceneConfigurations` stops the trap but leaves a black screen, because
+`RCTAppDelegate` creates its `UIWindow` in `didFinishLaunchingWithOptions`
+(`RCTAppDelegate.mm:58`) and under the scene life cycle that window belongs to no
+scene, so it is never shown. Adopting properly means a real `UIWindowSceneDelegate`
+that builds the window from the connecting `UIWindowScene` — which is exactly what
+SDK 58 wrote, and what a backport would have to reproduce against SDK 57's
+`ExpoReactNativeFactory`, through a config plugin so `expo prebuild` does not
+discard it. Worth doing only if Xcode 26 stops being an option before SDK 58 lands.
+
+
 ### Push has a client and no server
 
 Meldingen is back in Instellingen, with two layers: whether the app shows a
