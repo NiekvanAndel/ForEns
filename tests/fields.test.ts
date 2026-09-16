@@ -10,9 +10,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  FIELD_VARIABLES, formatFieldValue, frameClock, inkOn, isSynthetic,
-  legendColorFor, loopMinutes, orderedFrames, pixelFor, sampleField, unitLabel,
-  type FieldVariable,
+  FIELD_VARIABLES, fieldUnitLabel, fieldValueIn, formatFieldValue, frameClock, inkOn,
+  isSynthetic, legendColorFor, loopMinutes, orderedFrames, pixelFor, sampleField,
+  unitLabel, type FieldVariable,
 } from '../core/fields';
 import { fixtureManifest, fixtureValues } from '../core/fields/fixture';
 import { temperatureColor, TEMPERATURE_STOPS } from '../core/model/temperatureColor';
@@ -284,5 +284,63 @@ describe('labels', () => {
       // on the other side of the fill rather than beside it.
       expect(Math.abs(luma(ink) - luma(fill)), `${t} C`).toBeGreaterThan(0.35);
     }
+  });
+});
+
+describe('the layers in the reader’s own units', () => {
+  const metric = { tempUnit: 'C' as const, windUnit: 'kmh' as const };
+
+  it('converts a temperature the way every other figure in the app is converted', () => {
+    expect(fieldValueIn('degC', 20, { ...metric, tempUnit: 'C' })).toBe(20);
+    expect(fieldValueIn('degC', 20, { ...metric, tempUnit: 'F' })).toBe(68);
+    expect(fieldValueIn('degC', 20, { ...metric, tempUnit: 'K' })).toBe(293);
+  });
+
+  it('reads wind out of metres per second into whatever was picked', () => {
+    // The rasters are published in m/s; the app's canonical wind unit is km/h, and
+    // going through it is what stops the map and a block rounding differently.
+    expect(fieldValueIn('m s-1', 10, { ...metric, windUnit: 'ms' })).toBe(10);
+    expect(fieldValueIn('m s-1', 10, { ...metric, windUnit: 'kmh' })).toBe(36);
+    expect(fieldValueIn('m s-1', 10, { ...metric, windUnit: 'kn' })).toBe(19);
+    expect(fieldValueIn('m s-1', 10, { ...metric, windUnit: 'bft' })).toBe(5);
+  });
+
+  it('leaves a percentage alone, since there is nothing to convert', () => {
+    expect(fieldValueIn('percent', 84, metric)).toBe(84);
+    expect(fieldUnitLabel('percent', metric)).toBe('%');
+  });
+
+  it('labels it with the unit it was converted into', () => {
+    expect(fieldUnitLabel('degC', { ...metric, tempUnit: 'F' })).toBe('°F');
+    expect(fieldUnitLabel('m s-1', { ...metric, windUnit: 'kmh' })).toBe('km/u');
+    expect(fieldUnitLabel('m s-1', { ...metric, windUnit: 'kmh', lang: 'en' })).toBe('km/h');
+    expect(fieldUnitLabel('m s-1', { ...metric, windUnit: 'bft' })).toBe('Bft');
+  });
+
+  it('passes an unknown unit through rather than blanking it', () => {
+    // A wrong-looking unit beside a figure is a bug somebody can see; a missing one
+    // is a figure that means nothing.
+    expect(fieldValueIn('mm', 3, metric)).toBe(3);
+    expect(fieldUnitLabel('mm', metric)).toBe('mm');
+  });
+
+  it('prints a bubble at the precision the unit deserves', () => {
+    // Metres per second is a coarse step, so it keeps its decimal where it is the
+    // published unit and nothing has been converted. Everything `convWind` has
+    // already rounded is printed whole — a trailing ",0" on every bubble is noise.
+    expect(formatFieldValue('wind', 8.24)).toBe('8.2');
+    expect(formatFieldValue('wind', 8.24, { unit: 'm s-1', prefs: { ...metric, windUnit: 'kmh' } }))
+      .toBe('30');
+    expect(formatFieldValue('temperature', 17.6, { unit: 'degC', prefs: metric })).toBe('18');
+    expect(formatFieldValue('temperature', 17.6, { unit: 'degC', prefs: { ...metric, tempUnit: 'F' } }))
+      .toBe('64');
+    expect(formatFieldValue('humidity', null, { unit: 'percent', prefs: metric })).toBe('–');
+  });
+
+  it('does not touch the colour scale', () => {
+    // The ramp is keyed to the published unit and the pixels are drawn from it. Only
+    // the printed figures convert, or the legend would be explaining a different map.
+    expect(unitLabel('degC')).toBe('°C');
+    expect(unitLabel('m s-1')).toBe('m/s');
   });
 });

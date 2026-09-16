@@ -385,6 +385,7 @@ export function FullMap({
                   legend={fields.manifest.legend}
                   locations={locations}
                   values={fieldValues}
+                  unit={fields.manifest.unit}
                   selectedIndex={selectedIndex}
                   view={view}
                   onSelect={onSelectPlace}

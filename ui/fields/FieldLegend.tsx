@@ -27,7 +27,10 @@
 import { View } from 'react-native';
 import { radius, shadowFloat, useTheme } from '../../theme';
 import { Text } from '../Text';
-import { legendColorFor, unitLabel, type FieldLegend as Legend } from '../../core/fields';
+import {
+  fieldUnitLabel, fieldValueIn, legendColorFor, type FieldLegend as Legend,
+} from '../../core/fields';
+import { usePrefs } from '../../state/prefs';
 import { mapChrome } from '../radar/mapStyle';
 
 /** Slices down the strip. Enough that the steps are invisible at this height. */
@@ -48,12 +51,22 @@ export interface FieldLegendProps {
 
 export function FieldLegend({ legend, unit, top, left }: FieldLegendProps) {
   const { palette, appearance } = useTheme();
+  const { prefs } = usePrefs();
   const chrome = mapChrome(palette, appearance);
   const { vmin, vmax } = legend;
   if (!(vmax > vmin)) return null;
 
+  /**
+   * A point on the ramp, in the unit it is published in.
+   *
+   * The colours stay keyed to that: only the printed figures are converted, by
+   * `shown` below. A strip whose colours were recomputed per preference would be a
+   * different legend from the pixels it is explaining.
+   */
   const at = (f: number) => vmin + f * (vmax - vmin);
-  const label = unitLabel(unit);
+  /** The same point as the reader has asked to see it. */
+  const shown = (f: number) => Math.round(fieldValueIn(unit, at(f), prefs) ?? at(f));
+  const label = fieldUnitLabel(unit, prefs);
 
   return (
     <View
@@ -67,7 +80,7 @@ export function FieldLegend({ legend, unit, top, left }: FieldLegendProps) {
         },
         shadowFloat,
       ]}
-      accessibilityLabel={`Legenda: ${Math.round(vmin)} tot ${Math.round(vmax)} ${label}`}
+      accessibilityLabel={`Legenda: ${shown(0)} tot ${shown(1)} ${label}`}
     >
       <View style={{ width: STRIP_WIDTH, height: STRIP_HEIGHT, borderRadius: 3, overflow: 'hidden' }}>
         {Array.from({ length: SLICES }, (_, i) => (
@@ -85,13 +98,13 @@ export function FieldLegend({ legend, unit, top, left }: FieldLegendProps) {
 
       <View style={{ height: STRIP_HEIGHT, justifyContent: 'space-between' }}>
         <Text variant="caption" color={chrome.ink} tabular>
-          {`${Math.round(vmax)} ${label}`}
+          {`${shown(1)} ${label}`}
         </Text>
         <Text variant="caption" color={chrome.ink} tabular>
-          {Math.round(at(0.5))}
+          {shown(0.5)}
         </Text>
         <Text variant="caption" color={chrome.ink} tabular>
-          {Math.round(vmin)}
+          {shown(0)}
         </Text>
       </View>
     </View>

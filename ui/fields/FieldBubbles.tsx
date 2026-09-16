@@ -33,6 +33,7 @@ import {
   formatFieldValue, inkOn, legendColorFor, type FieldLegend, type FieldVariable,
 } from '../../core/fields';
 import { mapChrome } from '../radar/mapStyle';
+import { usePrefs } from '../../state/prefs';
 import type { SavedLocation } from '../../core/prefs';
 
 export interface FieldBubblesProps {
@@ -42,6 +43,9 @@ export interface FieldBubblesProps {
   locations: readonly SavedLocation[];
   /** One per location, in the same order; null where the field has nothing to say. */
   values: readonly (number | null)[];
+  /** The manifest's own unit for those values, so the figures can be printed in the
+   *  reader's. The fill stays keyed to the published unit — see the note below. */
+  unit: string;
   /** The location the map is centred on. */
   selectedIndex: number;
   /** The map as it is on screen, for the overlap test. Null until the map has reported
@@ -51,9 +55,10 @@ export interface FieldBubblesProps {
 }
 
 export function FieldBubbles({
-  variable, legend, locations, values, selectedIndex, view, onSelect,
+  variable, legend, locations, values, unit, selectedIndex, view, onSelect,
 }: FieldBubblesProps) {
   const { palette, appearance } = useTheme();
+  const { prefs } = usePrefs();
   const chrome = mapChrome(palette, appearance);
   if (!view) return null;
 
@@ -136,7 +141,9 @@ export function FieldBubbles({
               }}
             >
               <Text variant="caption" weight="bold" color={ink} tabular numberOfLines={1}>
-                {formatFieldValue(variable, value)}
+                {/* Printed in the reader's units; the fill above stays keyed to the
+                    published one, so the bubble and the pixel under it agree. */}
+                {formatFieldValue(variable, value, { unit, prefs })}
               </Text>
             </View>
           </Marker>

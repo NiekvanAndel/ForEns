@@ -32,7 +32,20 @@
  * own scale — the stops in `core/model/temperatureColor.ts`, exported into the manifest
  * by the pipeline — so the pixel under a location and the figure printed on it cannot
  * disagree.
+ *
+ * ## Units: the pixels are published, the figures are the reader's
+ *
+ * The rasters arrive in CF units — degrees Celsius, metres per second — and the colour
+ * ramp is keyed to those. Converting them would mean a legend explaining a different
+ * map, so nothing that is *drawn* is touched. What is *printed* — the figure in a
+ * bubble, the numbers beside the legend — goes through `fieldValueIn`, so a map reads
+ * in the same units as every block and every chart. Wind travels via km/h, the app's
+ * canonical wind unit, so the map and a block cannot round differently.
  */
+import { convTemp, convWind, tempUnitLabel, windUnitLabel } from '../i18n/units';
+import type { TempUnit, WindUnit } from '../i18n/units';
+import type { LangCode } from '../i18n/strings';
+
 import type { GeoBounds } from '../radar/types';
 
 /** The variables published as layers. One folder each, one manifest each. */
@@ -304,6 +317,52 @@ export function unitLabel(unit: string): string {
 }
 
 /**
+ * The units a reader has chosen, as the layers need them.
+ *
+ * A subset of `Prefs` rather than the thing itself, so `core/fields` does not have to
+ * know what a preference is — these modules are the contract with the pipeline, and
+ * the only reason they care about a preference is that a figure has to be printed.
+ */
+export interface FieldUnitPrefs {
+  tempUnit: TempUnit;
+  windUnit: WindUnit;
+  lang?: LangCode;
+}
+
+/**
+ * A field value in the reader's own units.
+ *
+ * The rasters are published in CF units — degrees Celsius, metres per second — and
+ * the colour ramp is keyed to them, so nothing here touches what is drawn. This is
+ * only what gets *printed*: the figure in a bubble and the numbers beside the legend.
+ *
+ * Wind goes through km/h on the way. That is the app's canonical wind unit, which
+ * `convWind` expects and which every other wind figure in the app has already passed
+ * through — so the number on the map is arrived at by exactly the route the number on
+ * a block was, and a map and a block cannot round differently.
+ */
+export function fieldValueIn(
+  unit: string,
+  value: number | null | undefined,
+  prefs: FieldUnitPrefs
+): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  if (unit === 'degC') return convTemp(value, prefs.tempUnit);
+  if (unit === 'm s-1') return convWind(value * MS_TO_KMH, prefs.windUnit);
+  return value;
+}
+
+/** The label that belongs beside it, once converted. */
+export function fieldUnitLabel(unit: string, prefs: FieldUnitPrefs): string {
+  if (unit === 'degC') return tempUnitLabel(prefs.tempUnit);
+  if (unit === 'm s-1') return windUnitLabel(prefs.windUnit, prefs.lang ?? 'nl');
+  return unitLabel(unit);
+}
+
+/** Metres per second to kilometres per hour. Exact, not 3.6 rounded from anything. */
+const MS_TO_KMH = 3.6;
+
+/**
  * Readable ink on a fill taken from the ramp.
  *
  * Rec. 601 luma, which is the cheap approximation that gets this right across a scale
@@ -323,10 +382,21 @@ export function inkOn(hex: string): string {
  * reader wants them. A temperature is a whole degree in this app, humidity a whole
  * percent, wind one decimal.
  */
-export function formatFieldValue(variable: FieldVariable, value: number | null): string {
-  if (value == null || !Number.isFinite(value)) return '–';
-  if (variable === 'wind') return value.toFixed(1);
-  return String(Math.round(value));
+export function formatFieldValue(
+  variable: FieldVariable,
+  value: number | null,
+  /** The reader's units, and the unit the value is published in. Without them the
+   *  figure is printed as the pipeline produced it, which is what the tests and the
+   *  fixtures do. */
+  converted?: { unit: string; prefs: FieldUnitPrefs }
+): string {
+  const shown = converted ? fieldValueIn(converted.unit, value, converted.prefs) : value;
+  if (shown == null || !Number.isFinite(shown)) return '–';
+  // Wind keeps a decimal only in metres per second, where a whole number is a coarse
+  // step; in km/h, knots and Beaufort `convWind` has already rounded to what the rest
+  // of the app shows, and a trailing ",0" on every bubble is noise.
+  if (variable === 'wind' && !converted) return shown.toFixed(1);
+  return String(Math.round(shown));
 }
 
 // --- The live source --------------------------------------------------------
