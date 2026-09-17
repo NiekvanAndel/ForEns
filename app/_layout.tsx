@@ -21,6 +21,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { PrefsProvider, usePrefs } from '../state/prefs';
 import { AgroAuthProvider } from '../state/auth';
 import { useStationLocationSync } from '../state/stations';
+import { useSoilLocationSync } from '../state/soilStations';
 import { DeviceLocationProvider } from '../state/deviceLocation';
 import { ForecastProvider, useForecast } from '../state/forecast';
 import { useWidgetSync, writeWidgetPayload } from '../state/widgetSync';
@@ -60,6 +61,9 @@ function Shell() {
   // Stations on the connected account become locations here, once, above every
   // screen — not inside Instellingen, which the user may never open.
   useStationLocationSync();
+  // And the soil sensors, which become fields of their own unless one stands within
+  // two hundred metres of a place that is already there.
+  useSoilLocationSync();
 
   // Mirror the live forecast into the widget whenever it changes.
   useWidgetSync({

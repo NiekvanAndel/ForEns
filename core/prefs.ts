@@ -11,6 +11,7 @@
 import type { LangCode } from './i18n/strings';
 import type { PresUnit, TempUnit, WindUnit, FontSizePref } from './i18n/units';
 import { sanitiseAlerts, type UserAlert } from './alerts';
+import { distanceKm } from './sources/agroexact';
 import { DEFAULT_OVERVIEW_LAYOUT, type WidgetSettings } from './overview';
 import { DEFAULT_TILE_LAYOUT, type TileLayout } from './arrangement';
 
@@ -47,6 +48,18 @@ export interface SavedLocation {
    * distinguishable rather than inferred from `stationId`.
    */
   source?: 'agroexact';
+  /**
+   * The soil sensor that stands on this place, where one does.
+   *
+   * Separate from `stationId` because the two are different instruments and a place
+   * can have either, both or neither: a weather pole measures the air above a region,
+   * a soil sensor measures the water in one field. A location that has both shows the
+   * soil blocks alongside the weather ones; a location that has only a soil sensor is
+   * a field, named after the field.
+   */
+  soilStationId?: string;
+  /** Its name at the time, for a list that reads before the sensors load. */
+  soilStationName?: string;
   /**
    * The device's own position, kept up to date by `DeviceLocationProvider`.
    *
@@ -387,7 +400,13 @@ export function syncStationLocations(prefs: Prefs, stations: readonly StationPla
       continue;
     }
     const station = l.stationId ? byId.get(l.stationId) : undefined;
-    if (!station) continue; // the station left the account
+    if (!station) {
+      // A location the soil sync created has no weather station and never had one.
+      // This sync is the authority over weather stations only; dropping a field
+      // because it is not in a list of poles would delete it on every refresh.
+      if (l.soilStationId) kept.push(l);
+      continue; // otherwise: the station left the account
+    }
     seen.add(station.stationId);
     // A station can be renamed or moved; the location follows it.
     kept.push({
@@ -427,6 +446,134 @@ export function syncStationLocations(prefs: Prefs, stations: readonly StationPla
 }
 
 /**
+ * How near a soil sensor has to be to a place before it is the *same* place.
+ *
+ * Two hundred metres, set by the grower on 17 September 2026 and not a guess: a soil
+ * sensor measures the water in one field, and at two kilometres you are on somebody
+ * else's. The plan carried ~2 km as an open assumption; this replaces it.
+ *
+ * The consequence is deliberate and worth stating. Almost no soil sensor will fall
+ * inside it, so almost every one becomes a location of its own — named after the
+ * field, which is what a grower calls it anyway. A wider radius would have produced
+ * fewer pages and attached suction readings to the wrong ground, and of those two
+ * this one is the mistake you cannot see.
+ */
+export const SOIL_COUPLING_KM = 0.2;
+
+/** One soil sensor, as the sync needs it. No reverse lookup: a field is called by its
+ *  own name, not by the nearest town. */
+export interface SoilPlace {
+  stationId: string;
+  stationName: string;
+  lat: number;
+  lon: number;
+}
+
+/**
+ * Reconcile the saved locations with the soil sensors on the account.
+ *
+ * Runs alongside `syncStationLocations` and is the authority over soil sensors only,
+ * exactly as that one is over weather stations. The same rule applies for the same
+ * reason: a sensor missing from a *failed* request must never reach here, or a network
+ * blip deletes someone's fields.
+ *
+ * Three outcomes per sensor:
+ *
+ *  - a saved place within `SOIL_COUPLING_KM` takes it, and keeps its own name. The
+ *    reader already calls that place something; the sensor is a second instrument on
+ *    it, not a second page.
+ *  - otherwise it becomes its own location, named after the field.
+ *  - a place at most one sensor. Two sensors on one field are two fields as far as
+ *    this app can tell, and the second gets its own page rather than overwriting the
+ *    first's readings.
+ */
+export function syncSoilLocations(prefs: Prefs, sensors: readonly SoilPlace[]): Prefs {
+  const viewed = prefs.locations[prefs.activeLocation];
+  const byId = new Map(sensors.map((s) => [s.stationId, s]));
+
+  // Drop bindings to sensors that have left the account, and delete the locations
+  // that existed only to carry one. A place the reader saved themselves, or that a
+  // weather station stands on, stays — it is still a place.
+  const base: SavedLocation[] = [];
+  for (const l of prefs.locations) {
+    if (!l.soilStationId) { base.push(l); continue; }
+    if (byId.has(l.soilStationId)) { base.push(l); continue; }
+    const wasOnlyASensor = l.source === 'agroexact' && !l.stationId;
+    if (!wasOnlyASensor) {
+      base.push({ ...l, soilStationId: undefined, soilStationName: undefined });
+    }
+  }
+
+  // A field this sync created earlier, that something else has since put a place on
+  // top of, is folded back into that place.
+  //
+  // The two syncs run independently and either can land first. Where the soil sync
+  // goes first there are no weather locations yet, so a sensor makes its own page —
+  // and then the station sync adds a pole fifty metres away as a second page for the
+  // same ground. Dropping the page here lets the loop below re-couple its sensor to
+  // the place that is now there, which is the answer the order should have produced.
+  const hosted: SavedLocation[] = base.filter((l) => {
+    const ownPage = !!l.soilStationId && l.source === 'agroexact' && !l.stationId;
+    if (!ownPage) return true;
+    return !base.some(
+      (other) => other !== l && !other.soilStationId
+        && distanceKm(l.lat, l.lon, other.lat, other.lon) <= SOIL_COUPLING_KM
+    );
+  });
+
+  const taken = new Set(
+    hosted.map((l) => l.soilStationId).filter((id): id is string => !!id)
+  );
+  const locations = [...hosted];
+
+  for (const s of sensors) {
+    if (taken.has(s.stationId)) {
+      // Already bound: follow the sensor if it was moved or renamed.
+      const i = locations.findIndex((l) => l.soilStationId === s.stationId);
+      const at = locations[i];
+      if (at) locations[i] = { ...at, soilStationName: s.stationName };
+      continue;
+    }
+
+    let nearest = -1;
+    let best = SOIL_COUPLING_KM;
+    locations.forEach((l, i) => {
+      if (l.soilStationId) return; // one sensor per place
+      const d = distanceKm(l.lat, l.lon, s.lat, s.lon);
+      if (d <= best) { best = d; nearest = i; }
+    });
+
+    const host = nearest >= 0 ? locations[nearest] : undefined;
+    if (host) {
+      locations[nearest] = {
+        ...host,
+        soilStationId: s.stationId,
+        soilStationName: s.stationName,
+      };
+    } else {
+      locations.push({
+        // The field's own name. A reverse-geocoded town would put four fields on the
+        // same village and leave the reader unable to say which one they are reading.
+        name: s.stationName,
+        lat: s.lat,
+        lon: s.lon,
+        soilStationId: s.stationId,
+        soilStationName: s.stationName,
+        source: 'agroexact',
+      });
+    }
+    taken.add(s.stationId);
+  }
+
+  const out = locations.length ? locations : [DEFAULT_LOCATION];
+  const at = viewed ? out.indexOf(viewed) : -1;
+  const activeLocation =
+    at >= 0 ? at : Math.min(Math.max(0, prefs.activeLocation), out.length - 1);
+
+  return { ...prefs, locations: out, activeLocation };
+}
+
+/**
  * Forget the AgroExact integration, keeping the places it created.
  *
  * A town does not stop existing because a token expired, and someone who has been
@@ -436,11 +583,18 @@ export function syncStationLocations(prefs: Prefs, stations: readonly StationPla
 export function unlinkStationLocations(prefs: Prefs): Prefs {
   return {
     ...prefs,
-    locations: prefs.locations.map((l) =>
-      l.source === 'agroexact'
-        ? { ...l, source: undefined, stationId: undefined, stationName: undefined }
-        : l
-    ),
+    // The binding goes from every place that carries one, not only from the places
+    // this integration created. A soil sensor can be coupled to somewhere the reader
+    // saved themselves, and leaving that binding behind would have the app going on
+    // asking a signed-out account for the field's readings.
+    locations: prefs.locations.map((l) => {
+      const dropped = l.soilStationId || l.soilStationName
+        ? { ...l, soilStationId: undefined, soilStationName: undefined }
+        : l;
+      return dropped.source === 'agroexact'
+        ? { ...dropped, source: undefined, stationId: undefined, stationName: undefined }
+        : dropped;
+    }),
     integrations: {},
   };
 }

@@ -24,7 +24,7 @@ benoemde backend-toevoegingen hieronder.
 | | Besluit |
 | --- | --- |
 | Verplaatsen | Zelfde `SoilStation`, nieuwe lat/lon en nieuwe instellingen. Verplaatsen is een **expliciete handeling in de webapp**, geen afleiding uit gewijzigde coördinaten. |
-| Locatie | Een plaatsing wordt een **eigen locatie**, behalve wanneer er al een weerlocatie binnen ~2 km ligt — dan wordt hij daaraan gekoppeld. |
+| Locatie | Een plaatsing wordt een **eigen locatie**, behalve wanneer er al een locatie binnen **200 m** ligt — dan wordt hij daaraan gekoppeld. (Was ~2 km; op 17 sep teruggebracht naar 200 m, zie hieronder.) |
 | Historie | Afgeleide waarden worden berekend met de **instellingen van dat moment**, niet met de huidige. |
 | Windwrijving | Blijft buiten de app. |
 | Neerslag en beregening | Eén getal, geen scheiding. |
@@ -447,16 +447,42 @@ is teruggebracht van `TileKind` naar een smallere `AlertKind`. Een regel kijkt n
 beste regel in de app zijn — het is de enige grootheid die met eigen drempels
 binnenkomt — maar dat vraagt dat de regelmachinerie bodemsensoren leert kennen.
 
-**Nog niet gedaan:** de blokken staan nog op geen enkel scherm. Daarvoor moet een
-locatie aan een bodemsensor gekoppeld zijn, en op dit account staat er geen enkele
-sensor bij een weerlocatie in de buurt (de dichtstbijzijnde: 287 km). Alle vier worden
-dus een eigen locatie — een zichtbare verandering in de locatielijst, en daarom een
-aparte stap.
+### De koppeling, en de 200 meter
+
+`SavedLocation` krijgt `soilStationId`, en `syncSoilLocations` in `core/prefs.ts` doet
+per sensor één van drie dingen: koppelen aan een plek binnen 200 m, anders een eigen
+locatie worden met de **perceelnaam** (geen reverse-geocode: vier percelen rond één
+dorp zouden anders alle vier naar dat dorp heten), en per plek hoogstens één sensor —
+twee sensoren op één plek zijn twee percelen, en de tweede mag de metingen van de
+eerste niet overschrijven.
+
+Drie dingen die pas bij het bouwen bleken:
+
+- **De stationsync gooide elke bodemlocatie meteen weer weg.** Die verwijdert elke
+  `agroexact`-locatie zonder weerstation, en een bodemlocatie heeft er nooit één gehad.
+  Eén verversing van de stationslijst had alle percelen van het account gewist.
+- **Loskoppelen liet de bodembinding hangen** op een plek die de gebruiker zelf had
+  opgeslagen — die is immers geen `agroexact`-locatie. De app zou een uitgelogd account
+  om metingen blijven vragen. Door een test gevonden.
+- **De volgorde van de twee syncs doet ertoe.** Draait de bodemsync eerst, dan is er
+  nog geen plek om aan te koppelen en maakt de sensor een eigen pagina; daarna zet de
+  stationsync een paal vijftig meter verderop als tweede pagina voor dezelfde grond.
+  Een perceel dat zo'n gastheer heeft gekregen wordt daarom teruggevouwen, en de sync
+  draait opnieuw zodra de koppelbare plekken veranderen.
+
+Op 'Actueel' schuiven de bodemblokken in dezelfde lijst als de rest, dus
+`arrangeTiles` plaatst ze en de blokkeneditor toont ze. Eronder staat de herkomstregel
+— gewas · grondsoort · sensordiepte — omdat 48 kPa op zand onder uien iets anders
+betekent dan op zware klei onder aardappelen.
 
 ## Nog open
 
-- De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt
-  gekoppeld in plaats van een eigen locatie te worden — voorlopig een aanname.
+- ~~De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt
+  gekoppeld~~ — **beantwoord: 200 m.** Een bodemsensor meet het water in één perceel,
+  en op twee kilometer sta je op dat van de buren. Het gevolg is met opzet: vrijwel
+  geen enkele sensor valt erbinnen, dus vrijwel elke sensor wordt een eigen locatie.
+  Een ruimere straal had minder pagina's opgeleverd én zuigspanning aan de verkeerde
+  grond gehangen, en van die twee is dat de fout die je niet ziet.
 - Of oude plaatsingen ook op de kaart zichtbaar moeten zijn, of alleen in de grafiek.
 - Zuigspanningsbubbels per perceel op de volledige kaart, in de vorm van de
   cumulatieve neerslaglaag. Niet ingepland, wel voor de hand liggend.

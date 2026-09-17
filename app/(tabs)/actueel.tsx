@@ -67,8 +67,10 @@ import { TileEditor } from '../../ui/current/TileEditor';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useLocationStation } from '../../state/stations';
+import { useLocationSoil } from '../../state/soilStations';
 import { arrangeTiles } from '../../core/prefs';
 import { modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
+import { placementContext, soilTiles, type SoilTileLabels } from '../../core/model/soilTiles';
 import { measurementTimeLabel } from '../../core/model/station';
 import { ta } from '../../core/i18n';
 
@@ -81,6 +83,7 @@ function CurrentPage() {
   const router = useRouter();
 
   const station = useLocationStation(location);
+  const soil = useLocationSoil(location);
   /** The block being compared across locations, or null when the sheet is shut. */
   const [compared, setCompared] = useState<Tile | null>(null);
   const [editing, setEditing] = useState(false);
@@ -108,11 +111,36 @@ function CurrentPage() {
     [prefs.lang]
   );
 
+  const soilLabels: SoilTileLabels = useMemo(
+    () => ({
+      tension: ta('soilTension', prefs.lang),
+      status: ta('soilStatusTile', prefs.lang),
+      refillRoom: ta('soilRefillRoom', prefs.lang),
+      refillNeeded: ta('soilRefillNeeded', prefs.lang),
+      waterPercent: ta('soilWaterPercent', prefs.lang),
+      pF: ta('soilPf', prefs.lang),
+      soilTemp: ta('soilTemp', prefs.lang),
+      temp10: ta('soilTemp10', prefs.lang),
+      humidity10: ta('soilHumidity10', prefs.lang),
+      dewpoint10: ta('soilDewpoint10', prefs.lang),
+      now: ta('now', prefs.lang),
+      atDepth: soil.placement ? `${soil.placement.depthCm} cm` : '',
+    }),
+    [prefs.lang, soil.placement]
+  );
+
   // Every block the app can draw, before the reader's arrangement is applied. The
   // editor lists these; the grid draws the arrangement of them.
+  //
+  // The soil blocks join the same list rather than forming a section of their own, so
+  // `arrangeTiles` places them and the editor lists them like everything else. On a
+  // location with no sensor, or one that is out of the ground, there are none.
   const allTiles: Tile[] = useMemo(
-    () => (model ? modelTiles(model, labels, nowcast) : []),
-    [model, labels, nowcast]
+    () => [
+      ...(model ? modelTiles(model, labels, nowcast) : []),
+      ...(soil.placement ? soilTiles(soil.placement, soil.latest, soilLabels) : []),
+    ],
+    [model, labels, nowcast, soil.placement, soil.latest, soilLabels]
   );
   const tiles = useMemo(() => arrangeTiles(allTiles, prefs.tiles), [allTiles, prefs.tiles]);
 
@@ -205,6 +233,23 @@ function CurrentPage() {
           </View>
 
           <Grid tiles={tiles} onOpen={setCompared} />
+
+          {/* Not decoration but provenance: 48 kPa means one thing on sand under
+              onions and another on heavy clay under potatoes, so a suction reading
+              cannot be interpreted without the crop, the soil and the depth. It sits
+              on the page whenever the soil blocks do. */}
+          {soil.placement && soil.latest ? (
+            <Text
+              variant="caption"
+              color={palette.muted}
+              style={{ paddingHorizontal: space[5], paddingTop: space[3] }}
+            >
+              {placementContext(
+                soil.placement,
+                `${ta('soilSensorAt', prefs.lang)} ${soil.placement.depthCm} cm`
+              )}
+            </Text>
+          ) : null}
 
           {/* Only where there is nothing measuring this place. On a station-backed
               location the dots already say which blocks are instruments, and a

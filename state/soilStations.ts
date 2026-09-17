@@ -13,14 +13,16 @@
  * builds on top — blocks on 'Actueel', series on 'Grafiek', the placement segments —
  * needs to know first that measurements arrive at all.
  */
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AgroAuthError, distanceKm, fetchLatestSoilMeasurement, fetchSoilStations, withAgroToken,
   type SoilSample, type SoilStation,
 } from '../core/sources/agroexact';
-import { isDormant } from '../core/model/soil';
+import { isDormant, placementFromStation } from '../core/model/soil';
+import { syncSoilLocations } from '../core/prefs';
 import { useAgroAuth } from './auth';
+import { usePrefs } from './prefs';
 
 /** Sensors are added and moved by hand in the web app; an hour between fetches is
  *  as generous here as it is for the weather stations. */
@@ -139,4 +141,110 @@ export function useRefreshSoilStations() {
     () => client.invalidateQueries({ queryKey: soilStationsKey }),
     [client]
   );
+}
+
+/**
+ * The soil sensor bound to a location, as a placement and its latest reading.
+ *
+ * The binding is `SavedLocation.soilStationId`, written by `syncSoilLocations` — a
+ * sensor within two hundred metres of a place is on that place, and anything further
+ * is its own. So this looks the sensor up by id rather than by distance: the decision
+ * was already made, and making it twice invites the two answers to differ.
+ *
+ * Null all the way down is the ordinary case. Most locations have no soil sensor, and
+ * a page that has none simply draws no soil blocks.
+ */
+export function useLocationSoil(location: { soilStationId?: string } | null) {
+  const auth = useAgroAuth();
+  const { data: sensors } = useAgroSoilStations();
+  const id = location?.soilStationId ?? null;
+
+  const station = useMemo(
+    () => (id ? sensors?.find((s) => s.id === id) ?? null : null),
+    [sensors, id]
+  );
+
+  const query = useQuery({
+    queryKey: soilLatestKey(id ?? ''),
+    enabled: auth.status === 'connected' && !!station,
+    staleTime: SOIL_READING_STALE_MS,
+    queryFn: async ({ signal }): Promise<SoilSample | null> => {
+      if (!station) return null;
+      const out = await withAgroToken(
+        auth.getAccessToken,
+        (token) => fetchLatestSoilMeasurement(
+          token, station.id, 0, station.depthCm ?? 0, { signal }
+        ),
+        auth.reportUnauthorized
+      );
+      return out?.current ?? null;
+    },
+    retry: (count, error) => !(error instanceof AgroAuthError) && count < 2,
+  });
+
+  const latest = query.data ?? null;
+
+  const placement = useMemo(() => {
+    if (!station || !latest) return null;
+    return placementFromStation(
+      {
+        id: station.id, name: station.name, lat: station.lat, lon: station.lon,
+        crop: station.crop, depthCm: station.depthCm, thresholds: station.thresholds,
+      },
+      // The oldest moment there is evidence for. Without `/soilstations/{id}/placements/`
+      // the app cannot know when this placement began, which is exactly what the
+      // `assumed` flag on it says. Only the segment splitting of step 4b needs a true
+      // start, and it must not be built on this.
+      latest.measTime
+    );
+  }, [station, latest]);
+
+  return { station, placement, latest, loading: query.isFetching };
+}
+
+/**
+ * Keep the saved locations in step with the account's soil sensors.
+ *
+ * The counterpart of `useStationLocationSync`, and kept separate for the same reason
+ * the rest of this file is: the two reconcile different instruments and would
+ * otherwise delete each other's locations.
+ *
+ * No reverse lookup, so no rate limit and no sequencing: a field is called by its own
+ * name. That is also the better name — four fields around one village would otherwise
+ * all be called after the village.
+ *
+ * A failed fetch never reaches here, so a sensor can only be absent because the
+ * account no longer has it.
+ */
+export function useSoilLocationSync() {
+  const { prefs, mutate } = usePrefs();
+  const { data: sensors } = useAgroSoilStations();
+  const { status } = useAgroAuth();
+  /** Sensor sets already reconciled this session, so a re-render cannot redo it. */
+  const done = useRef<string>('');
+
+  useEffect(() => {
+    if (status !== 'connected' || !sensors) return;
+    // The sensors, and the places they could be coupled to. The second half matters:
+    // the station sync may land after this one, and a sensor that made its own page
+    // for want of a host has to be reconsidered once the host appears.
+    const hosts = prefs.locations
+      .filter((l) => !l.soilStationId)
+      .map((l) => `${l.lat.toFixed(4)},${l.lon.toFixed(4)}`)
+      .sort()
+      .join(';');
+    const fingerprint = `${sensors
+      .map((s) => `${s.id}@${s.lat.toFixed(5)},${s.lon.toFixed(5)}`)
+      .sort()
+      .join(',')}|${hosts}`;
+    if (done.current === fingerprint) return;
+    done.current = fingerprint;
+
+    mutate((p) => syncSoilLocations(p, sensors.map((s) => ({
+      stationId: s.id,
+      stationName: s.name,
+      lat: s.lat,
+      lon: s.lon,
+    }))));
+  }, [sensors, status, mutate, prefs.locations]);
 }
