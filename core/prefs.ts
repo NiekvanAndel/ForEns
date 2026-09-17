@@ -10,6 +10,17 @@
  */
 import type { LangCode } from './i18n/strings';
 import type { PresUnit, TempUnit, WindUnit, FontSizePref } from './i18n/units';
+import { sanitiseAlerts, type UserAlert } from './alerts';
+import { DEFAULT_OVERVIEW_LAYOUT, type WidgetSettings } from './overview';
+import { DEFAULT_TILE_LAYOUT, type TileLayout } from './arrangement';
+
+// Re-exported so the many callers that reach for these through `core/prefs` keep
+// working: they are preferences to everything that uses them, and only the module
+// graph cares that they are defined elsewhere.
+export {
+  arrangeTiles, arrangeAllTiles, reorderTiles, toggleTile, DEFAULT_TILE_LAYOUT,
+} from './arrangement';
+export type { TileLayout } from './arrangement';
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
 /** Which deterministic model drives days 3–14. */
@@ -61,6 +72,10 @@ export interface AgroIntegration {
   connected: boolean;
   /** Whoever is signed in, for the settings row. Null when AuthKit gave no email. */
   account: string | null;
+  /** Their display name, when AuthKit gave one. Kept beside the email because the
+   *  greeting on the overview page is drawn before the auth context is ready, and an
+   *  email is not a name — see `greetingName`. */
+  accountName?: string | null;
   /**
    * Opt-in: let the device's own page use a station within `AGRO_MAX_DISTANCE_KM`.
    *
@@ -96,15 +111,7 @@ export const DEFAULT_AGRO_INTEGRATION: AgroIntegration = {
  *
  * Both lists are ids, and an id the app no longer knows is simply skipped.
  */
-export interface TileLayout {
-  /** Block ids in the order they are shown. Anything not named here follows, in the
-   *  order `modelTiles` produced it. */
-  order: string[];
-  /** Block ids switched off. */
-  hidden: string[];
-}
 
-export const DEFAULT_TILE_LAYOUT: TileLayout = { order: [], hidden: [] };
 
 export interface Prefs {
   lang: LangCode;
@@ -121,12 +128,44 @@ export interface Prefs {
   model: ModelPref;
   shortModel: ShortModelPref;
   showSpread: boolean;
+  /**
+   * Whether the significant-weather block appears on 'Nu' at all.
+   *
+   * The outer of the two layers: with it off there is no block and no notification
+   * of any kind, because a notification about something the app has been told not to
+   * show is a contradiction. See `core/model/alert`.
+   */
+  alertsEnabled: boolean;
+  /**
+   * Whether the same alerts are also delivered as push, from the server.
+   *
+   * The inner layer, and a different promise from the block: a block is read when
+   * the app is opened, and a push arrives whether it is or not. Off until someone
+   * asks for it, and asking is what triggers the permission prompt — see
+   * `core/push`.
+   */
+  pushEnabled: boolean;
+  /**
+   * Thresholds the reader set themselves, from a block on 'Actueel'.
+   *
+   * Alongside the six built-in conditions rather than instead of them: those are the
+   * app's judgement about weather worth knowing, these are one person's about their
+   * own crop. See `core/alerts`.
+   */
+  userAlerts: UserAlert[];
   notifyRain: boolean;
   notifyWind: boolean;
   notifyFrost: boolean;
   quietHours: boolean;
   /** The 'Actueel' grid's arrangement. See `TileLayout`. */
   tiles: TileLayout;
+  /** The overview page's, in the same shape and through the same machinery — see
+   *  `core/overview`. One implementation of "your order, minus what you switched
+   *  off", reused rather than written twice. */
+  overview: TileLayout;
+  /** What each overview widget is set to, by widget id — sparse, holding only what a
+   *  reader actually changed. See `widgetSettings` in `core/overview`. */
+  overviewSettings: Record<string, WidgetSettings>;
 }
 
 /** 's-Hertogenbosch is the web app's default and the design's station-backed example. */
@@ -150,11 +189,16 @@ export const DEFAULT_PREFS: Prefs = {
   model: 'ecmwf',
   shortModel: 'nowcast',
   showSpread: true,
+  alertsEnabled: true,
+  userAlerts: [],
+  pushEnabled: false,
   notifyRain: false,
   notifyWind: false,
   notifyFrost: false,
   quietHours: true,
   tiles: DEFAULT_TILE_LAYOUT,
+  overview: DEFAULT_OVERVIEW_LAYOUT,
+  overviewSettings: {},
 };
 
 /**
@@ -184,11 +228,15 @@ export function mergePrefs(stored: unknown): Prefs {
   take('model', oneOf('ecmwf', 'gfs', 'mix'));
   take('shortModel', oneOf('nowcast', 'radar'));
   for (const k of [
-    'useHarmonie', 'showSpread',
+    'useHarmonie', 'showSpread', 'alertsEnabled', 'pushEnabled',
     'notifyRain', 'notifyWind', 'notifyFrost', 'quietHours',
   ] as const) {
     take(k, bool);
   }
+
+  // One malformed rule must not cost the reader the others, so they are taken one
+  // at a time rather than as a block. See `sanitiseAlerts`.
+  out.userAlerts = sanitiseAlerts(s.userAlerts);
 
   // Integrations are stored state that outlives the code that wrote them, so each
   // field is taken on its own and anything missing falls back to the default rather
@@ -199,6 +247,7 @@ export function mergePrefs(stored: unknown): Prefs {
       agroexact: {
         connected: typeof agro.connected === 'boolean' ? agro.connected : false,
         account: typeof agro.account === 'string' ? agro.account : null,
+        accountName: typeof agro.accountName === 'string' ? agro.accountName : null,
         useForCurrentLocation:
           typeof agro.useForCurrentLocation === 'boolean' ? agro.useForCurrentLocation : false,
         lastSyncMs: typeof agro.lastSyncMs === 'number' ? agro.lastSyncMs : null,
@@ -213,6 +262,29 @@ export function mergePrefs(stored: unknown): Prefs {
   const tiles = s.tiles as TileLayout | undefined;
   if (tiles && typeof tiles === 'object') {
     out.tiles = { order: ids(tiles.order), hidden: ids(tiles.hidden) };
+  }
+  const overview = s.overview as TileLayout | undefined;
+  if (overview && typeof overview === 'object') {
+    out.overview = { order: ids(overview.order), hidden: ids(overview.hidden) };
+  }
+
+  // Per-widget settings, read key by key. A stored bag that picked up a value of the
+  // wrong type — a `limit` that came back a string from some older writer — must cost
+  // that one key and not every setting the reader has.
+  const bag = s.overviewSettings;
+  if (bag && typeof bag === 'object' && !Array.isArray(bag)) {
+    const settings: Record<string, WidgetSettings> = {};
+    for (const [id, raw] of Object.entries(bag as Record<string, unknown>)) {
+      if (!raw || typeof raw !== 'object') continue;
+      const w = raw as WidgetSettings;
+      const one: WidgetSettings = {};
+      if (Number.isInteger(w.location) && (w.location as number) >= 0) one.location = w.location;
+      if (Number.isInteger(w.limit) && (w.limit as number) > 0) one.limit = w.limit;
+      if (Number.isInteger(w.hours) && (w.hours as number) > 0) one.hours = w.hours;
+      if (w.window === 'today' || w.window === '24h') one.window = w.window;
+      if (Object.keys(one).length) settings[id] = one;
+    }
+    out.overviewSettings = settings;
   }
 
   if (Array.isArray(s.locations)) {
@@ -373,56 +445,6 @@ export function unlinkStationLocations(prefs: Prefs): Prefs {
   };
 }
 
-/**
- * The blocks to draw, in the reader's order, with the hidden ones dropped.
- *
- * `all` is every block the app can draw, in its natural order. Ids in `order` come
- * first, in that order; anything the layout has never heard of keeps its natural
- * place behind them, which is what lets a new block appear for someone who arranged
- * their grid before it existed.
- */
-export function arrangeTiles<T extends { id: string }>(
-  all: readonly T[],
-  layout: TileLayout
-): T[] {
-  const byId = new Map(all.map((t) => [t.id, t]));
-  const named = layout.order
-    .map((id) => byId.get(id))
-    .filter((t): t is T => t !== undefined);
-  const seen = new Set(named.map((t) => t.id));
-  const rest = all.filter((t) => !seen.has(t.id));
-  const hidden = new Set(layout.hidden);
-  return [...named, ...rest].filter((t) => !hidden.has(t.id));
-}
 
-/** The same, but keeping the hidden blocks — what the editor lists. */
-export function arrangeAllTiles<T extends { id: string }>(
-  all: readonly T[],
-  layout: TileLayout
-): T[] {
-  return arrangeTiles(all, { order: layout.order, hidden: [] });
-}
 
-/**
- * Move a block, writing the whole arrangement back.
- *
- * `visibleIds` is what the editor is showing, hidden blocks included, so the stored
- * order is rewritten from the list the reader was actually looking at. Storing only
- * the moved pair instead would leave the rest of the order implicit, and the next
- * new block would land in the middle of somebody's carefully arranged grid.
- */
-export function reorderTiles(layout: TileLayout, ids: string[], from: number, to: number): TileLayout {
-  if (from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) return layout;
-  const order = [...ids];
-  const [moved] = order.splice(from, 1);
-  order.splice(to, 0, moved as string);
-  return { ...layout, order };
-}
 
-/** Switch one block on or off. */
-export function toggleTile(layout: TileLayout, id: string): TileLayout {
-  const hidden = layout.hidden.includes(id)
-    ? layout.hidden.filter((h) => h !== id)
-    : [...layout.hidden, id];
-  return { ...layout, hidden };
-}

@@ -34,6 +34,7 @@ import { Icon } from '../Icon';
 import { WeatherIcon } from '../WeatherIcon';
 import { HourlyList } from './HourlyList';
 import { DayBar } from './DayBar';
+import { DaySummaryCells } from './DaySummaryCells';
 import { SpreadChart } from '../charts/SpreadChart';
 import { usePrefs } from '../../state/prefs';
 import { buildDayDetail, precipNarrative, spreadLabel } from '../../core/model/dayDetail';
@@ -325,7 +326,7 @@ function LayerSection({
     // used to be repeated at the top, which said all of it a second time in a
     // narrower form directly above the cells.
     case 'overview':
-      return <SummaryCells day={day} dayIndex={detail.dayIndex} />;
+      return <DaySummaryCells day={day} dayIndex={detail.dayIndex} />;
 
     case 'precip':
       return (
@@ -572,71 +573,3 @@ function StatRow({ items }: { items: { label: string; value: string }[] }) {
   );
 }
 
-/** The whole day at a glance, for a reader who does not want the charts.
- *  Values come from `resolveDayValues`, so the cells agree with the list row above
- *  them — including which model each figure came from. */
-function SummaryCells({ day, dayIndex }: { day: Day; dayIndex: number }) {
-  const { palette } = useTheme();
-  const { prefs } = usePrefs();
-  const v = resolveDayValues(day, { dayIndex });
-
-  const cells: { label: string; value: string; color?: string }[] = [
-    {
-      label: t('maxTemp', prefs.lang),
-      value: `${convTemp(v.tempMax.value, prefs.tempUnit) ?? '—'}${tempUnitLabel(prefs.tempUnit)}`,
-      color: palette.valHigh,
-    },
-    {
-      label: t('minTemp', prefs.lang),
-      value: `${convTemp(v.tempMin.value, prefs.tempUnit) ?? '—'}${tempUnitLabel(prefs.tempUnit)}`,
-      color: palette.valLow,
-    },
-    {
-      label: t('tabPrecip', prefs.lang),
-      value: v.precip.value != null ? `${fmtMm(v.precip.value)} mm` : '—',
-      color: v.precip.value ? palette.valPrecip : palette.valPrecipZero,
-    },
-    {
-      label: t('tabWind', prefs.lang),
-      value: `${convWind(v.wind.value, prefs.windUnit) ?? '—'} ${windUnitLabel(prefs.windUnit)}`,
-    },
-    {
-      label: t('sunHours', prefs.lang),
-      value: v.sunHours != null ? `${v.sunHours.toFixed(1).replace('.', ',')} u` : '—',
-      color: palette.valSun,
-    },
-    {
-      label: t('evap', prefs.lang),
-      value: v.et0 != null ? `${fmtMm(v.et0)} mm` : '—',
-    },
-  ];
-
-  return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: space[2] }}>
-      {cells.map((c, i) => (
-        <View
-          key={c.label}
-          style={{
-            width: '33.33%',
-            paddingVertical: space[3],
-            alignItems: 'center',
-            borderTopWidth: 1,
-            borderTopColor: palette.hairlineSoft,
-          }}
-        >
-          <Text variant="caption" color={palette.muted}>
-            {c.label}
-          </Text>
-          <Text
-            variant="stat"
-            color={c.color ?? palette.inkHeading}
-            tabular
-            style={{ marginTop: 4, fontSize: 18 }}
-          >
-            {c.value}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}

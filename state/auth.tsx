@@ -23,7 +23,6 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ReactNode,
 } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import {
@@ -31,26 +30,12 @@ import {
   exchangeCode, fetchAccount, isExpired, refreshTokens, revokeTokens,
   type AuthAccount, type AuthTokens,
 } from '../core/auth/workos';
+// The keychain entry itself lives in core, because the background task reads it too
+// and two copies of a key is a bug waiting for the day one of them is edited.
+import { readStoredAuth, writeStoredAuth } from '../core/auth/store';
 
 /** Completes the browser session on return, as expo-auth-session requires. */
 WebBrowser.maybeCompleteAuthSession();
-
-const TOKENS_KEY = 'exactcast.agro.oauth.v1';
-
-/**
- * Readable from first unlock after a reboot, rather than only while the screen is
- * open.
- *
- * The default, `WHEN_UNLOCKED`, is stricter than this app can live with: the widget
- * and the background refresh run on a phone in a pocket, and a keychain read that
- * fails there is indistinguishable from a signed-out account — the integration would
- * quietly drop out and reappear on unlock. `AFTER_FIRST_UNLOCK` still keeps the
- * tokens unreadable on a device that has not been unlocked since it powered on,
- * which is the case that matters for a lost phone.
- */
-const KEYCHAIN: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
-};
 
 /** Must be registered as a redirect URI on the AuthKit application, verbatim. */
 export const REDIRECT_URI = AuthSession.makeRedirectUri({
@@ -101,34 +86,6 @@ export interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-interface StoredAuth {
-  tokens: AuthTokens;
-  account: AuthAccount | null;
-}
-
-async function readStored(): Promise<StoredAuth | null> {
-  try {
-    const raw = await SecureStore.getItemAsync(TOKENS_KEY, KEYCHAIN);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as StoredAuth;
-    if (!parsed?.tokens?.accessToken) return null;
-    return parsed;
-  } catch {
-    // An unreadable keychain entry is indistinguishable from none, and treating it
-    // as none only costs a sign-in.
-    return null;
-  }
-}
-
-async function writeStored(value: StoredAuth | null): Promise<void> {
-  try {
-    if (value) await SecureStore.setItemAsync(TOKENS_KEY, JSON.stringify(value), KEYCHAIN);
-    else await SecureStore.deleteItemAsync(TOKENS_KEY, KEYCHAIN);
-  } catch {
-    // Failing to persist costs the next launch a sign-in, not this session.
-  }
-}
-
 export function AgroAuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('disconnected');
   const [account, setAccount] = useState<AuthAccount | null>(null);
@@ -145,7 +102,7 @@ export function AgroAuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
-    readStored().then((stored) => {
+    readStoredAuth().then((stored) => {
       if (!alive) return;
       if (stored) {
         tokensRef.current = stored.tokens;
@@ -160,7 +117,7 @@ export function AgroAuthProvider({ children }: { children: ReactNode }) {
 
   const disconnect = useCallback(async (next: AuthStatus) => {
     tokensRef.current = null;
-    await writeStored(null);
+    await writeStoredAuth(null);
     setAccount(null);
     setStatus(next);
   }, []);
@@ -203,7 +160,7 @@ export function AgroAuthProvider({ children }: { children: ReactNode }) {
       const who = await fetchAccount(tokens.accessToken);
 
       tokensRef.current = tokens;
-      await writeStored({ tokens, account: who });
+      await writeStoredAuth({ tokens, account: who });
       setAccount(who);
       setStatus('connected');
       return who;
@@ -241,7 +198,7 @@ export function AgroAuthProvider({ children }: { children: ReactNode }) {
       try {
         const next = await refreshTokens(current.refreshToken as string);
         tokensRef.current = next;
-        await writeStored({ tokens: next, account });
+        await writeStoredAuth({ tokens: next, account });
         setStatus('connected');
         return next.accessToken;
       } catch (e) {

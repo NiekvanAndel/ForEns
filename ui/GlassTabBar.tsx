@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, shadowCard, space, useTheme } from '../theme';
 import { GlassSurface } from './GlassSurface';
 import { Icon, type IconName } from './Icon';
+import { useLandscape } from './layout';
 
 /**
  * How much room a scrolling page must leave under its content so the last card
@@ -38,6 +39,14 @@ import { Icon, type IconName } from './Icon';
  * what makes it short enough for a chart and its play button to sit above it.
  */
 export const TAB_BAR_CLEARANCE = 84;
+
+/**
+ * The same, for the bar stood on its end against the right edge in landscape.
+ *
+ * Narrower than it is tall, because a column of icons is one icon wide where a row of
+ * them is the screen: the capsule's width plus its padding and the air beside it.
+ */
+export const TAB_BAR_CLEARANCE_SIDE = 64;
 
 /** Icon size by how many tabs share the bar. See the note above. */
 function iconSize(count: number): number {
@@ -59,6 +68,10 @@ export interface GlassTabBarProps {
 export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
   const { palette, appearance } = useTheme();
   const insets = useSafeAreaInsets();
+  // Sideways the bar stands on its end against the right edge. A row of tabs across the
+  // bottom of a landscape screen is a hand's width of travel between the first tab and
+  // the last, and it spends the scarce dimension: height.
+  const landscape = useLandscape();
 
   const dark = appearance === 'dark';
 
@@ -69,7 +82,13 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
   const row = (
     // The gap goes with the icons: six capsules a full step apart leave the icons
     // themselves nowhere to sit.
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: items.length >= 6 ? 1 : 2 }}>
+    <View
+      style={{
+        flexDirection: landscape ? 'column' : 'row',
+        alignItems: 'center',
+        gap: items.length >= 6 ? 1 : 2,
+      }}
+    >
       {items.map((it) => {
         const on = it.key === activeKey;
         return (
@@ -80,7 +99,10 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
             accessibilityState={{ selected: on }}
             accessibilityLabel={it.label}
             style={{
-              flex: 1,
+              // Across the bottom the tabs share the width equally; standing up they
+              // are as tall as one icon needs, and the column is as long as it is.
+              flex: landscape ? undefined : 1,
+              alignSelf: 'stretch',
               alignItems: 'center',
               // No label under the icon, so the capsule is padded evenly rather
               // than being top-heavy around a two-storey cell. The vertical padding
@@ -98,22 +120,38 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
     </View>
   );
 
+  const along = items.length >= 6 ? 6 : 10;
   const shell = {
     borderRadius: radius.pill,
-    paddingVertical: space[2],
-    paddingHorizontal: items.length >= 6 ? 6 : 10,
+    // The padding follows the bar: the generous side is the one the icons run along.
+    paddingVertical: landscape ? along : space[2],
+    paddingHorizontal: landscape ? space[2] : along,
     overflow: 'hidden' as const,
   };
 
   return (
     <View
       pointerEvents="box-none"
-      style={{
-        position: 'absolute',
-        left: space[5],
-        right: space[5],
-        bottom: Math.max(insets.bottom, space[3]),
-      }}
+      style={
+        landscape
+          ? {
+              position: 'absolute',
+              right: space[3] + insets.right,
+              // Held against the middle of the edge rather than pinned top or bottom:
+              // a thumb reaches the centre of the side it is holding.
+              top: 0,
+              bottom: 0,
+              justifyContent: 'center',
+            }
+          : {
+              position: 'absolute',
+              // The notch takes one edge and the rounded corner the other, so the bar is
+              // inset by whatever the hardware claims on top of its own margin.
+              left: space[5] + insets.left,
+              right: space[5] + insets.right,
+              bottom: Math.max(insets.bottom, space[3]),
+            }
+      }
     >
       <GlassSurface interactive style={[shell, shadowCard]}>
         {row}

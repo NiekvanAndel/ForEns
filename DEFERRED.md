@@ -25,7 +25,6 @@ plumbing and tests all remain, so re-exposing one means restoring its rows in
 
 | Hidden | Where the code still lives | Why |
 | --- | --- | --- |
-| **Meldingen** (rain / wind / frost / quiet hours) | `core/notifications.ts`, `core/backgroundTask.ts` | To be worked out later — see the push limitation below |
 | **Korte termijn: Nowcast / Radar** | `prefs.shortModel` | Needs a second 0–2h source to choose between |
 | ~~**AgroExact integration**~~ | ~~`core/sources/agroexact.ts`, `state/stations.ts`~~ | **Done** — see below |
 | ~~App and widget icon~~ | ~~—~~ | **Done** — see `logos/README.md` |
@@ -533,22 +532,280 @@ Where the deterministic IFS run falls outside the ensemble band, the ensemble me
 is shown instead and marked with a small `~`, exactly as `index.html` does. It appears
 on the overview rows and in the day sheet.
 
+### The overview page, and the wizard it is groundwork for
+
+`app/overview.tsx` answers the question the rest of the app cannot: across every
+saved location, what was it, what is it, what is coming, and can I get on the land.
+Seventeen widgets, arranged by the reader through the same `TileLayout` machinery the
+blocks on 'Actueel' use — which now lives in `core/arrangement.ts` so both can reach
+it without importing each other.
+
+What is deliberately not built yet:
+
+- **The set-up wizard.** Everything it would write already exists: a wizard is a
+  first-run path that picks locations and stores an arrangement, and both are one
+  `setPrefs` away. What is missing is the decision about when it should appear and
+  what it should ask.
+- **Per-crop work limits.** `workWindow` takes its thresholds as an argument for
+  exactly this reason — dry, under 20 km/h, above 1 °C is a sprayer's default and not
+  every crop's. They belong in preferences, per location or per crop, once somebody
+  has said which.
+- **Per-widget settings beyond the three there are.** A widget now declares which of
+  `location`, `limit` and `window` its sheet offers, and the gear beside it in the
+  editor swaps the list for those controls (`WidgetSettingsForm`, a face of the same
+  sheet rather than a second modal — see the note there). Three keys is a deliberate
+  ceiling: a settings screen that renders any shape a widget invents is one nobody
+  can keep consistent. A fourth wants arguing for in `WidgetSettings`, where the cost
+  is visible. What is stored is only what a reader changed, so a default the app later
+  thinks better of still moves for everybody who never opened the sheet.
+- **A pinned location only reaches three widgets, and the line is data, not taste.**
+  `location` pins the hero, the rain curve and the radar square, because what this
+  page fetches for every location — an observation model and a nowcast profile — is
+  enough to draw those. The hour strip and the week follow the selection and offer no
+  control at all, because the fortnight behind them exists only for the selected
+  location (the forecast cache holds three, and `useAllLocationConditions` makes an
+  observations-only model on purpose). Widening it means a real forecast fetch per
+  pinned location, which is the decision, not the plumbing: `ForecastOverrideProvider`
+  already exists to render a card against a model it is handed.
+- **All the rule sets want revisiting, together.** There are three now — the work
+  window (`DEFAULT_WORK_LIMITS`: dry, under 20 km/h, above 1 °C), the advice rules
+  (`DEFAULT_ADVICE_LIMITS`: 15 mm shuts the land, 10 mm coming is worth hurrying for,
+  a run under 3 hours is not a window, frost at or below 0 °C), and the app's own
+  significant-weather alerts. All three are first drafts written from the same
+  armchair, and they contradict each other quietly: a location can be "workable" by
+  one and "shut" by the other in the same hour. They are gathered at the top of their
+  modules so arguing with them is one edit each; what is missing is somebody who
+  farms saying which numbers are right, and per crop, and per soil. Until then every
+  figure in them is a placeholder that happens to be plausible.
+
+**Space is the page's hardest constraint**, not data. Widgets show the locations that
+clear their own bar and close with one line counting the rest (`notableRows`), a
+comparison collapses to a single line where the locations agree (`spreadOf`), and
+almost every reading carries a small mark — a rainfall sparkline, a workability ring,
+an ensemble band (`ui/overview/marks`). Each bar is the widget's own: worth mentioning
+means 0,1 mm for rain and 3 °C for frost.
+
+**The iPad is a supported device now** (`ios.supportsTablet`), which is mostly a
+warning: nothing but the overview has been looked at on that width, and
+`requireFullScreen` is false, so the app also has to survive a split-view pane at any
+width the reader drags it to. The tab bar, the map panels and the hero were all drawn
+for a phone. Submitting with this flag on also means Apple wants iPad screenshots.
+
+**Two columns is a question about width, not orientation.** `useWideLayout` replaces
+`useLandscape` wherever the question is "how many columns", against
+`TWO_COLUMN_WIDTH` (700, in `core/layout` so it is checkable without a phone). An
+iPad upright is not landscape and is 810 points wide, and a column of cards that wide
+is exactly what two columns exist to avoid; a split-view pane at half an iPad falls
+back to one column, which is right, because at that width it is a phone-shaped space
+again. `useLandscape` stays for the questions that really are about shape — where a
+floating panel goes, how much height a map may take.
+
+**Turned sideways the overview is two columns, and a widget's declared size gives
+way.** `widgetRows(widgets, wide)` pairs everything sideways rather than honouring
+`full`, because a `full` widget is asking for a portrait phone's width and that is
+roughly what half a landscape screen is — honouring it would give a rainfall ranking
+seven hundred points to print five place names in and push the next widget below the
+fold. The sizes still decide the odd one out, so a page ending on the map does not end
+with a map twice as wide as the one above it. The page does not use `Columns`, for the
+same reason 'Actueel' does not: it already answers the question `Columns` asks, over
+widgets that know their own width.
+
+**The page has a type floor: 14 points, the size of the tabs on 'Verwachting'.**
+Nothing on the overview is drawn at `caption` (12,5) any more — readings and compact
+labels take `label` (14, the `PillSwitcher`'s own size) and prose takes `bodySm` (15),
+with card titles a step above at `bodySm` bold. Two rounds of compaction had been paid
+for partly in type size, which is the one saving a reader notices and cannot undo.
+Height now comes out of padding, structure and the `limit` setting instead.
+
+**Height is spent per row, not per widget.** Two passes of compaction have been
+about the same thing: a row whose parts are sized to each other rather than to one
+another's habits. `LocationLine` gains `compact` where the reading is a sentence
+rather than a figure; the workability row writes out its own name line instead of
+nesting a `LocationLine` inside a block that already has padding, because two lots
+of padding cannot be made compact; the outlook puts a day's temperatures and rain on
+one line rather than stacked, which is two lines a location rather than four; and the
+brief and the alerts dropped their headline figure and their body-sized names for
+caption-sized lines, which is also what made them read as prose. Every
+list widget now takes a `limit` as well, which is the reader's own answer to the
+same question.
+
+**The radar is on this page twice, on purpose.** The curve (`nowcast`) says how hard
+and when, in a shape no total gets across; the square (`radar`) says where it is and
+which way it is going. They are the same components the radar page and 'Nu' carry —
+`NowcastPanel` and `RadarPreview` — so the loop, the scrub and the clock badge are the
+ones a reader already knows. Each keeps its own play head, which `useRadarFrames` is
+explicit about: whoever owns the index owns the timer. The cost is that a page showing
+both lists the frames twice; they are a short list of URLs, and sharing them would
+mean sharing a play head that should not be shared.
+
+**Agro Intelligence is the page in sentences** (`core/overviewBrief`). Its heading is
+the station green, because the block is the app speaking rather than a reading being
+labelled, and each figure inside it keeps the colour its quantity has everywhere else
+— rain blue, temperature amber, the workable field green. A sentence is not the one
+place in the app where rain stops being blue. It opened with
+a figure and a place — "7,2 mm · Almkerk" — which is quick to draw and slow to read: a
+figure says *what* without saying *of what*, so the eye has to fetch the heading back
+before it can use it. Seven sentences now, of which two or three are true on a given
+morning, in the order a grower asks them: what fell, what is coming (the radar first
+where it sees anything, because "over twintig minuten" is a different instruction from
+"vandaag"), how far apart the fields are, and where to go. Each has a bar under which
+it stays quiet — a wind range of one km/h is a line spent reporting that the wind is
+the same everywhere — and the bars are gathered in `DEFAULT_BRIEF_LIMITS` with the
+other rule sets that want revisiting. The figures are emboldened structurally rather
+than with markup in the string table: the template carries named blanks and
+`Sentence` splits on them, so a translator can move a blank around a sentence and the
+right words still come out bold.
+
+**The brief opens with a greeting** (`core/greeting`): the part of the day plus a
+first name, taken from the AgroExact account. It is the one line on the page that is
+not about the weather, and it is a line rather than a header for that reason. The name
+comes from the live auth context where it has caught up and from
+`integrations.agroexact.accountName` where it has not, because this widget is usually
+the first thing drawn after a cold start. An email is refused rather than trimmed —
+"Goedemorgen, niek" derived from a mailbox is a guess at somebody's name — and so is a
+bare initial; without a name the greeting still goes out, because the time of day was
+always the half that was true.
+
+**A widget declares every source it reads, not only the obvious one.** The outlook
+drew each day's rain chance and agreement from `row.ensemble` while asking only for
+`outlook`, which worked exactly as long as the confidence widget happened to be
+switched on — hiding one widget blanked half of another, and `neededSources` cannot
+see a dependency nobody wrote down. A test now checks that every widget touching the
+members asks for them.
+
+**Advies is the one widget that answers "so what do I do"** (`core/overviewAdvice`).
+Six rules, each a sentence a grower would say — the land is shut, there is no window
+today, rain is coming and you have hours before it, it will freeze tonight, you can
+go now, you can go at nine — evaluated per location, one line each, most pressing
+first. No scoring: a rule either applies or it does not, so a rule that fires when it
+should not can be found and changed. The rules return figures and the widget words
+them, because sentences built outside `core/i18n` are sentences that stay Dutch.
+
+**Meldingen is one list, not two.** The app's own judgement per location and the
+thresholds the reader set on 'Actueel' are the same kind of thing to a reader, so
+they share a card — and it draws nothing at all when both are empty, which is most
+days and the point.
+
+Widgets worth considering next, in rough order of how often a grower would use them:
+soil temperature and moisture where a station reports them, a drying window
+(evaporation against rainfall), degree-day accumulation per crop, a spray-drift
+advisory that reads gusts rather than mean wind, and a "what changed since yesterday"
+line that names the forecast that moved.
+
 ## Open
 
-### Notifications are local, not push
+### Expo SDK 57 cannot launch when built against the iOS 27 SDK
 
-`core/notifications.ts` schedules **local** notifications from the forecast the device
-already holds, refreshed by `core/backgroundTask.ts`.
+Built with Xcode 27 the app traps before React runs, on a black screen:
 
-iOS decides when a background task runs — `BGTaskScheduler` typically grants a window
-every few hours, learned from usage, and never at a guaranteed interval. So the
-design's copy, *"Uiterlijk 20 minuten vooraf"*, is **not something local scheduling
-can honour**. Delivering on it needs a server that watches the forecast and sends real
-push, which was out of scope.
+    Application failed to launch: UIScene life cycle is required for apps
+    built with this SDK.
 
-Two options when this is picked up:
-- Build a small push service (watch the ensemble per subscribed location, send APNs).
-- Or soften the settings copy to match what the app actually does.
+The iOS 27 SDK makes `UIScene` adoption mandatory, and **nothing in this stack
+adopts it**. In the installed tree, `expo/ios/AppDelegates/ExpoAppDelegate.swift`
+still carries `// TODO: - Configuring and Discarding Scenes`; react-native 0.86.3
+ships no scene delegate; and neither writes a `UIApplicationSceneManifest` into the
+generated `Info.plist`. The newest patch on this line, expo 57.0.23, carries the
+same TODO, so there is nothing to upgrade to within SDK 57.
+
+**It is fixed upstream, in SDK 58.** `expo@58.0.0-preview.2` adds
+`ios/Expo/ExpoAppSceneDelegate.swift`, `SceneEventForwarder.swift` and an
+`ExpoReactNativeFactoryProvider` protocol, and its own doc comment names the cause:
+"Required by the iOS 27, which asserts at launch unless the app adopts the
+scene-based life cycle." That preview pairs with react-native 0.88.0-rc.0, so
+taking it means moving both to release candidates.
+
+So, until SDK 58 is stable, **build with Xcode 26 (the iOS 26 SDK)**, which is what
+this SDK line is designed for and needs no change here. `ios.deploymentTarget` is
+26.0, so a device on iOS 27 still runs it; the deployment target is a floor, and it
+is the *SDK* that enforces scenes.
+
+A half-measure was tried and reverted: declaring `UIApplicationSceneManifest` with
+an empty `UISceneConfigurations` stops the trap but leaves a black screen, because
+`RCTAppDelegate` creates its `UIWindow` in `didFinishLaunchingWithOptions`
+(`RCTAppDelegate.mm:58`) and under the scene life cycle that window belongs to no
+scene, so it is never shown. Adopting properly means a real `UIWindowSceneDelegate`
+that builds the window from the connecting `UIWindowScene` — which is exactly what
+SDK 58 wrote, and what a backport would have to reproduce against SDK 57's
+`ExpoReactNativeFactory`, through a config plugin so `expo prebuild` does not
+discard it. Worth doing only if Xcode 26 stops being an option before SDK 58 lands.
+
+
+### Push has a client and no server
+
+Meldingen is back in Instellingen, with two layers: whether the app shows a
+significant-weather block at all, and whether the same alerts are pushed. The device's
+half of push is built and tested — `core/push.ts` (pure: what to register, whether
+anything changed), `core/pushSync.ts` (token, storage, endpoint), `state/push.ts` (the
+hook). The service is not.
+
+**`extra.pushEndpoint` in `app.json` is empty, and that is the switch.** With it
+empty every sync is a no-op: no request, no error. Set it and devices start
+registering. `docs/push_contract.md` is the other side of the wire — payload, two
+endpoints, and what the service has to do with them.
+
+Until then, alerts are scheduled **locally** from whatever the background task last
+fetched. iOS grants that window every few hours and never on a schedule, so
+*"Uiterlijk 20 minuten vooraf"* is not a promise local scheduling can keep. The
+settings screen now says so on the page rather than leaving it to be found.
+
+**Expo Go cannot deliver notifications at all**, whatever the toggle says. It ships
+without the native notification side, so the permission call comes back
+`undetermined` — nobody refused, the prompt was never presented. The settings screen
+now tells the three answers apart and says so; a development build
+(`npx expo run:ios`) is what actually exercises this.
+
+One thing to fix in the same change as the endpoint: `app.json` has no
+`extra.eas.projectId`, which `getExpoPushTokenAsync` requires, so no device can
+produce a token yet. Permission and token are asked for separately precisely so that
+this costs only the registration and not the notifications.
+
+(The alert wording is no longer on this list. `core/i18n/alertStrings.ts` holds every
+headline, advice line and eyebrow in all five languages, and `deriveAlert` converts
+its figures to the reader's units — so a service honouring the registration's `lang`,
+`tempUnit` and `windUnit` writes what the device's own block says.)
+
+### The reader's own thresholds evaluate on the device
+
+A rule made from a block on 'Actueel' (`core/alerts.ts`, `ui/current/TileAlertForm`)
+is stored in preferences, listed in Instellingen → Meldingen, travels in the push
+registration as `rules`, **and is evaluated by the background task**.
+
+The chain: `core/auth/store` hands out an access token outside React (refreshing and
+persisting the rotated pair, since a refresh token is single-use); `core/alertFetch`
+reads each watched station once, at most twelve a run; `core/model/stationTiles`
+computes the block's figure from that station alone; `core/alertRun` decides which
+rules tripped and which are worth saying. All of it is pure except the two fetching
+modules, and those take injected dependencies so the tests need no network.
+
+Two things to know when reading it:
+
+- **A station's figure is the station's, not the merged model's.** `modelTiles`
+  answers for a *location*, with the weather model filling whatever the instrument
+  did not report. That is right for a page and wrong for a rule — somebody who ticked
+  a station wants that station's number, not one a forecast contributed to. So the
+  aggregation is written out again in `stationTiles`, and the tests hold the two to
+  the same windows.
+- **A rule notifies on the edge.** "Below two" holds all night; a run every half hour
+  saying so is how notifications get switched off. It fires when it first becomes
+  true, goes quiet while it stays true, arms again when the reading comes back, and
+  may repeat after twelve hours (`REARM_AFTER_MS`). The bookkeeping lives in its own
+  AsyncStorage key, not in preferences, because preferences sync to the push server
+  and a shower crossing a threshold should not re-register the device.
+
+What is still iOS's to decide is *when*. The task gets a window every few hours at
+best, so a rule can trip long before anyone hears about it. That is the same ceiling
+the built-in alerts have and the reason the push service is still worth building.
+
+### Alerts fire from the background task only
+
+`planNotification` is called in `core/backgroundTask.ts` and nowhere else, so nothing
+is scheduled while the app is in the foreground. That is defensible — someone looking
+at the app can see the block — but it also means the only way to observe a
+notification on a device is to wait for iOS to grant a background window. Scheduling
+one on a foreground refresh as well would make the feature testable and more prompt;
+the de-duplication key in `planNotification` (kind plus hour) already makes it safe to
+call more often.
 
 ### Splash screen
 
@@ -652,3 +909,100 @@ Three things stand between this and the live endpoints. None of them touches the
 tested — the 503-with-`Retry-After` state, the untouched anchor-stamped URLs — so
 switching over is a change of source, not of screens. When it lands, the fixtures and
 `ui/radar/fixtureSource.ts` go.
+
+## The Detailcharts field layers run on fixtures too (15 Sep 2026)
+
+Temperature, humidity and wind are on the layer picker, drawn from
+`core/fields/fixture/` rather than from a server. The pipeline lives in the
+Detailcharts repo; its contract is `docs/app_layer_plan.md` there, and
+`core/fields/httpSource` is written against it and unused.
+
+Two things about the bundled data that the UI says out loud rather than hiding:
+
+1. **Only the newest frame is measured.** The other eleven of each variable were
+   derived from it by advecting the field, so the loop has something to animate.
+   Every manifest carries `source: "synthetic"`, `isSynthetic()` exposes it, and
+   `FieldPanel` prints it under the reading. When real 10-minute frames exist this
+   goes away by itself — the flag comes from the pipeline, not from the app.
+2. **The overlays are half resolution.** A bundle is not a CDN: full-resolution PNGs
+   are about 270 kB a frame and twelve frames of three variables would be 16 MB. The
+   published product is full resolution and nothing in the UI depends on the size.
+
+Three things stand between this and live frames, and none of them touches the UI:
+
+1. **Hosting is undecided.** Static bucket like the nowcast, or behind the
+   AgroExactWebApp API like the cumulative layer. `httpSource` takes a base URL and
+   an optional token, so either works without a change here — but the PNG header
+   problem from the cumulative layer above applies identically if it ends up
+   authenticated.
+2. **The value rasters are the wrong shape for this.** To put one figure in one
+   bubble the app downloads a whole country's raster, and it wants one per frame for
+   the loop. The contract anticipates a point endpoint (`/field/timeseries?lat&lon`)
+   for exactly this; it replaces `FieldSource.values` and nothing else.
+3. **The panel is only the slider.** It briefly carried a reading — the variable, the
+   value at the selected location, the clock — and every one of those was already on
+   the map, in the bubble, the badge and the layer the reader had just picked. Taken
+   out at the client's direction (15 Sep 2026). A curve of one location's value across
+   the loop is the one thing that would earn the space back, and it needs the point
+   endpoint first: drawing it today would mean twelve rasters to read twelve cells.
+
+Not verified on a device. The layer typechecks, its logic is tested, and the geometry
+is checked against the pipeline's own output — but nobody has yet seen it draw.
+
+## Rotation (15 Sep 2026)
+
+The app was portrait-locked; it now allows portrait and both landscapes, not
+upside-down. `app.json` names the three explicitly, because Expo's `"default"`
+would let iOS add portrait-upside-down as well. `ios/` is generated, so a
+prebuild picks this up with nothing to edit by hand.
+
+What landscape changes:
+
+- **The tab bar stands up against the right edge.** A row of tabs across the
+  bottom of a landscape screen is a hand's width of travel from the first to the
+  last, and it spends the dimension that is scarce. Pages take
+  `TAB_BAR_CLEARANCE_SIDE` as right padding instead of the bottom clearance —
+  `usePagePadding` adds up both claims on that edge.
+- **Pages lay out in two columns** (`ui/layout` → `Columns`, arithmetic in
+  `core/layout`). Cards alternate left, right, left; a page says how many of its
+  leading cards span the full width (its heading, an alert banner) and how many
+  trailing ones do (the chart on 'Grafiek', which is a time axis). **'Verwachting'
+  opts out**: its day rows are rows, and two columns of them is two half-width
+  lists rather than one legible one.
+- **The blocks on 'Actueel' take as many columns as fit**, two to four, from a
+  measured width rather than an orientation switch — so the sizes between get what
+  fits too. **That page opts out of `Columns`** for the same reason 'Verwachting'
+  does, arrived at the other way round: the grid already answers the question
+  `Columns` asks, and inside a column it measured half a screen and laid out the
+  portrait grid with white space beside it.
+- **Both map surfaces float their panel over the bottom of the map**, centred and
+  capped at 420pt. It sat in the flow for one round, on the argument that a control
+  over the thing it controls covers the weather being scrubbed through — which is
+  true and still costs less than a band across a screen whose scarce dimension is
+  height. Full screen it can also be dismissed outright: a tap on the map hides it,
+  a second tap brings it back, as Apple's weather map does.
+- **The map's own buttons clear the chrome around them.** Sideways the radar page's
+  map is full-bleed under a floating header and beside a standing tab bar, so the
+  zoom buttons start below the header (`chromeTop`/`chromeLeft` on `RadarMap`) and
+  the full-screen button insets by `TAB_BAR_CLEARANCE_SIDE`.
+- **The chrome takes the side insets.** Turned sideways the notch is on one edge
+  and the rounded corner on the other, so the top bar, the tab bar, the map's
+  buttons and the legends inset by `insets.left`/`insets.right` on top of their
+  own margin.
+
+Known and accepted:
+
+- **The columns are ragged.** They alternate rather than balance by height, so a
+  short card beside a tall one leaves white space. Balancing means measuring,
+  which means cards that move after they are drawn; a gap is better than a jump.
+- **Rotating remounts the cards**, because moving them into columns moves them in
+  the tree. Page-level state survives (it is held by the page); anything a card
+  holds internally does not. Nothing on these pages currently does.
+- **Day rows size their numbers from their measured width**, not with
+  `adjustsFontSizeToFit`. That prop stops honouring `minimumFontScale` on iOS once
+  the text node has a nested one inside it, and every reading nests its unit — what
+  it produced was two days in a fortnight printed visibly smaller than the rest,
+  picked out by nothing but which numbers happened to be longest. `dayRowCompact`
+  decides it from the width alone, so every row in a list agrees.
+- **Not verified on a device.** Typecheck, lint and the suite pass, and the
+  column and row arithmetic is tested, but nobody has turned a phone yet.

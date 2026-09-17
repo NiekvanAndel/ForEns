@@ -49,6 +49,15 @@ export interface RadarPreviewProps {
   stationLat?: number;
   stationLon?: number;
   onOpen: () => void;
+  /**
+   * The map's height in points, instead of the square it is on 'Nu'.
+   *
+   * For the widget on the overview page, which runs the full width of the page at the
+   * height it had as a half-width block. A square that wide would be half a screen for
+   * one card; a strip shows more of the weather coming in from the west for the same
+   * room.
+   */
+  height?: number;
 }
 
 /** The observed frames, newest last. The preview shows the newest until it is
@@ -75,7 +84,7 @@ export function useFrames(enabled = true): RadarFrame[] {
 }
 
 export function RadarPreview({
-  lat, lon, stationName, stationLat, stationLon, onOpen,
+  lat, lon, stationName, stationLat, stationLon, onOpen, height,
 }: RadarPreviewProps) {
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
@@ -158,7 +167,12 @@ export function RadarPreview({
         }
       />
       <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel="Open radar">
-        <View style={{ aspectRatio: 1, borderRadius: 18, overflow: 'hidden' }}>
+        <View
+          style={[
+            { borderRadius: 18, overflow: 'hidden' },
+            height != null ? { height } : { aspectRatio: 1 },
+          ]}
+        >
           {peeking ? (
             <View
               style={{

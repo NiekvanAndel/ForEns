@@ -30,6 +30,37 @@
  * chart could, and starting with it off meant the page's most-used window opened
  * showing half of what it had.
  *
+ * ## The band around the forecast
+ *
+ * Temperature, rainfall and wind carry the ensemble's p10–p90 over the forecast half.
+ * A forecast line on its own claims a precision the model does not have, and the 51
+ * members are what the app already carries to say where that claim is weak; the day
+ * sheets show them a day at a time, and this is the same spread over whatever window
+ * the reader picked.
+ *
+ * Where it goes is a different answer per quantity and per grain, and the reasoning
+ * sits beside the code that decides it (`spread`). In short: temperature and wind per
+ * hour behind the line, and per day behind the minimum and the maximum rather than the
+ * mean; rainfall per hour on the running total alone, because an hour's band is too
+ * small to read against an axis scaled to the wettest hour; rainfall per day on both
+ * the bars and the total.
+ *
+ * Only the forecast half. A band around a measurement would say the thermometer might
+ * have read something else. And the running total's band only over the part of the
+ * line the members are the siblings of: the first 48 hours are the near-term run, and
+ * accumulating ECMWF members over a HARMONIE total is an error that every later point
+ * inherits. See `cumulativeBands`.
+ *
+ * It arrives separately from the line and may not arrive at all, so it is handed to
+ * the chart as a parallel array rather than carried on the samples: the chart draws
+ * as soon as the series is ready and takes the band when it lands. The legend switch
+ * appears with it, for the same reason the others are switches — three claims over
+ * one line is a lot of ink for a reader who came to look at one of them.
+ *
+ * The percentiles are taken at the grain the chart draws, never aggregated after the
+ * fact. That is the one subtle thing in the whole feature; `core/model/ensembleBand`
+ * has the reasoning.
+ *
  * ## One day is read at the grain a station reports on
  *
  * A station measures about every ten minutes, and over a single day that is what the
@@ -105,15 +136,16 @@ import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { space, useTheme } from '../../theme';
+import { Columns, usePagePadding } from '../../ui/layout';
 import { CardHeader } from '../../ui/Card';
 import { Text } from '../../ui/Text';
-import { TAB_BAR_CLEARANCE } from '../../ui/GlassTabBar';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
 import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
 import { usePeeking } from '../../ui/peek';
-import { SeriesChart } from '../../ui/graph/SeriesChart';
+import { SeriesChart, type ChartSpread } from '../../ui/graph/SeriesChart';
+import { useEnsembleMembers } from '../../ui/graph/useEnsembleBand';
 import { PillSwitcher, type PillItem } from '../../ui/PillSwitcher';
 import type { IconName } from '../../ui/Icon';
 import {
@@ -127,6 +159,9 @@ import {
   buildSeries, dayKey, daySpan, forecastHorizon, SERIES_META,
   type Sample, type SeriesKey,
 } from '../../core/model/series';
+import {
+  bandsFrom, bandsForSamples, cumulativeBands, memberBuckets, type BandField,
+} from '../../core/model/ensembleBand';
 import {
   degToCompass, fmtMm, fmtTempValue, fmtWindValue, tempUnitLabel, windUnitLabel, ta,
   type AppStringKey,
@@ -153,6 +188,22 @@ const SERIES: {
   { key: 'windDir', labelKey: 'windDirection', icon: 'compass', color: (p) => p.wind },
   { key: 'radiation', labelKey: 'radiation', icon: 'sun', color: (p) => p.radiation },
 ];
+
+/**
+ * The quantities that carry an ensemble band, and what the legend calls it.
+ *
+ * Temperature, rainfall and wind: the three a grower plans around, and the three whose
+ * spread changes a decision rather than decorating a line. They travel in one request,
+ * so the set costs no more than any one of them. Humidity has members too — the day
+ * sheets plot them — but nobody schedules work around the spread of a humidity
+ * forecast, and gusts have no ensemble at all.
+ *
+ * Which of the chart's lines carries the band is decided per quantity and per grain,
+ * in `chartSpread` below, because the answer is different in all four cases.
+ */
+const BAND_FIELD: Partial<Record<SeriesKey, BandField>> = {
+  temp: 'temp', precip: 'precip', wind: 'wind',
+};
 
 /**
  * The page's vertical rhythm.
@@ -187,6 +238,7 @@ function GraphPage() {
   const { prefs, location } = usePrefs();
   const { model, offsetSec, phase } = useForecast();
   const insets = useSafeAreaInsets();
+  const pagePadding = usePagePadding();
   const peeking = usePeeking();
 
   const [preset, setPreset] = useState<PresetDays | null>(DEFAULT_PRESET);
@@ -206,6 +258,9 @@ function GraphPage() {
    * there, until the period changes and the grain with it.
    */
   const [lines, setLines] = useState({ value: true, lo: true, hi: true });
+  /** Whether the ensemble band is drawn. On by default: a forecast line without one
+   *  claims a precision the model does not have, which is the reason it is here. */
+  const [showSpread, setShowSpread] = useState(true);
 
   const station = useLocationStation(location);
   // A single day gets the station's raw readings; anything longer, the hourly
@@ -230,9 +285,105 @@ function GraphPage() {
   );
 
   // As far ahead as the model can be asked about.
-  const maxDay = forecastHorizon(model) ?? dayKey(new Date());
+  const today = dayKey(new Date());
+  const maxDay = forecastHorizon(model) ?? today;
+
+  /**
+   * The members behind the band, for the forecast part of the window only.
+   *
+   * Clamped to today at the near end: a band around a measurement would say the
+   * thermometer might have read something else. A window entirely in the past asks
+   * for nothing at all, and so does a quantity that carries no band.
+   */
+  const bandField = BAND_FIELD[key];
+  const ensemble = useEnsembleMembers({
+    lat: location.lat,
+    lon: location.lon,
+    from: range.from > today ? range.from : today,
+    to: range.to,
+    enabled: !!bandField && !peeking && range.to >= today,
+  });
 
   const meta = SERIES_META[key];
+
+  /** Only where the series has edges worth naming and something to draw them from. */
+  const hasEdges = !!meta.edges && series.samples.some((s) => s.band != null);
+
+  /**
+   * Which of the chart's lines the band goes on — a different answer per quantity and
+   * per grain.
+   *
+   * Percentiles are taken at the grain the chart draws, never aggregated after the
+   * fact; `core/model/ensembleBand` has that argument.
+   *
+   * - **Temperature and wind per hour** — behind the line. The line *is* the forecast,
+   *   and the band is how much the members disagree about it.
+   * - **Temperature and wind per day** — behind the minimum and the maximum, not the
+   *   mean. The spread of a daily average is narrow by construction and nobody plans
+   *   around it; the spread of the coldest hour answers "could it freeze tonight", and
+   *   of the windiest "can I spray", which is what a week of either is read for.
+   *   Temperature draws those two as named lines in their own colours and wind as the
+   *   top and bottom of one band, which changes how they are drawn and not what they
+   *   are — so both take the same pair.
+   * - **Rainfall per hour** — on the running total only. An hour's band is a few
+   *   millimetres tall on an axis scaled to the wettest hour of the window, which is
+   *   a whisker too small to read; the total is where an hourly disagreement becomes
+   *   a difference a reader can see.
+   * - **Rainfall per day** — both. A day's bars are tall enough to carry a whisker,
+   *   and the total still answers the question the bars cannot.
+   */
+  const spread: ChartSpread | null = useMemo(() => {
+    if (!bandField || !ensemble.data) return null;
+    const res = series.resolution;
+    const perDay = res === 'day';
+
+    if (bandField === 'precip') {
+      const buckets = memberBuckets(ensemble.data, 'precip', res);
+      return {
+        bars: perDay
+          ? bandsForSamples(bandsFrom(buckets, 0), series.samples, res)
+          : null,
+        // Only across the part of the line the members are actually the siblings of.
+        // See `cumulativeBands`.
+        cumulative: cumulativeBands(buckets, series.samples, res, (s) => s.source === 'ifs'),
+      };
+    }
+
+    // Temperature and wind are the same picture: one line per bucket, with the day's
+    // own extremes as its edges. The floor is the field's, so a wind band cannot run
+    // below zero.
+    const floor = bandField === 'wind' ? 0 : undefined;
+    const edge = (stat: 'min' | 'max') =>
+      bandsForSamples(
+        bandsFrom(memberBuckets(ensemble.data!, bandField, res, stat), floor),
+        series.samples, res
+      );
+
+    if (perDay) {
+      // Following the lines that are actually drawn: temperature's two edges are
+      // switchable and wind's are simply the top and bottom of its band.
+      return {
+        lo: !hasEdges || lines.lo ? edge('min') : null,
+        hi: !hasEdges || lines.hi ? edge('max') : null,
+      };
+    }
+
+    return {
+      value: bandsForSamples(
+        bandsFrom(memberBuckets(ensemble.data, bandField, res), floor),
+        series.samples, res
+      ),
+    };
+  }, [bandField, ensemble.data, hasEdges, lines.lo, lines.hi, series.resolution, series.samples]);
+
+  // The switch appears only where something would actually be drawn. On rainfall per
+  // hour the band lives on the running total alone, so with the total switched off
+  // there is nothing for a spread switch to do.
+  const drawnSlots = spread
+    ? [spread.value, spread.lo, spread.hi, spread.bars, showCumulative ? spread.cumulative : null]
+    : [];
+  const hasSpread = drawnSlots.some((slot) => slot?.some(Boolean));
+
   const byDay = series.resolution === 'day';
 
   // Changing the period is a deliberate act, and the grain it lands on is what the
@@ -261,8 +412,6 @@ function GraphPage() {
       ? { lo: palette.valHigh, hi: palette.valLow }
       : { lo: palette.valLow, hi: palette.valHigh };
 
-  /** Only where the series has edges worth naming and something to draw them from. */
-  const hasEdges = !!meta.edges && series.samples.some((s) => s.band != null);
 
   // One line has to stay: a chart of nothing is a card with an axis in it.
   const toggleLine = (which: 'value' | 'lo' | 'hi') => {
@@ -317,9 +466,8 @@ function GraphPage() {
   return (
     <ScrollView
       contentContainerStyle={{
-        paddingHorizontal: space[5],
+        ...pagePadding,
         paddingTop: TOP_BAR_CLEARANCE + insets.top,
-        paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
         // The step between the page's three parts. It was 14 against an internal 12,
         // which is not a step at all: a heading sat as far from the section above it
         // as from its own content, and the three read as one long column. Twice the
@@ -329,197 +477,216 @@ function GraphPage() {
       showsVerticalScrollIndicator={false}
       refreshControl={refreshControl}
     >
-      <LocationTitle />
+      <Columns spanning={1} spanningEnd={1}>
+        <LocationTitle />
 
-      {/* On the page, like everything under it. Two cards held the page's questions
-          apart, and then the second came out to give the chart its width — which left
-          one card floating over a page of bare content. The headings and the space
-          between them do the separating now, which is what both are for. */}
-      <View>
-        <CardHeader label={ta('period', prefs.lang)} />
-        <RangeSelector
-          range={range}
-          preset={preset}
-          maxDay={maxDay}
-          onPreset={(days) => {
-            setPreset(days);
-            setRange(presetRange(days));
-          }}
-          onRange={(next) => {
-            // Dates of the reader's own choosing: the preset row lets go of its
-            // highlight rather than claiming to describe a window it did not set.
-            setPreset(null);
-            setRange(next);
-          }}
-        />
-      </View>
+        {/* On the page, like everything under it. Two cards held the page's questions
+            apart, and then the second came out to give the chart its width — which left
+            one card floating over a page of bare content. The headings and the space
+            between them do the separating now, which is what both are for. */}
+        <View>
+          <CardHeader label={ta('period', prefs.lang)} />
+          <RangeSelector
+            range={range}
+            preset={preset}
+            maxDay={maxDay}
+            onPreset={(days) => {
+              setPreset(days);
+              setRange(presetRange(days));
+            }}
+            onRange={(next) => {
+              // Dates of the reader's own choosing: the preset row lets go of its
+              // highlight rather than claiming to describe a window it did not set.
+              setPreset(null);
+              setRange(next);
+            }}
+          />
+        </View>
 
-      {/* Its own part of the page, not an appendage of the chart: what to plot is a
-          question of the same weight as over what period. */}
-      <View>
-        <CardHeader label={ta('measurement', prefs.lang)} />
-        <PillSwitcher items={pills} active={key} onChange={setKey} />
-      </View>
+        {/* Its own part of the page, not an appendage of the chart: what to plot is a
+            question of the same weight as over what period. */}
+        <View>
+          <CardHeader label={ta('measurement', prefs.lang)} />
+          <PillSwitcher items={pills} active={key} onChange={setKey} />
+        </View>
 
-      {/* Not a card. A chart inside one is inset three times over — the page's own
-          margin, the card's, and the room the chart keeps for its axis labels — and
-          on a phone that is a fifth of the width spent on nothing. Out here it uses
-          the page, and the plot itself reaches the screen's edges. */}
-      <View>
-        <CardHeader label={ta(RESOLUTION_LABEL[series.resolution], prefs.lang)} />
+        {/* Not a card. A chart inside one is inset three times over — the page's own
+            margin, the card's, and the room the chart keeps for its axis labels — and
+            on a phone that is a fifth of the width spent on nothing. Out here it uses
+            the page, and the plot itself reaches the screen's edges. */}
+        <View>
+          <CardHeader label={ta(RESOLUTION_LABEL[series.resolution], prefs.lang)} />
 
-        {phase === 'loading' && loading ? (
-          <View style={{ paddingVertical: space[8], alignItems: 'center' }}>
-            <ActivityIndicator color={palette.accent} />
-          </View>
-        ) : (
-          <View style={{ gap: CONTENT_GAP }}>
-            {series.stats && meta.summary !== 'none' ? (
-              <View style={{ flexDirection: 'row', gap: space[5] }}>
-                {meta.summary === 'total' ? (
+          {phase === 'loading' && loading ? (
+            <View style={{ paddingVertical: space[8], alignItems: 'center' }}>
+              <ActivityIndicator color={palette.accent} />
+            </View>
+          ) : (
+            <View style={{ gap: CONTENT_GAP }}>
+              {series.stats && meta.summary !== 'none' ? (
+                <View style={{ flexDirection: 'row', gap: space[5] }}>
+                  {meta.summary === 'total' ? (
+                    <>
+                      <Stat label={ta('total', prefs.lang)} value={format(series.stats.total)} />
+                      <Stat
+                        // "Piekuur" is wrong of a ten-minute sample and of a day, and
+                        // the peak is the same idea at all three grains.
+                        label={ta(PEAK_LABEL[series.resolution], prefs.lang)}
+                        value={format(series.stats.max)}
+                      />
+                    </>
+                  ) : meta.summary === 'wind' ? (
+                    <>
+                      {/* A minimum wind speed is a number nobody acts on; the strongest
+                          gust is the one a grower spraying tomorrow reads for. */}
+                      <Stat label={ta('average', prefs.lang)} value={format(series.stats.avg)} />
+                      <Stat label={ta('maxWind', prefs.lang)} value={format(series.stats.max)} />
+                      {series.stats.secondaryMax != null ? (
+                        <Stat
+                          label={ta('maxGust', prefs.lang)}
+                          value={format(series.stats.secondaryMax)}
+                        />
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      {/* Just "Min" and "Max": the quantity is named on the pill above
+                          and again on the axis, and "Min temperatuur" over a chart of
+                          temperatures says it a third time. */}
+                      <Stat label={ta('statMin', prefs.lang)} value={format(series.stats.min)} />
+                      <Stat label={ta('average', prefs.lang)} value={format(series.stats.avg)} />
+                      <Stat label={ta('statMax', prefs.lang)} value={format(series.stats.max)} />
+                    </>
+                  )}
+                </View>
+              ) : null}
+
+              {/* Out past the page's own margin, to the screen's edges. The chart
+                  keeps its own room for the axis labels and needs no second margin
+                  inside a third; every point given back here is a point of plot. */}
+              <View style={{ marginHorizontal: -space[5] }}>
+                <SeriesChart
+                  samples={series.samples}
+                  shape={meta.shape}
+                  color={color}
+                  unit={unit}
+                  axisLabel={axisLabel}
+                  readLabel={readLabel}
+                  format={format}
+                  // Gusts belong above the wind line and nowhere else: on temperature
+                  // the secondary would be an unlabelled second reading.
+                  secondaryLabel={key === 'wind' ? '⤴' : undefined}
+                  axisMin={meta.axisMin}
+                  axisMax={meta.axisMax}
+                  axisFixed={meta.axisFixed}
+                  showValue={!hasEdges || lines.value}
+                  showBandLo={hasEdges && lines.lo}
+                  showBandHi={hasEdges && lines.hi}
+                  bandLoColor={edgeInk.lo}
+                  bandHiColor={edgeInk.hi}
+                  // A bearing's axis reads N · O · Z · W · N, which needs four gaps to
+                  // land on the cardinal points rather than between them.
+                  formatAxis={key === 'windDir' ? degToCompass : undefined}
+                  gridLines={key === 'windDir' ? 4 : undefined}
+                  showCumulative={meta.shape === 'bar' && showCumulative}
+                  cumulativeLabel={ta('cumulative', prefs.lang)}
+                  cumulativeColor={palette.inkHeading}
+                  spread={showSpread ? spread : null}
+                  spreadLabel={ta('spread', prefs.lang)}
+                  background={palette.appBg}
+                  emptyLabel={ta('noSeries', prefs.lang)}
+                />
+              </View>
+
+              {/* What the chart is made of, and mostly the switches for it: the
+                  running total on rainfall, and on a banded series each of its three
+                  lines. What is not a switch is the dashed style note, and the sentence
+                  for a location with no instrument — which needs the room to wrap under
+                  the entries beside it. */}
+              <View
+                style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  flexWrap: 'wrap', columnGap: space[3], rowGap: space[2],
+                }}
+              >
+                {meta.shape === 'bar' ? (
+                  <Legend
+                    color={palette.inkHeading}
+                    label={ta('cumulative', prefs.lang)}
+                    on={showCumulative}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setShowCumulative((v) => !v);
+                    }}
+                  />
+                ) : null}
+
+                {/* The central line. Named for what it is on this location: an
+                    instrument's reading where one exists, and the model's own figure
+                    where it does not. */}
+                {hasEdges ? (
+                  <Legend
+                    color={color}
+                    label={ta(series.anyMeasured ? 'measured' : 'computed', prefs.lang)}
+                    on={lines.value}
+                    onPress={() => toggleLine('value')}
+                  />
+                ) : series.anyMeasured ? (
+                  <Legend color={color} label={ta('measured', prefs.lang)} />
+                ) : null}
+
+                {hasEdges ? (
                   <>
-                    <Stat label={ta('total', prefs.lang)} value={format(series.stats.total)} />
-                    <Stat
-                      // "Piekuur" is wrong of a ten-minute sample and of a day, and
-                      // the peak is the same idea at all three grains.
-                      label={ta(PEAK_LABEL[series.resolution], prefs.lang)}
-                      value={format(series.stats.max)}
+                    <Legend
+                      color={edgeInk.lo}
+                      label={ta('statMin', prefs.lang)}
+                      on={lines.lo}
+                      onPress={() => toggleLine('lo')}
+                    />
+                    <Legend
+                      color={edgeInk.hi}
+                      label={ta('statMax', prefs.lang)}
+                      on={lines.hi}
+                      onPress={() => toggleLine('hi')}
                     />
                   </>
-                ) : meta.summary === 'wind' ? (
-                  <>
-                    {/* A minimum wind speed is a number nobody acts on; the strongest
-                        gust is the one a grower spraying tomorrow reads for. */}
-                    <Stat label={ta('average', prefs.lang)} value={format(series.stats.avg)} />
-                    <Stat label={ta('maxWind', prefs.lang)} value={format(series.stats.max)} />
-                    {series.stats.secondaryMax != null ? (
-                      <Stat
-                        label={ta('maxGust', prefs.lang)}
-                        value={format(series.stats.secondaryMax)}
-                      />
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    {/* Just "Min" and "Max": the quantity is named on the pill above
-                        and again on the axis, and "Min temperatuur" over a chart of
-                        temperatures says it a third time. */}
-                    <Stat label={ta('statMin', prefs.lang)} value={format(series.stats.min)} />
-                    <Stat label={ta('average', prefs.lang)} value={format(series.stats.avg)} />
-                    <Stat label={ta('statMax', prefs.lang)} value={format(series.stats.max)} />
-                  </>
+                ) : null}
+
+                {/* A style note, not a switch: it says which half of a line is which,
+                    and there is no half to turn off. */}
+                {series.forecastFrom >= 0 ? (
+                  <Legend color={color} label={ta('forecastPart', prefs.lang)} dashed />
+                ) : null}
+
+                {/* Only once there is a band to talk about. A switch for something
+                    that has not loaded is a switch that does nothing, and one for a
+                    quantity that never bands is a promise the page cannot keep. */}
+                {hasSpread ? (
+                  <Legend
+                    color={color}
+                    label={ta('spread', prefs.lang)}
+                    on={showSpread}
+                    onPress={() => {
+                      Haptics.selectionAsync().catch(() => {});
+                      setShowSpread((v) => !v);
+                    }}
+                  />
+                ) : null}
+
+                {series.anyMeasured ? null : (
+                  <Text variant="caption" color={palette.muted} style={{ flexShrink: 1 }}>
+                    {/* One sentence, whatever window is on screen. The reader's problem
+                        is the same either way — this location has no instrument, so a
+                        day is as far back as the chart can go — and saying it two
+                        different ways made it read as two different limitations. */}
+                    {ta('graphNoStation', prefs.lang)}
+                  </Text>
                 )}
               </View>
-            ) : null}
-
-            {/* Out past the page's own margin, to the screen's edges. The chart
-                keeps its own room for the axis labels and needs no second margin
-                inside a third; every point given back here is a point of plot. */}
-            <View style={{ marginHorizontal: -space[5] }}>
-              <SeriesChart
-                samples={series.samples}
-                shape={meta.shape}
-                color={color}
-                unit={unit}
-                axisLabel={axisLabel}
-                readLabel={readLabel}
-                format={format}
-                // Gusts belong above the wind line and nowhere else: on temperature
-                // the secondary would be an unlabelled second reading.
-                secondaryLabel={key === 'wind' ? '⤴' : undefined}
-                axisMin={meta.axisMin}
-                axisMax={meta.axisMax}
-                axisFixed={meta.axisFixed}
-                showValue={!hasEdges || lines.value}
-                showBandLo={hasEdges && lines.lo}
-                showBandHi={hasEdges && lines.hi}
-                bandLoColor={edgeInk.lo}
-                bandHiColor={edgeInk.hi}
-                // A bearing's axis reads N · O · Z · W · N, which needs four gaps to
-                // land on the cardinal points rather than between them.
-                formatAxis={key === 'windDir' ? degToCompass : undefined}
-                gridLines={key === 'windDir' ? 4 : undefined}
-                showCumulative={meta.shape === 'bar' && showCumulative}
-                cumulativeLabel={ta('cumulative', prefs.lang)}
-                cumulativeColor={palette.inkHeading}
-                background={palette.appBg}
-                emptyLabel={ta('noSeries', prefs.lang)}
-              />
             </View>
-
-            {/* What the chart is made of, and mostly the switches for it: the
-                running total on rainfall, and on a banded series each of its three
-                lines. What is not a switch is the dashed style note, and the sentence
-                for a location with no instrument — which needs the room to wrap under
-                the entries beside it. */}
-            <View
-              style={{
-                flexDirection: 'row', alignItems: 'center',
-                flexWrap: 'wrap', columnGap: space[3], rowGap: space[2],
-              }}
-            >
-              {meta.shape === 'bar' ? (
-                <Legend
-                  color={palette.inkHeading}
-                  label={ta('cumulative', prefs.lang)}
-                  on={showCumulative}
-                  onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
-                    setShowCumulative((v) => !v);
-                  }}
-                />
-              ) : null}
-
-              {/* The central line. Named for what it is on this location: an
-                  instrument's reading where one exists, and the model's own figure
-                  where it does not. */}
-              {hasEdges ? (
-                <Legend
-                  color={color}
-                  label={ta(series.anyMeasured ? 'measured' : 'computed', prefs.lang)}
-                  on={lines.value}
-                  onPress={() => toggleLine('value')}
-                />
-              ) : series.anyMeasured ? (
-                <Legend color={color} label={ta('measured', prefs.lang)} />
-              ) : null}
-
-              {hasEdges ? (
-                <>
-                  <Legend
-                    color={edgeInk.lo}
-                    label={ta('statMin', prefs.lang)}
-                    on={lines.lo}
-                    onPress={() => toggleLine('lo')}
-                  />
-                  <Legend
-                    color={edgeInk.hi}
-                    label={ta('statMax', prefs.lang)}
-                    on={lines.hi}
-                    onPress={() => toggleLine('hi')}
-                  />
-                </>
-              ) : null}
-
-              {/* A style note, not a switch: it says which half of a line is which,
-                  and there is no half to turn off. */}
-              {series.forecastFrom >= 0 ? (
-                <Legend color={color} label={ta('forecastPart', prefs.lang)} dashed />
-              ) : null}
-
-              {series.anyMeasured ? null : (
-                <Text variant="caption" color={palette.muted} style={{ flexShrink: 1 }}>
-                  {/* One sentence, whatever window is on screen. The reader's problem
-                      is the same either way — this location has no instrument, so a
-                      day is as far back as the chart can go — and saying it two
-                      different ways made it read as two different limitations. */}
-                  {ta('graphNoStation', prefs.lang)}
-                </Text>
-              )}
-            </View>
-          </View>
-        )}
-      </View>
+          )}
+        </View>
+      </Columns>
     </ScrollView>
   );
 }

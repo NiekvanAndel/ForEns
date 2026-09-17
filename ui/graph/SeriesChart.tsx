@@ -16,6 +16,27 @@
  * one thing this page must never say. Bars do the same with fill: solid for what
  * fell, hollow for what is expected.
  *
+ * ## The ensemble band
+ *
+ * Temperature and rainfall carry the members' p10–p90 over the forecast half, handed
+ * in alongside the samples rather than carried on them: the series is assembled from
+ * measurements and a deterministic model, and the ensemble is a separate fetch that
+ * arrives later and may not arrive at all. A parallel array is what lets the chart
+ * draw as soon as the line is ready and add the band when it lands.
+ *
+ * It is drawn differently from the band a sample carries itself. That one is the
+ * spread *inside* a bucket — the day's coldest and warmest — and it is an area under
+ * the line. This one is disagreement between members about the same moment, so it is
+ * an area with a dashed edge, the same dash that marks every other forecast on this
+ * chart. On bars it is a whisker instead: a rainfall band is usually anchored at zero
+ * and an area hanging off the axis reads as a second, taller set of bars. The running
+ * total takes an area again, in the total's own ink rather than the bars'.
+ *
+ * Which of the chart's lines carries one is the caller's decision, not this file's,
+ * which is why `spread` is an object with a slot per line rather than one array. The
+ * page bands the temperature mean per hour and its two edges per day, and rainfall's
+ * running total always — none of which this chart could work out for itself.
+ *
  * ## The running total
  *
  * Rainfall bars can carry a cumulative line, on the same axis as the bars rather
@@ -46,6 +67,7 @@ import { Text } from '../Text';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { niceRange, scaleX, scaleY, smoothPath, type Point } from '../../core/model/smooth';
 import type { Sample, SeriesShape } from '../../core/model/series';
+import type { Band } from '../../core/model/ensembleBand';
 
 // Just enough for a three-figure axis label and its air. It was 42, which put the
 // plot a finger's width in from a card that is already inset from the screen — three
@@ -60,6 +82,24 @@ const X_LABELS = 6;
 /** How many empty forecast samples a line may be drawn straight through. Two, so a
  *  three-hourly series joins up and a genuinely absent afternoon does not. */
 const FORECAST_GAP_BRIDGE = 2;
+
+/**
+ * Where a band may go: behind the central line, behind either of the band's own
+ * edges, as a whisker on the bars, or around the running total.
+ *
+ * Every slot is optional and the chart draws whichever it is given, in that line's own
+ * ink where it has one. Whether an edge's band belongs on screen at all — its line may
+ * be switched off, or the series may draw no named edges — is the caller's call, for
+ * the same reason the slots exist: only the page knows which of these means something
+ * for the quantity on screen.
+ */
+export interface ChartSpread {
+  value?: (Band | null)[] | null;
+  lo?: (Band | null)[] | null;
+  hi?: (Band | null)[] | null;
+  bars?: (Band | null)[] | null;
+  cumulative?: (Band | null)[] | null;
+}
 
 export interface SeriesChartProps {
   samples: Sample[];
@@ -93,6 +133,17 @@ export interface SeriesChartProps {
   showBandHi?: boolean;
   bandLoColor?: string;
   bandHiColor?: string;
+  /**
+   * The ensemble's p10–p90, per line that carries one, each aligned with `samples`.
+   *
+   * Null entries are samples with no band — everything already measured, and any
+   * forecast sample the members did not reach. Null or absent altogether is a chart
+   * drawn without one, which is what happens before the fetch lands and if it fails.
+   */
+  spread?: ChartSpread | null;
+  /** Names the band in the cursor's readout. Without it the two extra numbers in the
+   *  label say nothing about where they came from. */
+  spreadLabel?: string;
   /** Short unit riding the top gridline. */
   unit?: string;
   /** Hard floor and ceiling for the axis, where the quantity has them — humidity
@@ -128,6 +179,7 @@ export function SeriesChart({
   showCumulative, cumulativeLabel, cumulativeColor, axisMin, axisMax, axisFixed,
   formatAxis, gridLines = GRID_LINES,
   showValue = true, showBandLo, showBandHi, bandLoColor, bandHiColor, background,
+  spread, spreadLabel,
 }: SeriesChartProps) {
   const { palette } = useTheme();
   const ground = background ?? palette.appCard;
@@ -139,9 +191,12 @@ export function SeriesChart({
   const n = samples.length;
   // The axis fits what is drawn, and nothing else: with the running total switched
   // off it goes back to fitting the bars alone. See the note at the top.
-  const all = samples.flatMap((s) => [
+  const all = samples.flatMap((s, i) => [
     ...(s.value != null ? [s.value] : []),
     ...(s.band ? [s.band.lo, s.band.hi] : []),
+    // The axis has to fit every band as well, or the widest part of one is clipped
+    // against the top of the plot and reads as a forecast with a ceiling.
+    ...spreadAt(spread, i, showCumulative),
     ...(secondaryLabel && s.secondary != null ? [s.secondary] : []),
     ...(showCumulative && s.cumulative != null ? [s.cumulative] : []),
   ]);
@@ -213,12 +268,17 @@ export function SeriesChart({
         readLabel(at),
         at.value != null ? format(at.value) : '—',
         at.band ? `${format(at.band.lo)}–${format(at.band.hi)}` : '',
+        spreadLabel && cursor != null ? readSpread(spread, cursor, onCumulative, format, spreadLabel) : '',
         secondaryLabel && at.secondary != null ? `${secondaryLabel} ${format(at.secondary)}` : '',
         showCumulative && at.cumulative != null
           ? `${cumulativeLabel ?? 'Σ'} ${format(at.cumulative)}`
           : '',
       ].filter(Boolean).join(' · ')
     : '';
+
+  // Built here rather than inside `Lines`, because the total is drawn by the chart
+  // itself: it belongs to the bars, not to a line series.
+  const cumulativeArea = bandArea(spread?.cumulative, samples.length, px, py);
 
   const labelLeft = Math.min(Math.max(cursorX - label.w / 2, 0), Math.max(0, width - label.w));
   const labelTop =
@@ -259,7 +319,10 @@ export function SeriesChart({
             ) : null}
 
             {shape === 'bar' ? (
-              <Bars samples={samples} px={px} py={py} n={n} plotW={plotW} zeroY={py(lo)} color={color} />
+              <Bars
+                samples={samples} px={px} py={py} n={n} plotW={plotW}
+                zeroY={py(lo)} color={color} spread={spread?.bars ?? null}
+              />
             ) : shape === 'dots' ? (
               <Dots samples={samples} px={px} py={py} color={color} cardColor={ground} />
             ) : (
@@ -273,8 +336,22 @@ export function SeriesChart({
                 showValue={showValue}
                 lo={showBandLo ? bandLoColor ?? color : null}
                 hi={showBandHi ? bandHiColor ?? color : null}
+                spread={spread ?? null}
               />
             )}
+
+            {/* The total's own band, under its line and over the bars: how much more
+                could still fall by each point, as a fan opening from the last figure
+                that is not in doubt. See `cumulativeBands`. */}
+            {showCumulative && cumulativeArea ? (
+              <G>
+                <Path d={cumulativeArea} fill={cumulativeColor ?? color} opacity={0.13} />
+                <Path
+                  d={cumulativeArea} fill="none" stroke={cumulativeColor ?? color}
+                  strokeWidth={1} strokeDasharray="4 4" opacity={0.45}
+                />
+              </G>
+            ) : null}
 
             {/* Over the bars, not under them: the total is read against the showers
                 that made it, and a line behind them would be hidden by the tallest
@@ -369,7 +446,7 @@ export function SeriesChart({
  * makes the two halves touch rather than leaving a notch between them.
  */
 function Lines({
-  samples, px, py, color, drawSecondary, cardColor, showValue, lo, hi,
+  samples, px, py, color, drawSecondary, cardColor, showValue, lo, hi, spread,
 }: {
   samples: Sample[];
   px: (i: number) => number;
@@ -386,6 +463,8 @@ function Lines({
   /** Colour for the band's lower and upper edge, or null to leave it undrawn. */
   lo: string | null;
   hi: string | null;
+  /** The ensemble's bands, of which this draws the three that belong to lines. */
+  spread: ChartSpread | null;
 }) {
   const bandPath = (() => {
     const top: Point[] = [];
@@ -400,6 +479,18 @@ function Lines({
     return `${smoothPath(top)} ${lower} Z`;
   })();
 
+  const areaFor = (bands: (Band | null)[] | null | undefined) =>
+    bandArea(bands, samples.length, px, py);
+
+  // One per line the chart is drawing, each in that line's ink where it has its own —
+  // temperature's edges are blue and red, and a series with no named edges bands them
+  // in its own colour.
+  const areas = [
+    { d: areaFor(spread?.value), colour: color },
+    { d: areaFor(spread?.lo), colour: lo ?? color },
+    { d: areaFor(spread?.hi), colour: hi ?? color },
+  ];
+
   const main = showValue ? splitRuns(samples, (s) => s.value, px, py) : [];
   const secondary = drawSecondary ? splitRuns(samples, (s) => s.secondary, px, py) : [];
   // The band's own edges, drawn through the same run splitting as everything else so
@@ -411,6 +502,21 @@ function Lines({
 
   return (
     <G>
+      {/* Behind everything, the sample's own band included: this is the widest claim
+          on the chart and the one the rest is read against. The dashed outline is the
+          same dash the forecast line uses, because it says the same thing. */}
+      {areas.map(({ d, colour }, i) =>
+        d ? (
+          <G key={`sp${i}`}>
+            <Path d={d} fill={colour} opacity={0.13} />
+            <Path
+              d={d} fill="none" stroke={colour} strokeWidth={1}
+              strokeDasharray="4 4" opacity={0.45}
+            />
+          </G>
+        ) : null
+      )}
+
       {bandPath ? <Path d={bandPath} fill={color} opacity={0.16} /> : null}
 
       {/* Under the central line: it is the one the chart is about, and an edge drawn
@@ -499,10 +605,22 @@ function Dots({
   );
 }
 
-/** Rainfall, as bars standing on zero: solid for what fell, hollow for what is
- *  expected. */
+/**
+ * Rainfall, as bars standing on zero: solid for what fell, hollow for what is
+ * expected — and, over the forecast bars, the ensemble's p10–p90 as a whisker.
+ *
+ * A whisker rather than the area the line chart draws. A rainfall band starts at or
+ * near zero in most hours, so an area would be a second set of bars, taller than the
+ * first and in the same colour: two readings of the same quantity that a reader has
+ * to be told apart. A whisker is unmistakably a range on the bar it stands on.
+ *
+ * It is drawn for every forecast sample with a band, including the ones whose bar is
+ * nothing. A dry forecast hour that the members say could bring four millimetres is
+ * exactly the hour the band exists for, and hiding the whisker where the bar is zero
+ * would hide it precisely there.
+ */
 function Bars({
-  samples, px, py, n, plotW, zeroY, color,
+  samples, px, py, n, plotW, zeroY, color, spread,
 }: {
   samples: Sample[];
   px: (i: number) => number;
@@ -511,6 +629,8 @@ function Bars({
   plotW: number;
   zeroY: number;
   color: string;
+  /** The ensemble band for the bars, or null where the chart draws none. */
+  spread: (Band | null)[] | null;
 }) {
   // Bar and gap fill one slot, so any sample count fits the width. A month of hours
   // leaves sub-pixel bars, which is why a window that long is bucketed into days
@@ -535,6 +655,28 @@ function Bars({
             strokeWidth={s.future ? 1 : 0}
             opacity={s.future ? 0.75 : 1}
           />
+        );
+      })}
+
+      {/* Over the bars: a whisker behind a solid bar is a whisker nobody can see. */}
+      {(spread ?? []).map((b, i) => {
+        if (!b) return null;
+        const top = py(b.hi);
+        const bottom = py(b.lo);
+        // A band the axis has flattened to nothing is a tick on a bar, which reads as
+        // a mark rather than a range. Better to draw none.
+        if (bottom - top < 1) return null;
+        const cap = Math.max(2, barW * 0.3);
+        const x = px(i);
+        return (
+          <G key={`w${i}`} opacity={0.75}>
+            <Line x1={x} x2={x} y1={top} y2={bottom} stroke={color} strokeWidth={1.2} />
+            <Line x1={x - cap} x2={x + cap} y1={top} y2={top} stroke={color} strokeWidth={1.2} />
+            <Line
+              x1={x - cap} x2={x + cap} y1={bottom} y2={bottom}
+              stroke={color} strokeWidth={1.2}
+            />
+          </G>
         );
       })}
     </G>
@@ -596,6 +738,80 @@ function splitRuns(
 
   if (run.length) out.push({ points: run, future });
   return out;
+}
+
+/**
+ * An ensemble band, as a closed area with a top and a bottom edge.
+ *
+ * Built from the run of samples that actually have one rather than from all of them,
+ * so it starts where the forecast does instead of collapsing to the axis across the
+ * measured half. A break in the middle would need several areas; there is none in
+ * practice, because the members cover the whole forecast window or none of it, and a
+ * single run is the shape that cannot draw a lie if that ever changes — it simply
+ * stops.
+ */
+function bandArea(
+  bands: (Band | null)[] | null | undefined,
+  count: number,
+  px: (i: number) => number,
+  py: (v: number) => number
+): string | null {
+  if (!bands) return null;
+  const top: Point[] = [];
+  const bottom: Point[] = [];
+  for (let i = 0; i < count; i++) {
+    const b = bands[i];
+    if (!b) {
+      if (top.length) break;
+      continue;
+    }
+    top.push({ x: px(i), y: py(b.hi) });
+    bottom.push({ x: px(i), y: py(b.lo) });
+  }
+  if (top.length < 2) return null;
+  const lower = smoothPath([...bottom].reverse()).replace(/^M/, 'L');
+  return `${smoothPath(top)} ${lower} Z`;
+}
+
+/** Every band value at one sample, for fitting the axis around them. The running
+ *  total's is left out when the total itself is off, exactly as the total is. */
+function spreadAt(
+  spread: ChartSpread | null | undefined,
+  i: number,
+  showCumulative: boolean | undefined
+): number[] {
+  if (!spread) return [];
+  const bands = [spread.value?.[i], spread.lo?.[i], spread.hi?.[i], spread.bars?.[i]];
+  if (showCumulative) bands.push(spread.cumulative?.[i]);
+  return bands.flatMap((b) => (b ? [b.lo, b.hi] : []));
+}
+
+/**
+ * The band in the cursor's readout — one of them, not all.
+ *
+ * Whichever belongs to the mark the cursor is riding: the running total where the
+ * total is up, the bars or the central line otherwise. The pair of edge bands is the
+ * one case with two numbers to give, and it gives them as two ranges rather than as
+ * one envelope, because the coldest hour's spread and the warmest hour's spread are
+ * different answers and an outer hull of them is neither.
+ */
+function readSpread(
+  spread: ChartSpread | null | undefined,
+  i: number,
+  onCumulative: boolean,
+  format: (v: number) => string,
+  label: string
+): string {
+  if (!spread) return '';
+  const range = (b: Band) => `${format(b.lo)}–${format(b.hi)}`;
+  if (onCumulative && spread.cumulative?.[i]) return `${label} ${range(spread.cumulative[i]!)}`;
+  if (spread.value?.[i]) return `${label} ${range(spread.value[i]!)}`;
+  if (spread.bars?.[i]) return `${label} ${range(spread.bars[i]!)}`;
+  const lo = spread.lo?.[i];
+  const hi = spread.hi?.[i];
+  if (lo && hi) return `${label} ${range(lo)} / ${range(hi)}`;
+  if (lo || hi) return `${label} ${range((lo ?? hi)!)}`;
+  return '';
 }
 
 function formatTick(v: number): string {

@@ -440,7 +440,18 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     location.lat, location.lon, remember,
   ]);
 
-  const alert = useMemo(() => deriveAlert(model, nowcast), [model, nowcast]);
+  // Gated here rather than where it is drawn, so the page, the widget and the
+  // notifications cannot disagree about whether there is an alert: they all read
+  // this one value. See `Prefs.alertsEnabled`.
+  const alert = useMemo(
+    () =>
+      prefs.alertsEnabled
+        ? deriveAlert(model, nowcast, {
+            lang: prefs.lang, tempUnit: prefs.tempUnit, windUnit: prefs.windUnit,
+          })
+        : null,
+    [model, nowcast, prefs.alertsEnabled, prefs.lang, prefs.tempUnit, prefs.windUnit]
+  );
 
   const value = useMemo<ForecastContextValue>(
     () => ({

@@ -47,12 +47,15 @@ export interface HourSliderProps {
   model: ForecastModel;
   /** Tapping an hour hands back the hour it belongs to. */
   onPressHour?: (hour: Hour) => void;
+  /** How far forward the strip runs. A day is what 'Nu' wants; the widget on the
+   *  overview page lets its reader say. */
+  ahead?: number;
 }
 
-export function HourSlider({ model, onPressHour }: HourSliderProps) {
+export function HourSlider({ model, onPressHour, ahead = 24 }: HourSliderProps) {
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
-  const { hours, nowIndex } = hourWindow(model, { ahead: 24, behind: 6 });
+  const { hours, nowIndex } = hourWindow(model, { ahead, behind: 6 });
   const decor = currentHourDecor(palette, appearance);
   const { ref, onLayout } = useCenterOnIndex(nowIndex, CELL_WIDTH, CELL_GAP);
 

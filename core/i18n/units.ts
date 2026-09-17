@@ -8,6 +8,7 @@
  *
  * Inputs are always the canonical units the APIs return: °C, km/h and hPa.
  */
+import type { LangCode } from './strings';
 
 export type TempUnit = 'C' | 'F' | 'K';
 export type WindUnit = 'kmh' | 'ms' | 'kn' | 'bft';
@@ -88,11 +89,19 @@ export function fmtWind(kmh: number | null | undefined, unit: WindUnit): string 
   return Math.round(v) + ' km/u';
 }
 
-export function windUnitLabel(unit: WindUnit): string {
+/**
+ * The unit's own abbreviation.
+ *
+ * Only kilometres per hour is written differently per language — "km/u" in Dutch,
+ * "km/h" everywhere else — and only that one takes `lang`. Without it the Dutch form
+ * is used, which is what every call site that has no language to hand has always
+ * produced; passing one is how a sentence built for a reader gets their spelling.
+ */
+export function windUnitLabel(unit: WindUnit, lang: LangCode = 'nl'): string {
   if (unit === 'ms') return 'm/s';
   if (unit === 'kn') return 'kn';
   if (unit === 'bft') return 'Bft';
-  return 'km/u';
+  return lang === 'nl' ? 'km/u' : 'km/h';
 }
 
 /**

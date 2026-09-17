@@ -22,6 +22,7 @@
  * Turning the last one off is refused, because a grid with nothing in it is a page
  * with nothing to say and no obvious way back.
  */
+import { useEffect, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -35,7 +36,6 @@ import { Icon } from '../Icon';
 import { Rule } from '../Card';
 import { usePrefs } from '../../state/prefs';
 import { arrangeAllTiles, reorderTiles, toggleTile, type TileLayout } from '../../core/prefs';
-import type { Tile } from '../../core/model/tiles';
 import { ta } from '../../core/i18n';
 
 /** Every row is this tall, which is what turns a drag distance into a slot. */
@@ -44,19 +44,65 @@ const ROW_HEIGHT = 62;
  *  tap that meant to toggle, short enough not to feel stuck. */
 const HOLD_MS = 220;
 
+/**
+ * The least a thing needs to be arrangeable: an id, a name, and a word about it.
+ *
+ * Generic on purpose. This editor started life bound to `Tile`, and the overview
+ * page wanted exactly the same drag-to-reorder-and-switch-off over a different kind
+ * of thing — so it takes the shape rather than the type, and there is one
+ * implementation of this gesture rather than two that drift.
+ */
+export interface EditableItem {
+  id: string;
+  title: string;
+  /** The line under the name: a window for a block, what it shows for a widget. */
+  hint?: string;
+  /** Whether this one has settings of its own. A gear is drawn beside it, and
+   *  pressing it swaps this list for `renderSettings`. False everywhere the caller
+   *  has no settings to show, which is the whole of 'Actueel'. */
+  settings?: boolean;
+}
+
 export interface TileEditorProps {
   visible: boolean;
   onClose: () => void;
-  /** Every block the app can draw, in its natural order. */
-  all: Tile[];
+  /** Every item that can be drawn, in its natural order. */
+  all: EditableItem[];
+  /** The arrangement being edited, and how to write it back. Defaults to the
+   *  'Actueel' grid's, which is what this was built for. */
+  layout?: TileLayout;
+  onChange?: (next: (layout: TileLayout) => TileLayout) => void;
+  /** The sheet's own heading. */
+  title?: string;
+  hint?: string;
+  /**
+   * What to draw when a row's gear is pressed, in place of the list.
+   *
+   * A face of this sheet rather than a second modal. Presenting one modal in the
+   * frame another is dismissed in does not reliably survive it on iOS, and a settings
+   * panel reached from an editor that is itself a modal is exactly that case — so
+   * there is one sheet on screen throughout, and it changes what it is showing.
+   */
+  renderSettings?: (id: string) => ReactNode;
 }
 
-export function TileEditor({ visible, onClose, all }: TileEditorProps) {
+export function TileEditor({
+  visible, onClose, all, layout: layoutProp, onChange, title, hint, renderSettings,
+}: TileEditorProps) {
   const { palette } = useTheme();
   const { prefs, setTileLayout } = usePrefs();
   const insets = useSafeAreaInsets();
 
-  const layout: TileLayout = prefs.tiles;
+  // Which row's settings are showing, if any. Cleared when the sheet closes, so it
+  // reopens on the list rather than on whatever was last set up.
+  const [settingsFor, setSettingsFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!visible) setSettingsFor(null);
+  }, [visible]);
+  const openItem = settingsFor ? all.find((i) => i.id === settingsFor) ?? null : null;
+
+  const layout: TileLayout = layoutProp ?? prefs.tiles;
+  const write = onChange ?? setTileLayout;
   // Hidden blocks included: this list is the arrangement, not the result of it.
   const rows = arrangeAllTiles(all, layout);
   const ids = rows.map((r) => r.id);
@@ -67,14 +113,14 @@ export function TileEditor({ visible, onClose, all }: TileEditorProps) {
 
   const commit = (from: number, to: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    if (from !== to) setTileLayout((l) => reorderTiles(l, ids, from, to));
+    if (from !== to) write((l) => reorderTiles(l, ids, from, to));
   };
 
   const toggle = (id: string) => {
     // The last one standing cannot be switched off; see the note at the top.
     if (shown === 1 && !layout.hidden.includes(id)) return;
     Haptics.selectionAsync().catch(() => {});
-    setTileLayout((l) => toggleTile(l, id));
+    write((l) => toggleTile(l, id));
   };
 
   return (
@@ -98,8 +144,19 @@ export function TileEditor({ visible, onClose, all }: TileEditorProps) {
               paddingHorizontal: space[5], paddingTop: space[5], paddingBottom: space[4],
             }}
           >
+            {openItem ? (
+              <Pressable
+                onPress={() => setSettingsFor(null)}
+                accessibilityRole="button"
+                accessibilityLabel={ta('back', prefs.lang)}
+                hitSlop={10}
+                style={{ marginRight: space[3] }}
+              >
+                <Icon name="caret-left" size={16} color={palette.muted} weight="bold" />
+              </Pressable>
+            ) : null}
             <Text variant="locationName" color={palette.inkHeading} style={{ flex: 1 }}>
-              {ta('editBlocks', prefs.lang)}
+              {openItem ? openItem.title : title ?? ta('editBlocks', prefs.lang)}
             </Text>
             <Pressable onPress={onClose} accessibilityRole="button" hitSlop={10}>
               <Text variant="body" weight="semibold" color={palette.accentDark}>
@@ -110,6 +167,9 @@ export function TileEditor({ visible, onClose, all }: TileEditorProps) {
 
           <Rule />
 
+          {openItem && renderSettings ? (
+            renderSettings(openItem.id)
+          ) : (
           <ScrollView showsVerticalScrollIndicator={false}>
             <View style={{ height: ROW_HEIGHT * rows.length, marginTop: space[2] }}>
               {rows.map((tile, i) => (
@@ -122,6 +182,11 @@ export function TileEditor({ visible, onClose, all }: TileEditorProps) {
                   dragging={dragging}
                   dragY={dragY}
                   onToggle={() => toggle(tile.id)}
+                  onSettings={
+                    tile.settings && renderSettings
+                      ? () => { Haptics.selectionAsync().catch(() => {}); setSettingsFor(tile.id); }
+                      : undefined
+                  }
                   onCommit={commit}
                 />
               ))}
@@ -132,9 +197,10 @@ export function TileEditor({ visible, onClose, all }: TileEditorProps) {
               color={palette.muted}
               style={{ paddingHorizontal: space[5], paddingVertical: space[4] }}
             >
-              {ta('editBlocksHint', prefs.lang)}
+              {hint ?? ta('editBlocksHint', prefs.lang)}
             </Text>
           </ScrollView>
+          )}
         </View>
       </View>
     </Modal>
@@ -142,18 +208,21 @@ export function TileEditor({ visible, onClose, all }: TileEditorProps) {
 }
 
 function EditorRow({
-  tile, index, count, hidden, dragging, dragY, onToggle, onCommit,
+  tile, index, count, hidden, dragging, dragY, onToggle, onSettings, onCommit,
 }: {
-  tile: Tile;
+  tile: EditableItem;
   index: number;
   count: number;
   hidden: boolean;
   dragging: { value: number };
   dragY: { value: number };
   onToggle: () => void;
+  /** Absent where this row has nothing to set up, which draws no gear. */
+  onSettings?: () => void;
   onCommit: (from: number, to: number) => void;
 }) {
   const { palette } = useTheme();
+  const { prefs } = usePrefs();
 
   const drag = Gesture.Pan()
     .enabled(count > 1)
@@ -205,7 +274,7 @@ function EditorRow({
           onPress={onToggle}
           accessibilityRole="switch"
           accessibilityState={{ checked: !hidden }}
-          accessibilityLabel={`${tile.title}, ${tile.timeLabel}`}
+          accessibilityLabel={tile.hint ? `${tile.title}, ${tile.hint}` : tile.title}
           style={({ pressed }) => ({
             flex: 1,
             flexDirection: 'row', alignItems: 'center', gap: space[3],
@@ -224,10 +293,26 @@ function EditorRow({
             >
               {tile.title}
             </Text>
-            <Text variant="caption" color={palette.muted} numberOfLines={1}>
-              {tile.timeLabel}
-            </Text>
+            {tile.hint ? (
+              <Text variant="caption" color={palette.muted} numberOfLines={1}>
+                {tile.hint}
+              </Text>
+            ) : null}
           </View>
+
+          {/* Settings before the switch, because the switch is the thing a finger
+              lands on by habit and a gear next to it should not be in that path. */}
+          {onSettings ? (
+            <Pressable
+              onPress={onSettings}
+              accessibilityRole="button"
+              accessibilityLabel={`${tile.title}, ${ta('wsTitle', prefs.lang)}`}
+              hitSlop={8}
+              style={{ padding: 4 }}
+            >
+              <Icon name="gear-six" size={17} color={palette.muted} />
+            </Pressable>
+          ) : null}
 
           <View
             style={{

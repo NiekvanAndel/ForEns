@@ -21,14 +21,22 @@
  *
  * This is what the Apple Maps implementation could not do, and why the app moved off
  * it — see ./mapStyle for that history.
+ *
+ * ## Into the basemap, not over it
+ *
+ * `beforeId` puts the frames beneath part of the basemap rather than over all of it, at
+ * `LAYER_DEPTH.nowcast`: the boundaries and the place names stay on top, the water and
+ * the roads go under. Rain over a lake is still rain, and a shower leaves most of the
+ * map alone anyway — which is why this layer can afford to cover the water where a
+ * temperature field cannot.
  */
 import { ImageSource, Layer, RasterSource } from '@maplibre/maplibre-react-native';
 import type { LngLat } from '@maplibre/maplibre-react-native';
 import type { GeoBounds, RadarFrame, RadarProvider } from '../../core/radar';
 
-/** How opaque the visible frame is drawn. Short of solid, so town names and the
- *  coastline stay legible under moderate rain. */
-const FRAME_OPACITY = 0.9;
+/** How opaque the visible frame is drawn. Short of solid, so the basemap reads through
+ *  moderate rain rather than being buried by it. */
+const FRAME_OPACITY = 0.85;
 
 /**
  * No cross-fade, no smoothing.
@@ -59,9 +67,11 @@ export interface RadarLayerProps {
   frames: readonly RadarFrame[];
   /** The frame to show. Everything else stays mounted at zero opacity. */
   active: RadarFrame | undefined;
+  /** The style layer to draw beneath, so the labels stay on top. */
+  beforeId?: string;
 }
 
-export function RadarLayer({ provider, frames, active }: RadarLayerProps) {
+export function RadarLayer({ provider, frames, active, beforeId }: RadarLayerProps) {
   if (provider.kind === 'overlay') {
     return (
       <>
@@ -78,6 +88,7 @@ export function RadarLayer({ provider, frames, active }: RadarLayerProps) {
               <Layer
                 type="raster"
                 id={`radar-layer-${frame.id}`}
+                beforeId={beforeId}
                 paint={{
                   ...RADAR_PAINT,
                   'raster-opacity': frame.id === active?.id ? FRAME_OPACITY : 0,
@@ -105,6 +116,7 @@ export function RadarLayer({ provider, frames, active }: RadarLayerProps) {
           <Layer
             type="raster"
             id={`radar-layer-${frame.id}`}
+            beforeId={beforeId}
             paint={{
               ...RADAR_PAINT,
               'raster-opacity': frame.id === active?.id ? FRAME_OPACITY : 0,

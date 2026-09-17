@@ -68,8 +68,23 @@
  * Where there is no curve at all — a location the nowcast does not reach — there is
  * nothing to fold, so the grabber goes and the row simply stands. The rule under
  * every case is the same one: something on screen has to be draggable.
+ *
+ * ## A tap on the map puts the panel away entirely
+ *
+ * Folding makes the panel small; tapping the map makes it gone, and tapping again
+ * brings it back. This is what Apple's weather map does, and the reason is the one
+ * behind every other decision on this screen: the picture is the point, and there is
+ * no arrangement of a panel that does not cover some of it. A gesture that gives the
+ * reader the whole map for as long as they want it beats another few points shaved off
+ * a control.
+ *
+ * It follows that the panel floats over the map rather than sitting under it, in both
+ * orientations — there would be nothing to uncover otherwise. Sideways it also narrows
+ * to a card in the middle, so what it covers is a strip rather than a band: height is
+ * the scarce dimension there, and a panel that spends it across the full width is
+ * spending it on white space either side of a 420-point control.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -83,20 +98,28 @@ import { CumulativeLayer } from './CumulativeLayer';
 import { CumulativeLegend } from './CumulativeLegend';
 import { CumulativePanel } from './CumulativePanel';
 import { CumulativeTimeline } from './CumulativeTimeline';
-import { MapLayersControl, type MapLayer } from './MapLayersControl';
+import { fieldVariableOf, MapLayersControl, type MapLayer } from './MapLayersControl';
+import { FieldLayer } from '../fields/FieldLayer';
+import { FieldBubbles } from '../fields/FieldBubbles';
+import { FieldLegend } from '../fields/FieldLegend';
+import { FieldPanel } from '../fields/FieldPanel';
+import { useFields } from '../fields/useFields';
+import { fixtureFieldSource } from '../fields/fixtureSource';
+import { sampleField } from '../../core/fields';
 import { CumulativeBubbles } from './CumulativeBubbles';
 import { useCumulative } from './useCumulative';
 import { useCumulativeReadings } from './useCumulativeReadings';
 import { fixtureSource } from './fixtureSource';
-import { lookbackLabel } from '../../core/radar/cumulative';
 import type { MapView } from '../../core/radar/bubbles';
 import { Timeline } from './Timeline';
 import { hasNowcastCurve, NowcastPanel } from './NowcastPanel';
-import { mapChrome } from './mapStyle';
+import { FULL_MAP_START_ZOOM, LAYER_DEPTH, mapChrome } from './mapStyle';
+import { useWeatherBeforeId } from './useMapStyle';
 import { frameAtFraction } from './useRadarFrames';
 import {
   forecastBoundary, frameClock, radarAxis, type NowcastProfile, type RadarFrame,
 } from '../../core/radar';
+import { useLandscape } from '../layout';
 import { usePrefs } from '../../state/prefs';
 import type { SavedLocation } from '../../core/prefs';
 import { ta } from '../../core/i18n';
@@ -105,18 +128,31 @@ import { ta } from '../../core/i18n';
  *  fold be a height rather than a measurement; set too high, the first part of it
  *  does nothing visible. */
 const PROFILE_MAX_HEIGHT = 190;
-/** The play button, the slider and the air above them — what unfolds as the curve
- *  folds. The 42pt button is the tallest thing in the row; set this higher and the
- *  last part of the fold animates a height nothing occupies. */
-const TIMELINE_HEIGHT = 50;
+/**
+ * The folded row: a play button, three labels and the track under them.
+ *
+ * Measured rather than guessed, because a fold animates *to* this number and anything
+ * short of the content is a row with its bottom cut off — which is what happened when
+ * the nowcast row started showing its labels and this still said 50, the height of the
+ * same row without them.
+ *
+ * 12.5pt caption ≈ 16, plus its 4pt gap, plus the scrubber's 40pt touch area = 60; plus
+ * the block's own 8pt of air above = 68. The 42pt play button fits inside the 60, so it
+ * is not what sets the height — which is exactly why the old number looked right.
+ *
+ * Both folded rows are this shape now, so they share it.
+ */
+const TIMELINE_HEIGHT = 68;
 /** The same, for the totals panel: its heading, the figure, the window in clock terms
  *  and the curve with its axis. Taller than the nowcast profile because it carries the
  *  reading as well as the chart — and deliberately a little over rather than under, so
  *  a location with a long name is folded rather than clipped while it is open. */
 const TOTALS_MAX_HEIGHT = 260;
-/** The folded row's own height: the same play button, with the window labels above
- *  the track that the curve's axis carried while it was open. */
-const TOTALS_TIMELINE_HEIGHT = 64;
+
+/** How wide the floating panel gets in landscape. Wider than this and the play button
+ *  and the far end of the track are a hand's width apart, which is a control nobody can
+ *  work one-handed. */
+const PANEL_MAX_WIDTH = 420;
 
 /** Stable empty list, so the readings hook is not handed a new array every render
  *  while the cumulative layer is off. */
@@ -162,12 +198,20 @@ export function FullMap({
   const { prefs } = usePrefs();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  // Sideways the panel narrows to a card at the bottom centre rather than spanning the
+  // width, and the map keeps the whole screen behind it. See the note at the top.
+  const landscape = useLandscape();
   const chrome = mapChrome(palette, appearance);
   const [panelWidth, setPanelWidth] = useState(width);
   // The profile collapses out of the way; the timeline below it never does.
   const [profileOpen, setProfileOpen] = useState(true);
+  // And the whole panel goes, on a tap on the map. Kept as React state as well as a
+  // shared value because `pointerEvents` is a prop, not a style: a panel faded to
+  // nothing still swallows the tap meant to bring it back.
+  const [panelHidden, setPanelHidden] = useState(false);
   const reduceMotion = useReducedMotion();
   const collapse = useSharedValue(0);
+  const hide = useSharedValue(0);
   // Nothing to fold away, and nothing to drag: the slider stands rather than
   // trading places with a curve that was never drawn.
   const curve = hasNowcastCurve(profile);
@@ -182,6 +226,15 @@ export function FullMap({
   const [view, setView] = useState<MapView | null>(null);
   const cumulative = useCumulative(fixtureSource);
   const totals = layer === 'cumulative';
+  // The three Detailcharts layers are one thing to this screen: a scalar field on a
+  // loop. Only the variable differs, so they share a hook, a panel and a legend.
+  const fields = useFields(fixtureFieldSource);
+  // A field sits deeper in the basemap than rain does — under the water as well — so
+  // the two overlays this screen owns take their own depths. See `LAYER_DEPTH`.
+  const fieldBeforeId = useWeatherBeforeId(LAYER_DEPTH.field);
+  const rainBeforeId = useWeatherBeforeId(LAYER_DEPTH.cumulative);
+  const fieldVariable = fieldVariableOf(layer);
+  const showField = fieldVariable != null;
 
   // The reader's own list, which is both what carries a bubble each and the order
   // that settles an overlap.
@@ -200,18 +253,51 @@ export function FullMap({
     cumulative.rasters
   );
   const reading = readings[selectedIndex] ?? SELECTED_PENDING;
+
+  // The field's value at each saved location for the frame on screen. Recomputed per
+  // frame, which is a handful of array lookups: the expensive part is the raster, and
+  // that is fetched once per frame by the hook.
+  const fieldValues = useMemo(
+    () =>
+      fields.manifest && fields.values
+        ? locations.map((l) => sampleField(fields.manifest!, fields.values!, l.lat, l.lon))
+        : locations.map(() => null),
+    [fields.manifest, fields.values, locations]
+  );
   // Only a panel with a curve in it has anything to fold. While the totals are still
   // loading — or cannot be built at all — the panel is a single line of explanation,
   // and a grabber over it would promise a drag that does nothing.
-  const foldable = totals ? cumulative.status === 'ready' && !!cumulative.window : curve;
+  // A field layer has no curve to fold: its panel is one reading and the slider under
+  // it, which is the arrangement `FullMap` already uses where the nowcast has nothing
+  // to draw. Nothing to fold means no grabber, and the row simply stands.
+  const foldable = showField
+    ? false
+    : totals
+      ? cumulative.status === 'ready' && !!cumulative.window
+      : curve;
+
+  // Under the back button, level with the layers card across the map.
+  const legendTop = insets.top + space[2] + MAP_CHROME_SIZE + space[2];
+  const legendLeft = insets.left + 14;
 
   const chooseLayer = (next: MapLayer) => {
     setLayer(next);
     cumulative.setEnabled(next === 'cumulative');
+    // Null takes the field layer off entirely, so a reader who never picks one pays
+    // for no manifest and no rasters.
+    fields.setVariable(fieldVariableOf(next));
     // A loop nobody can see should not be running. Its frames come off the map with
     // the layer switch, and a reader coming back to find the play head somewhere else
     // has watched time pass behind a picture that was not on screen.
-    if (next === 'cumulative' && playing) onTogglePlay();
+    if (next !== 'nowcast' && playing) onTogglePlay();
+  };
+
+  const togglePanel = () => {
+    const next = !panelHidden;
+    setPanelHidden(next);
+    hide.value = reduceMotion
+      ? (next ? 1 : 0)
+      : withTiming(next ? 1 : 0, { duration: duration.base });
   };
 
   const setOpen = (open: boolean) => {
@@ -229,6 +315,14 @@ export function FullMap({
       else if (e.translationY < -30 || e.velocityY < -500) runOnJS(setOpen)(true);
     });
 
+  // Sliding down as it fades, so it reads as the panel leaving rather than the panel
+  // dissolving. A fixed distance: the panel's height is not known here, and past the
+  // first few points of travel a fade has already done the work.
+  const panelStyle = useAnimatedStyle(() => ({
+    opacity: 1 - hide.value,
+    transform: [{ translateY: hide.value * 36 }],
+  }));
+
   const profileStyle = useAnimatedStyle(() => ({
     opacity: 1 - collapse.value,
     // Collapsing height rather than translating keeps everything below it in place.
@@ -241,16 +335,12 @@ export function FullMap({
     maxHeight: collapse.value * TIMELINE_HEIGHT,
   }));
 
-  // The same pair again for the totals panel. Separate styles rather than one with a
-  // height passed in: the two panels are different heights, and a fold that animates
-  // the wrong one either clips the panel open or spends its first inches on nothing.
+  // The panels themselves are different heights, so they keep separate styles: a fold
+  // that animates the wrong one either clips the panel open or spends its first inches
+  // on nothing. Their folded rows are the same shape, though, so those share `timelineStyle`.
   const totalsStyle = useAnimatedStyle(() => ({
     opacity: 1 - collapse.value,
     maxHeight: (1 - collapse.value) * TOTALS_MAX_HEIGHT,
-  }));
-  const totalsTimelineStyle = useAnimatedStyle(() => ({
-    opacity: collapse.value,
-    maxHeight: collapse.value * TOTALS_TIMELINE_HEIGHT,
   }));
 
   const active = frames[activeIndex];
@@ -271,30 +361,44 @@ export function FullMap({
         <RadarMap
           lat={lat}
           lon={lon}
+          startZoom={FULL_MAP_START_ZOOM}
           frames={frames}
           activeIndex={activeIndex}
           places={places}
           onSelectPlace={onSelectPlace}
-          // While the totals are up the badge names the window rather than a frame
-          // time: there is no frame on screen for a clock to belong to. Signed, and in
-          // the same words the chart's axis uses, so the badge and the point under the
-          // cursor are visibly the same window.
-          timeLabel={
-            totals && cumulative.window
-              ? lookbackLabel(cumulative.window.hours)
-              : frameClock(active)
-          }
-          showFrames={!totals}
-          showPins={!totals}
-          onViewChange={totals ? setView : undefined}
+          showFrames={!totals && !showField}
+          showPins={!totals && !showField}
+          onViewChange={totals || showField ? setView : undefined}
+          onMapPress={togglePanel}
           overlay={
-            totals && cumulative.manifest ? (
+            showField && fields.manifest && fieldVariable ? (
+              <>
+                <FieldLayer
+                  manifest={fields.manifest}
+                  frames={fields.frames}
+                  active={fields.frame}
+                  source={fixtureFieldSource}
+                  beforeId={fieldBeforeId}
+                />
+                <FieldBubbles
+                  variable={fieldVariable}
+                  legend={fields.manifest.legend}
+                  locations={locations}
+                  values={fieldValues}
+                  unit={fields.manifest.unit}
+                  selectedIndex={selectedIndex}
+                  view={view}
+                  onSelect={onSelectPlace}
+                />
+              </>
+            ) : totals && cumulative.manifest ? (
               <>
                 <CumulativeLayer
                   manifest={cumulative.manifest}
                   windows={cumulative.windows}
                   active={cumulative.window}
                   source={fixtureSource}
+                  beforeId={rainBeforeId}
                 />
                 <CumulativeBubbles
                   locations={locations}
@@ -325,7 +429,7 @@ export function FullMap({
             {
               // Same line as the time badge on the right, and the same height,
               // so the two read as one row of chrome across the top.
-              position: 'absolute', left: 14, top: insets.top + space[2],
+              position: 'absolute', left: insets.left + 14, top: insets.top + space[2],
               width: MAP_CHROME_SIZE, height: MAP_CHROME_SIZE, borderRadius: radius.pill,
               backgroundColor: chrome.bg,
               alignItems: 'center', justifyContent: 'center',
@@ -336,35 +440,75 @@ export function FullMap({
           <Icon name="caret-left" size={18} color={chrome.ink} weight="bold" />
         </Pressable>
 
-        {/* Directly under the time badge, on the same right-hand edge, so the map's
-            chrome stays two columns rather than three. */}
+        {/* The top-right corner, level with the back button opposite. It used to sit a
+            row below a time badge; the time lives in the panel now, so this moves up
+            into the space that left. */}
         <MapLayersControl
           active={layer}
           onSelect={chooseLayer}
           open={layersOpen}
           onOpenChange={setLayersOpen}
-          top={insets.top + space[2] + MAP_CHROME_SIZE + space[2]}
+          top={insets.top + space[2]}
+          right={insets.right + 14}
         />
 
-        {/* Only with the layer that needs it, and clear of the attribution button in
-            the same corner. */}
+        {/* Both legends stand in the top-left corner, under the back button and on the
+            same line the layers control starts on opposite them. Only one can be up:
+            the picker is a radio. */}
         {totals && cumulative.manifest ? (
-          <CumulativeLegend
-            legend={cumulative.manifest.legend}
-            bottom={radius.appCard + space[2] + 28}
+          <CumulativeLegend legend={cumulative.manifest.legend} top={legendTop} left={legendLeft} />
+        ) : null}
+
+        {showField && fields.manifest ? (
+          <FieldLegend
+            legend={fields.manifest.legend}
+            unit={fields.manifest.unit}
+            top={legendTop}
+            left={legendLeft}
           />
         ) : null}
       </View>
 
+      {/* Over the map rather than under it, so a tap on the map has something to
+          uncover — and, sideways, so the map keeps the height a band would take.
+          `box-none` lets a tap through the padding around the card to the map below;
+          `none` while hidden lets the tap that brings it back reach the map at all. */}
+      <Animated.View
+        pointerEvents={panelHidden ? 'none' : 'box-none'}
+        style={[
+          {
+            position: 'absolute', left: 0, right: 0, bottom: 0,
+            alignItems: landscape ? 'center' : 'stretch',
+          },
+          landscape ? { paddingBottom: insets.bottom + space[3] } : null,
+          panelStyle,
+        ]}
+      >
       <View
         onLayout={(e) => setPanelWidth(e.nativeEvent.layout.width)}
-        style={{
-          backgroundColor: palette.appCard,
-          borderTopLeftRadius: radius.appCard,
-          borderTopRightRadius: radius.appCard,
-          paddingBottom: insets.bottom + space[3],
-          marginTop: -radius.appCard,
-        }}
+        style={[
+          { backgroundColor: palette.appCard },
+          landscape
+            ? {
+                // Capped, because a control that spans a landscape screen puts its play
+                // button and the end of its track a hand's width apart. Centred on the
+                // screen: this page is pushed over the tab bar, not beside it, so there
+                // is nothing standing against the right edge to lean away from.
+                width: Math.min(
+                  PANEL_MAX_WIDTH,
+                  width - insets.left - insets.right - space[6]
+                ),
+                borderRadius: radius.appCard,
+                paddingBottom: space[3],
+                ...shadowFloat,
+              }
+            : {
+                borderTopLeftRadius: radius.appCard,
+                borderTopRightRadius: radius.appCard,
+                paddingBottom: insets.bottom + space[3],
+                ...shadowFloat,
+              },
+        ]}
       >
         <GestureDetector gesture={drag}>
           <View>
@@ -390,7 +534,18 @@ export function FullMap({
               </Pressable>
             ) : null}
 
-            {totals ? (
+            {showField ? (
+              <FieldPanel
+                status={fields.status}
+                manifest={fields.manifest}
+                frames={fields.frames}
+                index={fields.index}
+                onIndexChange={fields.setIndex}
+                playing={fields.playing}
+                onTogglePlay={fields.togglePlay}
+                retryAfterSec={fields.retryAfterSec}
+              />
+            ) : totals ? (
               <Animated.View
                 style={[{ overflow: 'hidden' }, foldable ? totalsStyle : undefined]}
               >
@@ -422,6 +577,7 @@ export function FullMap({
                   locationName={locationName}
                   onScrubFraction={scrubTo}
                   boundaryFraction={forecastBoundary(frames, axis?.positions)}
+                  timeLabel={frameClock(active)}
                   playing={playing}
                   onTogglePlay={onTogglePlay}
                   playDisabled={frames.length < 2}
@@ -431,7 +587,9 @@ export function FullMap({
           </View>
         </GestureDetector>
 
-        {totals ? (
+        {/* A field layer carries its own slider inside the panel, so there is no
+            second row to stand in for a folded curve. */}
+        {showField ? null : totals ? (
           foldable ? (
             <Animated.View
               // Invisible is also untouchable: a slider at zero opacity behind the
@@ -439,7 +597,7 @@ export function FullMap({
               pointerEvents={profileOpen ? 'none' : 'auto'}
               style={[
                 { overflow: 'hidden', paddingHorizontal: space[5], paddingTop: space[2] },
-                totalsTimelineStyle,
+                timelineStyle,
               ]}
             >
               <CumulativeTimeline
@@ -467,7 +625,6 @@ export function FullMap({
               onIndexChange={onScrub}
               playing={playing}
               onTogglePlay={onTogglePlay}
-              showLabels={false}
               stepPositions={axis?.positions}
             />
           </Animated.View>
@@ -479,12 +636,12 @@ export function FullMap({
               onIndexChange={onScrub}
               playing={playing}
               onTogglePlay={onTogglePlay}
-              showLabels={false}
               stepPositions={axis?.positions}
             />
           </View>
         )}
       </View>
+      </Animated.View>
     </View>
   );
 }

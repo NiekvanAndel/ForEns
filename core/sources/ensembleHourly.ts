@@ -66,7 +66,7 @@ export async function fetchDayEnsemble(
 /** The member columns for one field, e.g. `temperature_2m_member01…`. A response
  *  without them still carries the plain deterministic series, which is treated as a
  *  one-member ensemble rather than as missing. */
-function memberSeries(
+export function memberSeries(
   hourly: Record<string, unknown>,
   field: string
 ): (number | null)[][] {

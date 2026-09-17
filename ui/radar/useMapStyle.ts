@@ -27,7 +27,10 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import type { StyleSpecification } from '@maplibre/maplibre-react-native';
-import { localiseStyle, mapStyleFor } from './mapStyle';
+import {
+  describeBands, LAYER_DEPTH, localiseStyle, mapStyleFor, orderForWeather,
+  weatherBeforeLayerId, type WeatherDepth,
+} from './mapStyle';
 import { usePrefs } from '../../state/prefs';
 import { useTheme } from '../../theme';
 
@@ -36,12 +39,14 @@ const STYLE_STALE_MS = 24 * 60 * 60_000;
 
 export const mapStyleKey = (url: string, lang: string) => ['map-style', url, lang] as const;
 
-export function useLocalisedMapStyle(): string | StyleSpecification {
+function useStyleQuery() {
   const { appearance } = useTheme();
   const { prefs } = usePrefs();
   const url = mapStyleFor(appearance);
 
-  const { data } = useQuery({
+  // The key carries the URL, which differs per appearance, so a restyle for one theme
+  // can never be served to the other.
+  const query = useQuery({
     queryKey: mapStyleKey(url, prefs.lang),
     staleTime: STYLE_STALE_MS,
     gcTime: STYLE_STALE_MS,
@@ -51,9 +56,43 @@ export function useLocalisedMapStyle(): string | StyleSpecification {
     queryFn: async ({ signal }): Promise<StyleSpecification> => {
       const response = await fetch(url, { signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return localiseStyle((await response.json()) as StyleSpecification, prefs.lang);
+      const style = (await response.json()) as StyleSpecification;
+      // What the labels say, then where the weather will sit among the layers. Both are
+      // pure rewrites of the same document; see `LAYER_DEPTH` for why the second one has
+      // to reorder rather than only pick an insertion point.
+      const ordered = orderForWeather(localiseStyle(style, prefs.lang));
+
+      if (__DEV__) {
+        // The basemap is not reachable from a build machine, so its layer ids are known
+        // by schema and habit rather than by having read them. If something lands on the
+        // wrong side of the weather, this says which layer it was.
+        console.log(
+          `[map] ${url}\n${describeBands(ordered)}\n` +
+            `  seams: rain under "${weatherBeforeLayerId(ordered, LAYER_DEPTH.nowcast)}", ` +
+            `fields under "${weatherBeforeLayerId(ordered, LAYER_DEPTH.field)}"`
+        );
+      }
+      return ordered;
     },
   });
 
+  return { data: query.data, url };
+}
+
+export function useLocalisedMapStyle(): string | StyleSpecification {
+  const { data, url } = useStyleQuery();
   return data ?? url;
+}
+
+/**
+ * The style layer a weather layer should be drawn *under*, so the basemap's own marks
+ * stay on top of it. Which marks those are is the depth — see `LAYER_DEPTH`.
+ *
+ * Reads the same query as `useLocalisedMapStyle`, so a second caller costs nothing: the
+ * style is fetched once per appearance and language and held for a day. Undefined until
+ * it lands, and undefined for good if it never does — in which case the layer draws on
+ * top, exactly as it did before.
+ */
+export function useWeatherBeforeId(depth: WeatherDepth): string | undefined {
+  return weatherBeforeLayerId(useStyleQuery().data, depth);
 }

@@ -24,6 +24,7 @@ import { useStationLocationSync } from '../state/stations';
 import { DeviceLocationProvider } from '../state/deviceLocation';
 import { ForecastProvider, useForecast } from '../state/forecast';
 import { useWidgetSync, writeWidgetPayload } from '../state/widgetSync';
+import { configureNotifications, usePushSync } from '../state/push';
 import { registerBackgroundRefresh, setWidgetWriter } from '../core/backgroundTask';
 import { ThemeProvider } from '../state/theme';
 import { useTheme } from '../theme';
@@ -69,6 +70,11 @@ function Shell() {
     nowcastBars: nowcast?.bars.map((b) => Math.round(b.height)),
   });
 
+  // Keep the push server's idea of this device true: the locations it watches, the
+  // kinds it watches for, and the language it writes in. A no-op until an endpoint
+  // is configured — see `state/push`.
+  usePushSync(prefs);
+
   useEffect(() => {
     if (!ready) return;
     // The background task runs without a React tree, so it is handed the widget
@@ -77,6 +83,8 @@ function Shell() {
       if (m) writeWidgetPayload({ model: m, prefs: p, location: l, alert: a, nowcastBars });
     });
     registerBackgroundRefresh();
+    // How a push behaves while the app is open. See `configureNotifications`.
+    configureNotifications();
   }, [ready]);
 
   useEffect(() => {

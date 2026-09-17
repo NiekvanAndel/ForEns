@@ -15,37 +15,9 @@
  * All of this is scaffolding. When the live endpoints are reachable it goes, and
  * `httpSource` in ../cumulative takes its place behind the same interface.
  */
+import { decodeBase64 } from '../../base64';
 import type { CumulativeManifest } from '../cumulative';
 import { FIXTURE_MANIFEST, FIXTURE_VALUES_B64 } from './generated';
-
-const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-/**
- * base64 to bytes, without depending on `atob` or `Buffer`.
- *
- * Hermes and Node both offer one of those, but not the same one, and this runs in
- * both the app and the test runner. Twenty lines is cheaper than a polyfill that has
- * to be right on two platforms.
- */
-function decodeBase64(input: string): Uint8Array {
-  const clean = input.replace(/[^A-Za-z0-9+/]/g, '');
-  const out = new Uint8Array((clean.length * 3) >> 2);
-  let bits = 0;
-  let acc = 0;
-  let at = 0;
-
-  for (let i = 0; i < clean.length; i++) {
-    const value = B64_ALPHABET.indexOf(clean[i]!);
-    if (value < 0) continue;
-    acc = (acc << 6) | value;
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      out[at++] = (acc >> bits) & 0xff;
-    }
-  }
-  return out.subarray(0, at);
-}
 
 /** The dummy manifest, shaped exactly as the endpoint's. */
 export const fixtureManifest = FIXTURE_MANIFEST as unknown as CumulativeManifest;

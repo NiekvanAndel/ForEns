@@ -1,15 +1,17 @@
 /**
  * The top row: the map, where you are, and room for what comes next.
  *
- * Three slots of equal weight — the full-screen map on the left, the location
- * control in the middle, an empty slot on the right held open for a future button.
+ * Three slots of equal weight — the overview on the left, the location control in
+ * the middle, the full-screen map on the right. The two outer ones are the things on
+ * this row that leave the page, and they sit opposite each other with your places
+ * between them.
  *
  * Search used to hold the left slot. It is a way of *adding* a location, so it now
  * sits at the head of the location control itself, immediately left of the arrow and
  * the dots, separated from them by a hairline: the things in that pill are your
- * places, and the magnifying glass is how you get another one. The left slot went to
- * the map, which is the one thing on the row that leaves the page — one tap from any
- * screen to the full-screen map.
+ * places, and the magnifying glass is how you get another one. The map took the left
+ * slot for a while and moved right when the overview arrived: the overview leads
+ * because it is where a day starts, and the map is where you go to look at one.
  *
  * The row floats over the page on glass, so the content scrolls beneath it. That is
  * the only way the material means anything: glass over a solid background is a
@@ -91,6 +93,12 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
     router.push('/map');
   };
 
+  /** The overview page — see `app/overview.tsx`. */
+  const openOverview = () => {
+    Haptics.selectionAsync().catch(() => {});
+    router.push('/overview');
+  };
+
   /** Go to the device's page, or take a fix if there is not one yet. */
   const goHere = () => {
     Haptics.selectionAsync().catch(() => {});
@@ -103,7 +111,8 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
       <View
         style={{
           position: 'absolute', left: 0, right: 0, top: 0,
-          paddingHorizontal: space[5],
+          paddingLeft: space[5] + insets.left,
+          paddingRight: space[5] + insets.right,
           paddingTop: insets.top + 6,
           paddingBottom: space[3],
           // Opaque while searching: a list of places over a moving page is unreadable.
@@ -194,18 +203,24 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
       interactive
       style={{
         position: 'absolute', left: 0, right: 0, top: 0,
-        paddingHorizontal: space[5],
+        paddingLeft: space[5] + insets.left,
+        paddingRight: space[5] + insets.right,
         paddingTop: insets.top + 6,
         paddingBottom: space[2],
         flexDirection: 'row', alignItems: 'center',
       }}
     >
-      {/* Left: the map, full screen. */}
+      {/* Left: the overview — every saved location in one screen. It leads because
+          it is where a day starts: the tabs are where you read one place closely, and
+          this is the question you open the app with. */}
       <View style={{ flex: 1, alignItems: 'flex-start' }}>
         <RoundButton
-          icon="map-trifold"
-          label={ta('mapShortcut', prefs.lang)}
-          onPress={openMap}
+          // The page's own mark: three bars narrowing to a point, which is what an
+          // overview does. Not the grid — 'Actueel' owns that picture, and two
+          // buttons with one icon is a button nobody learns.
+          icon="overview"
+          label={ta('ovTitle', prefs.lang)}
+          onPress={openOverview}
         />
       </View>
 
@@ -286,8 +301,16 @@ export function TopBar({ onSearch, results, searching, onPick }: TopBarProps) {
         </View>
       </View>
 
-      {/* Right: held open, so adding a button later does not move the middle. */}
-      <View style={{ flex: 1, alignItems: 'flex-end' }} />
+      {/* Right: the map, full screen. It was on the left and moved here when the
+          overview arrived — the two things on this row that leave the page now sit
+          opposite each other, with your places between them. */}
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <RoundButton
+          icon="map-trifold"
+          label={ta('mapShortcut', prefs.lang)}
+          onPress={openMap}
+        />
+      </View>
     </GlassSurface>
   );
 }

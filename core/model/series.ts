@@ -93,10 +93,24 @@ export const SERIES_META: Record<SeriesKey, SeriesMeta> = {
 /** Beyond this many days the samples are days rather than hours. */
 export const DAY_RESOLUTION_FROM = 3;
 
+/**
+ * Which forecast answered for a sample.
+ *
+ * `station` is an instrument. The other two are both "the model", and telling them
+ * apart matters to anything that wants to combine the line with the ECMWF ensemble:
+ * `nearTerm` is the 48-hour series, which is HARMONIE where it is available and the
+ * observation feed's own short-range run where it is not, and `ifs` is the IFS hourly
+ * series that carries the rest of the horizon — the deterministic sibling of the
+ * members. See `ensembleBand.cumulativeBands` for the one place it changes a picture.
+ */
+export type SampleSource = 'station' | 'nearTerm' | 'ifs';
+
 export interface Sample {
   /** `YYYY-MM-DDTHH:MM` at minute and hour resolution, `YYYY-MM-DD` at day. */
   key: string;
   value: number | null;
+  /** Where the value came from; null where there is no value. */
+  source?: SampleSource | null;
   /** The spread inside a bucketed day. Absent at hour resolution. */
   band?: { lo: number; hi: number } | null;
   /** A second line above the first — gusts over mean wind. */
@@ -316,7 +330,9 @@ export function buildSeries({
         const { value, secondary, band } = fromMeasured(key, m);
         // A station that reported the hour but not this quantity leaves the model to
         // answer for it: the merge is per quantity everywhere else in the app too.
-        if (value != null) return { key: time, value, secondary, band, measured: true, future };
+        if (value != null) {
+          return { key: time, value, secondary, band, measured: true, future, source: 'station' };
+        }
       }
       // A modelled value is stamped on the hour, so on a finer grid the hour a
       // sample falls inside is what answers for it — the model has nothing to say
@@ -326,12 +342,14 @@ export function buildSeries({
         const { value, secondary } = fromModel(key, h);
         // `allHours` stops 48 hours out, so a value is only accepted from it when
         // there is one; past that the IFS series below carries the line.
-        if (value != null) return { key: time, value, secondary, measured: false, future };
+        if (value != null) {
+          return { key: time, value, secondary, measured: false, future, source: 'nearTerm' };
+        }
       }
       const p = byHres.get(stepMinutes < 60 ? `${time.slice(0, 14)}00` : time);
-      if (!p) return { key: time, value: null, measured: false, future };
+      if (!p) return { key: time, value: null, measured: false, future, source: null };
       const { value, secondary } = fromHres(key, p);
-      return { key: time, value, secondary, measured: false, future };
+      return { key: time, value, secondary, measured: false, future, source: value != null ? 'ifs' : null };
     });
 
   const span = daySpan(hours[0]?.key.slice(0, 10) ?? from, hours[hours.length - 1]?.key.slice(0, 10) ?? to);
@@ -401,8 +419,17 @@ function bucketByDay(key: SeriesKey, hours: readonly Sample[]): Sample[] {
     const his = list.map((s) => s.band?.hi).filter((v): v is number => v != null);
 
     if (!values.length) {
-      return { key: day, value: null, band: null, measured: false, future: list.every((s) => s.future) };
+      return {
+        key: day, value: null, band: null, measured: false,
+        future: list.every((s) => s.future), source: null,
+      };
     }
+
+    // A day speaks for one forecast only where every hour in it did. A day half from
+    // the near-term run and half from IFS is not an IFS day, and treating it as one
+    // is what would let a running total's band open a few hours early.
+    const sources = new Set(withValue.map((s) => s.source));
+    const source = sources.size === 1 ? ([...sources][0] as SampleSource | null) : null;
 
     const total = values.reduce((a, b) => a + b, 0);
     const lo = Math.min(...values, ...los);
@@ -410,6 +437,7 @@ function bucketByDay(key: SeriesKey, hours: readonly Sample[]): Sample[] {
 
     return {
       key: day,
+      source,
       value:
         key === 'precip' ? round1(total)
         // A bearing has no arithmetic mean: north-west and north-east average to

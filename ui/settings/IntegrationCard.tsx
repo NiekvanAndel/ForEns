@@ -55,6 +55,7 @@ export function IntegrationCard() {
             ...(p.integrations.agroexact ?? DEFAULT_AGRO_INTEGRATION),
             connected: true,
             account: who.email ?? null,
+            accountName: who.name ?? null,
           },
         },
       }));
