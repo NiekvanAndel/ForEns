@@ -7,6 +7,9 @@
  *  - `/aggregates/{id}/`          hourly roll-ups, which is what the hour strip wants
  *  - `/readings/{id}/?latest=true` the most recent measurement, which is what the hero wants
  *
+ * The soil sensors are the same three shapes under different names, at the bottom of
+ * this file — see the section comment there.
+ *
  * The hourly strip is built from **aggregates** rather than raw readings. A station
  * measures every ten minutes, so folding readings into hours client-side means
  * pulling six times the data and then re-deriving hourly minima, maxima and gust
@@ -40,6 +43,9 @@
  */
 import { SourceError, type FetchOptions } from './http';
 import { round1 } from '../model/stats';
+import {
+  refillMm, waterPercent, type SoilStatus, type SoilThresholds,
+} from '../model/soil';
 
 export const AGRO_BASE = 'https://app.agroexact.com/api/v2';
 
@@ -802,4 +808,309 @@ export function localMinuteKey(utcIso: string, offsetSec: number, stepMin = 10):
     `${l.getUTCFullYear()}-${pad(l.getUTCMonth() + 1)}-${pad(l.getUTCDate())}` +
     `T${pad(l.getUTCHours())}:${pad(minute)}`
   );
+}
+
+// ── Soil ────────────────────────────────────────────────────────────────────────
+
+/**
+ * The soil half of the same API: SoilExact and CropExact.
+ *
+ *  - `/soilstations/`              the soil sensors on the account, with their thresholds
+ *  - `/soil_aggregates/{id}/`      hourly roll-ups, for a window wider than a day
+ *  - `/soilreadings/{id}/`         the raw half-hourly records, and `?latest=true`
+ *
+ * Deliberately a copy of the weather paths above with different names on the fields:
+ * the same `dd-mm-YYYY` conversion, the same NDJSON-tolerant row reader, the same
+ * end-of-hour correction on aggregates, the same oldest-first ordering. What differs
+ * is what a soil sensor is — see `core/model/soil` on why the placement, not the
+ * station, is the unit — and two unit conversions that have to happen here or not at
+ * all.
+ *
+ * ## Two things worth knowing before reading a chart drawn from these
+ *
+ * **`/soil_aggregates/` withholds rows younger than thirty minutes**, so the last
+ * half hour exists only on `/soilreadings/`. A page that wants "now" asks
+ * `fetchLatestSoilMeasurement`, not the tail of the hourly series.
+ *
+ * **Every sensor on the account answered these endpoints empty** on 17 September
+ * 2026, across BASIC, PLUS and PRO and across windows from 24 hours to a summer
+ * fortnight. So the row shapes below are the v2 schema as `docs/soil-crop-integratie.md`
+ * records it, and unlike the radiation conversion they are *not* pinned against live
+ * data. Everything maps through `num`, a missing field is a null rather than a
+ * failure, and the one genuinely ambiguous quantity is isolated in
+ * `waterPercent` so that pinning it later is a single edit.
+ */
+
+/** A soil sensor as `/soilstations/` reports it. */
+export interface SoilStation {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  /** BASIC, PLUS or PRO. Not the same axis as SoilExact vs CropExact: what decides
+   *  whether there is a canopy sensor is whether the readings carry `temperature_10`. */
+  type: string | null;
+  crop: string | null;
+  /** Sensor depth, cm — also what turns refill room from vol-% into mm. */
+  depthCm: number | null;
+  /** Today's thresholds. Null where the account has not set them, which is the one
+   *  case a page cannot draw a threshold line for. */
+  thresholds: SoilThresholds | null;
+}
+
+/**
+ * One soil measurement, raw or hourly.
+ *
+ * Every field independently nullable, for the same reason the weather shapes are: a
+ * BASIC sensor has no canopy probe, a season has hours before the sensor went in, and
+ * one dead field should cost that field rather than the chart.
+ */
+export interface SoilSample {
+  /** Local wall-clock key — the hour for an aggregate, the half hour for a reading. */
+  time: string;
+  /** The measurement's own UTC stamp, which is what the placement split reads. */
+  measTime: string;
+  /** Suction in the root zone, kPa. The indicator. */
+  tension: number | null;
+  /** The state stored at ingest — authoritative, because it was computed against the
+   *  settings of that day. Null on a row that carries no `status_code`. */
+  status: SoilStatus | null;
+  pF: number | null;
+  /** Volume percent — see `waterPercent` on why this one is not yet pinned. */
+  waterPercent: number | null;
+  /** Room to refill, mm over the sensor depth. Null where the depth is unknown,
+   *  because the vol-% the API sends is not a depth of water on its own. */
+  refillMm: number | null;
+  /** How much of that refill only brings the field back out of scarcity — the lower
+   *  end of "top up 18 to 33 mm". */
+  refillToScarceMm: number | null;
+  /** Soil temperature at placement depth, °C. */
+  soilTemp: number | null;
+  /** Canopy sensor, 10 cm above the ground — CropExact only. A different quantity
+   *  from the 1.50 m readings, never a substitute for them. */
+  temp10: number | null;
+  humidity10: number | null;
+  dewpoint10: number | null;
+  /** Not measured: the API derives it from rain in the last hour or RH at 10 cm above
+   *  95%. Carried because it is genuinely useful, labelled as a proxy wherever it is
+   *  shown, and not good enough for Mills. */
+  leafWetProxy: boolean | null;
+  /** Rain and irrigation together, mm — one number, by decision. */
+  precip: number | null;
+}
+
+interface SoilStationRow {
+  station_id?: string;
+  name?: string;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  version_type?: string | null;
+  crop?: string | null;
+  placement_depth?: number | null;
+  threshold_0_to_1?: number | null;
+  threshold_1_to_2?: number | null;
+  threshold_2_to_3?: number | null;
+}
+
+interface SoilReadingRow {
+  timestamp?: string;
+  station_name?: string;
+  water_tension?: number | null;
+  status_code?: number | null;
+  pF?: number | null;
+  water_percentage?: number | null;
+  bijvulruimte?: number | null;
+  water_until_nonschaarste?: number | null;
+  temperature_placement_depth?: number | null;
+  temperature_10?: number | null;
+  humidity_10?: number | null;
+  dewpoint?: number | null;
+  leaf_wet?: boolean | null;
+  precipitation?: number | null;
+}
+
+/**
+ * The account's soil sensors.
+ *
+ * A sensor without coordinates is skipped, as with weather stations: it cannot become
+ * a location. A sensor without thresholds is kept — it still measures suction, and a
+ * chart without a threshold line is a smaller loss than a field that vanishes from
+ * the list its owner expects it in.
+ */
+export async function fetchSoilStations(
+  token: string,
+  opts: FetchOptions = {}
+): Promise<SoilStation[]> {
+  const rows = await agroFetch<SoilStationRow[]>(token, '/soilstations/', opts);
+  if (!Array.isArray(rows)) throw new SourceError('AgroExact', 'onverwacht antwoord');
+  return rows
+    .map((r) => ({
+      id: String(r.station_id ?? ''),
+      name: (r.name ?? '').trim() || 'Bodemsensor',
+      lat: num(r.latitude) as number,
+      lon: num(r.longitude) as number,
+      type: r.version_type ?? null,
+      crop: (r.crop ?? '').trim() || null,
+      depthCm: num(r.placement_depth),
+      thresholds: soilThresholds(r),
+    }))
+    .filter((s) => s.id && Number.isFinite(s.lat) && Number.isFinite(s.lon));
+}
+
+/**
+ * The three thresholds, or null if the sensor has no usable set.
+ *
+ * They must be non-decreasing, and that is all: on 17 September 2026, 238 of the
+ * account's 1181 sensors have `threshold_0_to_1` equal to `threshold_1_to_2`, which
+ * is a real setting — that field has no suboptimal band, it goes from fine straight
+ * to irrigate. Demanding a strictly rising set would throw away a fifth of the
+ * account's thresholds for being configured the way their owners configured them.
+ */
+function soilThresholds(r: SoilStationRow): SoilThresholds | null {
+  const scarce = num(r.threshold_0_to_1);
+  const irrigate = num(r.threshold_1_to_2);
+  const critical = num(r.threshold_2_to_3);
+  if (scarce == null || irrigate == null || critical == null) return null;
+  if (!(scarce <= irrigate && irrigate <= critical)) return null;
+  return { scarce, irrigate, critical };
+}
+
+/** `status_code` as the app's four-lamp status, ignoring anything outside 0–3. */
+const soilStatus = (v: number | null): SoilStatus | null =>
+  v != null && v >= 0 && v <= 3 ? (Math.round(v) as SoilStatus) : null;
+
+/**
+ * One soil row in the app's shape.
+ *
+ * `depthCm` comes from the placement that covers the row rather than from the
+ * station, so a series that crosses a move converts each half over the depth it was
+ * actually measured at. Pass 0 and the two millimetre fields stay null, which is the
+ * honest answer for a sensor whose depth nobody has recorded — better than a number
+ * that is wrong by whatever the depth turns out to be.
+ */
+function mapSoilRow(key: string, r: SoilReadingRow, depthCm: number): SoilSample {
+  return {
+    time: key,
+    measTime: r.timestamp as string,
+    tension: round1OrNull(num(r.water_tension)),
+    status: soilStatus(num(r.status_code)),
+    // Two decimals: pF is a logarithm, so its interesting range is 0–4.2 and a tenth
+    // is a coarse step across it.
+    pF: num(r.pF) != null ? Math.round((num(r.pF) as number) * 100) / 100 : null,
+    waterPercent: waterPercent(num(r.water_percentage)),
+    refillMm: refillMm(num(r.bijvulruimte), depthCm),
+    refillToScarceMm: refillMm(num(r.water_until_nonschaarste), depthCm),
+    soilTemp: round1OrNull(num(r.temperature_placement_depth)),
+    temp10: round1OrNull(num(r.temperature_10)),
+    humidity10: roundOrNull(num(r.humidity_10)),
+    dewpoint10: roundOrNull(num(r.dewpoint)),
+    leafWetProxy: typeof r.leaf_wet === 'boolean' ? r.leaf_wet : null,
+    precip: num(r.precipitation) != null ? round1(num(r.precipitation) as number) : null,
+  };
+}
+
+/**
+ * The sensor's most recent reading — what "nu" means on a field.
+ *
+ * Straight from the API's cache, as with the weather stations, and the only call that
+ * can see the last half hour: `/soil_aggregates/` withholds it.
+ */
+export async function fetchLatestSoilMeasurement(
+  token: string,
+  stationId: string,
+  offsetSec: number,
+  depthCm: number,
+  opts: FetchOptions = {}
+): Promise<{ current: SoilSample | null; stationName: string | null }> {
+  const rows = await agroFetchRows<SoilReadingRow>(
+    token,
+    `/soilreadings/${encodeURIComponent(stationId)}/?latest=true`,
+    opts
+  );
+  const r = rows[0];
+  if (!r?.timestamp) return { current: null, stationName: null };
+
+  const time = localHourKey(r.timestamp, offsetSec);
+  if (!time) return { current: null, stationName: r.station_name ?? null };
+
+  return { stationName: r.station_name ?? null, current: mapSoilRow(time, r, depthCm) };
+}
+
+/**
+ * Every hour the sensor measured between two dates, oldest first.
+ *
+ * The graph page's window, the exact counterpart of `fetchStationRange` — including
+ * the end-of-hour correction, which matters here for the same reason it does there:
+ * a row stamped `14:00Z` covers `13:00Z–14:00Z`, and mapping it to 14:00 local shifts
+ * a drying curve an hour into the future.
+ */
+export async function fetchSoilRange(
+  token: string,
+  stationId: string,
+  offsetSec: number,
+  depthCm: number,
+  /** Both `YYYY-MM-DD`; converted to the API's own format on the way out. */
+  startDay: string,
+  endDay: string,
+  opts: FetchOptions = {}
+): Promise<SoilSample[]> {
+  const rows = await agroFetchRows<SoilReadingRow>(
+    token,
+    `/soil_aggregates/${encodeURIComponent(stationId)}/` +
+      `?start_date=${apiDay(startDay)}&end_date=${apiDay(endDay)}&limit=5000`,
+    opts
+  );
+
+  const out: SoilSample[] = [];
+  for (const r of rows) {
+    if (!r?.timestamp) continue;
+    const endMs = new Date(r.timestamp).getTime();
+    if (!Number.isFinite(endMs)) continue;
+    const key = localHourKey(new Date(endMs - HOUR_MS).toISOString(), offsetSec);
+    if (!key) continue;
+    out.push(mapSoilRow(key, r, depthCm));
+  }
+
+  // Oldest first: a chart reads left to right, and the API answers newest first.
+  return out.sort((a, b) => (a.time < b.time ? -1 : 1));
+}
+
+/** A soil sensor reports about every thirty minutes, where a weather station is on ten. */
+export const SOIL_STEP_MIN = 30;
+
+/**
+ * Every raw measurement the sensor took between two dates.
+ *
+ * The one-day window on the graph page, as `fetchStationReadings` is for weather: an
+ * hourly roll-up of a single day flattens the half hour an irrigation run actually
+ * landed in. Stamped at the instant of measurement, so unlike an aggregate it is not
+ * shifted back.
+ */
+export async function fetchSoilReadings(
+  token: string,
+  stationId: string,
+  offsetSec: number,
+  depthCm: number,
+  /** Both `YYYY-MM-DD`; converted to the API's own format on the way out. */
+  startDay: string,
+  endDay: string,
+  opts: FetchOptions = {}
+): Promise<SoilSample[]> {
+  const rows = await agroFetchRows<SoilReadingRow>(
+    token,
+    `/soilreadings/${encodeURIComponent(stationId)}/` +
+      `?start_date=${apiDay(startDay)}&end_date=${apiDay(endDay)}&time_rounding=true`,
+    opts
+  );
+
+  const out: SoilSample[] = [];
+  for (const r of rows) {
+    if (!r?.timestamp) continue;
+    const time = localMinuteKey(r.timestamp, offsetSec, SOIL_STEP_MIN);
+    if (!time) continue;
+    out.push(mapSoilRow(time, r, depthCm));
+  }
+
+  // Oldest first: a chart reads left to right, and the API answers newest first.
+  return out.sort((a, b) => (a.time < b.time ? -1 : 1));
 }
