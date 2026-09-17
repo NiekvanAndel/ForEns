@@ -68,7 +68,7 @@ import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useLocationStation } from '../../state/stations';
 import { useLocationSoil } from '../../state/soilStations';
-import { arrangeTiles } from '../../core/prefs';
+import { arrangeTiles, DEFAULT_TILE_LAYOUT } from '../../core/prefs';
 import { modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
 import { placementContext, soilTiles, type SoilTileLabels } from '../../core/model/soilTiles';
 import { measurementTimeLabel } from '../../core/model/station';
@@ -76,7 +76,7 @@ import { ta } from '../../core/i18n';
 
 function CurrentPage() {
   const { palette } = useTheme();
-  const { prefs, location } = usePrefs();
+  const { prefs, location, setTileLayout, setSoilTileLayout } = usePrefs();
   const { model, nowcast, phase, error, refresh, offsetSec, precipMeasured } = useForecast();
   const insets = useSafeAreaInsets();
   const pagePadding = usePagePadding();
@@ -142,7 +142,38 @@ function CurrentPage() {
     ],
     [model, labels, nowcast, precipMeasured, soil.placement, soil.latest, soilLabels]
   );
-  const tiles = useMemo(() => arrangeTiles(allTiles, prefs.tiles), [allTiles, prefs.tiles]);
+  /**
+   * Measured blocks first, before the reader's own order is applied.
+   *
+   * The page's promise is that a green dot means an instrument reported this. That is
+   * easy to miss in a grid where the two kinds are interleaved, and on a field it is
+   * the whole point of the page: the suction is a reading and the wind beside it is a
+   * forecast for the region. Sorting the natural order puts what was measured where
+   * the eye lands first.
+   *
+   * A stable partition, so within each half the blocks keep the order `modelTiles`
+   * and `soilTiles` produced. And it only sets the *natural* order — anything the
+   * reader has dragged is named in the layout and keeps its place, so this changes
+   * nothing for someone who has arranged their grid.
+   */
+  const ordered = useMemo(
+    () => [...allTiles.filter((t) => t.measured), ...allTiles.filter((t) => !t.measured)],
+    [allTiles]
+  );
+
+  /**
+   * A field keeps its own arrangement.
+   *
+   * On a field the suction and the refill room are what the app is opened for; on a
+   * town it is the rain and the wind. One shared arrangement would mean every soil
+   * block dragged to the top reorders the ordinary pages too, and every weather block
+   * hidden on a field disappears from them.
+   */
+  const onSoil = !!soil.placement;
+  const layout = onSoil ? prefs.soilTiles ?? DEFAULT_TILE_LAYOUT : prefs.tiles;
+  const writeLayout = onSoil ? setSoilTileLayout : setTileLayout;
+
+  const tiles = useMemo(() => arrangeTiles(ordered, layout), [ordered, layout]);
 
   // Everything on this page comes out of the forecast, which the control refreshes
   // by itself — including the station readings merged into it.
@@ -273,14 +304,21 @@ function CurrentPage() {
       )}
     </ScrollView>
 
-    <TileSheet tile={compared} labels={labels} onClose={() => setCompared(null)} />
+    <TileSheet
+      tile={compared}
+      labels={labels}
+      soilLabels={soilLabels}
+      onClose={() => setCompared(null)}
+    />
 
     {/* The editor takes a shape rather than a `Tile`, since the overview page
         arranges its widgets through the same one. */}
     <TileEditor
       visible={editing}
       onClose={() => setEditing(false)}
-      all={allTiles.map((t) => ({ id: t.id, title: t.title, hint: t.timeLabel }))}
+      all={ordered.map((t) => ({ id: t.id, title: t.title, hint: t.timeLabel }))}
+      layout={layout}
+      onChange={writeLayout}
     />
     </>
   );

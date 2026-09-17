@@ -172,6 +172,16 @@ export interface Prefs {
   quietHours: boolean;
   /** The 'Actueel' grid's arrangement. See `TileLayout`. */
   tiles: TileLayout;
+  /**
+   * The same, kept separately for a location a soil sensor speaks for.
+   *
+   * A field's page has blocks a weather page never shows and, more to the point, a
+   * different order worth having: on a field the suction and the refill room are what
+   * you open the app for, and on a town it is the rain and the wind. One arrangement
+   * for both would mean every soil block someone drags to the top reorders their
+   * ordinary pages too, and every weather block they hide disappears from their field.
+   */
+  soilTiles: TileLayout;
   /** The overview page's, in the same shape and through the same machinery — see
    *  `core/overview`. One implementation of "your order, minus what you switched
    *  off", reused rather than written twice. */
@@ -210,6 +220,7 @@ export const DEFAULT_PREFS: Prefs = {
   notifyFrost: false,
   quietHours: true,
   tiles: DEFAULT_TILE_LAYOUT,
+  soilTiles: DEFAULT_TILE_LAYOUT,
   overview: DEFAULT_OVERVIEW_LAYOUT,
   overviewSettings: {},
 };

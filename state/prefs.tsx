@@ -11,7 +11,7 @@ import {
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  DEFAULT_PREFS, mergePrefs, activeLocation, withCurrentLocation,
+  DEFAULT_PREFS, DEFAULT_TILE_LAYOUT, mergePrefs, activeLocation, withCurrentLocation,
   type Prefs, type SavedLocation, type TileLayout,
 } from '../core/prefs';
 
@@ -41,6 +41,8 @@ interface PrefsContextValue {
   /** Rewrite the 'Actueel' grid's arrangement. Takes the current one, so a caller
    *  never has to read and write it in two steps. */
   setTileLayout: (next: (layout: TileLayout) => TileLayout) => void;
+  /** The same, for the arrangement a field's page keeps of its own. */
+  setSoilTileLayout: (next: (layout: TileLayout) => TileLayout) => void;
   selectLocation: (index: number) => void;
   /** Record where the device is as the first page, replacing any earlier fix. */
   setCurrentLocation: (loc: SavedLocation) => void;
@@ -170,6 +172,10 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     setState((p) => ({ ...p, tiles: next(p.tiles) }));
   }, []);
 
+  const setSoilTileLayout = useCallback((next: (layout: TileLayout) => TileLayout) => {
+    setState((p) => ({ ...p, soilTiles: next(p.soilTiles ?? DEFAULT_TILE_LAYOUT) }));
+  }, []);
+
   const setCurrentLocation = useCallback((loc: SavedLocation) => {
     setState((p) => withCurrentLocation(p, loc));
   }, []);
@@ -185,11 +191,11 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
       prefs, ready, setPref, setPrefs, mutate,
       location: activeLocation(prefs),
       addLocation, removeLocation, reorderLocation, selectLocation,
-      setCurrentLocation, setTileLayout,
+      setCurrentLocation, setTileLayout, setSoilTileLayout,
     }),
     [
       prefs, ready, setPref, setPrefs, mutate, addLocation, removeLocation,
-      reorderLocation, selectLocation, setCurrentLocation, setTileLayout,
+      reorderLocation, selectLocation, setCurrentLocation, setTileLayout, setSoilTileLayout,
     ]
   );
 

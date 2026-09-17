@@ -8,7 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import { soilTiles, placementContext, type SoilTileLabels } from '../core/model/soilTiles';
 import { soilCapabilities, soilProbeSilent, type Placement } from '../core/model/soil';
-import type { SoilSample } from '../core/sources/agroexact';
+import type { MeasuredHour, SoilSample } from '../core/sources/agroexact';
+import { measuredSeriesKeys } from '../core/model/series';
 
 const HEESCH: Placement = {
   stationId: 's1', placementId: 'p1', lat: 51.73, lon: 5.53,
@@ -119,5 +120,39 @@ describe('soil tiles', () => {
     // worst of the three to be wrong about.
     expect(placementContext({ ...HEESCH, soil: null }, 'sensor op 30 cm'))
       .toBe('Aardappel · sensor op 30 cm');
+  });
+});
+
+describe('measured against filled in', () => {
+  it('names only the quantities this station reported itself', () => {
+    // With external substitution on, a rain gauge answers with a full record. Treating
+    // the whole record as measured would put an instrument's authority behind every
+    // number on it, so each field is asked on its own.
+    const gauge: MeasuredHour[] = [{
+      time: '2026-07-01T10:00',
+      temp: null, tempMin: null, tempMax: null,
+      humidity: null, humidityMin: null, humidityMax: null, dewpoint: null,
+      wind: null, gusts: null, windDir: null,
+      precip: 2.4, radiation: null,
+    }];
+    expect(measuredSeriesKeys(gauge)).toEqual(['precip']);
+  });
+
+  it('names every quantity a full station reported', () => {
+    const full: MeasuredHour[] = [{
+      time: '2026-07-01T10:00',
+      temp: 18, tempMin: 17, tempMax: 19,
+      humidity: 70, humidityMin: 65, humidityMax: 75, dewpoint: 12,
+      wind: 9, gusts: 15, windDir: 200,
+      precip: 0, radiation: 410,
+    }];
+    expect(measuredSeriesKeys(full))
+      .toEqual(['temp', 'precip', 'humidity', 'wind', 'windDir', 'radiation']);
+  });
+
+  it('names nothing on a location with no instrument at all', () => {
+    // Which is what keeps an ordinary town from growing a row labelled "filled in"
+    // over everything on it.
+    expect(measuredSeriesKeys([])).toEqual([]);
   });
 });

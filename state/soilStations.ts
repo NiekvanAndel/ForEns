@@ -14,7 +14,7 @@
  * needs to know first that measurements arrive at all.
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AgroAuthError, distanceKm, fetchLatestSoilMeasurement, fetchSoilHours, fetchSoilRange,
   fetchSoilReadings, fetchSoilStations, withAgroToken,
@@ -22,7 +22,7 @@ import {
 } from '../core/sources/agroexact';
 import { isDormant, placementFromStation } from '../core/model/soil';
 import type { SoilObservations } from '../core/model/station';
-import { syncSoilLocations } from '../core/prefs';
+import { syncSoilLocations, type SavedLocation } from '../core/prefs';
 import { useAgroAuth } from './auth';
 import { usePrefs } from './prefs';
 
@@ -356,4 +356,62 @@ export function useSoilObservations(
       : null),
     [station, query.data]
   );
+}
+
+/** One location's soil sensor and what it last reported, for the comparison sheet. */
+export interface LocationSoil {
+  location: SavedLocation;
+  station: SoilStation;
+  latest: SoilSample | null;
+  loading: boolean;
+}
+
+/**
+ * Every location that has a soil sensor, with its latest reading.
+ *
+ * What the comparison sheet needs for a soil block: tap suction on one field and see
+ * every field beside it. Only the locations that have a sensor appear — a town has no
+ * answer to "how dry is it at 30 cm", and a row of dashes for it would suggest it
+ * might have had one.
+ *
+ * Idle until the sheet is open, like the weather comparison it sits beside: a grid of
+ * blocks nobody has tapped should cost nothing.
+ */
+export function useAllLocationSoil(enabled: boolean): LocationSoil[] {
+  const { prefs } = usePrefs();
+  const auth = useAgroAuth();
+  const { data: sensors } = useAgroSoilStations();
+
+  const fields = useMemo(() => {
+    const byId = new Map((sensors ?? []).map((s) => [s.id, s]));
+    return prefs.locations
+      .map((location) => ({ location, station: byId.get(location.soilStationId ?? '') }))
+      .filter((r): r is { location: SavedLocation; station: SoilStation } => !!r.station);
+  }, [prefs.locations, sensors]);
+
+  const results = useQueries({
+    queries: fields.map(({ station }) => ({
+      queryKey: soilLatestKey(station.id),
+      enabled: enabled && auth.status === 'connected',
+      staleTime: SOIL_READING_STALE_MS,
+      retry: (count: number, error: Error) =>
+        !(error instanceof AgroAuthError) && count < 1,
+      queryFn: async ({ signal }: { signal: AbortSignal }): Promise<SoilSample | null> => {
+        const out = await withAgroToken(
+          auth.getAccessToken,
+          (token) => fetchLatestSoilMeasurement(
+            token, station.id, 0, station.depthCm ?? 0, { signal }
+          ),
+          auth.reportUnauthorized
+        );
+        return out?.current ?? null;
+      },
+    })),
+  });
+
+  return fields.map((f, i) => ({
+    ...f,
+    latest: results[i]?.data ?? null,
+    loading: results[i]?.isFetching ?? false,
+  }));
 }

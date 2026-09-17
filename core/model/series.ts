@@ -90,6 +90,33 @@ export const SERIES_META: Record<SeriesKey, SeriesMeta> = {
   radiation: { key: 'radiation', shape: 'line', summary: 'range', axisMin: 0 },
 };
 
+/**
+ * Which quantities an instrument actually answered for, from its own hours.
+ *
+ * The page's pill row splits on this: what was measured *here* goes on one line and
+ * what was filled in from a model on the next, so a reader can see at a glance that
+ * the temperature on a rain gauge's page is not a reading.
+ *
+ * Per quantity, never per station. A RainExact answers with a full record once
+ * external data is substituted in — that is the whole point of `station_only=false` —
+ * and treating the whole record as measured would put an instrument's authority
+ * behind every number on it. So this asks each field whether *this* station reported
+ * it, which is the same rule `modelTiles` follows for its green dots.
+ */
+export function measuredSeriesKeys(hours: readonly MeasuredHour[]): SeriesKey[] {
+  const has = (pick: (h: MeasuredHour) => number | null) =>
+    hours.some((h) => pick(h) != null);
+
+  const out: SeriesKey[] = [];
+  if (has((h) => h.temp)) out.push('temp');
+  if (has((h) => h.precip)) out.push('precip');
+  if (has((h) => h.humidity)) out.push('humidity');
+  if (has((h) => h.wind)) out.push('wind');
+  if (has((h) => h.windDir)) out.push('windDir');
+  if (has((h) => h.radiation)) out.push('radiation');
+  return out;
+}
+
 /** Beyond this many days the samples are days rather than hours. */
 export const DAY_RESOLUTION_FROM = 3;
 

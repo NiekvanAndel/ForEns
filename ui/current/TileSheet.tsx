@@ -34,11 +34,16 @@ import { ta } from '../../core/i18n';
 import { tileReading } from './ConditionTile';
 import { TileAlertForm } from './TileAlertSheet';
 import { isAlertKind } from '../../core/alerts';
+import { useAllLocationSoil } from '../../state/soilStations';
+import { placementFromStation } from '../../core/model/soil';
+import { placementContext, soilTiles, type SoilTileLabels } from '../../core/model/soilTiles';
 
 export interface TileSheetProps {
   /** The block to compare, or null when the sheet is shut. */
   tile: Tile | null;
   labels: TileLabels;
+  /** Needed only to compare a soil block, and absent on a page with no sensor. */
+  soilLabels?: SoilTileLabels;
   onClose: () => void;
 }
 
@@ -48,9 +53,18 @@ interface Row {
   value: number | null;
   measured: boolean;
   loading: boolean;
+  /**
+   * The line that makes a soil reading readable — crop, soil and depth.
+   *
+   * 48 kPa means one thing on sand under onions and another on heavy clay under
+   * potatoes, so a column of suction figures from different fields cannot be compared
+   * without it. Absent on every weather block, where the quantity means the same
+   * everywhere.
+   */
+  hint?: string;
 }
 
-export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
+export function TileSheet({ tile, labels, soilLabels, onClose }: TileSheetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const insets = useSafeAreaInsets();
@@ -70,10 +84,44 @@ export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
     if (tile) setMode('compare');
   }, [tile]);
 
-  const conditions = useAllLocationConditions(tile != null && mode === 'compare');
-  const nowcasts = useAllLocationNowcasts(tile?.id === 'rain-next-1h' && mode === 'compare');
+  /** A soil block compares fields, not places — a different question and a different
+   *  source, so a different fetch. */
+  const isSoilTile = !!tile?.id.startsWith('soil-');
+  const open = tile != null && mode === 'compare';
 
-  const rows: Row[] = conditions.map(({ location, model, loading }, i) => {
+  const conditions = useAllLocationConditions(open && !isSoilTile);
+  const nowcasts = useAllLocationNowcasts(tile?.id === 'rain-next-1h' && mode === 'compare');
+  const fields = useAllLocationSoil(open && isSoilTile);
+
+  const soilRows: Row[] = fields.map(({ location, station, latest, loading }) => {
+    // Built through `soilTiles` rather than read off the sample, so a row and the
+    // block behind it cannot disagree about the same quantity — the same rule the
+    // weather rows follow.
+    const placement = latest
+      ? placementFromStation(
+          {
+            id: station.id, lat: station.lat, lon: station.lon,
+            crop: station.crop, depthCm: station.depthCm,
+            thresholds: station.thresholds, type: station.type,
+          },
+          latest.measTime
+        )
+      : null;
+    const match = placement && soilLabels
+      ? soilTiles(placement, latest, soilLabels).find((t) => t.id === tile?.id)
+      : undefined;
+    return {
+      name: location.name,
+      value: match?.value ?? null,
+      measured: match?.measured ?? false,
+      loading,
+      hint: placement
+        ? placementContext(placement, `${placement.depthCm} cm`) || undefined
+        : undefined,
+    };
+  });
+
+  const weatherRows: Row[] = conditions.map(({ location, model, loading }, i) => {
     // The same blocks the grid behind is drawing, for this location; the one
     // being compared is picked out by id, so the two cannot describe different
     // windows of the same quantity.
@@ -88,6 +136,10 @@ export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
     };
   });
 
+  const rows = isSoilTile ? soilRows : weatherRows;
+
+  // Highest first, which on suction is the driest field first — the one to go to.
+  // A bearing is not a quantity and does not sort.
   const sorted =
     tile?.kind === 'direction'
       ? rows
@@ -186,14 +238,16 @@ export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
                     }}
                   />
                 ) : null}
-                <Text
-                  variant="label"
-                  color={palette.inkHeading}
-                  numberOfLines={1}
-                  style={{ flexShrink: 1, flexGrow: 1 }}
-                >
-                  {row.name}
-                </Text>
+                <View style={{ flexShrink: 1, flexGrow: 1 }}>
+                  <Text variant="label" color={palette.inkHeading} numberOfLines={1}>
+                    {row.name}
+                  </Text>
+                  {row.hint ? (
+                    <Text variant="caption" color={palette.muted} numberOfLines={1}>
+                      {row.hint}
+                    </Text>
+                  ) : null}
+                </View>
                 <Reading row={row} tile={tile} />
               </View>
             ))}

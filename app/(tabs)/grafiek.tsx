@@ -162,7 +162,7 @@ import { useForecast } from '../../state/forecast';
 import { useLocationStation, useStationRange } from '../../state/stations';
 import { useLocationSoil, useSoilRange } from '../../state/soilStations';
 import {
-  buildSeries, dayKey, daySpan, forecastHorizon, SERIES_META,
+  buildSeries, dayKey, daySpan, forecastHorizon, measuredSeriesKeys, SERIES_META,
   type Sample, type SeriesKey,
 } from '../../core/model/series';
 import {
@@ -265,7 +265,7 @@ const PEAK_LABEL = {
 function GraphPage() {
   const { palette } = useTheme();
   const { prefs, location } = usePrefs();
-  const { model, offsetSec, phase } = useForecast();
+  const { model, offsetSec, phase, precipMeasured } = useForecast();
   const insets = useSafeAreaInsets();
   const pagePadding = usePagePadding();
   const peeking = usePeeking();
@@ -504,7 +504,7 @@ function GraphPage() {
     [soil.station?.type, soilRows]
   );
 
-  const pills: PillItem<ChartKey>[] = [
+  const allPills: PillItem<ChartKey>[] = [
     ...SERIES.map((entry) => ({
       key: entry.key as ChartKey,
       icon: entry.icon,
@@ -516,6 +516,39 @@ function GraphPage() {
       label: ta(SOIL_PILLS[k].labelKey, prefs.lang),
     })),
   ];
+
+  /**
+   * Which of those an instrument at this place actually answered for.
+   *
+   * Soil quantities are measurements by construction — they only exist because a
+   * sensor reported them. The weather ones are asked of the station's own hours, per
+   * quantity: with external substitution on, a rain gauge answers with a full record,
+   * and a temperature in it is not a reading however complete the row looks.
+   */
+  const measuredKeys = useMemo(() => {
+    const set = new Set<ChartKey>(measuredSeriesKeys(measurements.data ?? []));
+    // A PLUS or PRO soil sensor is the rain gauge on a field that has no pole.
+    if (precipMeasured) set.add('precip');
+    for (const k of soilKeys) set.add(k);
+    return set;
+  }, [measurements.data, precipMeasured, soilKeys]);
+
+  /**
+   * Two rows, because the difference between them is the thing a reader most needs
+   * and could least see.
+   *
+   * Under one heading called "Meetwaarde", a modelled temperature on a soil sensor's
+   * page sits beside a measured suction and reads exactly as true. Splitting them and
+   * naming both halves is the cheapest honest fix: nothing is hidden, and nothing is
+   * dressed up as a reading either.
+   *
+   * With no instrument at all there is nothing to split, so the row stays the single
+   * one it has always been rather than growing a label that says "filled in" over
+   * everything on an ordinary place.
+   */
+  const measuredPills = allPills.filter((p) => measuredKeys.has(p.key));
+  const filledPills = allPills.filter((p) => !measuredKeys.has(p.key));
+  const splitPills = measuredPills.length > 0 && filledPills.length > 0;
 
   // Swiping to a location without that sensor must not leave the page on a pill that
   // is no longer there — an empty chart with a selected pill reads as a failure.
@@ -642,7 +675,16 @@ function GraphPage() {
             question of the same weight as over what period. */}
         <View>
           <CardHeader label={ta('measurement', prefs.lang)} />
-          <PillSwitcher items={pills} active={key} onChange={setKey} />
+          {splitPills ? (
+            <>
+              <RowLabel text={ta('pillMeasured', prefs.lang)} tone={palette.agroInk} dot />
+              <PillSwitcher items={measuredPills} active={key} onChange={setKey} />
+              <RowLabel text={ta('pillFilled', prefs.lang)} tone={palette.muted} />
+              <PillSwitcher items={filledPills} active={key} onChange={setKey} />
+            </>
+          ) : (
+            <PillSwitcher items={allPills} active={key} onChange={setKey} />
+          )}
         </View>
 
         {/* Not a card. A chart inside one is inset three times over — the page's own
@@ -824,6 +866,34 @@ function GraphPage() {
         </View>
       </Columns>
     </ScrollView>
+  );
+}
+
+/**
+ * The caption over a row of pills.
+ *
+ * The green dot is this app's mark for an instrument everywhere else — on a block, on
+ * a location's name — so it is the mark here too rather than a second vocabulary for
+ * the same idea.
+ */
+function RowLabel({ text, tone, dot }: { text: string; tone: string; dot?: boolean }) {
+  const { palette } = useTheme();
+  return (
+    <View
+      style={{
+        flexDirection: 'row', alignItems: 'center', gap: 5,
+        paddingTop: space[2], paddingBottom: 5,
+      }}
+    >
+      {dot ? (
+        <View
+          style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroInk }}
+        />
+      ) : null}
+      <Text variant="caption" weight="semibold" color={tone}>
+        {text}
+      </Text>
+    </View>
   );
 }
 
