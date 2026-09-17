@@ -1,0 +1,142 @@
+/**
+ * The account's soil sensors, and what the nearest one is reporting.
+ *
+ * Kept apart from `state/stations.ts` because a soil sensor is not a weather station
+ * with different fields on it. A pole stands in one place for years and becomes a
+ * location; a soil sensor is station × field × crop × soil × depth × season, and its
+ * history belongs to the field rather than to the device — see `core/model/soil`. The
+ * two will need different syncs, and starting them in one file would mean pulling them
+ * apart again at the first placement.
+ *
+ * This is the first thing in the app that actually calls the soil endpoints. It is
+ * deliberately small: the list, and one sensor's latest reading. Everything the plan
+ * builds on top — blocks on 'Actueel', series on 'Grafiek', the placement segments —
+ * needs to know first that measurements arrive at all.
+ */
+import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  AgroAuthError, distanceKm, fetchLatestSoilMeasurement, fetchSoilStations, withAgroToken,
+  type SoilSample, type SoilStation,
+} from '../core/sources/agroexact';
+import { isDormant } from '../core/model/soil';
+import { useAgroAuth } from './auth';
+
+/** Sensors are added and moved by hand in the web app; an hour between fetches is
+ *  as generous here as it is for the weather stations. */
+const SOIL_STATIONS_STALE_MS = 60 * 60_000;
+/** A soil sensor reports about every thirty minutes, so a quarter of an hour of
+ *  reuse never costs a reading. */
+const SOIL_READING_STALE_MS = 15 * 60_000;
+
+export const soilStationsKey = ['agroexact', 'soilstations'] as const;
+export const soilLatestKey = (stationId: string) =>
+  ['agroexact', 'soil-latest', stationId] as const;
+
+/**
+ * The soil sensors linked to the signed-in account.
+ *
+ * Empty rather than an error when nobody is signed in, exactly as `useAgroStations`
+ * does: every caller has a perfectly good page to draw without sensors.
+ */
+export function useAgroSoilStations() {
+  const auth = useAgroAuth();
+
+  return useQuery({
+    queryKey: soilStationsKey,
+    enabled: auth.status === 'connected',
+    staleTime: SOIL_STATIONS_STALE_MS,
+    queryFn: async ({ signal }): Promise<SoilStation[]> => {
+      const rows = await withAgroToken(
+        auth.getAccessToken,
+        (token) => fetchSoilStations(token, { signal }),
+        auth.reportUnauthorized
+      );
+      return rows ?? [];
+    },
+    retry: (count, error) => !(error instanceof AgroAuthError) && count < 2,
+  });
+}
+
+/** What one sensor is reporting, and whether it is in the ground at all. */
+export interface NearestSoil {
+  station: SoilStation;
+  /** Great-circle distance from the point asked about, km. */
+  dist: number;
+  /** Null while the reading is still in flight, and when there is none to have. */
+  latest: SoilSample | null;
+  /** Out of the ground rather than broken — fourteen days without a measurement. */
+  dormant: boolean;
+  loading: boolean;
+}
+
+/**
+ * The sensor nearest a point, and its latest reading.
+ *
+ * One sensor, one call. The account has over a thousand of them and asking each for
+ * its state would be a thousand requests to answer a question one of them settles.
+ *
+ * No radius: a sensor eighty kilometres away is reported as being eighty kilometres
+ * away rather than hidden behind a threshold this app would have had to invent. The
+ * distance is the answer to "is this mine", and the reader is better at it than a
+ * constant would be.
+ */
+export function useNearestSoilSensor(lat: number | null, lon: number | null): NearestSoil | null {
+  const auth = useAgroAuth();
+  const { data: stations } = useAgroSoilStations();
+
+  const nearest = useMemo(() => {
+    if (lat == null || lon == null || !stations?.length) return null;
+    let best: { station: SoilStation; dist: number } | null = null;
+    for (const s of stations) {
+      const dist = distanceKm(lat, lon, s.lat, s.lon);
+      if (!best || dist < best.dist) best = { station: s, dist };
+    }
+    return best;
+  }, [stations, lat, lon]);
+
+  const query = useQuery({
+    queryKey: soilLatestKey(nearest?.station.id ?? ''),
+    enabled: auth.status === 'connected' && !!nearest,
+    staleTime: SOIL_READING_STALE_MS,
+    queryFn: async ({ signal }): Promise<SoilSample | null> => {
+      if (!nearest) return null;
+      const out = await withAgroToken(
+        auth.getAccessToken,
+        (token) => fetchLatestSoilMeasurement(
+          token,
+          nearest.station.id,
+          // The row shows the measurement's own timestamp in the reader's zone, so
+          // the local hour key this would bucket into is not used and the offset
+          // does not matter. Anything drawing a series must pass the real one.
+          0,
+          nearest.station.depthCm ?? 0,
+          { signal }
+        ),
+        auth.reportUnauthorized
+      );
+      return out?.current ?? null;
+    },
+    retry: (count, error) => !(error instanceof AgroAuthError) && count < 2,
+  });
+
+  if (!nearest) return null;
+  return {
+    station: nearest.station,
+    dist: nearest.dist,
+    latest: query.data ?? null,
+    // No reading at all is the same answer as a very old one: the sensor is not in
+    // the ground. It is a state, not a fault, and nothing here reports it as one.
+    dormant: !query.isFetching && isDormant(query.data?.measTime ?? null),
+    loading: query.isFetching,
+  };
+}
+
+/** Refetch the soil sensor list now, alongside the station refresh in Instellingen. */
+export function useRefreshSoilStations() {
+  const client = useQueryClient();
+  return useCallback(
+    () => client.invalidateQueries({ queryKey: soilStationsKey }),
+    [client]
+  );
+}

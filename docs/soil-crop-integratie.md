@@ -375,6 +375,24 @@ Nog geen pagina geeft de prop mee: de bodemreeksen op 'Grafiek' zijn stap 4b, en
 zuigspanning is volgens blad 3 de eerste klant. Wind en Delta T staan er in de
 volgorde expliciet áchter.
 
+### Eerste aansluiting op een scherm
+
+Tussen stap 2 en 3 in, en buiten de volgorde om: tot hier riep niets in de app de
+bodemcode aan, dus er was niets te zien of te controleren. Daarom is er nu één rij op
+Instellingen → Integraties → AgroExact:
+
+- `state/soilStations.ts` — `useAgroSoilStations` (de lijst) en `useNearestSoilSensor`
+  (de dichtstbijzijnde sensor bij de eerste locatie, plus zijn laatste meting). Apart
+  van `state/stations.ts` gehouden: een bodemsensor is geen weerstation met andere
+  velden, en de twee syncs gaan uiteenlopen zodra de plaatsingen er zijn.
+- Eén extra call, niet duizend: het account heeft er 1181, en de vraag "komt er data
+  binnen" wordt door één sensor beantwoord.
+- **Geen straal.** Een sensor op tachtig kilometer wordt gemeld als tachtig kilometer,
+  niet verborgen achter een grens die deze app had moeten verzinnen. De afstand is het
+  antwoord op "is dit de mijne", en de lezer is daar beter in dan een constante.
+- **"Niet actief" is een toestand**, geen storing — ook als er helemaal geen meting is.
+  Een sensor die eruit ligt is het normale najaar.
+
 Stap 3 — de profielwizard — is hiermee aan de beurt.
 
 ## Nog open

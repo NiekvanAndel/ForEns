@@ -25,15 +25,27 @@ import { Icon } from '../Icon';
 import { usePrefs } from '../../state/prefs';
 import { useAgroAuth } from '../../state/auth';
 import { useAgroStations, useRefreshStations } from '../../state/stations';
+import {
+  useAgroSoilStations, useNearestSoilSensor, useRefreshSoilStations,
+} from '../../state/soilStations';
 import { agroIntegration, unlinkStationLocations, DEFAULT_AGRO_INTEGRATION } from '../../core/prefs';
 import { ta } from '../../core/i18n';
+import type { LangCode } from '../../core/i18n/strings';
+import { fmtDecimal } from '../../core/i18n/units';
 
 export function IntegrationCard() {
   const { palette } = useTheme();
   const { prefs, mutate } = usePrefs();
   const { status, account, error, signIn, signOut } = useAgroAuth();
   const { data: stations, isFetching } = useAgroStations();
+  const { data: soilStations } = useAgroSoilStations();
   const refreshStations = useRefreshStations();
+  const refreshSoil = useRefreshSoilStations();
+  // Measured against the first saved place, which is the one the app opens on. The
+  // question this row answers — is there a sensor of mine, and is it reporting — is
+  // about somewhere the reader actually is, not about the account's centre of mass.
+  const home = prefs.locations[0] ?? null;
+  const nearestSoil = useNearestSoilSensor(home?.lat ?? null, home?.lon ?? null);
   const [busy, setBusy] = useState(false);
   const lang = prefs.lang;
   const integration = agroIntegration(prefs);
@@ -121,9 +133,26 @@ export function IntegrationCard() {
           <Row
             icon="arrows-clockwise"
             label={ta('agroRefreshStations', lang)}
-            onPress={() => { tap(); refreshStations(); }}
+            // One button for both lists: they come from the same account and nobody
+            // refreshing their stations means "but leave the soil sensors stale".
+            onPress={() => { tap(); refreshStations(); refreshSoil(); }}
           >
             {isFetching ? <ActivityIndicator color={palette.accent} /> : null}
+          </Row>
+
+          <Row
+            icon="drop-half"
+            label={ta('agroSoilCount', lang)}
+            hint={home ? soilHint(nearestSoil, lang) : undefined}
+            last={false}
+          >
+            {nearestSoil?.loading ? (
+              <ActivityIndicator color={palette.accent} />
+            ) : (
+              <Text variant="bodySm" weight="semibold" color={palette.inkHeading} tabular>
+                {soilStations?.length ?? 0}
+              </Text>
+            )}
           </Row>
 
           <Row
@@ -171,10 +200,44 @@ export function IntegrationCard() {
       <View style={{ paddingHorizontal: space[5], paddingBottom: space[4] }}>
         <Text variant="caption" color={palette.muted} style={{ lineHeight: 17 }}>
           {ta('agroLocationsNote', lang)}
+          {connected && soilStations?.length ? `\n\n${ta('agroSoilNote', lang)}` : ''}
         </Text>
       </View>
     </Group>
   );
+}
+
+/**
+ * What the soil row says under its count.
+ *
+ * Three answers, and the difference between the last two is the whole point of the
+ * row: a sensor reporting suction, a sensor that is out of the ground, and no sensor
+ * near this place at all. "Not active" is a state and is worded as one — a soil
+ * sensor is lifted at harvest and goes back in in spring, and an app that called that
+ * a fault would report a breakdown to every grower each autumn.
+ *
+ * The distance is always there. It is what answers "is this one mine", and a reader
+ * does that better than any radius this app could have picked.
+ *
+ * Only called once there is a place to measure from. Without one there is no nearest
+ * anything, and saying "no soil sensor found" would blame the account for what is
+ * really a sync that has not finished.
+ */
+function soilHint(soil: ReturnType<typeof useNearestSoilSensor>, lang: LangCode): string {
+  if (!soil) return ta('agroSoilNone', lang);
+
+  const where = [
+    soil.station.name,
+    `${fmtDecimal(soil.dist)} km`,
+    soil.station.crop,
+    soil.station.depthCm ? `${soil.station.depthCm} cm` : null,
+  ].filter(Boolean).join(' · ');
+
+  if (soil.loading) return where;
+  if (soil.dormant || soil.latest?.tension == null) {
+    return `${where} — ${ta('agroSoilDormant', lang)}`;
+  }
+  return `${where} — ${fmtDecimal(soil.latest.tension)} kPa`;
 }
 
 /** The card's one button. A row rather than a pill, so it lines up with the rows
