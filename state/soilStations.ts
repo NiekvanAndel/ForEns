@@ -156,7 +156,20 @@ export function useRefreshSoilStations() {
  * Null all the way down is the ordinary case. Most locations have no soil sensor, and
  * a page that has none simply draws no soil blocks.
  */
-export function useLocationSoil(location: { soilStationId?: string } | null) {
+export function useLocationSoil(
+  location: { soilStationId?: string } | null,
+  /**
+   * The location's own UTC offset, from the forecast.
+   *
+   * Not optional in spirit: the sample's `time` is bucketed with it, and anything
+   * comparing that key against the model's `nowHour` — which is a local key — needs
+   * the two on the same clock. Bucketing on UTC puts a reading west of Greenwich in
+   * the future, where `buildIndicator` will not count it as the current state and the
+   * card loses its bar. Zero is the honest default for a caller that has no offset
+   * yet, and such a caller is not comparing keys.
+   */
+  offsetSec = 0
+) {
   const auth = useAgroAuth();
   const { data: sensors } = useAgroSoilStations();
   const id = location?.soilStationId ?? null;
@@ -167,7 +180,7 @@ export function useLocationSoil(location: { soilStationId?: string } | null) {
   );
 
   const query = useQuery({
-    queryKey: soilLatestKey(id ?? ''),
+    queryKey: [...soilLatestKey(id ?? ''), offsetSec],
     enabled: auth.status === 'connected' && !!station,
     staleTime: SOIL_READING_STALE_MS,
     queryFn: async ({ signal }): Promise<SoilSample | null> => {
@@ -175,7 +188,7 @@ export function useLocationSoil(location: { soilStationId?: string } | null) {
       const out = await withAgroToken(
         auth.getAccessToken,
         (token) => fetchLatestSoilMeasurement(
-          token, station.id, 0, station.depthCm ?? 0, { signal }
+          token, station.id, offsetSec, station.depthCm ?? 0, { signal }
         ),
         auth.reportUnauthorized
       );

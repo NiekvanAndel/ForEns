@@ -8,7 +8,7 @@
  * summary: every measurand for each of seven days, with the second week a tap away.
  * Tapping a day opens the same sheet 'Verwachting' opens, on its overview section.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,12 +23,15 @@ import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
 import { AlertHero } from '../../ui/nowcast/AlertHero';
 import { ConditionsHero } from '../../ui/nowcast/ConditionsHero';
+import { SoilHero } from '../../ui/nowcast/SoilHero';
 import { RadarPreview } from '../../ui/nowcast/RadarPreview';
 import { HourSlider } from '../../ui/nowcast/HourSlider';
 import { ForecastPreview } from '../../ui/nowcast/ForecastPreview';
 import { DaySheet } from '../../ui/forecast/DaySheet';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
+import { useLocationSoil } from '../../state/soilStations';
+import { waterTensionIndicator } from '../../core/model/indicators';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
 import { t, ta } from '../../core/i18n';
@@ -43,6 +46,27 @@ function NowcastPage() {
   } = useForecast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+
+  /**
+   * Everything the field's card needs, or null on a place that is not one.
+   *
+   * The rainfall comes off the model rather than off the sample, because the sensor's
+   * own hours have already been merged into it — rain and irrigation are one number,
+   * and this is the number.
+   */
+  const soil = useLocationSoil(location, offsetSec);
+  const soilHero = useMemo(() => {
+    if (!soil.placement || !soil.latest || !model) return null;
+    const rain24 = model.pastHours
+      .slice(-24)
+      .reduce((sum, h) => sum + (h.precip ?? 0), 0);
+    return {
+      placement: soil.placement,
+      latest: soil.latest,
+      indicator: waterTensionIndicator([soil.latest], soil.placement, model.nowHour),
+      rain24: Math.round(rain24 * 10) / 10,
+    };
+  }, [soil.placement, soil.latest, model]);
   const pagePadding = usePagePadding();
 
   const [expanded, setExpanded] = useState(false);
@@ -149,14 +173,28 @@ function NowcastPage() {
           <>
             <AlertHero alert={alert} />
 
-            <ConditionsHero
-              model={model}
-              location={location}
-              sourceLabel={sourceLabel}
-              timeLabel={timeLabel}
-              // The card's own subject at full length. See `ConditionsHero`.
-              onPress={() => router.push('/actueel')}
-            />
+            {/* On a field, the weather hero answers a question nobody asked: it leads
+                with a temperature modelled for the region, and leaves out the one
+                reading that decides today. So a field gets its own card, and the
+                weather it needs is still two taps away on 'Actueel'. */}
+            {soilHero ? (
+              <SoilHero
+                name={location.name}
+                placement={soilHero.placement}
+                latest={soilHero.latest}
+                indicator={soilHero.indicator}
+                rain24={soilHero.rain24}
+              />
+            ) : (
+              <ConditionsHero
+                model={model}
+                location={location}
+                sourceLabel={sourceLabel}
+                timeLabel={timeLabel}
+                // The card's own subject at full length. See `ConditionsHero`.
+                onPress={() => router.push('/actueel')}
+              />
+            )}
 
             {/* The next hours, as their own block: the hero says what it is doing
                 now, this says what happens next, and a tap on an hour opens that

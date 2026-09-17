@@ -303,7 +303,7 @@ function GraphPage() {
   // The soil sensor bound to this place, and its window. Same `fine` rule: a single
   // day gets the raw half-hourly records, anything longer the hourly roll-ups — which
   // withhold the last half hour, a second reason the day view wants the raw ones.
-  const soil = useLocationSoil(location);
+  const soil = useLocationSoil(location, offsetSec);
   const soilMeasurements = useSoilRange(
     soil.station?.id ?? null,
     soil.station?.depthCm ?? 0,

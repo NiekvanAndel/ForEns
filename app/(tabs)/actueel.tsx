@@ -83,7 +83,7 @@ function CurrentPage() {
   const router = useRouter();
 
   const station = useLocationStation(location);
-  const soil = useLocationSoil(location);
+  const soil = useLocationSoil(location, offsetSec);
   /** The block being compared across locations, or null when the sheet is shut. */
   const [compared, setCompared] = useState<Tile | null>(null);
   const [editing, setEditing] = useState(false);

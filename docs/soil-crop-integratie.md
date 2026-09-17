@@ -546,6 +546,45 @@ met 8 en één met 4 — zou de lezer vragen zijn eigen perceel op te tellen.
 
 Daarmee is §5 af op één punt na: de vergelijkrij over locaties voor bodemblokken.
 
+### Gemeten tegenover aangevuld, en de kaart van een perceel
+
+Onder een kop die 'Meetwaarde' heet stond een gemodelleerde temperatuur naast een
+gemeten zuigspanning, en las precies zo waar. Vier plekken waar dat nu uit elkaar
+gehaald is.
+
+- **'Grafiek': de pillenrij splitst in tweeën** — *hier gemeten* met de groene stip,
+  en daaronder *aangevuld uit het model*. Per grootheid bepaald en niet per station:
+  met externe aanvulling aan geeft een regenmeter een volledig record terug, en de
+  temperatuur daarin is geen meting. Zonder instrument blijft het de ene rij die het
+  was.
+- **'Actueel': gemeten blokken vooraan** in de natuurlijke volgorde. Een stabiele
+  partitie, en alleen de *natuurlijke* volgorde — wie zijn raster zelf heeft ingedeeld
+  merkt er niets van.
+- **Een perceel bewaart zijn eigen indeling** (`prefs.soilTiles`). Op een perceel open
+  je de app voor de zuigspanning, op een dorp voor de regen; één gedeelde indeling zou
+  betekenen dat elk bodemblok dat naar boven gesleept wordt ook de gewone pagina's
+  herordent.
+- **Het vergelijkscherm werkt door voor bodemblokken** — het laatste punt van §5. Tik
+  op zuigspanning en alle percelen staan ernaast, het droogste eerst, elk met gewas en
+  diepte eronder. Alleen locaties met een sensor: een dorp heeft geen antwoord op hoe
+  droog het op dertig centimeter is.
+
+En op 'Nu' vervangt `SoilHero` de weerhero op een perceel. Die leidde met een
+temperatuur die voor de streek gemodelleerd is, op een pagina die over één perceel
+gaat, en liet de meting die vandaag beslist helemaal weg. De kaart volgt die van de
+webapp, met wat deze app eerlijk kan tonen: geen serienummer en geen grondsoort, want
+geen van beide zit in API v2.
+
+De balk eronder is de indicatorlaag getekend: vier zones uit de drempels van dít
+perceel met de meting erin. Een samengevallen band krijgt geen breedte en tekent dus
+niets. Elke volgende indicator kan zo getekend worden zodra hij grenzen heeft die het
+waard zijn.
+
+Eén bug die het bouwen opleverde: de laatste meting werd op UTC gebucket terwijl
+`nowHour` een lokale sleutel is. Westelijk van Greenwich valt die meting daarmee in de
+toekomst, telt `buildIndicator` hem niet als de huidige toestand, en verdwijnt de balk.
+De offset van de locatie gaat nu mee.
+
 ## Nog open
 
 - ~~De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt
