@@ -95,38 +95,46 @@ describe('the two syncs living together', () => {
     expect(after.locations.map((l) => l.name)).toContain('Kortgene');
   });
 
-  it('keeps a sensor bound across a station sync that renames its host', () => {
+  it('leaves a weather pole page alone and gives the sensor its own', () => {
+    // Two instruments answering different questions, sharing a fence post. The pole's
+    // page is the air over a region; the sensor's page is the water in one field.
     const withStation = prefsWith([
       at(51.73, 5.53, { name: 'Heesch', stationId: 'w1', source: 'agroexact' }),
     ]);
-    const bound = syncSoilLocations(withStation, [sensor('s1', 51.73, 5.53)]);
+    const after = syncSoilLocations(withStation, [sensor('s1', 51.73, 5.53, 'Noord')]);
+    expect(after.locations).toHaveLength(2);
+    expect(after.locations[0]!.soilStationId).toBeUndefined();
+    expect(after.locations[1]).toMatchObject({ name: 'Noord', soilStationId: 's1' });
+  });
+
+  it('keeps both pages when the station sync later renames the pole', () => {
+    const withStation = prefsWith([
+      at(51.73, 5.53, { name: 'Heesch', stationId: 'w1', source: 'agroexact' }),
+    ]);
+    const bound = syncSoilLocations(withStation, [sensor('s1', 51.73, 5.53, 'Noord')]);
     const after = syncStationLocations(bound, [{
       stationId: 'w1', stationName: 'Weide', lat: 51.73, lon: 5.53, place: 'Nistelrode',
     }]);
-    expect(after.locations[0]).toMatchObject({ name: 'Nistelrode', soilStationId: 's1' });
+    expect(after.locations.map((l) => l.name)).toEqual(['Nistelrode', 'Noord']);
   });
 });
 
 describe('the two syncs landing in either order', () => {
-  it('folds a field back in when a place arrives on top of it later', () => {
-    // The soil sync went first, so the sensor made its own page. Then the station
-    // sync put a weather pole fifty metres away — the same ground, two pages.
+  it('folds a field back in when an ordinary place arrives on top of it later', () => {
+    // The soil sync went first, so the sensor made its own page. Then a saved place
+    // turned up fifty metres away — the same ground, two pages. A weather station
+    // arriving there would not do this; see the test above.
     const first = syncSoilLocations(prefsWith([]), [sensor('s1', 51.73, 5.53, 'Noord')]);
     expect(first.locations).toHaveLength(1);
 
-    const withPole = {
+    const withPlace = {
       ...first,
-      locations: [
-        ...first.locations,
-        at(51.73 + 50 * M, 5.53, { name: 'Heesch', stationId: 'w1', source: 'agroexact' as const }),
-      ],
+      locations: [...first.locations, at(51.73 + 50 * M, 5.53, { name: 'Heesch' })],
     };
-    const after = syncSoilLocations(withPole, [sensor('s1', 51.73, 5.53, 'Noord')]);
+    const after = syncSoilLocations(withPlace, [sensor('s1', 51.73, 5.53, 'Noord')]);
 
     expect(after.locations).toHaveLength(1);
-    expect(after.locations[0]).toMatchObject({
-      name: 'Heesch', stationId: 'w1', soilStationId: 's1',
-    });
+    expect(after.locations[0]).toMatchObject({ name: 'Heesch', soilStationId: 's1' });
   });
 
   it('leaves a field alone when the place that turns up is a field away', () => {

@@ -457,6 +457,12 @@ export function syncStationLocations(prefs: Prefs, stations: readonly StationPla
  * field, which is what a grower calls it anyway. A wider radius would have produced
  * fewer pages and attached suction readings to the wrong ground, and of those two
  * this one is the mistake you cannot see.
+ *
+ * **A place that carries a weather station never hosts one**, however near it stands.
+ * Also the grower's call, and it is about what a page is *for*: a weather station's
+ * page is the air over a region, a soil sensor's page is the water in one field. Two
+ * instruments answering different questions get two pages, even when they share a
+ * fence post. So the radius only ever applies to an ordinary saved place.
  */
 export const SOIL_COUPLING_KM = 0.2;
 
@@ -479,14 +485,25 @@ export interface SoilPlace {
  *
  * Three outcomes per sensor:
  *
- *  - a saved place within `SOIL_COUPLING_KM` takes it, and keeps its own name. The
- *    reader already calls that place something; the sensor is a second instrument on
- *    it, not a second page.
+ *  - an ordinary saved place within `SOIL_COUPLING_KM` takes it, and keeps its own
+ *    name. The reader already calls that place something.
+ *  - a place that carries a weather station never takes it, at any distance: two
+ *    instruments answering different questions get two pages.
  *  - otherwise it becomes its own location, named after the field.
  *  - a place at most one sensor. Two sensors on one field are two fields as far as
  *    this app can tell, and the second gets its own page rather than overwriting the
  *    first's readings.
  */
+/**
+ * Whether a place may take a soil sensor.
+ *
+ * One sensor per place, and never a place that is already a weather station's — see
+ * `SOIL_COUPLING_KM` on why two instruments do not share a page.
+ */
+function canHost(l: SavedLocation): boolean {
+  return !l.soilStationId && !l.stationId;
+}
+
 export function syncSoilLocations(prefs: Prefs, sensors: readonly SoilPlace[]): Prefs {
   const viewed = prefs.locations[prefs.activeLocation];
   const byId = new Map(sensors.map((s) => [s.stationId, s]));
@@ -515,10 +532,8 @@ export function syncSoilLocations(prefs: Prefs, sensors: readonly SoilPlace[]): 
   const hosted: SavedLocation[] = base.filter((l) => {
     const ownPage = !!l.soilStationId && l.source === 'agroexact' && !l.stationId;
     if (!ownPage) return true;
-    return !base.some(
-      (other) => other !== l && !other.soilStationId
-        && distanceKm(l.lat, l.lon, other.lat, other.lon) <= SOIL_COUPLING_KM
-    );
+    return !base.some((other) => other !== l && canHost(other)
+      && distanceKm(l.lat, l.lon, other.lat, other.lon) <= SOIL_COUPLING_KM);
   });
 
   const taken = new Set(
@@ -538,7 +553,7 @@ export function syncSoilLocations(prefs: Prefs, sensors: readonly SoilPlace[]): 
     let nearest = -1;
     let best = SOIL_COUPLING_KM;
     locations.forEach((l, i) => {
-      if (l.soilStationId) return; // one sensor per place
+      if (!canHost(l)) return;
       const d = distanceKm(l.lat, l.lon, s.lat, s.lon);
       if (d <= best) { best = d; nearest = i; }
     });

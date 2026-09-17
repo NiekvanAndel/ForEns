@@ -24,7 +24,7 @@ benoemde backend-toevoegingen hieronder.
 | | Besluit |
 | --- | --- |
 | Verplaatsen | Zelfde `SoilStation`, nieuwe lat/lon en nieuwe instellingen. Verplaatsen is een **expliciete handeling in de webapp**, geen afleiding uit gewijzigde coördinaten. |
-| Locatie | Een plaatsing wordt een **eigen locatie**, behalve wanneer er al een locatie binnen **200 m** ligt — dan wordt hij daaraan gekoppeld. (Was ~2 km; op 17 sep teruggebracht naar 200 m, zie hieronder.) |
+| Locatie | Een plaatsing wordt een **eigen locatie**, behalve wanneer er al een gewone plek binnen **200 m** ligt. Een locatie die een **weerstation** draagt wordt nooit gastheer, hoe dichtbij ook: twee instrumenten die verschillende vragen beantwoorden krijgen twee pagina's. (Was ~2 km; 17 sep teruggebracht naar 200 m, en daarna het weerstation uitgezonderd.) |
 | Historie | Afgeleide waarden worden berekend met de **instellingen van dat moment**, niet met de huidige. |
 | Windwrijving | Blijft buiten de app. |
 | Neerslag en beregening | Eén getal, geen scheiding. |
@@ -450,8 +450,11 @@ binnenkomt — maar dat vraagt dat de regelmachinerie bodemsensoren leert kennen
 ### De koppeling, en de 200 meter
 
 `SavedLocation` krijgt `soilStationId`, en `syncSoilLocations` in `core/prefs.ts` doet
-per sensor één van drie dingen: koppelen aan een plek binnen 200 m, anders een eigen
-locatie worden met de **perceelnaam** (geen reverse-geocode: vier percelen rond één
+per sensor één van drie dingen: koppelen aan een **gewone** plek binnen 200 m — een
+locatie met een weerstation erop komt daar niet voor in aanmerking, hoe dichtbij ook,
+want de pagina van een weerpaal gaat over de lucht boven een streek en die van een
+bodemsensor over het water in één perceel — anders een eigen locatie worden met de
+**perceelnaam** (geen reverse-geocode: vier percelen rond één
 dorp zouden anders alle vier naar dat dorp heten), en per plek hoogstens één sensor —
 twee sensoren op één plek zijn twee percelen, en de tweede mag de metingen van de
 eerste niet overschrijven.

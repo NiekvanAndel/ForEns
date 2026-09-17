@@ -229,7 +229,7 @@ export function useSoilLocationSync() {
     // the station sync may land after this one, and a sensor that made its own page
     // for want of a host has to be reconsidered once the host appears.
     const hosts = prefs.locations
-      .filter((l) => !l.soilStationId)
+      .filter((l) => !l.soilStationId && !l.stationId)
       .map((l) => `${l.lat.toFixed(4)},${l.lon.toFixed(4)}`)
       .sort()
       .join(';');
