@@ -241,6 +241,38 @@ Bodem hoort in de basis om dezelfde reden als de ziektemodellen: een bodem achte
 betaalmuur bereikt de meeste gebruikers nooit en telt dus niet mee in het gesprek met
 een partner.
 
+## 10b. Wat de live API op 17 september 2026 antwoordde
+
+Gecontroleerd tegen `/soilstations/`, `/soilreadings/` en `/soil_aggregates/` op het
+eigen account, voordat er code omheen kwam. Drie dingen die het plan raken.
+
+**`/soilstations/` bevestigt de ontbrekende velden.** Elk van de 1181 sensoren geeft
+exact tien velden: `station_id`, `name`, `latitude`, `longitude`, `version_type`,
+`crop`, `placement_depth` en de drie drempels. Geen `soil`, geen `field_capacity`,
+geen `last_reading_at` — punt 5 van §3 staat dus zoals het er staat. `version_type` is
+BASIC (790), PLUS (81) of PRO (310); dat is *niet* de as SoilExact–CropExact. Wat
+beslist of er een gewassensor is, is of de metingen `temperature_10` dragen, en dat
+is per meting te zien in plaats van per station te raden.
+
+**238 van de 1181 sensoren hebben `threshold_0_to_1 == threshold_1_to_2`.** Dat is
+een vijfde van het bestand, en het is een echte instelling: op dat perceel is er geen
+suboptimale band, het gaat van goed naar beregenen. Drempels moeten dus
+*niet-dalend* zijn, niet strikt stijgend — een controle op strikt stijgend gooit een
+vijfde van de drempels weg omdat hun eigenaar ze zo heeft gezet. Een omgekeerde
+volgorde is wél een fout en levert geen drempellijn, met de sensor gewoon in de lijst.
+
+**Alle bodemsensoren antwoordden leeg.** BASIC, PLUS en PRO, over vensters van 24 uur
+tot een zomerweek in juli: `total: 0`. De winterstand van §1 is daarmee niet de
+uitzondering maar de toestand waarin de meeste sensoren het grootste deel van het jaar
+staan, en het is de eerste toestand die de app goed moet doen — niet de laatste.
+
+Het gevolg voor §9: **de eenheden zijn niet gepind.** `water_percentage` en
+`bijvulruimte` konden niet tegen echte waarden gehouden worden zoals
+`global_radiation` dat wel is. `refillMm` volgt de webapp (vol-% × diepte / 10) en is
+daarmee zo goed als de bron. `waterPercent` moet gokken, en doet dat langs de enige
+grens waar bodemvocht niet dubbelzinnig over kan zijn — geen grond zit op of onder
+1 vol-%, geen grond haalt 100 — in één functie, zodat pinnen later één regel is.
+
 ## 11. Volgorde
 
 Ingevlochten in de veertien stappen van het integrale voorstel.
@@ -260,6 +292,28 @@ Ingevlochten in de veertien stappen van het integrale voorstel.
 
 Fase 1 van de app-kant (de bron in `core/sources/agroexact.ts`, met de eenheden en de
 tests) is onafhankelijk van de backend en kan meteen.
+
+## Wat er nu in de app staat
+
+Fase 1 is gebouwd en staat los van de backend:
+
+- `core/model/soil.ts` — `Placement`, `SoilThresholds`, `SoilStatus`, de twee
+  eenheidsomrekeningen (`refillMm`, `waterPercent`), de winterstand (`isDormant`) en
+  het splitsen van een reeks op plaatsingsgrenzen (`placementAt`,
+  `segmentByPlacement`). Zolang `/placements/` er niet is, maakt
+  `placementFromStation` de ene lopende plaatsing die de huidige instellingen
+  beschrijven, gemarkeerd `assumed` zodat een pagina "instellingen onbekend vóór
+  «datum»" kan zeggen in plaats van een bevroren drempel te suggereren die er niet is.
+- `core/sources/agroexact.ts` — `fetchSoilStations`, `fetchLatestSoilMeasurement`,
+  `fetchSoilRange` (`/soil_aggregates/`, uur, eind-van-het-uur gecorrigeerd) en
+  `fetchSoilReadings` (`/soilreadings/`, halfuur). Dezelfde `dd-mm-YYYY`-conversie,
+  dezelfde NDJSON-tolerante rijlezer, dezelfde oudste-eerst-volgorde als de weerkant.
+- `tests/soil.test.ts` — dertien tests om de besluiten heen: de drempelbanden en de
+  samenvallende drempel, de twee eenheidsvallen, het uur dat een uur terug hoort, de
+  lege reeks, de plaatsingssplitsing en de winterstand.
+
+Stap 1 van de volgorde — zuigspanning als eerste indicator in `indicators.ts` — is
+hiermee aan de beurt, met de drempels die de bron al meelevert.
 
 ## Nog open
 
