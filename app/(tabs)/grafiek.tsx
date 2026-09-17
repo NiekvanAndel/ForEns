@@ -495,10 +495,14 @@ function GraphPage() {
   /**
    * Which soil quantities this sensor can draw, from what it actually reported.
    *
-   * A pill per quantity that has a value somewhere in the window. On a location with
-   * no sensor there are none and the row is the six it has always been.
+   * The sensor's model decides which probes exist and the window decides whether they
+   * said anything — see `soilSeriesKeys`. On a location with no sensor there are none
+   * and the row is the six it has always been.
    */
-  const soilKeys = useMemo(() => soilSeriesKeys(soilRows), [soilRows]);
+  const soilKeys = useMemo(
+    () => soilSeriesKeys(soil.station?.type, soilRows),
+    [soil.station?.type, soilRows]
+  );
 
   const pills: PillItem<ChartKey>[] = [
     ...SERIES.map((entry) => ({

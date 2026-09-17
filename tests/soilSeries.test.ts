@@ -68,17 +68,22 @@ describe('soil series', () => {
     expect(first.band).toEqual({ lo: 20, hi: 40 });
   });
 
-  it('offers a pill only for a quantity the sensor actually reports', () => {
-    // Read from the readings, not from `version_type`: BASIC, PLUS and PRO say
-    // nothing about whether there is a probe at 10 cm.
-    const plain = soilSeriesKeys([s('2026-07-01T09:00')]);
-    expect(plain).toContain('waterTension');
-    expect(plain).not.toContain('temp10');
-    expect(plain).not.toContain('humidity10');
+  it('offers the canopy pills only on the model that has that probe', () => {
+    // BASIC is suction only, PLUS adds rainfall, PRO adds the air at 10 cm. Hardware,
+    // so no window of readings can change the answer.
+    const reading = s('2026-07-01T09:00', { temp10: 19, humidity10: 88 });
+    expect(soilSeriesKeys('PRO', [reading])).toContain('temp10');
+    expect(soilSeriesKeys('BASIC', [reading])).not.toContain('temp10');
+    expect(soilSeriesKeys('PLUS', [reading])).not.toContain('humidity10');
+    // An unknown model answers conservatively: suction is all every sensor has.
+    expect(soilSeriesKeys(null, [reading])).not.toContain('temp10');
+    expect(soilSeriesKeys(null, [reading])).toContain('waterTension');
+  });
 
-    const canopy = soilSeriesKeys([s('2026-07-01T09:00', { temp10: 19, humidity10: 88 })]);
-    expect(canopy).toContain('temp10');
-    expect(canopy).toContain('humidity10');
+  it('still drops a pill for a probe that said nothing all window', () => {
+    // The model says the probe is there; the window says it reported nothing. A pill
+    // onto an empty chart leaves the reader wondering what they did wrong.
+    expect(soilSeriesKeys('PRO', [s('2026-07-01T09:00')])).not.toContain('temp10');
   });
 
   it('pins pF to its own range instead of letting it scale', () => {

@@ -18,10 +18,12 @@
  * rather than a number in a grid of measurements. Both are settled before it appears,
  * not after.
  *
- * The canopy blocks — temperature, humidity and dew point at 10 cm — appear only where
- * the sensor actually reports them. They are a different quantity from the same
- * readings at 1.50 m, not a better version of them, so they are their own blocks and
- * must never quietly overwrite the weather station's.
+ * The canopy blocks — temperature, humidity and dew point at 10 cm — appear only on a
+ * PRO, which is the model that has that probe. Asking the readings instead, as this
+ * did first, cannot tell a sensor without the probe from one whose probe is silent.
+ * They are a different quantity from the same readings at 1.50 m, not a better version
+ * of them, so they are their own blocks and must never quietly overwrite the weather
+ * station's.
  *
  * ## Rainfall is not here
  *
@@ -32,7 +34,7 @@
  *
  * Pure: no formatting, no unit conversion, no words beyond the labels handed in.
  */
-import { isDormant, type Placement } from './soil';
+import { isDormant, soilCapabilities, type Placement } from './soil';
 import type { Tile, TileKind } from './tiles';
 import type { SoilSample } from '../sources/agroexact';
 
@@ -87,6 +89,7 @@ export function soilTiles(
   };
 
   const depth = labels.atDepth;
+  const { canopy } = soilCapabilities(placement.sensorType);
 
   return [
     // The indicator itself, and the reason soil comes first in the layer.
@@ -103,11 +106,13 @@ export function soilTiles(
     tile('water-percent', labels.waterPercent, depth, latest.waterPercent, 'percent'),
     tile('pf', labels.pF, depth, latest.pF, 'pf'),
     tile('soil-temp', labels.soilTemp, depth, latest.soilTemp, 'temp'),
-    // Canopy: present only on a sensor that carries one, and never a stand-in for
-    // the readings at 1.50 m.
-    tile('temp-10', labels.temp10, labels.now, latest.temp10, 'temp'),
-    tile('humidity-10', labels.humidity10, labels.now, latest.humidity10, 'percent'),
-    tile('dewpoint-10', labels.dewpoint10, labels.now, latest.dewpoint10, 'temp'),
+    // Canopy: PRO only, decided by the sensor's model rather than by whether a value
+    // happens to be there. Never a stand-in for the readings at 1.50 m.
+    ...(canopy ? [
+      tile('temp-10', labels.temp10, labels.now, latest.temp10, 'temp'),
+      tile('humidity-10', labels.humidity10, labels.now, latest.humidity10, 'percent'),
+      tile('dewpoint-10', labels.dewpoint10, labels.now, latest.dewpoint10, 'temp'),
+    ] : []),
   ].filter((t): t is Tile => t != null);
 }
 

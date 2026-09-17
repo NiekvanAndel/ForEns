@@ -848,8 +848,11 @@ export interface SoilStation {
   name: string;
   lat: number;
   lon: number;
-  /** BASIC, PLUS or PRO. Not the same axis as SoilExact vs CropExact: what decides
-   *  whether there is a canopy sensor is whether the readings carry `temperature_10`. */
+  /**
+   * BASIC, PLUS or PRO, and it says exactly what the sensor carries: BASIC suction
+   * only, PLUS suction and rainfall, PRO those plus air temperature and humidity at
+   * 10 cm. Read it through `soilCapabilities` rather than comparing strings here.
+   */
   type: string | null;
   crop: string | null;
   /** Sensor depth, cm — also what turns refill room from vol-% into mm. */
@@ -864,7 +867,8 @@ export interface SoilStation {
  *
  * Every field independently nullable, for the same reason the weather shapes are: a
  * BASIC sensor has no canopy probe, a season has hours before the sensor went in, and
- * one dead field should cost that field rather than the chart.
+ * one dead field should cost that field rather than the chart. Which nulls are
+ * expected and which are a fault is `soilCapabilities`' answer, not this shape's.
  */
 export interface SoilSample {
   /** Local wall-clock key — the hour for an aggregate, the half hour for a reading. */

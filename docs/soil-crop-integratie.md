@@ -250,10 +250,24 @@ eigen account, voordat er code omheen kwam. Drie dingen die het plan raken.
 vlootbrede lijst geeft
 exact tien velden: `station_id`, `name`, `latitude`, `longitude`, `version_type`,
 `crop`, `placement_depth` en de drie drempels. Geen `soil`, geen `field_capacity`,
-geen `last_reading_at` — punt 5 van §3 staat dus zoals het er staat. `version_type` is
-BASIC (790), PLUS (81) of PRO (310); dat is *niet* de as SoilExact–CropExact. Wat
-beslist of er een gewassensor is, is of de metingen `temperature_10` dragen, en dat
-is per meting te zien in plaats van per station te raden.
+geen `last_reading_at` — punt 5 van §3 staat dus zoals het er staat.
+
+`version_type` is BASIC (790), PLUS (81) of PRO (310), en zegt **precies** welke
+voelers erin zitten:
+
+| | zuigspanning | neerslag | lucht op 10 cm |
+| --- | --- | --- | --- |
+| BASIC | ✓ | | |
+| PLUS | ✓ | ✓ | |
+| PRO | ✓ | ✓ | ✓ |
+
+> **Gecorrigeerd op 17 sep.** Hier stond eerst dat `version_type` hier níets over zegt
+> en dat je aan de metingen moest zien of er een voeler op 10 cm zit. Dat was een gok,
+> en een dure: een null kan "die voeler bestaat niet" niet onderscheiden van "die
+> voeler zwijgt", en juist dat onderscheid is waar de hele indicatorlaag op rust.
+> `soilCapabilities` beantwoordt het nu zonder request, en `soilProbeSilent` maakt er
+> de vraag van die er werkelijk toe doet: is dit een BASIC zonder voeler, of een PRO
+> die stuk is?
 
 **238 van de 1181 sensoren hebben `threshold_0_to_1 == threshold_1_to_2`.** Dat is
 een vijfde van de vloot, en het is een echte instelling: op dat perceel is er geen
@@ -494,9 +508,10 @@ dezelfde cursor en de drempellijnen van stap 2.
   natte week één rechte streep — precies het enige wat de lezer kwam zien.
 - **Zuigspanning krijgt géén vaste bovengrens.** De drempels bepalen hoever de as
   reikt, en die verschillen per perceel.
-- **Welke pillen verschijnen volgt uit de metingen**, niet uit `version_type`: BASIC,
-  PLUS en PRO zeggen niets over of er een voeler op 10 cm zit. Een pil voor een
-  grootheid die overal null is opent een lege grafiek en geeft de lezer de schuld.
+- **Welke pillen verschijnen volgt uit twee filters.** Het model van de sensor zegt
+  welke voelers er zijn — dat is hardware, dus een BASIC biedt nooit een 10 cm-pil, hoe
+  het venster ook liep — en de metingen zeggen of er iets terugkwam, want een pil naar
+  een lege grafiek geeft de lezer de schuld.
 - **Een gat blijft een gat.** De sensor meet elk halfuur en die gaten zijn echt; een
   lijn die er stilletjes overheen loopt zegt dat er gemeten is waar dat niet zo is.
 - Een venster langer dan drie dagen vouwt naar één punt per dag met de spreiding als

@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { soilTiles, placementContext, type SoilTileLabels } from '../core/model/soilTiles';
-import type { Placement } from '../core/model/soil';
+import { soilCapabilities, soilProbeSilent, type Placement } from '../core/model/soil';
 import type { SoilSample } from '../core/sources/agroexact';
 
 const HEESCH: Placement = {
@@ -53,18 +53,41 @@ describe('soil tiles', () => {
     });
   });
 
-  it('leaves out the canopy blocks on a sensor without a canopy probe', () => {
-    // A block reading "—" would claim there is a probe at 10 cm that is silent.
-    const plain = byId(soilTiles(HEESCH, sample(), L, clock));
-    expect(plain).not.toContain('soil-temp-10');
-    expect(plain).not.toContain('soil-humidity-10');
+  it('gives the canopy blocks to a PRO and to nothing else', () => {
+    // BASIC is suction only, PLUS adds rainfall, PRO adds the air at 10 cm. It is the
+    // model that decides, not whether a value happens to be in this reading.
+    const withCanopy = sample({ temp10: 19.3, humidity10: 96, dewpoint10: 18.6 });
 
-    const crop = byId(soilTiles(
-      HEESCH, sample({ temp10: 19.3, humidity10: 96, dewpoint10: 18.6 }), L, clock
-    ));
-    expect(crop).toContain('soil-temp-10');
-    expect(crop).toContain('soil-humidity-10');
-    expect(crop).toContain('soil-dewpoint-10');
+    const pro = byId(soilTiles({ ...HEESCH, sensorType: 'PRO' }, withCanopy, L, clock));
+    expect(pro).toContain('soil-temp-10');
+    expect(pro).toContain('soil-humidity-10');
+    expect(pro).toContain('soil-dewpoint-10');
+
+    const basic = byId(soilTiles({ ...HEESCH, sensorType: 'BASIC' }, withCanopy, L, clock));
+    expect(basic).not.toContain('soil-temp-10');
+    const plus = byId(soilTiles({ ...HEESCH, sensorType: 'PLUS' }, withCanopy, L, clock));
+    expect(plus).not.toContain('soil-humidity-10');
+  });
+
+  it('holds a PRO with a silent probe apart from a BASIC without one', () => {
+    // The distinction the whole layer rests on, one level down. A BASIC reporting no
+    // canopy is a BASIC; a PRO reporting none is a fault, and only one of those is
+    // worth telling anyone about.
+    expect(soilProbeSilent('PRO', 'canopy', null)).toBe(true);
+    expect(soilProbeSilent('BASIC', 'canopy', null)).toBe(false);
+    expect(soilProbeSilent('PRO', 'canopy', 19.3)).toBe(false);
+    // Rainfall is the same question one model down.
+    expect(soilProbeSilent('PLUS', 'precip', null)).toBe(true);
+    expect(soilProbeSilent('BASIC', 'precip', null)).toBe(false);
+  });
+
+  it('claims no probe at all for a model it does not recognise', () => {
+    expect(soilCapabilities('CROPEXACT-9000')).toEqual({
+      tension: true, precip: false, canopy: false,
+    });
+    // Suction is what a soil sensor is, so every model has it.
+    expect(soilCapabilities(null).tension).toBe(true);
+    expect(soilCapabilities('pro')).toEqual({ tension: true, precip: true, canopy: true });
   });
 
   it('shows the figure to top up from suboptimal onward, not only at irrigate', () => {

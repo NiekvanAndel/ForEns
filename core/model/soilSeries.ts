@@ -15,6 +15,7 @@
  * without the chart learning anything new.
  */
 import { DAY_RESOLUTION_FROM, daySpan, timeKeys, type Sample, type Series, type SeriesShape } from './series';
+import { soilCapabilities } from './soil';
 import type { SoilSample } from '../sources/agroexact';
 
 /** Which soil quantity a chart is about. */
@@ -67,15 +68,25 @@ function valueOf(key: SoilSeriesKey, s: SoilSample): number | null {
 }
 
 /**
- * Which soil quantities this sensor can actually draw.
+ * Which soil quantities this sensor can draw.
  *
- * Read from the readings rather than from the sensor's type, because `version_type`
- * is BASIC, PLUS or PRO and says nothing about whether there is a probe at 10 cm. A
- * pill for a quantity that is null all the way along would open an empty chart and
- * leave the reader wondering what they did wrong.
+ * Two filters, and they answer different questions. The sensor's **model** says which
+ * probes exist — BASIC suction only, PLUS with rainfall, PRO with the air at 10 cm —
+ * and that is hardware, so a BASIC never offers a canopy pill however the window went.
+ * The **readings** then say whether anything came back, because a pill onto an empty
+ * chart leaves the reader wondering what they did wrong.
+ *
+ * Keeping them apart is what lets the app tell a probe that is not there from a probe
+ * that is silent. Deriving it from the readings alone, as this did first, collapses
+ * the two into one shrug.
  */
-export function soilSeriesKeys(samples: readonly SoilSample[]): SoilSeriesKey[] {
+export function soilSeriesKeys(
+  versionType: string | null | undefined,
+  samples: readonly SoilSample[]
+): SoilSeriesKey[] {
+  const can = soilCapabilities(versionType);
   return (Object.keys(SOIL_SERIES_META) as SoilSeriesKey[])
+    .filter((key) => (SOIL_SERIES_META[key].canopy ? can.canopy : true))
     .filter((key) => samples.some((s) => valueOf(key, s) != null));
 }
 

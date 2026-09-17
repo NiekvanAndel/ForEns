@@ -78,6 +78,15 @@ export interface Placement {
   depthCm: number;
   /** Frozen at creation: what was in force while this placement ran. */
   thresholds: SoilThresholds;
+  /**
+   * The model of sensor that sat in this field — BASIC, PLUS or PRO.
+   *
+   * Placement-scoped rather than station-scoped because swapping the device is one of
+   * the things a move is: last season's field may have had a PRO reporting the air at
+   * 10 cm where this one has a BASIC, and a chart of last season must not lose its
+   * canopy line because of what is in the ground today. See `soilCapabilities`.
+   */
+  sensorType?: string | null;
   /** True where the settings are today's rather than the ones that actually ran —
    *  everything before the first recorded move. Pages label such a segment rather
    *  than quietly presenting it as measured fact. */
@@ -244,6 +253,8 @@ export function placementFromStation(
     crop: string | null;
     depthCm: number | null;
     thresholds: SoilThresholds | null;
+    /** BASIC, PLUS or PRO. */
+    type?: string | null;
   },
   /** When this placement is taken to have started — the season's first reading
    *  where one is known. */
@@ -263,6 +274,63 @@ export function placementFromStation(
     soil: null,
     depthCm: station.depthCm,
     thresholds: station.thresholds,
+    sensorType: station.type ?? null,
     assumed: true,
   };
+}
+
+/**
+ * What a sensor carries, from the model it is.
+ *
+ * `version_type` on `/soilstations/` is the answer, and it is exact:
+ *
+ * | | suction | rainfall | 10 cm air |
+ * | --- | --- | --- | --- |
+ * | BASIC | ✓ | | |
+ * | PLUS | ✓ | ✓ | |
+ * | PRO | ✓ | ✓ | ✓ |
+ *
+ * This replaces a guess. The source layer used to say that the type told you nothing
+ * and that the only way to know about a probe at 10 cm was to look for a value in the
+ * readings — which works, and is exactly the wrong instrument for the job: a null
+ * cannot tell "there is no probe" from "the probe is silent". Those are the two states
+ * the honesty rules most need to keep apart, and the sensor's own model settles it
+ * without a request.
+ *
+ * Unknown types answer conservatively: suction only. Every sensor has that, and
+ * claiming a probe that may not exist is the more expensive mistake.
+ */
+export interface SoilCapabilities {
+  /** Every model has it. It is what a soil sensor is. */
+  tension: boolean;
+  /** PLUS and PRO. Rain and irrigation together, which is the whole point of it. */
+  precip: boolean;
+  /** PRO only: air temperature, humidity and so dew point, at 10 cm above the ground.
+   *  A different quantity from the same readings at 1.50 m, never a better one. */
+  canopy: boolean;
+}
+
+export function soilCapabilities(versionType: string | null | undefined): SoilCapabilities {
+  const type = (versionType ?? '').trim().toUpperCase();
+  return {
+    tension: true,
+    precip: type === 'PLUS' || type === 'PRO',
+    canopy: type === 'PRO',
+  };
+}
+
+/**
+ * A probe that should be reporting and is not.
+ *
+ * The distinction the whole indicator layer is built on, one level down: a BASIC with
+ * no canopy reading is a BASIC, and a PRO with no canopy reading is a fault. Only the
+ * second is worth telling anyone about — and without the model it was impossible to
+ * say which one you were looking at.
+ */
+export function soilProbeSilent(
+  versionType: string | null | undefined,
+  probe: 'precip' | 'canopy',
+  value: number | null | undefined
+): boolean {
+  return soilCapabilities(versionType)[probe] && value == null;
 }
