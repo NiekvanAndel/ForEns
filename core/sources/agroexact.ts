@@ -832,13 +832,14 @@ export function localMinuteKey(utcIso: string, offsetSec: number, stepMin = 10):
  * half hour exists only on `/soilreadings/`. A page that wants "now" asks
  * `fetchLatestSoilMeasurement`, not the tail of the hourly series.
  *
- * **Every sensor on the account answered these endpoints empty** on 17 September
- * 2026, across BASIC, PLUS and PRO and across windows from 24 hours to a summer
- * fortnight. So the row shapes below are the v2 schema as `docs/soil-crop-integratie.md`
- * records it, and unlike the radiation conversion they are *not* pinned against live
- * data. Everything maps through `num`, a missing field is a null rather than a
- * failure, and the one genuinely ambiguous quantity is isolated in
- * `waterPercent` so that pinning it later is a single edit.
+ * **The field names below are the v2 schema, not live data.** Five sensors sampled
+ * from a fleet-wide listing answered these endpoints empty, which turned out to say
+ * something about those five rather than about the endpoints: a real account's sensor
+ * reports suction perfectly well. So unlike the radiation conversion these names are
+ * still unpinned, and they are written defensively for it — everything maps through
+ * `num`, a missing field is a null rather than a failure, and the one genuinely
+ * ambiguous quantity is isolated in `waterPercent` so that pinning it later is a
+ * single edit.
  */
 
 /** A soil sensor as `/soilstations/` reports it. */
@@ -960,11 +961,12 @@ export async function fetchSoilStations(
 /**
  * The three thresholds, or null if the sensor has no usable set.
  *
- * They must be non-decreasing, and that is all: on 17 September 2026, 238 of the
- * account's 1181 sensors have `threshold_0_to_1` equal to `threshold_1_to_2`, which
- * is a real setting — that field has no suboptimal band, it goes from fine straight
- * to irrigate. Demanding a strictly rising set would throw away a fifth of the
- * account's thresholds for being configured the way their owners configured them.
+ * They must be non-decreasing, and that is all: of the 1181 sensors a fleet-wide
+ * listing returned on 17 September 2026, 238 have `threshold_0_to_1` equal to
+ * `threshold_1_to_2`. That is a real setting — such a field has no suboptimal band, it
+ * goes from fine straight to irrigate. Demanding a strictly rising set would throw
+ * away a fifth of the fleet's thresholds for being configured the way their owners
+ * configured them.
  */
 function soilThresholds(r: SoilStationRow): SoilThresholds | null {
   const scarce = num(r.threshold_0_to_1);

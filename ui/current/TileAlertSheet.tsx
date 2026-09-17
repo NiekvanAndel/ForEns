@@ -43,16 +43,25 @@ import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { usePrefs } from '../../state/prefs';
 import { useAgroStations } from '../../state/stations';
-import { draftProblem, makeAlert, upsertAlert, type AlertOp, type DraftAlert } from '../../core/alerts';
-import type { Tile, TileKind } from '../../core/model/tiles';
+import {
+  draftProblem, makeAlert, upsertAlert,
+  type AlertKind, type AlertOp, type DraftAlert,
+} from '../../core/alerts';
+import type { Tile } from '../../core/model/tiles';
 import {
   convTempExact, convWindExact, t, ta, tempUnitLabel, windUnitLabel,
 } from '../../core/i18n';
 import type { Prefs } from '../../core/prefs';
 
 export interface TileAlertFormProps {
-  /** The block the rule is about. */
-  tile: Tile;
+  /**
+   * The block the rule is about — and it has to be one a rule can be made on.
+   *
+   * A rule watches weather stations, so the soil blocks have nothing to be evaluated
+   * against yet. Requiring the narrower kind here means the sheet cannot offer a rule
+   * that would save and never fire; see `AlertKind`.
+   */
+  tile: Tile & { kind: AlertKind };
   /** Saved, or backed out of — both return to the comparison face. */
   onDone: () => void;
 }
@@ -64,7 +73,7 @@ export interface TileAlertFormProps {
  * disagree — which is the way a units bug survives review: the field says °F and the
  * rule quietly holds 36.
  */
-function unitFor(kind: TileKind, prefs: Prefs): {
+function unitFor(kind: AlertKind, prefs: Prefs): {
   label: string;
   toCanonical: (v: number) => number;
   fromCanonical: (v: number) => number;

@@ -29,8 +29,16 @@
 import type { ForecastModel } from './types';
 import type { NowcastBar } from '../radar/types';
 
-/** Which unit family a tile's value belongs to, so the page can convert it. */
-export type TileKind = 'temp' | 'wind' | 'mm' | 'percent' | 'direction';
+/**
+ * Which unit family a tile's value belongs to, so the page can convert it.
+ *
+ * `kpa`, `pf` and `status` arrived with the soil blocks. The first two have no
+ * reader-facing alternative — suction is kPa everywhere and pF is a logarithm with no
+ * unit at all — and `status` is not a quantity but a level the page names in words.
+ */
+export type TileKind =
+  | 'temp' | 'wind' | 'mm' | 'percent' | 'direction'
+  | 'kpa' | 'pf' | 'status';
 
 export interface Tile {
   /** Stable within a grid, for React's key. */

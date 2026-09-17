@@ -33,6 +33,7 @@ import { modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
 import { ta } from '../../core/i18n';
 import { tileReading } from './ConditionTile';
 import { TileAlertForm } from './TileAlertSheet';
+import { isAlertKind } from '../../core/alerts';
 
 export interface TileSheetProps {
   /** The block to compare, or null when the sheet is shut. */
@@ -62,6 +63,8 @@ export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
    * see `TileAlertForm`.
    */
   const [mode, setMode] = useState<'compare' | 'alert'>('compare');
+  /** The same block, typed as one a rule can be made on — or null where it is not. */
+  const alertable = tile && isAlertKind(tile.kind) ? { ...tile, kind: tile.kind } : null;
   // Every opening starts on the comparison, whichever face the last one was left on.
   useEffect(() => {
     if (tile) setMode('compare');
@@ -137,7 +140,10 @@ export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
               "sixteen degrees — tell me when it drops below two" is one tap from the
               number that prompted it. The list of them still lives in Instellingen,
               which is where a list belongs. */}
-          {mode === 'compare' ? (
+          {/* A rule watches weather stations, so a soil block has nothing to fire
+              against yet and is not offered one — better than a button that leads to
+              a rule which saves and never fires. */}
+          {mode === 'compare' && alertable ? (
             <Pressable
               onPress={() => { Haptics.selectionAsync().catch(() => {}); setMode('alert'); }}
               accessibilityRole="button"
@@ -155,8 +161,8 @@ export function TileSheet({ tile, labels, onClose }: TileSheetProps) {
 
           <Rule />
 
-          {tile && mode === 'alert' ? (
-            <TileAlertForm tile={tile} onDone={() => setMode('compare')} />
+          {alertable && mode === 'alert' ? (
+            <TileAlertForm tile={alertable} onDone={() => setMode('compare')} />
           ) : (
           <ScrollView
             contentContainerStyle={{ paddingHorizontal: space[5] }}

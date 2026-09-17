@@ -160,9 +160,9 @@ export interface Indicator {
  *
  * Thresholds must be sorted by `at` and are treated as non-decreasing: two on the
  * same value collapse the level between them, which is a real configuration rather
- * than an error — a fifth of the soil sensors on the account are set up that way, with
- * no suboptimal band at all. The highest threshold at or below the value wins, so a
- * collapsed level is simply never occupied.
+ * than an error — a fifth of the sensors in a fleet-wide listing are set up that way,
+ * with no suboptimal band at all. The highest threshold at or below the value wins, so
+ * a collapsed level is simply never occupied.
  */
 export function levelAt(value: number | null, thresholds: readonly Threshold[]): number | null {
   if (value == null || !Number.isFinite(value)) return null;

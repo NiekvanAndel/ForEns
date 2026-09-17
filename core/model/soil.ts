@@ -96,10 +96,11 @@ export interface Placement {
  * because that is how the transition alerts in the web app already read them, and two
  * answers to "is it 45" would show up as an alert that fires without the app agreeing.
  *
- * Thresholds are required to be non-decreasing, not strictly increasing: 238 of the
- * 1181 sensors on the account today have `scarce == irrigate`, which is a real
- * configuration meaning "there is no suboptimal band here, it goes from fine to
- * irrigate". Collapsed bands are skipped rather than treated as an error.
+ * Thresholds are required to be non-decreasing, not strictly increasing: of the 1181
+ * sensors a fleet-wide listing returned on 17 September 2026, 238 have
+ * `scarce == irrigate`. That is a real configuration meaning "there is no suboptimal
+ * band here, it goes from fine to irrigate", and a fifth of a fleet is far too many to
+ * treat as broken. Collapsed bands are skipped rather than rejected.
  */
 export function statusFromTension(kPa: number | null, t: SoilThresholds): SoilStatus | null {
   if (kPa == null || !Number.isFinite(kPa)) return null;

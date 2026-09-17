@@ -35,13 +35,20 @@ import { usePrefs } from '../../state/prefs';
 import type { Tile } from '../../core/model/tiles';
 import { temperatureColor } from '../../core/model/temperatureColor';
 import {
-  degToCompass, fmtMm, fmtTempValue, fmtWindValue, windUnitLabel,
+  degToCompass, fmtDecimal, fmtMm, fmtTempValue, fmtWindValue, ta, windUnitLabel,
 } from '../../core/i18n';
+import type { LangCode } from '../../core/i18n/strings';
 
 /** The reading and the unit it is printed in, in the reader's own units. */
 export function tileReading(
   tile: Tile,
-  units: { tempUnit: 'C' | 'F' | 'K'; windUnit: 'kmh' | 'ms' | 'kn' | 'bft' }
+  // `lang` arrived with the soil blocks: a status is a word, not a number, and the
+  // callers already hand in the whole of `prefs`.
+  units: {
+    tempUnit: 'C' | 'F' | 'K';
+    windUnit: 'kmh' | 'ms' | 'kn' | 'bft';
+    lang: LangCode;
+  }
 ): { value: string; unit: string } {
   if (tile.value == null) return { value: '—', unit: '' };
   switch (tile.kind) {
@@ -56,7 +63,31 @@ export function tileReading(
     // A bearing in degrees is a number nobody reads as a direction.
     case 'direction':
       return { value: degToCompass(tile.value), unit: '' };
+    // Suction has no reader-facing alternative: kPa is what the thresholds, the web
+    // app and the sensor itself are all in.
+    case 'kpa':
+      return { value: fmtDecimal(tile.value), unit: 'kPa' };
+    // pF is a logarithm and has no unit at all. Two decimals, because its whole
+    // interesting range is 0 to 4,2 and a tenth is a coarse step across it.
+    case 'pf':
+      return { value: fmtPf(tile.value), unit: '' };
+    // Not a quantity but a level, so it is a word. A grid showing "2" would be
+    // asking the reader to know the API's own numbering.
+    case 'status':
+      return { value: ta(soilStatusKey(tile.value), units.lang), unit: '' };
   }
+}
+
+/** The four soil states, in the reader's language. Anything outside 0–3 is not a
+ *  state this app knows, so it reads as a dash rather than as the nearest one. */
+function soilStatusKey(v: number): 'soilStatus0' | 'soilStatus1' | 'soilStatus2' | 'soilStatus3' {
+  const i = Math.min(3, Math.max(0, Math.round(v)));
+  return (['soilStatus0', 'soilStatus1', 'soilStatus2', 'soilStatus3'] as const)[i]!;
+}
+
+/** pF to two decimals, with the comma this app writes decimals with. */
+function fmtPf(v: number): string {
+  return (Math.round(v * 100) / 100).toFixed(2).replace('.', ',');
 }
 
 export function ConditionTile({ tile, onPress }: { tile: Tile; onPress?: () => void }) {

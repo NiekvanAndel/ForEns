@@ -33,6 +33,25 @@ import type { TileKind } from './model/tiles';
  *  that adding "between" or "changes by" later does not rewrite what is stored. */
 export type AlertOp = 'above' | 'below';
 
+/**
+ * The block kinds a rule can be made on.
+ *
+ * Narrower than `TileKind` on purpose. A rule names a set of **weather stations** and
+ * is evaluated from their readings by `stationTiles`; a soil sensor is not one of
+ * those, so suction, pF and soil status have nothing to be evaluated against yet.
+ * Suction would in fact make the best rule in the app — it is the one quantity that
+ * arrives with its own thresholds — but wiring it means teaching the rule engine about
+ * soil sensors, and a kind accepted here before that happens is a rule that saves and
+ * never fires.
+ */
+export type AlertKind = 'temp' | 'wind' | 'mm' | 'percent' | 'direction';
+
+/** Whether a block can carry a rule at all. */
+export function isAlertKind(kind: TileKind): kind is AlertKind {
+  return kind === 'temp' || kind === 'wind' || kind === 'mm'
+    || kind === 'percent' || kind === 'direction';
+}
+
 export interface UserAlert {
   /** Stable for the life of the rule. */
   id: string;
@@ -48,7 +67,7 @@ export interface UserAlert {
   title: string;
   timeLabel: string;
   /** Which unit family the threshold belongs to, so it can be shown converted. */
-  kind: TileKind;
+  kind: AlertKind;
   op: AlertOp;
   /** The threshold, in the app's canonical units. See the note above. */
   value: number;
@@ -67,7 +86,7 @@ export interface DraftAlert {
   tileId: string;
   title: string;
   timeLabel: string;
-  kind: TileKind;
+  kind: AlertKind;
   op: AlertOp;
   /** In canonical units, already converted from whatever was typed. */
   value: number | null;
@@ -164,7 +183,9 @@ export function sanitiseAlerts(stored: unknown): UserAlert[] {
       tileId: a.tileId,
       title: typeof a.title === 'string' ? a.title : a.tileId,
       timeLabel: typeof a.timeLabel === 'string' ? a.timeLabel : '',
-      kind: (a.kind ?? 'temp') as TileKind,
+      // A stored rule whose kind this build no longer accepts falls back rather than
+      // being dropped: the threshold and the stations are still what someone meant.
+      kind: isAlertKind(a.kind as TileKind) ? (a.kind as AlertKind) : 'temp',
       op: a.op,
       value: a.value,
       stationIds: ids,

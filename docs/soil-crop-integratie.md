@@ -246,7 +246,8 @@ een partner.
 Gecontroleerd tegen `/soilstations/`, `/soilreadings/` en `/soil_aggregates/` op het
 eigen account, voordat er code omheen kwam. Drie dingen die het plan raken.
 
-**`/soilstations/` bevestigt de ontbrekende velden.** Elk van de 1181 sensoren geeft
+**`/soilstations/` bevestigt de ontbrekende velden.** Elk van de 1181 sensoren in die
+vlootbrede lijst geeft
 exact tien velden: `station_id`, `name`, `latitude`, `longitude`, `version_type`,
 `crop`, `placement_depth` en de drie drempels. Geen `soil`, geen `field_capacity`,
 geen `last_reading_at` — punt 5 van §3 staat dus zoals het er staat. `version_type` is
@@ -255,16 +256,29 @@ beslist of er een gewassensor is, is of de metingen `temperature_10` dragen, en 
 is per meting te zien in plaats van per station te raden.
 
 **238 van de 1181 sensoren hebben `threshold_0_to_1 == threshold_1_to_2`.** Dat is
-een vijfde van het bestand, en het is een echte instelling: op dat perceel is er geen
+een vijfde van de vloot, en het is een echte instelling: op dat perceel is er geen
 suboptimale band, het gaat van goed naar beregenen. Drempels moeten dus
 *niet-dalend* zijn, niet strikt stijgend — een controle op strikt stijgend gooit een
 vijfde van de drempels weg omdat hun eigenaar ze zo heeft gezet. Een omgekeerde
 volgorde is wél een fout en levert geen drempellijn, met de sensor gewoon in de lijst.
 
-**Alle bodemsensoren antwoordden leeg.** BASIC, PLUS en PRO, over vensters van 24 uur
-tot een zomerweek in juli: `total: 0`. De winterstand van §1 is daarmee niet de
-uitzondering maar de toestand waarin de meeste sensoren het grootste deel van het jaar
-staan, en het is de eerste toestand die de app goed moet doen — niet de laatste.
+**De vijf gesampelde sensoren antwoordden leeg** — BASIC, PLUS en PRO, over vensters
+van 24 uur tot een zomerweek in juli: `total: 0`.
+
+> **Gecorrigeerd na de eerste aansluiting.** Hier stond eerst "alle bodemsensoren
+> antwoordden leeg". Dat was een veralgemenisering van vijf steekproeven naar 1181
+> sensoren, en hij klopt niet: zodra de app zelf `/soilreadings/` aanriep kwam er
+> gewoon een zuigspanning terug. Die vijf stonden uit; het endpoint doet het.
+>
+> Dezelfde controle legde een tweede ding bloot: de app ziet op dit account **vier**
+> bodemsensoren, waar de lijst waarop de cijfers hierboven rusten er 1181 gaf. Dat zijn
+> twee verschillende populaties — de statistieken hierboven beschrijven de vloot, niet
+> wat één teler heeft. Voor de drempelregel maakt dat niet uit (een vijfde van de vloot
+> is nog steeds te veel om als kapot te behandelen), voor elke uitspraak over "het
+> account" wel.
+
+De winterstand van §1 blijft daarmee gewoon staan als toestand die de app goed moet
+doen — maar het is niet aangetoond dat het de toestand van de meeste sensoren is.
 
 Het gevolg voor §9: **de eenheden zijn niet gepind.** `water_percentage` en
 `bijvulruimte` konden niet tegen echte waarden gehouden worden zoals
@@ -385,15 +399,59 @@ Instellingen → Integraties → AgroExact:
   (de dichtstbijzijnde sensor bij de eerste locatie, plus zijn laatste meting). Apart
   van `state/stations.ts` gehouden: een bodemsensor is geen weerstation met andere
   velden, en de twee syncs gaan uiteenlopen zodra de plaatsingen er zijn.
-- Eén extra call, niet duizend: het account heeft er 1181, en de vraag "komt er data
-  binnen" wordt door één sensor beantwoord.
+- Eén extra call, niet één per sensor: de vraag "komt er data binnen" wordt door één
+  sensor beantwoord, en een vlootbrede lijst loopt in de duizenden.
 - **Geen straal.** Een sensor op tachtig kilometer wordt gemeld als tachtig kilometer,
   niet verborgen achter een grens die deze app had moeten verzinnen. De afstand is het
   antwoord op "is dit de mijne", en de lezer is daar beter in dan een constante.
 - **"Niet actief" is een toestand**, geen storing — ook als er helemaal geen meting is.
   Een sensor die eruit ligt is het normale najaar.
 
-Stap 3 — de profielwizard — is hiermee aan de beurt.
+**Uitkomst van die controle, 17 september:** vier sensoren op het account, en de
+dichtstbijzijnde bij de eerste locatie staat op **287 km** en meet **34 kPa**. Dus: de
+keten werkt end-to-end, er komt wel degelijk data binnen, en de keuze om geen straal te
+hanteren was de juiste — met de ~2 km uit §1 was er niets te zien geweest.
+
+Die 287 km zegt ook iets voor stap 4: op dit account ligt géén bodemsensor bij een
+bestaande weerlocatie in de buurt, dus alle vier worden ze een eigen locatie. De
+koppelregel van §1 is hier dood materiaal, en de sensor-als-locatie is het pad dat
+werkelijk gelopen wordt.
+
+### Stap 4 — de blokken zelf
+
+Stap 3 (profielwizard) is voor bodem een lege stap: het gewas staat al in de webapp,
+en de wizard levert pas iets op bij de ziektemodellen van stap 5. Dus door naar 4.
+
+- `core/model/soilTiles.ts` — dezelfde `Tile`-vorm als `modelTiles`, zodat
+  `arrangeTiles` en de blokkeneditor ze zonder wijziging dragen: slepen en uitzetten
+  werkt, en niemands indeling breekt.
+- `TileKind` groeit met `kpa`, `pf` en `status`. De eerste twee hebben geen
+  lezerseenheid om naar om te rekenen; `status` is geen grootheid maar een niveau dat
+  de pagina in woorden zet — een blok met "2" erin vraagt de lezer de nummering van de
+  API te kennen.
+- **Bladnat krijgt geen blok.** Twee redenen die elk los al genoeg zijn: `leaf_wet`
+  zit nog niet in API v2, en het is afgeleid in plaats van gemeten. Het hoort dus een
+  ja/nee-blok te worden met "proxy" erop, niet een getal tussen de metingen. Beide
+  eerst beslissen, dan pas tonen.
+- **De blokken verdwijnen bij winterstand**, en ook bij helemaal geen meting. Een
+  raster streepjes zegt dat er een sensor staat die zwijgt, en dat is een alarmerender
+  bewering dan geen bodemblokken.
+- "Bij te vullen" verschijnt vanaf status ≥ 1, terwijl de badge pas vanaf ≥ 2 een
+  hoeveelheid noemt. Dat is met opzet: een blok in een raster cijfers is een cijfer, en
+  een badge die een hoeveelheid noemt is een advies.
+
+Eén ding dat tsc afdwong en de moeite van het opschrijven waard is: `UserAlert.kind`
+is teruggebracht van `TileKind` naar een smallere `AlertKind`. Een regel kijkt naar
+**weerstations**, dus een regel op zuigspanning zou opslaan en nooit afgaan. De knop
+"melding toevoegen" verschijnt daarom niet op een bodemblok. Zuigspanning zou juist de
+beste regel in de app zijn — het is de enige grootheid die met eigen drempels
+binnenkomt — maar dat vraagt dat de regelmachinerie bodemsensoren leert kennen.
+
+**Nog niet gedaan:** de blokken staan nog op geen enkel scherm. Daarvoor moet een
+locatie aan een bodemsensor gekoppeld zijn, en op dit account staat er geen enkele
+sensor bij een weerlocatie in de buurt (de dichtstbijzijnde: 287 km). Alle vier worden
+dus een eigen locatie — een zichtbare verandering in de locatielijst, en daarom een
+aparte stap.
 
 ## Nog open
 
