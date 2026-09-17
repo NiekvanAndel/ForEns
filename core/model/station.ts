@@ -21,8 +21,12 @@
  * schedule: the model is built when the forecast lands and re-decorated when the
  * station answers, without refetching either.
  */
-import { AGRO_MAX_DISTANCE_KM, nearestStation, type AgroStation, type StationObservations } from '../sources/agroexact';
+import {
+  AGRO_MAX_DISTANCE_KM, nearestStation,
+  type AgroStation, type SoilSample, type StationObservations,
+} from '../sources/agroexact';
 import type { SavedLocation } from '../prefs';
+import { soilCapabilities } from './soil';
 import type { ForecastModel, Hour, StationOverlay } from './types';
 
 /** Prefer the measurement, keep the model where there is none. */
@@ -90,6 +94,81 @@ export function applyStationObservations(
     // both draw it as a round number.
     currentTemp: obs.current?.temp != null ? Math.round(obs.current.temp) : model.currentTemp,
   };
+}
+
+// ── The soil sensor's rainfall ──────────────────────────────────────────────────
+
+/** Everything a soil sensor has to say that the *weather* model wants. */
+export interface SoilObservations {
+  stationId: string;
+  stationName: string | null;
+  /** BASIC, PLUS or PRO — what decides whether there is a rain gauge at all. */
+  type: string | null;
+  /** By local hour key, as `fetchSoilHours` returns them. */
+  hours: Record<string, SoilSample>;
+}
+
+/**
+ * Put a soil sensor's rainfall into the model, and nothing else.
+ *
+ * Decided in the plan: **rain and irrigation are one number.** A field that got eight
+ * millimetres does not care which of them delivered it, and two blocks side by side —
+ * one saying 8 and one saying 4 — would be asking the reader to add up their own
+ * field. So the sensor's figure goes into the rainfall the app already has, rather
+ * than into a block of its own.
+ *
+ * Two rules keep it honest:
+ *
+ * **A BASIC has no rain gauge**, so its hours are left alone. Putting an instrument's
+ * green dot behind a modelled figure is exactly the mistake the per-quantity merge
+ * exists to prevent, and the sensor's own model says which of the three it is without
+ * a request — see `soilCapabilities`.
+ *
+ * **Only rainfall is touched.** A soil sensor has no thermometer at 1.50 m and no
+ * anemometer, so every other quantity stays whatever it was. That is the same
+ * per-quantity rule `mergeHour` follows for a rain gauge, applied to a different
+ * instrument.
+ *
+ * Unlike `applyStationObservations` this sets no `station` overlay. The overlay is
+ * what the hero reads to say "measured at 14:20" beside a temperature, and a sensor
+ * that measured the rain has said nothing whatever about the temperature.
+ */
+export function applySoilPrecip(
+  model: ForecastModel,
+  obs: SoilObservations | null
+): ForecastModel {
+  if (!obs || !soilCapabilities(obs.type).precip) return model;
+
+  let touched = false;
+  const pastHours = model.pastHours.map((h) => {
+    const measured = obs.hours[h.time]?.precip;
+    if (measured == null) return h;
+    touched = true;
+    return { ...h, precip: measured };
+  });
+
+  // An unchanged reference keeps the strip from re-rendering every row on a refresh
+  // that changed nothing, the same reason `mergeHour` returns its input.
+  if (!touched) return model;
+
+  return { ...model, pastHours, allHours: [...pastHours, ...model.futureHours] };
+}
+
+/**
+ * Whether the rainfall blocks may claim an instrument.
+ *
+ * True on a weather station that reported rain, and on a PLUS or PRO soil sensor —
+ * the two ways this app can know what actually fell on a place. A location has at
+ * most one of them: the location sync never puts a soil sensor on a weather station's
+ * page.
+ */
+export function precipIsMeasured(
+  model: ForecastModel,
+  soil: SoilObservations | null
+): boolean {
+  if (model.station?.current?.precip != null) return true;
+  if (!soil || !soilCapabilities(soil.type).precip) return false;
+  return Object.values(soil.hours).some((s) => s.precip != null);
 }
 
 /**

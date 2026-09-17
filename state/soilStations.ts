@@ -16,11 +16,12 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AgroAuthError, distanceKm, fetchLatestSoilMeasurement, fetchSoilRange, fetchSoilReadings,
-  fetchSoilStations, withAgroToken,
+  AgroAuthError, distanceKm, fetchLatestSoilMeasurement, fetchSoilHours, fetchSoilRange,
+  fetchSoilReadings, fetchSoilStations, withAgroToken,
   type SoilSample, type SoilStation,
 } from '../core/sources/agroexact';
 import { isDormant, placementFromStation } from '../core/model/soil';
+import type { SoilObservations } from '../core/model/station';
 import { syncSoilLocations } from '../core/prefs';
 import { useAgroAuth } from './auth';
 import { usePrefs } from './prefs';
@@ -297,4 +298,62 @@ export function useSoilRange(
     },
     retry: (count, error) => !(error instanceof AgroAuthError) && count < 1,
   });
+}
+
+export const soilObservationsKey = (stationId: string, offsetSec: number) =>
+  ['agroexact', 'soil-observations', stationId, offsetSec] as const;
+
+/**
+ * The soil sensor's last twenty-six hours, for the rainfall merge.
+ *
+ * The blocks on 'Actueel' sum rainfall over windows of past hours, so the sensor's
+ * rain has to reach the model per hour — one latest reading cannot answer "how much
+ * fell in the last six hours".
+ *
+ * Fetched for every soil-backed location, not only the PLUS and PRO ones: the merge
+ * itself decides whether there is a rain gauge behind the numbers, and asking the
+ * question here as well would put that rule in two places.
+ */
+export function useSoilObservations(
+  location: { soilStationId?: string } | null,
+  offsetSec: number | null,
+  ready = true
+) {
+  const auth = useAgroAuth();
+  const { data: sensors } = useAgroSoilStations();
+  const id = location?.soilStationId ?? null;
+  const station = useMemo(
+    () => (id ? sensors?.find((s) => s.id === id) ?? null : null),
+    [sensors, id]
+  );
+
+  const query = useQuery({
+    queryKey: soilObservationsKey(id ?? '', offsetSec ?? 0),
+    enabled: ready && auth.status === 'connected' && !!station && offsetSec != null,
+    staleTime: SOIL_READING_STALE_MS,
+    queryFn: async ({ signal }): Promise<Record<string, SoilSample>> => {
+      if (!station) return {};
+      const out = await withAgroToken(
+        auth.getAccessToken,
+        (token) => fetchSoilHours(
+          token, station.id, offsetSec ?? 0, station.depthCm ?? 0, 26, { signal }
+        ),
+        auth.reportUnauthorized
+      );
+      return out?.hours ?? {};
+    },
+    retry: (count, error) => !(error instanceof AgroAuthError) && count < 2,
+  });
+
+  return useMemo<SoilObservations | null>(
+    () => (station
+      ? {
+          stationId: station.id,
+          stationName: station.name,
+          type: station.type,
+          hours: query.data ?? {},
+        }
+      : null),
+    [station, query.data]
+  );
 }

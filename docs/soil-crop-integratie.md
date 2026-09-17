@@ -525,6 +525,27 @@ dezelfde cursor en de drempellijnen van stap 2.
 `/placements/` is kent de app één plaatsing en is er niets te splitsen. Dat wordt echt
 werk zodra de backend stap 0 levert.
 
+### De neerslag-merge
+
+Besloten in §5 en nu gebouwd: **regen en beregening zijn één getal.** Een perceel dat
+acht millimeter kreeg vraagt niet wie ze leverde, en twee blokken naast elkaar — één
+met 8 en één met 4 — zou de lezer vragen zijn eigen perceel op te tellen.
+
+- `fetchSoilHours` haalt de laatste 26 uur op, want de blokken sommeren over vensters
+  van uren; één laatste meting kan "hoeveel viel er in zes uur" niet beantwoorden.
+- `applySoilPrecip` zet die neerslag in de uren die er al zijn, en raakt verder niets
+  aan: een bodemsensor heeft geen thermometer op 1,50 m en geen anemometer.
+- **Een BASIC wordt overgeslagen.** Die heeft geen regenmeter, en een groene stip
+  achter een modelgetal is precies wat de per-grootheid-merge moet voorkomen. Sinds
+  `version_type` bekend is, is dat een feit in plaats van een gok.
+- **Geen `station`-overlay.** Die is wat de hero leest om "gemeten om 14:20" naast een
+  *temperatuur* te zetten, en deze sensor heeft over de temperatuur niets gezegd. De
+  stip reist daarom als losse vlag naast het model mee (`precipIsMeasured`), niet erop.
+- De merge geeft hetzelfde object terug als er niets te mergen valt, zodat de urenstrip
+  niet elke verversing opnieuw tekent.
+
+Daarmee is §5 af op één punt na: de vergelijkrij over locaties voor bodemblokken.
+
 ## Nog open
 
 - ~~De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt

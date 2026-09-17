@@ -77,7 +77,7 @@ import { ta } from '../../core/i18n';
 function CurrentPage() {
   const { palette } = useTheme();
   const { prefs, location } = usePrefs();
-  const { model, nowcast, phase, error, refresh, offsetSec } = useForecast();
+  const { model, nowcast, phase, error, refresh, offsetSec, precipMeasured } = useForecast();
   const insets = useSafeAreaInsets();
   const pagePadding = usePagePadding();
   const router = useRouter();
@@ -137,10 +137,10 @@ function CurrentPage() {
   // location with no sensor, or one that is out of the ground, there are none.
   const allTiles: Tile[] = useMemo(
     () => [
-      ...(model ? modelTiles(model, labels, nowcast) : []),
+      ...(model ? modelTiles(model, labels, nowcast, precipMeasured) : []),
       ...(soil.placement ? soilTiles(soil.placement, soil.latest, soilLabels) : []),
     ],
-    [model, labels, nowcast, soil.placement, soil.latest, soilLabels]
+    [model, labels, nowcast, precipMeasured, soil.placement, soil.latest, soilLabels]
   );
   const tiles = useMemo(() => arrangeTiles(allTiles, prefs.tiles), [allTiles, prefs.tiles]);
 

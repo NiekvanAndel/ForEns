@@ -1081,6 +1081,47 @@ export async function fetchSoilRange(
   return out.sort((a, b) => (a.time < b.time ? -1 : 1));
 }
 
+/**
+ * The sensor's last `hours` hours, as hourly measurements keyed by local hour.
+ *
+ * The counterpart of `fetchStationHours`, and what the rainfall merge reads: the
+ * blocks on 'Actueel' sum over windows of past hours, so a sensor's rain has to reach
+ * the model per hour rather than as one latest reading.
+ *
+ * Same end-of-hour correction as everywhere else — a row stamped `14:00Z` covers
+ * `13:00Z–14:00Z` — because getting it wrong moves a shower an hour into the future,
+ * which is invisible in dry weather and badly wrong in wet.
+ */
+export async function fetchSoilHours(
+  token: string,
+  stationId: string,
+  offsetSec: number,
+  depthCm: number,
+  hours = 26,
+  opts: FetchOptions = {}
+): Promise<{ hours: Record<string, SoilSample>; stationName: string | null }> {
+  const rows = await agroFetchRows<SoilReadingRow>(
+    token,
+    `/soil_aggregates/${encodeURIComponent(stationId)}/?hours=${hours}`,
+    opts
+  );
+
+  const out: Record<string, SoilSample> = {};
+  let stationName: string | null = null;
+
+  for (const r of rows) {
+    if (!r?.timestamp) continue;
+    const endMs = new Date(r.timestamp).getTime();
+    if (!Number.isFinite(endMs)) continue;
+    stationName ??= r.station_name ?? null;
+    const key = localHourKey(new Date(endMs - HOUR_MS).toISOString(), offsetSec);
+    if (!key) continue;
+    out[key] = mapSoilRow(key, r, depthCm);
+  }
+
+  return { hours: out, stationName };
+}
+
 /** A soil sensor reports about every thirty minutes, where a weather station is on ten. */
 export const SOIL_STEP_MIN = 30;
 

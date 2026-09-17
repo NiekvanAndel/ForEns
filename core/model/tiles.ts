@@ -146,7 +146,17 @@ export function modelTiles(
   model: ForecastModel,
   labels: TileLabels,
   /** The radar nowcast for this location, where there is one. */
-  nowcast?: { series: NowcastBar[] } | null
+  nowcast?: { series: NowcastBar[] } | null,
+  /**
+   * Whether an instrument other than a weather station answered for the rainfall.
+   *
+   * A soil sensor's rain is merged into the hours by `applySoilPrecip` rather than
+   * carried on `model.station`, because that overlay is what the hero reads to put a
+   * measurement time beside a *temperature* — and a soil sensor has said nothing
+   * about the temperature. So the merge is invisible here and the flag is how the
+   * rainfall blocks learn they have earned their green dot.
+   */
+  precipMeasured?: boolean
 ): Tile[] {
   const measured = model.station?.current ?? null;
   const now = model.futureHours[0] ?? model.pastHours[model.pastHours.length - 1] ?? null;
@@ -160,7 +170,9 @@ export function modelTiles(
     wind: measured?.wind != null,
     gusts: measured?.gusts != null,
     windDir: measured?.windDir != null,
-    precip: measured?.precip != null,
+    // Either instrument: the weather station's gauge, or a PLUS/PRO soil sensor whose
+    // hours have already been merged in. A location never has both.
+    precip: measured?.precip != null || !!precipMeasured,
   };
 
   const sum = (hours: readonly { precip: number | null }[]) =>

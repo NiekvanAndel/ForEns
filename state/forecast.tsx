@@ -36,7 +36,10 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { processAll } from '../core/model/process';
-import { applyStationObservations } from '../core/model/station';
+import {
+  applySoilPrecip, applyStationObservations, precipIsMeasured,
+} from '../core/model/station';
+import { useSoilObservations } from './soilStations';
 import { useStationObservations } from './stations';
 import { deriveAlert, type WeatherAlert } from '../core/model/alert';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -111,6 +114,15 @@ interface ForecastContextValue {
   extendedLoaded: boolean;
   /** True while the page's own measurements are being fetched from a station. */
   stationLoading: boolean;
+  /**
+   * Whether the rainfall figures came from an instrument.
+   *
+   * A weather station's gauge says so through `model.station`; a soil sensor's rain is
+   * merged into the hours and leaves no overlay behind, because that overlay is what
+   * the hero reads to put a measurement time beside a temperature. So the answer
+   * travels beside the model instead of on it.
+   */
+  precipMeasured: boolean;
   refresh: () => void;
   loadExtendedDays: () => void;
   /** The last model built for a location, or null if it has not been visited.
@@ -309,9 +321,33 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
    * schedules: the forecast is rebuilt when a stage lands, the station answers when
    * it answers, and neither should have to wait for the other.
    */
+  /**
+   * The soil sensor's hours, for its rainfall.
+   *
+   * A soil-backed location has no weather station — the sync never puts a sensor on a
+   * station's page — so this is the only instrument that can say what fell there.
+   */
+  const soilObs = useSoilObservations(
+    location,
+    phase === 'idle' ? null : sources.offsetSec,
+    phase !== 'idle'
+  );
+
   const model = useMemo(
-    () => (baseModel ? applyStationObservations(baseModel, stationQuery.data ?? null) : null),
-    [baseModel, stationQuery.data]
+    () => {
+      if (!baseModel) return null;
+      const withStation = applyStationObservations(baseModel, stationQuery.data ?? null);
+      // Rain and irrigation are one number, by decision: a soil sensor's rainfall goes
+      // into the rainfall the app already has rather than into a block beside it.
+      return applySoilPrecip(withStation, soilObs);
+    },
+    [baseModel, stationQuery.data, soilObs]
+  );
+
+  /** Whether the rainfall blocks may claim an instrument — see `precipIsMeasured`. */
+  const precipMeasured = useMemo(
+    () => (model ? precipIsMeasured(model, soilObs) : false),
+    [model, soilObs]
   );
 
   /** Put a model in the cache and let the pager know there is something new. */
@@ -459,11 +495,13 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
       harmonie: sources.harmonie,
       offsetSec: sources.offsetSec,
       phase, error, extendedLoaded, stationLoading: stationQuery.isFetching,
+      precipMeasured,
       refresh, loadExtendedDays, cachedModel,
     }),
     [
       model, alert, nowcast, sources.harmonie, sources.offsetSec, phase, error,
-      extendedLoaded, stationQuery.isFetching, refresh, loadExtendedDays, cachedModel,
+      extendedLoaded, stationQuery.isFetching, precipMeasured,
+      refresh, loadExtendedDays, cachedModel,
     ]
   );
 
