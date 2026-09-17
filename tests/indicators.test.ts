@@ -13,7 +13,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   bindingThreshold, buildIndicator, certaintyOf, levelAt, nextTransition,
-  soilThresholdSteps, waterTensionIndicator, type IndicatorPoint,
+  soilThresholdSteps, thresholdZones, thresholdsInPlay, waterTensionIndicator,
+  type IndicatorPoint,
 } from '../core/model/indicators';
 import type { Placement } from '../core/model/soil';
 import type { SoilSample } from '../core/sources/agroexact';
@@ -234,5 +235,72 @@ describe('suction as the first indicator', () => {
     )).toBeNull();
     // And an empty season is nothing at all, not a broken indicator.
     expect(waterTensionIndicator([], HEESCH, now, clock)).toBeNull();
+  });
+});
+
+describe('threshold lines on a chart', () => {
+  it('draws the boundaries the series is measurably near', () => {
+    // Heesch in July: 12–48 kPa against 25 / 45 / 60. All three are in play — the
+    // point of the chart is seeing how near critical you are.
+    expect(thresholdsInPlay(STEPS, 12, 48).map((t) => t.at)).toEqual([25, 45, 60]);
+  });
+
+  it('leaves out a boundary that is nowhere near, rather than flattening the series', () => {
+    // A field sitting at 18–22 kPa whose critical is 200: stretching the axis to
+    // reach it would draw the whole summer as a line along the bottom.
+    const far = [{ at: 30, level: 1 }, { at: 60, level: 2 }, { at: 200, level: 3 }];
+    expect(thresholdsInPlay(far, 18, 22).map((t) => t.at)).toEqual([30]);
+  });
+
+  it('still draws a boundary just above a series that barely moves', () => {
+    // No span to reason from, so a share of the reading itself stands in. Without
+    // that, a steady field loses its threshold line exactly when it is closest to it.
+    expect(thresholdsInPlay(STEPS, 44, 44).map((t) => t.at)).toEqual([45]);
+  });
+
+  it('sorts the boundaries, whatever order they arrived in', () => {
+    const jumbled = [{ at: 60, level: 3 }, { at: 25, level: 1 }, { at: 45, level: 2 }];
+    expect(thresholdsInPlay(jumbled, 12, 48).map((t) => t.at)).toEqual([25, 45, 60]);
+  });
+
+  it('runs each zone up to the next boundary, and the highest to the ceiling', () => {
+    expect(thresholdZones(STEPS, 70)).toEqual([
+      { at: 25, level: 1, from: 25, to: 45 },
+      { at: 45, level: 2, from: 45, to: 60 },
+      { at: 60, level: 3, from: 60, to: 70 },
+    ]);
+  });
+
+  it('gives a collapsed band no height at all', () => {
+    // Drawn as nothing, rather than as a sliver in the colour of a state the field
+    // can never be in.
+    const flat = soilThresholdSteps({ scarce: 19.9, irrigate: 19.9, critical: 25 });
+    const zones = thresholdZones(flat, 40);
+    expect(zones[0]!.to - zones[0]!.from).toBe(0);
+    expect(zones[1]!.to).toBe(25);
+  });
+
+  it('keeps the series worth looking at when it stretches for a boundary', () => {
+    // The rule stated as what it protects: a quarter of the axis, at least.
+    const marks = thresholdsInPlay(STEPS, 18, 22);
+    const hi = Math.max(22, ...marks.map((m) => m.at));
+    const lo = Math.min(18, ...marks.map((m) => m.at));
+    expect((22 - 18) / (hi - lo)).toBeGreaterThanOrEqual(0.25);
+  });
+
+  it('leaves the zone below the lowest boundary unshaded', () => {
+    // Where nothing is wrong, nothing is coloured: shading "fine" spends the chart's
+    // loudest device on its least interesting state.
+    const zones = thresholdZones(STEPS, 70);
+    expect(Math.min(...zones.map((z) => z.from))).toBe(25);
+  });
+
+  it('hands an indicator straight to the chart, with no second bands mechanism', () => {
+    // The claim from sheet 1: one prop, and the indicator already knows its grens.
+    const ind = waterTensionIndicator(
+      [sample('2026-07-01T11:00', 48, 2)], HEESCH, '2026-07-01T11:00',
+      new Date('2026-07-01T11:30:00Z')
+    )!;
+    expect(thresholdsInPlay(ind.thresholds, 12, 48)).toEqual(ind.thresholds);
   });
 });

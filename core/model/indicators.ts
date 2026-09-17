@@ -397,3 +397,89 @@ function refillAmount(s: SoilSample): { min: number; max: number } | null {
 
 /** Re-exported so a page can name a level without importing the soil model too. */
 export type { SoilStatus };
+
+// ── Drawing an indicator's thresholds ───────────────────────────────────────────
+
+/**
+ * A chart's threshold line, and the zone above it.
+ *
+ * Honesty rule made visible: "een getal in een tabel is een feit; dezelfde lijn door
+ * je eigen meetreeks is een besluit." The indicator already knows its boundaries, so
+ * a chart needs one prop rather than a bands mechanism of its own — and whatever is
+ * drawn here for suction is what draws the 18 km/h line on wind later, unchanged.
+ *
+ * Purely geometric: which boundaries belong on this axis, and what each one spans.
+ * The colours belong to the theme and the words to the page; neither is decided here.
+ */
+export interface ThresholdZone {
+  /** The boundary itself. */
+  at: number;
+  level: number;
+  /** The stretch this level occupies, up to the next boundary or the axis ceiling. */
+  from: number;
+  to: number;
+}
+
+/**
+ * The least of the axis the series itself may end up occupying.
+ *
+ * This is the real constraint, and stating it this way rather than as a distance is
+ * what makes it hold on a quiet day as well as a stormy one. Stretching the axis to
+ * reach a boundary costs the series height; a quarter is the point past which the
+ * reader has come for a line and been given a flat mark along the bottom. The account
+ * has fields whose critical threshold is ten times their summer suction — on those a
+ * chart scaled to 200 kPa shows the boundary and nothing else.
+ *
+ * A boundary further out than that is not in play. It is not hidden: the field is
+ * simply nowhere near it, which is what the chart then says by leaving it off.
+ */
+const MIN_DATA_SHARE = 0.25;
+
+/** A flat series has no span to reason from, so a tenth of its own value stands in —
+ *  enough that a boundary just above a steady reading still draws. */
+const FLAT_REACH = 0.1;
+
+/**
+ * Which boundaries belong on an axis fitted to `dataLo`–`dataHi`.
+ *
+ * Sorted by value, so the zones below stack in order regardless of how the caller
+ * listed them.
+ */
+export function thresholdsInPlay(
+  thresholds: readonly Threshold[],
+  dataLo: number,
+  dataHi: number
+): Threshold[] {
+  const span = Math.max(dataHi - dataLo, Math.abs(dataHi) * FLAT_REACH);
+  // What the axis may grow by, on either side, before the series drops below its
+  // share of the height.
+  const reach = span / MIN_DATA_SHARE - span;
+  return thresholds
+    .filter((t) => t.at >= dataLo - reach && t.at <= dataHi + reach)
+    .sort((a, b) => a.at - b.at);
+}
+
+/**
+ * The zones a set of boundaries cuts the axis into, bottom boundary upward.
+ *
+ * Each zone runs from its own boundary to the next one above it, and the highest runs
+ * to the ceiling. Boundaries that sit on the same value — a collapsed band, which a
+ * fifth of the account's fields have — produce a zone of no height, which draws as
+ * nothing rather than as a sliver of the wrong colour.
+ *
+ * The stretch below the lowest boundary is deliberately absent: that is the zone where
+ * nothing is wrong, and a chart that shades "fine" in a colour has spent its loudest
+ * device on its least interesting state.
+ */
+export function thresholdZones(
+  thresholds: readonly Threshold[],
+  axisHi: number
+): ThresholdZone[] {
+  const sorted = [...thresholds].sort((a, b) => a.at - b.at);
+  return sorted.map((t, i) => ({
+    at: t.at,
+    level: t.level,
+    from: t.at,
+    to: Math.max(t.at, i + 1 < sorted.length ? sorted[i + 1]!.at : axisHi),
+  }));
+}
