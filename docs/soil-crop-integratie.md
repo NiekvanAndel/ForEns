@@ -312,8 +312,39 @@ Fase 1 is gebouwd en staat los van de backend:
   samenvallende drempel, de twee eenheidsvallen, het uur dat een uur terug hoort, de
   lege reeks, de plaatsingssplitsing en de winterstand.
 
-Stap 1 van de volgorde — zuigspanning als eerste indicator in `indicators.ts` — is
-hiermee aan de beurt, met de drempels die de bron al meelevert.
+Stap 1 staat er ook:
+
+- `core/model/indicators.ts` — de indicatorlaag zelf. `Indicator` draagt de zes
+  eigenschappen van blad 1 (drempel, toestand, verloop, herkomst, zekerheid,
+  geldigheidshorizon) en kent de drie vormen *momentaan*, *accumulerend* en
+  *periode*. De vier eerlijkheidsregels zijn velden, geen commentaar: `horizon` is
+  null zolang een reeks niets over de toekomst beweert, `certainty` is één klasse
+  zonder decimalen, elk punt draagt `observed` voor massief tegenover gestippeld, en
+  `provenance` zegt wat de waarde maakte — bij een proxy welke.
+- `waterTensionIndicator` is de eerste klant. Elk veld komt uit iets dat al bestaat:
+  de drempels uit de plaatsing, de toestand uit `status_code`, het verloop uit
+  `/soil_aggregates/`, de herkomst uit gewas × grondsoort × diepte. De bevroren
+  `status_code` wint van een herberekening — vorig seizoen tegen de drempels van
+  vandaag narekenen is precies de terugwerkende herschrijving waarvoor de plaatsing
+  bestaat. `statusFromTension` vult alleen in waar een rij géén status draagt.
+- `tests/indicators.test.ts` — vijftien tests, met een test per eerlijkheidsregel.
+
+Twee dingen die uit het bouwen zelf volgden en nergens stonden:
+
+- **De bindende drempel bij een samenvallend paar is de hoogste van de twee.** Bij
+  `scarce == irrigate` zegt de badge "grens 19,9 — beregen nu", niet "suboptimaal".
+- **De hoeveelheid komt van dezelfde meting als de toestand**, niet van het eind van
+  de reeks. Zolang er geen verwachting in de reeks zit is dat hetzelfde punt; vanaf
+  stap 4c niet meer, en dan zou er een bijvulling van morgen naast een meting van
+  vanochtend staan.
+
+`next` — de eerstvolgende toestandsovergang — is nu altijd null, omdat de reeks
+alleen metingen bevat. Dat is het eerlijke antwoord en geen ontbrekende functie:
+zodra de zuigspanningsverwachting van stap 4c in dezelfde reeks landt, begint
+dezelfde functie "passeert 45 om 11:20" te antwoorden zonder te veranderen.
+
+Stap 2 — drempellijnen in de grafieken — is hiermee aan de beurt: de indicator kent
+zijn grenzen al, dus het is één prop.
 
 ## Nog open
 
