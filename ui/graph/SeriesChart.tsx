@@ -67,6 +67,7 @@ import { Text } from '../Text';
 import { radius, shadowFloat, space, useTheme } from '../../theme';
 import { niceRange, scaleX, scaleY, smoothPath, type Point } from '../../core/model/smooth';
 import type { Sample, SeriesShape } from '../../core/model/series';
+import { thresholdZones, thresholdsInPlay } from '../../core/model/indicators';
 import type { Band } from '../../core/model/ensembleBand';
 
 // Just enough for a three-figure axis label and its air. It was 42, which put the
@@ -99,6 +100,30 @@ export interface ChartSpread {
   hi?: (Band | null)[] | null;
   bars?: (Band | null)[] | null;
   cumulative?: (Band | null)[] | null;
+}
+
+/**
+ * One boundary drawn across the plot, and the zone it opens above it.
+ *
+ * The indicator layer's single prop: an indicator knows its own thresholds, so a
+ * chart is handed them rather than working out bands for itself. Suction is the first
+ * quantity to use it — four boundaries, different per field — and the 18 km/h line on
+ * wind is the same prop with one entry.
+ *
+ * `from` and `to` are sample indices, for a boundary that only holds over part of the
+ * window. A soil sensor that moved field mid-season has different thresholds either
+ * side of the move, and one line straight across would put the earlier half of the
+ * series under a limit that never applied to it.
+ */
+export interface ChartThreshold {
+  at: number;
+  color: string;
+  /** Rides just above the line, at its left end — "kritiek 60". */
+  label?: string;
+  /** Tint the zone from here up to the next boundary, or to the top of the plot. */
+  shade?: boolean;
+  from?: number;
+  to?: number;
 }
 
 export interface SeriesChartProps {
@@ -144,6 +169,14 @@ export interface SeriesChartProps {
   /** Names the band in the cursor's readout. Without it the two extra numbers in the
    *  label say nothing about where they came from. */
   spreadLabel?: string;
+  /**
+   * The boundaries this quantity is read against.
+   *
+   * Only those the series is measurably near are drawn — see `thresholdsInPlay`. A
+   * boundary far off the scale is not in play, and stretching the axis to reach it
+   * would flatten the series into a line along the bottom.
+   */
+  thresholds?: readonly ChartThreshold[] | null;
   /** Short unit riding the top gridline. */
   unit?: string;
   /** Hard floor and ceiling for the axis, where the quantity has them — humidity
@@ -179,7 +212,7 @@ export function SeriesChart({
   showCumulative, cumulativeLabel, cumulativeColor, axisMin, axisMax, axisFixed,
   formatAxis, gridLines = GRID_LINES,
   showValue = true, showBandLo, showBandHi, bandLoColor, bandHiColor, background,
-  spread, spreadLabel,
+  spread, spreadLabel, thresholds,
 }: SeriesChartProps) {
   const { palette } = useTheme();
   const ground = background ?? palette.appCard;
@@ -211,13 +244,23 @@ export function SeriesChart({
     );
   }
 
-  const range = niceRange(Math.min(...all), Math.max(...all));
+  // The boundaries in play stretch the axis, or a line at 60 on a series that tops
+  // out at 48 is clipped against the ceiling and reads as no boundary at all. Which
+  // ones those are is decided from the data alone, before the axis moves for them.
+  const marks = thresholdsInPlay(
+    (thresholds ?? []).map((t, i) => ({ at: t.at, level: i })),
+    Math.min(...all),
+    Math.max(...all)
+  );
+  const withMarks = [...all, ...marks.map((m) => m.at)];
+
+  const range = niceRange(Math.min(...withMarks), Math.max(...withMarks));
   // Bars stand on zero; a bar chart with a floating baseline misreads every height
   // on it. A line keeps the padded range, so a flat day is not a flat line — but
   // never past a bound the quantity itself has: a padded range around a humid
   // afternoon would otherwise label the axis 104%.
   const fixed = axisFixed && axisMin != null && axisMax != null;
-  const padded = shape === 'bar' ? 0 : Math.min(range.lo, Math.min(...all));
+  const padded = shape === 'bar' ? 0 : Math.min(range.lo, Math.min(...withMarks));
   const lo = fixed ? axisMin : axisMin != null ? Math.max(padded, axisMin) : padded;
   const hi = fixed
     ? axisMax
@@ -309,6 +352,51 @@ export function SeriesChart({
                 </SvgText>
               </G>
             ))}
+
+            {/* The boundaries, under the data: a line the series crosses has to stay
+                readable where it crosses. Zones first, then the lines over them. */}
+            {marks.length ? (
+              <G>
+                {thresholdZones(marks, hi)
+                  .filter((z) => thresholds?.[z.level]?.shade && z.to > z.from)
+                  .map((z) => (
+                    <Rect
+                      key={`tz${z.level}`}
+                      x={PAD_LEFT}
+                      y={py(z.to)}
+                      width={plotW}
+                      height={Math.max(0, py(z.from) - py(z.to))}
+                      fill={thresholds![z.level]!.color}
+                      opacity={0.1}
+                    />
+                  ))}
+                {marks.map((m) => {
+                  const t = thresholds![m.level]!;
+                  // A boundary that only holds over part of the window stops where it
+                  // stops; without a stretch it runs the whole width.
+                  const x1 = t.from != null ? px(Math.max(0, t.from)) : PAD_LEFT;
+                  const x2 = t.to != null ? px(Math.min(n - 1, t.to)) : width - PAD_RIGHT;
+                  return (
+                    <G key={`tl${m.level}`}>
+                      <Line
+                        x1={x1} x2={x2} y1={py(m.at)} y2={py(m.at)}
+                        stroke={t.color} strokeWidth={1.2} strokeDasharray="4 3"
+                        opacity={0.9}
+                      />
+                      {t.label ? (
+                        <SvgText
+                          x={x1 + 4} y={py(m.at) - 3}
+                          fontSize={8} fill={t.color} textAnchor="start"
+                          fontFamily="Figtree_600SemiBold"
+                        >
+                          {t.label}
+                        </SvgText>
+                      ) : null}
+                    </G>
+                  );
+                })}
+              </G>
+            ) : null}
 
             {/* Where measurement stops and forecast begins. */}
             {boundaryX != null ? (

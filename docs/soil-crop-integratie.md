@@ -343,8 +343,39 @@ alleen metingen bevat. Dat is het eerlijke antwoord en geen ontbrekende functie:
 zodra de zuigspanningsverwachting van stap 4c in dezelfde reeks landt, begint
 dezelfde functie "passeert 45 om 11:20" te antwoorden zonder te veranderen.
 
-Stap 2 — drempellijnen in de grafieken — is hiermee aan de beurt: de indicator kent
-zijn grenzen al, dus het is één prop.
+Stap 2 staat er ook: **de drempellijn is één prop.**
+
+- `ui/graph/SeriesChart.tsx` krijgt `thresholds?: ChartThreshold[]` — per grens een
+  waarde, een kleur, een label en of de zone erboven getint wordt. Geen eigen
+  `bands`-mechanisme: de indicator kent zijn grenzen al, dus de grafiek krijgt ze
+  aangereikt. Wat hier voor zuigspanning getekend wordt, tekent straks de 18 km/u-lijn
+  op wind met één entry.
+- `ChartThreshold` draagt een optionele `from`/`to` in sample-indices, zodat een grens
+  die halverwege het venster wisselt daar ook stopt. Dat is de haak voor stap 4b: een
+  sensor die halverwege het seizoen verhuist heeft twee drempelsets, en één lijn dwars
+  over de reeks zet de eerste helft onder een grens die er nooit gold.
+- De rekenkant staat puur in `indicators.ts` (`thresholdsInPlay`, `thresholdZones`) en
+  is getest; de component tekent alleen.
+
+Drie beslissingen die tijdens het bouwen vielen:
+
+- **Welke grenzen meedoen.** Een grens ver buiten de reeks wordt niet getekend. Niet
+  om hem te verbergen, maar omdat de as ernaartoe rekken de reeks platdrukt: het
+  account heeft percelen waarvan de kritieke grens tienmaal de zomerzuigspanning is,
+  en een as tot 200 kPa toont de grens en verder niets. De regel staat als wat hij
+  beschermt — **de reeks houdt minstens een kwart van de ashoogte** — en niet als een
+  afstand, want een afstand werkt niet op een vlakke dag.
+- **De zone onder de laagste grens blijft ongekleurd.** Waar niets aan de hand is
+  wordt niets ingekleurd; het luidste middel van de grafiek hoort niet naar zijn minst
+  interessante toestand te gaan.
+- **Een samengevallen band krijgt geen hoogte**, en tekent dus niets, in plaats van een
+  streepje in de kleur van een toestand waar dat perceel nooit in kan staan.
+
+Nog geen pagina geeft de prop mee: de bodemreeksen op 'Grafiek' zijn stap 4b, en
+zuigspanning is volgens blad 3 de eerste klant. Wind en Delta T staan er in de
+volgorde expliciet áchter.
+
+Stap 3 — de profielwizard — is hiermee aan de beurt.
 
 ## Nog open
 
