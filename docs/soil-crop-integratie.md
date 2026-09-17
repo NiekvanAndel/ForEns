@@ -478,6 +478,38 @@ Op 'Actueel' schuiven de bodemblokken in dezelfde lijst als de rest, dus
 — gewas · grondsoort · sensordiepte — omdat 48 kPa op zand onder uien iets anders
 betekent dan op zware klei onder aardappelen.
 
+### Stap 4b — de reeksen op 'Grafiek'
+
+`core/model/soilSeries.ts` staat náást `buildSeries` en niet erin. Een weerreeks mengt
+meting en model per uur en loopt door na nu; een bodemreeks heeft geen model achter
+zich — `/soil_aggregates/` is alles wat er is, en de zuigspanningsverwachting zit in de
+webapp maar niet in API v2. De weerbouwer daaromheen buigen betekent een merge zonder
+iets om te mergen en een toekomsthelft die altijd leeg is. Wat ze wél delen is de vorm:
+beide leveren de app's eigen `Sample`, dus `SeriesChart` tekent ze met dezelfde as,
+dezelfde cursor en de drempellijnen van stap 2.
+
+- **Zuigspanning is de eerste klant van die drempellijn.** Vier grenzen uit de
+  plaatsing, per perceel anders, met de zones erboven getint.
+- **pF krijgt een vaste as 0–4,2.** Logaritmisch én meeschalend samen maakt van een
+  natte week één rechte streep — precies het enige wat de lezer kwam zien.
+- **Zuigspanning krijgt géén vaste bovengrens.** De drempels bepalen hoever de as
+  reikt, en die verschillen per perceel.
+- **Welke pillen verschijnen volgt uit de metingen**, niet uit `version_type`: BASIC,
+  PLUS en PRO zeggen niets over of er een voeler op 10 cm zit. Een pil voor een
+  grootheid die overal null is opent een lege grafiek en geeft de lezer de schuld.
+- **Een gat blijft een gat.** De sensor meet elk halfuur en die gaten zijn echt; een
+  lijn die er stilletjes overheen loopt zegt dat er gemeten is waar dat niet zo is.
+- Een venster langer dan drie dagen vouwt naar één punt per dag met de spreiding als
+  band — een perceel dat van 20 naar 55 kPa liep en een perceel dat op 37 stond zijn
+  dezelfde lijn en heel verschillende dagen.
+- Swipe je naar een locatie zonder die sensor, dan springt de pil terug: een lege
+  grafiek met een geselecteerde pil leest als een storing.
+
+**Nog niet gedaan binnen 4b:** de plaatsingssegmenten. `ChartThreshold` draagt de
+`from`/`to` ervoor en `segmentByPlacement` staat klaar, maar zolang er geen
+`/placements/` is kent de app één plaatsing en is er niets te splitsen. Dat wordt echt
+werk zodra de backend stap 0 levert.
+
 ## Nog open
 
 - ~~De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt
