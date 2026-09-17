@@ -16,7 +16,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AgroAuthError, distanceKm, fetchLatestSoilMeasurement, fetchSoilStations, withAgroToken,
+  AgroAuthError, distanceKm, fetchLatestSoilMeasurement, fetchSoilRange, fetchSoilReadings,
+  fetchSoilStations, withAgroToken,
   type SoilSample, type SoilStation,
 } from '../core/sources/agroexact';
 import { isDormant, placementFromStation } from '../core/model/soil';
@@ -247,4 +248,53 @@ export function useSoilLocationSync() {
       lon: s.lon,
     }))));
   }, [sensors, status, mutate, prefs.locations]);
+}
+
+export const soilRangeKey = (
+  stationId: string, offsetSec: number, from: string, to: string, fine: boolean
+) => ['agroexact', 'soil-range', stationId, offsetSec, from, to, fine] as const;
+
+/** A window of soil readings is worth reusing for a few minutes; the sensor reports
+ *  every half hour and the reader is switching pills, not waiting for data. */
+const SOIL_RANGE_STALE_MS = 5 * 60_000;
+
+/**
+ * What a soil sensor measured between two dates.
+ *
+ * The counterpart of `useStationRange`, and `fine` picks the endpoint the same way:
+ * off, the hourly roll-ups from `/soil_aggregates/`; on, the raw half-hourly records
+ * from `/soilreadings/`, which is what a single day deserves.
+ *
+ * One thing differs and it matters on the day view. `/soil_aggregates/` withholds
+ * rows younger than thirty minutes, so an hourly window always stops a little short
+ * of now. The raw endpoint does not, which is a second reason the day view uses it.
+ */
+export function useSoilRange(
+  stationId: string | null,
+  depthCm: number,
+  offsetSec: number | null,
+  range: { from: string; to: string },
+  enabled = true,
+  fine = false
+) {
+  const auth = useAgroAuth();
+
+  return useQuery({
+    queryKey: soilRangeKey(stationId ?? '', offsetSec ?? 0, range.from, range.to, fine),
+    enabled: enabled && auth.status === 'connected' && !!stationId && offsetSec != null,
+    staleTime: SOIL_RANGE_STALE_MS,
+    queryFn: async ({ signal }): Promise<SoilSample[]> => {
+      if (!stationId) return [];
+      const fetchRows = fine ? fetchSoilReadings : fetchSoilRange;
+      const rows = await withAgroToken(
+        auth.getAccessToken,
+        (token) => fetchRows(
+          token, stationId, offsetSec ?? 0, depthCm, range.from, range.to, { signal }
+        ),
+        auth.reportUnauthorized
+      );
+      return rows ?? [];
+    },
+    retry: (count, error) => !(error instanceof AgroAuthError) && count < 1,
+  });
 }

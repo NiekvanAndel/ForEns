@@ -147,6 +147,11 @@ import { usePeeking } from '../../ui/peek';
 import { SeriesChart, type ChartSpread } from '../../ui/graph/SeriesChart';
 import { useEnsembleMembers } from '../../ui/graph/useEnsembleBand';
 import { PillSwitcher, type PillItem } from '../../ui/PillSwitcher';
+import {
+  SOIL_SERIES_META, buildSoilSeries, soilSeriesKeys, type SoilSeriesKey,
+} from '../../core/model/soilSeries';
+import { soilThresholdSteps } from '../../core/model/indicators';
+import { SOIL_STEP_MIN } from '../../core/sources/agroexact';
 import type { IconName } from '../../ui/Icon';
 import {
   DEFAULT_PRESET, presetRange, RangeSelector,
@@ -155,6 +160,7 @@ import {
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useLocationStation, useStationRange } from '../../state/stations';
+import { useLocationSoil, useSoilRange } from '../../state/soilStations';
 import {
   buildSeries, dayKey, daySpan, forecastHorizon, SERIES_META,
   type Sample, type SeriesKey,
@@ -163,7 +169,7 @@ import {
   bandsFrom, bandsForSamples, cumulativeBands, memberBuckets, type BandField,
 } from '../../core/model/ensembleBand';
 import {
-  degToCompass, fmtMm, fmtTempValue, fmtWindValue, tempUnitLabel, windUnitLabel, ta,
+  degToCompass, fmtDecimal, fmtMm, fmtTempValue, fmtWindValue, tempUnitLabel, windUnitLabel, ta,
   type AppStringKey,
 } from '../../core/i18n';
 
@@ -175,6 +181,29 @@ import {
  * the *line's*, not the pill's — the pill carries the accent gradient like every
  * other switcher in the app, and the quantity's own colour belongs to the data.
  */
+/**
+ * What the pill row can be showing.
+ *
+ * Weather and soil are two builders behind one row, because to the reader they are
+ * one question — what has this place been doing — and two switchers would be two
+ * places to look. `isSoilKey` is the only branch; everything downstream reads the
+ * `Series` that both builders produce.
+ */
+export type ChartKey = SeriesKey | SoilSeriesKey;
+
+const isSoilKey = (k: ChartKey): k is SoilSeriesKey => k in SOIL_SERIES_META;
+
+/** The soil pills, in the order the plan lists their blocks. */
+const SOIL_PILLS: Record<SoilSeriesKey, { labelKey: AppStringKey; icon: IconName }> = {
+  waterTension: { labelKey: 'soilTension', icon: 'drop-half' },
+  pF: { labelKey: 'soilPf', icon: 'chart-line' },
+  waterPercent: { labelKey: 'soilWaterPercent', icon: 'drop' },
+  refillMm: { labelKey: 'soilRefillRoom', icon: 'drop' },
+  soilTemp: { labelKey: 'soilTemp', icon: 'thermometer-simple' },
+  temp10: { labelKey: 'soilTemp10', icon: 'thermometer-simple' },
+  humidity10: { labelKey: 'soilHumidity10', icon: 'drop-half' },
+};
+
 const SERIES: {
   key: SeriesKey;
   labelKey: AppStringKey;
@@ -243,7 +272,7 @@ function GraphPage() {
 
   const [preset, setPreset] = useState<PresetDays | null>(DEFAULT_PRESET);
   const [range, setRange] = useState<DateRange>(() => presetRange(DEFAULT_PRESET));
-  const [key, setKey] = useState<SeriesKey>('temp');
+  const [key, setKey] = useState<ChartKey>('temp');
   /** The running total over the rainfall bars. On by default — it is the reason the
    *  page can answer "how much fell in this period" at a glance. */
   const [showCumulative, setShowCumulative] = useState(true);
@@ -271,17 +300,41 @@ function GraphPage() {
   // in hand.
   const measurements = useStationRange(station?.id ?? null, offsetSec, range, !peeking, fine);
 
+  // The soil sensor bound to this place, and its window. Same `fine` rule: a single
+  // day gets the raw half-hourly records, anything longer the hourly roll-ups — which
+  // withhold the last half hour, a second reason the day view wants the raw ones.
+  const soil = useLocationSoil(location);
+  const soilMeasurements = useSoilRange(
+    soil.station?.id ?? null,
+    soil.station?.depthCm ?? 0,
+    offsetSec,
+    range,
+    !peeking && !!soil.station,
+    fine
+  );
+  const soilRows = useMemo(() => soilMeasurements.data ?? [], [soilMeasurements.data]);
+
   const series = useMemo(
-    () =>
-      buildSeries({
+    () => {
+      // Soil has no model behind it and nothing ahead of now, so it is its own
+      // builder — see `core/model/soilSeries`. Both produce the same `Series`, which
+      // is what lets everything below this line stay one path.
+      if (isSoilKey(key)) {
+        return buildSoilSeries({
+          key, from: range.from, to: range.to, samples: soilRows,
+          stepMinutes: fine && soilRows.length > 0 ? SOIL_STEP_MIN : 60,
+        });
+      }
+      return buildSeries({
         key, from: range.from, to: range.to,
         measured: measurements.data ?? [], model, includeForecast: true,
         // Only where a station actually answered at that grain: the ten-minute grid
         // is worth its extra samples when they are filled, and is a row of gaps with
         // an hourly model behind it when they are not.
         stepMinutes: fine && (measurements.data?.length ?? 0) > 0 ? 10 : 60,
-      }),
-    [key, range.from, range.to, measurements.data, model, fine]
+      });
+    },
+    [key, range.from, range.to, measurements.data, soilRows, model, fine]
   );
 
   // As far ahead as the model can be asked about.
@@ -295,7 +348,9 @@ function GraphPage() {
    * thermometer might have read something else. A window entirely in the past asks
    * for nothing at all, and so does a quantity that carries no band.
    */
-  const bandField = BAND_FIELD[key];
+  // A soil series has no ensemble behind it: nobody runs fifty members of a suction
+  // measurement. So no band, and no request for one.
+  const bandField = isSoilKey(key) ? undefined : BAND_FIELD[key];
   const ensemble = useEnsembleMembers({
     lat: location.lat,
     lon: location.lon,
@@ -304,7 +359,16 @@ function GraphPage() {
     enabled: !!bandField && !peeking && range.to >= today,
   });
 
-  const meta = SERIES_META[key];
+  /**
+   * The axis and the shape, from whichever table owns this quantity.
+   *
+   * Soil has no named edges — "the day's coldest and warmest" is a temperature idea,
+   * and a day's driest hour of suction is not a number anyone plans around — so its
+   * spread stays an area under the line rather than two lines with words under them.
+   */
+  const meta = isSoilKey(key)
+    ? { ...SOIL_SERIES_META[key], summary: 'range' as const, edges: false }
+    : SERIES_META[key];
 
   /** Only where the series has edges worth naming and something to draw them from. */
   const hasEdges = !!meta.edges && series.samples.some((s) => s.band != null);
@@ -397,7 +461,12 @@ function GraphPage() {
     humidity: palette.accentDark, wind: palette.valWind,
     radiation: palette.valSun,
   };
-  const color = SERIES.find((s) => s.key === key)?.color(colors) ?? palette.accent;
+  // Soil takes the station green: it is the app's mark for an instrument, and every
+  // soil sample is one. Within soil the quantities are told apart by the pill and the
+  // axis, not by six more hues.
+  const color = isSoilKey(key)
+    ? palette.agroInk
+    : SERIES.find((s) => s.key === key)?.color(colors) ?? palette.accent;
 
   /**
    * The colours the band's edges take, which are not the same pair for both.
@@ -423,13 +492,59 @@ function GraphPage() {
     });
   };
 
-  const pills: PillItem<SeriesKey>[] = SERIES.map((entry) => ({
-    key: entry.key,
-    icon: entry.icon,
-    label: ta(entry.labelKey, prefs.lang),
-  }));
+  /**
+   * Which soil quantities this sensor can draw, from what it actually reported.
+   *
+   * A pill per quantity that has a value somewhere in the window. On a location with
+   * no sensor there are none and the row is the six it has always been.
+   */
+  const soilKeys = useMemo(() => soilSeriesKeys(soilRows), [soilRows]);
 
-  const refreshControl = useRefreshControl(measurements.refetch);
+  const pills: PillItem<ChartKey>[] = [
+    ...SERIES.map((entry) => ({
+      key: entry.key as ChartKey,
+      icon: entry.icon,
+      label: ta(entry.labelKey, prefs.lang),
+    })),
+    ...soilKeys.map((k) => ({
+      key: k as ChartKey,
+      icon: SOIL_PILLS[k].icon,
+      label: ta(SOIL_PILLS[k].labelKey, prefs.lang),
+    })),
+  ];
+
+  // Swiping to a location without that sensor must not leave the page on a pill that
+  // is no longer there — an empty chart with a selected pill reads as a failure.
+  useEffect(() => {
+    if (isSoilKey(key) && !soilKeys.includes(key)) setKey('temp');
+  }, [key, soilKeys]);
+
+  /**
+   * The field's own thresholds, as lines across the plot.
+   *
+   * Step 2's prop, and suction is its first caller: the indicator already knows these
+   * boundaries, so nothing here computes a band. They are the placement's frozen set,
+   * which is why a chart drawn over a move will step them rather than run one line
+   * across both halves.
+   */
+  const thresholds = useMemo(() => {
+    if (key !== 'waterTension' || !soil.placement) return null;
+    const ink: Record<number, string> = {
+      1: palette.valSun, 2: palette.valTemp, 3: palette.valHigh,
+    };
+    return soilThresholdSteps(soil.placement.thresholds).map((t) => ({
+      at: t.at,
+      color: ink[t.level] ?? palette.valHigh,
+      label: `${fmtDecimal(t.at)}`,
+      shade: true,
+    }));
+  }, [key, soil.placement, palette]);
+
+  // Both windows, because the pill row is one row: pulling down on a suction chart
+  // that only refetched the weather would look like a refresh that did nothing.
+  const refreshControl = useRefreshControl(async () => {
+    await Promise.all([measurements.refetch(), soilMeasurements.refetch()]);
+  });
 
   /** The reader's own units, for the axis and the cursor alike. */
   const format = (v: number): string => {
@@ -441,6 +556,17 @@ function GraphPage() {
       // A bearing reads as the compass point it is, not as a number of degrees.
       case 'windDir': return degToCompass(v);
       case 'radiation': return `${Math.round(v)} W/m²`;
+      // Suction is kPa on every side of this: the thresholds, the web app and the
+      // sensor are all in it, and there is no reader unit to convert to.
+      case 'waterTension': return `${fmtDecimal(v)} kPa`;
+      // A logarithm with no unit, to two decimals — its whole range is 0 to 4,2.
+      case 'pF': return (Math.round(v * 100) / 100).toFixed(2).replace('.', ',');
+      case 'waterPercent': return `${fmtDecimal(v)} vol-%`;
+      case 'refillMm': return `${fmtMm(v)} mm`;
+      // A soil temperature is a temperature: it converts like any other.
+      case 'soilTemp':
+      case 'temp10': return `${fmtTempValue(v, prefs.tempUnit)}°`;
+      case 'humidity10': return `${Math.round(v)}%`;
     }
   };
 
@@ -450,6 +576,11 @@ function GraphPage() {
     : key === 'humidity' ? '%'
     : key === 'windDir' ? ''
     : key === 'radiation' ? 'W'
+    : key === 'waterTension' ? 'kPa'
+    : key === 'waterPercent' ? '%'
+    : key === 'refillMm' ? 'mm'
+    : key === 'soilTemp' || key === 'temp10' ? tempUnitLabel(prefs.tempUnit)
+    : key === 'humidity10' ? '%'
     : '';
 
   // Clock times where a sample is a moment, dates where it is a day: a thirty-day
@@ -593,6 +724,7 @@ function GraphPage() {
                   cumulativeColor={palette.inkHeading}
                   spread={showSpread ? spread : null}
                   spreadLabel={ta('spread', prefs.lang)}
+                  thresholds={thresholds}
                   background={palette.appBg}
                   emptyLabel={ta('noSeries', prefs.lang)}
                 />
