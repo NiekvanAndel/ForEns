@@ -136,3 +136,51 @@ function nextDay(date: string): string {
   if (!Number.isFinite(ms)) return '';
   return new Date(ms + 86_400_000).toISOString().slice(0, 10);
 }
+
+/**
+ * Which crops this model speaks for.
+ *
+ * Smith is a potato model and nothing else. The crop comes from `/soilstations/` as a
+ * Dutch name the grower typed in the web app, so the match is loose on case and
+ * whitespace and strict on everything else: showing a blight model over a field of
+ * onions would be worse than showing nothing.
+ *
+ * A function rather than a constant because the next model has its own list, and the
+ * profile wizard will eventually answer this for locations that have no sensor to ask.
+ */
+export function smithAppliesTo(crop: string | null | undefined): boolean {
+  return (crop ?? '').trim().toLowerCase() === 'aardappel';
+}
+
+/** What the badge says, without saying it in any language. */
+export interface SmithVerdict {
+  /** 0 nothing running, 1 a day that could become a period, 2 a period. */
+  level: 0 | 1 | 2;
+  /** Days in the run that is current, where one is. */
+  days: number;
+  source: HumidSource;
+}
+
+/**
+ * Smith as one verdict.
+ *
+ * Three states and no more, because that is what a badge can carry and what a grower
+ * acts on: nothing running, something building, a period. The middle one earns its
+ * place — a single qualifying day is not a Smith period and must never be called one,
+ * but it is the day before one, and a grower who sees it coming can plan the walk
+ * rather than be told about it afterwards.
+ *
+ * Read off the *last* day the hours cover, not off the whole window: this is a badge
+ * about now. The history is in `periods` for anything that wants to draw it.
+ */
+export function smithVerdict(result: SmithResult): SmithVerdict {
+  const lastDay = result.days[result.days.length - 1]?.date ?? null;
+  const current = result.periods.find((p) => p.to === lastDay) ?? null;
+
+  if (!current) return { level: 0, days: 0, source: result.source };
+  return {
+    level: current.complete ? 2 : 1,
+    days: current.days,
+    source: result.source,
+  };
+}

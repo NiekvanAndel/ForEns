@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest';
 import {
   humidDays, humidHoursFrom, humidRuns, type HumidHour,
 } from '../core/model/humidHours';
-import { SMITH, smith } from '../core/model/smith';
+import { SMITH, smith, smithAppliesTo, smithVerdict } from '../core/model/smith';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -190,5 +190,39 @@ describe('which height the models run on', () => {
       [at('2026-07-01T06:00', 96)]
     );
     expect(out.hours).toHaveLength(1);
+  });
+});
+
+describe('Smith as one verdict', () => {
+  const wet = { humid: [0, 11] as [number, number], temp: 15 };
+  const dry = { humid: [0, 3] as [number, number], temp: 15 };
+
+  const verdictOf = (...days: HumidHour[][]) =>
+    smithVerdict(smith({ hours: days.flat(), source: 'canopy10cm' }));
+
+  it('calls two days in a row a period', () => {
+    expect(verdictOf(day('2026-07-01', wet), day('2026-07-02', wet)))
+      .toMatchObject({ level: 2, days: 2, source: 'canopy10cm' });
+  });
+
+  it('calls one qualifying day a day, not a period', () => {
+    // It is the day before one, which a grower can act on — but it is not one, and
+    // the app must never call it one.
+    expect(verdictOf(day('2026-07-01', dry), day('2026-07-02', wet)))
+      .toMatchObject({ level: 1, days: 1 });
+  });
+
+  it('reads today, not the whole window', () => {
+    // A period that ended on Tuesday is history, not a badge about now.
+    expect(verdictOf(day('2026-07-01', wet), day('2026-07-02', wet), day('2026-07-03', dry)))
+      .toMatchObject({ level: 0, days: 0 });
+  });
+
+  it('speaks for potatoes and for nothing else', () => {
+    // Showing a blight model over a field of onions is worse than showing nothing.
+    expect(smithAppliesTo('Aardappel')).toBe(true);
+    expect(smithAppliesTo(' aardappel ')).toBe(true);
+    expect(smithAppliesTo('Ui')).toBe(false);
+    expect(smithAppliesTo(null)).toBe(false);
   });
 });

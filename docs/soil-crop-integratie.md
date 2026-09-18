@@ -835,8 +835,30 @@ of boven 90% RV en een minimumtemperatuur van 10 °C. Signaleren, niet voorschri
 staat, anders op 1,50 m, nooit beide. De hoogte reist mee als herkomst, want een
 Smith-periode gevonden op 10 cm is een andere bewering dan een op 1,50 m.
 
-**Nog niet op een scherm.** Smith heeft een week aan uren nodig en de bestaande
-ophaalpaden reiken 26 uur terug; dat is een eigen slice.
+**Op het scherm**, als `DiseaseCard` onder de bodemkaart op 'Nu'. Drie toestanden:
+geen periode, eerste dag van een periode, en een lopende periode. Die middelste
+verdient zijn plek — één kwalificerende dag is géén Smith-periode en mag nooit zo
+heten, maar het is wel de dag ervóór, en wie hem ziet aankomen kan de ronde plannen in
+plaats van het achteraf te horen.
+
+**Waar het kan draaien, en waarom alleen daar.** Het gewas komt uit `/soilstations/` —
+de teler heeft de webapp al verteld wat er staat — dus de profielwizard staat hier niet
+in de weg. Maar Smith heeft twee volle dagen nodig, en een perceel heeft geen
+weerstation (de koppelregel zet er nooit een op dezelfde pagina). Dus: **alleen op een
+PRO**, waar de voeler op 10 cm een week kan leveren. Op een BASIC of PLUS tekent de
+kaart niets, wat het eerlijke antwoord is in plaats van een oordeel uit anderhalve dag.
+
+Twee dingen die het narekenen van de eigen wiring opleverde:
+
+- **Niets gemeten is niet "geen Smith-periode".** Zonder uren viel de hoogtekeuze terug
+  op 1,50 m en zou de kaart een rustige week melden op gezag van een voeler die niets
+  zei. Nu tekent hij niets.
+- **Het weekvenster volgde de datum niet.** Het stond vast bij mount, dus over een
+  dagovergang heen keek de kaart naar gisteren.
+
+De formulering is "ga kijken", nooit "ga spuiten", en het model wordt bij naam genoemd.
+Wie weet wat Smith is kan het wegen; wie het niet weet kan het opzoeken. Aan "risico
+hoog" heeft geen van beiden iets.
 
 ## Nog open
 

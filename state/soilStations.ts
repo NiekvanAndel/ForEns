@@ -20,7 +20,8 @@ import {
   fetchSoilReadings, fetchSoilStations, withAgroToken,
   type SoilSample, type SoilStation,
 } from '../core/sources/agroexact';
-import { isDormant, placementFromStation } from '../core/model/soil';
+import { isDormant, placementFromStation, soilCapabilities } from '../core/model/soil';
+import type { HumidHour } from '../core/model/humidHours';
 import type { SoilObservations } from '../core/model/station';
 import { syncSoilLocations, type SavedLocation } from '../core/prefs';
 import { useAgroAuth } from './auth';
@@ -433,4 +434,56 @@ export function useAllLocationSoil(enabled: boolean): LocationSoil[] {
     latest: results[i]?.data ?? null,
     loading: results[i]?.isFetching ?? false,
   }));
+}
+
+/** How far back the disease models look. A week is enough to see a period build,
+ *  and Smith itself only ever needs two days of it. */
+const DISEASE_DAYS = 7;
+
+/**
+ * A week of hours for the disease models, from the sensor in the crop.
+ *
+ * Only a PRO has a probe at 10 cm, and only a PRO can answer this at all: a field has
+ * no weather station — the location sync never puts a sensor on one's page — so
+ * there is no 1.50 m record to fall back to here, and the model's own past hours reach
+ * about a day back where Smith needs two. On a BASIC or a PLUS this returns nothing,
+ * and a page with nothing draws nothing, which is the honest answer rather than a
+ * verdict built from a day and a half.
+ *
+ * A week of hourly roll-ups is about 170 rows, fetched once per field and only where a
+ * model actually applies to the crop.
+ */
+export function useSoilCanopyWeek(
+  station: SoilStation | null,
+  offsetSec: number | null,
+  enabled = true
+): { hours: HumidHour[]; loading: boolean } {
+  const canopy = soilCapabilities(station?.type).canopy;
+  // Recomputed when the calendar day turns, and not on every render: the window has to
+  // follow the date, but a new object each render would refetch the week continuously.
+  const today = new Date().toISOString().slice(0, 10);
+  const range = useMemo(() => {
+    const to = new Date(`${today}T12:00:00Z`);
+    const from = new Date(to.getTime() - (DISEASE_DAYS - 1) * 86_400_000);
+    return { from: from.toISOString().slice(0, 10), to: today };
+  }, [today]);
+
+  const query = useSoilRange(
+    canopy ? station?.id ?? null : null,
+    station?.depthCm ?? 0,
+    offsetSec,
+    range,
+    enabled && canopy
+  );
+
+  const hours = useMemo<HumidHour[]>(
+    () => (query.data ?? []).map((s) => ({
+      time: s.time,
+      humidity: s.humidity10,
+      temp: s.temp10,
+    })),
+    [query.data]
+  );
+
+  return { hours, loading: query.isFetching };
 }

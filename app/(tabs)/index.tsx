@@ -30,9 +30,12 @@ import { ForecastPreview } from '../../ui/nowcast/ForecastPreview';
 import { DaySheet } from '../../ui/forecast/DaySheet';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
-import { useLocationSoil } from '../../state/soilStations';
+import { useLocationSoil, useSoilCanopyWeek } from '../../state/soilStations';
 import { waterTensionIndicator } from '../../core/model/indicators';
 import { soilCapabilities } from '../../core/model/soil';
+import { humidHoursFrom } from '../../core/model/humidHours';
+import { smith, smithAppliesTo, smithVerdict } from '../../core/model/smith';
+import { DiseaseCard } from '../../ui/nowcast/DiseaseCard';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
 import { t, ta } from '../../core/i18n';
@@ -71,6 +74,29 @@ function NowcastPage() {
       label: ta('soilCanopyLabel', prefs.lang),
     };
   }, [soil.latest, soil.station?.type, prefs.lang]);
+
+  /**
+   * Smith, where the crop is potato and there is a probe in it.
+   *
+   * The crop comes from `/soilstations/` — a grower already told the web app what is
+   * in this field — so the profile wizard is not in the way here. Only a PRO can
+   * answer: a field has no weather station, and the model's own past hours reach about
+   * a day back where Smith needs two.
+   */
+  const canopyWeek = useSoilCanopyWeek(
+    soil.station,
+    offsetSec,
+    smithAppliesTo(soil.station?.crop)
+  );
+  const smithNow = useMemo(() => {
+    if (!smithAppliesTo(soil.station?.crop)) return null;
+    const { hours, source } = humidHoursFrom([], canopyWeek.hours);
+    // Nothing measured is not "no Smith period". With no hours at all the fallback
+    // would name a height nobody read from, and the card would report a quiet week on
+    // the strength of a probe that said nothing.
+    if (!hours.length) return null;
+    return smithVerdict(smith({ hours, source }));
+  }, [soil.station?.crop, canopyWeek.hours]);
 
   const soilHero = useMemo(() => {
     if (!soil.placement || !soil.latest || !model) return null;
@@ -203,6 +229,11 @@ function NowcastPage() {
                 indicator={soilHero.indicator}
               />
             ) : null}
+
+            {/* What the weather has been doing to the crop. Under the field's own
+                card, because the soil is what the page leads with and this is the
+                consequence of the weather on top of it. */}
+            <DiseaseCard smith={smithNow} />
 
             <ConditionsHero
               model={model}
