@@ -118,6 +118,9 @@ export default function OverviewScreen() {
           index: i,
           name: c.location.name,
           hasStation: c.hasStation,
+          // A field's rain is measured too, and the dot has to know it — the same
+          // flag the page's own blocks read. See `applySoilPrecip`.
+          precipMeasured: c.precipMeasured,
           loading: c.loading,
           model: c.model,
           outlook: outlooks[i] ?? null,

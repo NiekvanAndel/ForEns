@@ -42,7 +42,7 @@ function NowcastPage() {
   const { prefs, location } = usePrefs();
   const {
     model, alert, harmonie, phase, error, refresh, extendedLoaded, loadExtendedDays,
-    offsetSec,
+    offsetSec, precipMeasured,
   } = useForecast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -177,6 +177,11 @@ function NowcastPage() {
                 with a temperature modelled for the region, and leaves out the one
                 reading that decides today. So a field gets its own card, and the
                 weather it needs is still two taps away on 'Actueel'. */}
+            {/* A field leads with its own card, and the weather follows underneath.
+                The first replaced the second at first, which threw away something a
+                grower on a field still wants: the air over it. Two cards, in the order
+                the questions are asked — how is the soil, and then what is the
+                weather doing to it. */}
             {soilHero ? (
               <SoilHero
                 name={location.name}
@@ -184,17 +189,18 @@ function NowcastPage() {
                 latest={soilHero.latest}
                 indicator={soilHero.indicator}
                 rain24={soilHero.rain24}
+                rainMeasured={precipMeasured}
               />
-            ) : (
-              <ConditionsHero
-                model={model}
-                location={location}
-                sourceLabel={sourceLabel}
-                timeLabel={timeLabel}
-                // The card's own subject at full length. See `ConditionsHero`.
-                onPress={() => router.push('/actueel')}
-              />
-            )}
+            ) : null}
+
+            <ConditionsHero
+              model={model}
+              location={location}
+              sourceLabel={sourceLabel}
+              timeLabel={timeLabel}
+              // The card's own subject at full length. See `ConditionsHero`.
+              onPress={() => router.push('/actueel')}
+            />
 
             {/* The next hours, as their own block: the hero says what it is doing
                 now, this says what happens next, and a tap on an hour opens that

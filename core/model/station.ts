@@ -155,6 +155,43 @@ export function applySoilPrecip(
 }
 
 /**
+ * Which quantities an instrument answered for at this location, per quantity.
+ *
+ * One implementation, because there were nearly three. The rule is the same
+ * everywhere and it is easy to get wrong in the cheap direction: a station either has
+ * an anemometer or it does not, so a rain gauge answering with a full record — which
+ * is what `station_only=false` makes it do — marks its rainfall and leaves the wind
+ * alone. Marking every figure on a station-backed location would put an instrument's
+ * authority behind numbers a model supplied.
+ *
+ * `precipMeasured` carries the soil sensor's answer, which is not on the overlay: see
+ * `applySoilPrecip` on why a sensor that measured the rain leaves no `station` behind.
+ */
+export interface MeasuredQuantities {
+  temp: boolean;
+  humidity: boolean;
+  wind: boolean;
+  gusts: boolean;
+  windDir: boolean;
+  precip: boolean;
+}
+
+export function measuredQuantities(
+  model: ForecastModel | null,
+  precipMeasured = false
+): MeasuredQuantities {
+  const m = model?.station?.current ?? null;
+  return {
+    temp: m?.temp != null,
+    humidity: m?.humidity != null,
+    wind: m?.wind != null,
+    gusts: m?.gusts != null,
+    windDir: m?.windDir != null,
+    precip: m?.precip != null || precipMeasured,
+  };
+}
+
+/**
  * Whether the rainfall blocks may claim an instrument.
  *
  * True on a weather station that reported rain, and on a PLUS or PRO soil sensor —

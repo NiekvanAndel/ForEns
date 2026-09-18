@@ -27,6 +27,7 @@
  * the app does.
  */
 import type { ForecastModel } from './types';
+import { measuredQuantities } from './station';
 import type { NowcastBar } from '../radar/types';
 
 /**
@@ -164,16 +165,11 @@ export function modelTiles(
   // which may be in another zone entirely.
   const todayKey = model.nowHour.slice(0, 10);
   const today = model.pastHours.filter((h) => h.time.slice(0, 10) === todayKey);
-  const measures = {
-    temp: measured?.temp != null,
-    humidity: measured?.humidity != null,
-    wind: measured?.wind != null,
-    gusts: measured?.gusts != null,
-    windDir: measured?.windDir != null,
-    // Either instrument: the weather station's gauge, or a PLUS/PRO soil sensor whose
-    // hours have already been merged in. A location never has both.
-    precip: measured?.precip != null || !!precipMeasured,
-  };
+  // One implementation of "which quantities are instruments here", shared with the
+  // overview page — see `measuredQuantities`. It used to be written out in both, and
+  // the two had already drifted: the overview marked every figure on a
+  // station-backed location, forecasts included.
+  const measures = measuredQuantities(model, precipMeasured);
 
   const sum = (hours: readonly { precip: number | null }[]) =>
     Math.round(hours.reduce((total, h) => total + (h.precip ?? 0), 0) * 10) / 10;

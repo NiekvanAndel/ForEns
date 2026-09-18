@@ -22,6 +22,15 @@
  * A collapsed band — a field configured with no suboptimal stretch, which a fifth of
  * them are — takes no width, so it draws as nothing rather than as a sliver of a state
  * that field can never be in.
+ *
+ * ## The green dot, per figure
+ *
+ * The app's mark for "an instrument reported this" is a green dot, so that is what
+ * this card uses too rather than a second vocabulary for the same idea. And it is per
+ * figure, not per card: the rainfall beside the suction comes from the model unless
+ * this sensor has a gauge, and on a BASIC it always does. Tinting it green because
+ * the card belongs to an instrument would be the mistake the whole layer is built to
+ * avoid.
  */
 import { View } from 'react-native';
 import { Card } from '../Card';
@@ -46,13 +55,18 @@ export interface SoilHeroProps {
   /** Rain over the last 24 hours, from the model this sensor's own hours were merged
    *  into. Rain and irrigation are one number, by decision. */
   rain24: number | null;
+  /** Whether that rainfall is this sensor's own. False on a BASIC, which has no
+   *  gauge, and then the figure is the model's. */
+  rainMeasured: boolean;
 }
 
 /** How far above the critical threshold the bar runs, so a field past it still has
  *  somewhere to sit rather than pinning to the very end. */
 const BAR_HEADROOM = 1.15;
 
-export function SoilHero({ name, placement, latest, indicator, rain24 }: SoilHeroProps) {
+export function SoilHero({
+  name, placement, latest, indicator, rain24, rainMeasured,
+}: SoilHeroProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const lang = prefs.lang;
@@ -99,26 +113,26 @@ export function SoilHero({ name, placement, latest, indicator, rain24 }: SoilHer
             icon="drop-half"
             value={latest.tension == null ? null : fmtDecimal(latest.tension)}
             unit="kPa"
-            tone={palette.agroInk}
+            measured
           />
           <Reading
             icon="drop"
             value={latest.waterPercent == null ? null : fmtDecimal(latest.waterPercent)}
             unit="%"
-            tone={palette.agroInk}
+            measured
           />
           <Reading
             icon="thermometer-simple"
             value={latest.soilTemp == null ? null : fmtTempValue(latest.soilTemp, prefs.tempUnit)}
             unit={tempUnitLabel(prefs.tempUnit)}
-            tone={palette.agroInk}
+            measured
           />
           <Reading
             icon="cloud-rain"
             value={rain24 == null ? null : fmtDecimal(rain24)}
             unit="mm"
             sub={ta('last24h', lang)}
-            tone={palette.agroInk}
+            measured={rainMeasured}
           />
         </View>
 
@@ -143,15 +157,28 @@ export function SoilHero({ name, placement, latest, indicator, rain24 }: SoilHer
   );
 }
 
-/** One figure with its mark, its unit and an optional window under it. */
+/**
+ * One figure with its mark, its unit and an optional window under it.
+ *
+ * The green dot is the app's mark for an instrument, so it is the mark here — and it
+ * goes per figure. The icon says which quantity, which is a different job, so it stays
+ * in the ordinary ink whatever the dot does.
+ */
 function Reading({
-  icon, value, unit, sub, tone,
-}: { icon: IconName; value: string | null; unit: string; sub?: string; tone: string }) {
+  icon, value, unit, sub, measured,
+}: { icon: IconName; value: string | null; unit: string; sub?: string; measured: boolean }) {
   const { palette } = useTheme();
   return (
     <View style={{ gap: 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-        <Icon name={icon} size={15} color={tone} />
+        {measured ? (
+          <View
+            style={{
+              width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright,
+            }}
+          />
+        ) : null}
+        <Icon name={icon} size={15} color={palette.muted} />
         <Text variant="bodySm" weight="semibold" color={palette.inkHeading} tabular>
           {value ?? '—'}
         </Text>
@@ -160,7 +187,7 @@ function Reading({
         </Text>
       </View>
       {sub ? (
-        <Text variant="caption" color={palette.inkDisabled} style={{ marginLeft: 20 }}>
+        <Text variant="caption" color={palette.inkDisabled}>
           {sub}
         </Text>
       ) : null}

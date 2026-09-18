@@ -11,6 +11,7 @@
  * every other surface in this app does.
  */
 import type { EnsembleOutlook } from './sources/ensembleOutlook';
+import { measuredQuantities, type MeasuredQuantities } from './model/station';
 import type { ForecastModel, Hour } from './model/types';
 
 /** A short forecast for one location, beyond what the observation feed carries. */
@@ -45,8 +46,21 @@ export interface OverviewRow {
   /** Its slot in the saved list — what selecting it needs. */
   index: number;
   name: string;
-  /** True where an AgroExact station speaks for it, for the green dot. */
+  /** True where an instrument of any kind stands at this location. Not the green
+   *  dot — that is per quantity, below. */
   hasStation: boolean;
+  /**
+   * Which figures on this row an instrument actually reported.
+   *
+   * The green dot's rule, and the same one the blocks on 'Actueel' use. It used to be
+   * `hasStation` here, which was wrong in both directions at once: a rain gauge's page
+   * put a dot on its modelled temperature, and a field with a soil sensor got no dot
+   * at all on rain it had measured itself.
+   *
+   * Nothing about the future is in here. No instrument reports tomorrow, so every
+   * widget built on the outlook or the ensemble draws no dot whatever stands there.
+   */
+  measured: MeasuredQuantities;
   loading: boolean;
 
   tempC: number | null;
@@ -88,6 +102,8 @@ export interface BuildRowInput {
   index: number;
   name: string;
   hasStation: boolean;
+  /** Whether a soil sensor answered for the rainfall — see `applySoilPrecip`. */
+  precipMeasured?: boolean;
   loading: boolean;
   model: ForecastModel | null;
   outlook: LocationOutlook | null;
@@ -118,6 +134,7 @@ export function buildOverviewRow(input: BuildRowInput): OverviewRow {
     index: input.index,
     name: input.name,
     hasStation: input.hasStation,
+    measured: measuredQuantities(model, input.precipMeasured),
     loading: input.loading,
 
     tempC: now?.tempExact ?? now?.temp ?? null,

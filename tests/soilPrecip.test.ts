@@ -6,7 +6,9 @@
  * figure, or that a sensor with no rain gauge is treated as though it had one.
  */
 import { describe, it, expect } from 'vitest';
-import { applySoilPrecip, precipIsMeasured, type SoilObservations } from '../core/model/station';
+import {
+  applySoilPrecip, measuredQuantities, precipIsMeasured, type SoilObservations,
+} from '../core/model/station';
 import { modelTiles, type TileLabels } from '../core/model/tiles';
 import type { ForecastModel, Hour } from '../core/model/types';
 import type { SoilSample } from '../core/sources/agroexact';
@@ -115,6 +117,40 @@ describe('the same number everywhere it is shown', () => {
     // And the dot follows the figure, rather than being decided separately.
     expect(withSoil.find((t) => t.id === 'rain-24h')!.measured).toBe(true);
     expect(bare.find((t) => t.id === 'rain-24h')!.measured).toBe(false);
+  });
+});
+
+describe('the green dot, per quantity', () => {
+  it('marks only what the instrument at this place reported', () => {
+    // One rule, one implementation — the overview page had written it out again and
+    // the two had drifted: it marked every figure on a station-backed location.
+    const gauge: ForecastModel = {
+      ...model(),
+      station: {
+        id: 'w1', name: 'Regen',
+        current: {
+          time: '2026-06-15T12:00', measTime: '2026-06-15T12:05:00Z',
+          // A rain gauge: it has no thermometer and no anemometer.
+          temp: null, humidity: null, dewpoint: null,
+          wind: null, gusts: null, windDir: null, precip: 1.2,
+        },
+      },
+    };
+    expect(measuredQuantities(gauge)).toEqual({
+      temp: false, humidity: false, wind: false, gusts: false, windDir: false, precip: true,
+    });
+  });
+
+  it('lets a soil sensor speak for the rain without a station behind it', () => {
+    expect(measuredQuantities(model(), true).precip).toBe(true);
+    expect(measuredQuantities(model(), false).precip).toBe(false);
+    // And for nothing else, whatever the field measured at 30 cm.
+    expect(measuredQuantities(model(), true).temp).toBe(false);
+  });
+
+  it('marks nothing at all where there is no instrument', () => {
+    expect(Object.values(measuredQuantities(model()))).not.toContain(true);
+    expect(Object.values(measuredQuantities(null))).not.toContain(true);
   });
 });
 

@@ -602,6 +602,34 @@ deze bug: **elk tweede pad dat een model bouwt, moet elke merge draaien die het 
 draait.** Er zijn er twee (`state/forecast.tsx` en `state/allLocations.ts`), en een
 derde zou dezelfde fout opnieuw maken.
 
+### Het groene bolletje, nagelopen
+
+Gevraagd bij een schermafdruk van de overzichtspagina, en het antwoord was: niet
+consistent. Drie fouten, alle drie in dezelfde richting — de stip beloofde meer dan er
+gemeten was.
+
+- **De overzichtswidgets gebruikten `row.hasStation`**, één vlag per *locatie*, waar de
+  rest van de app het per *grootheid* doet. Dat was in twee richtingen mis: een
+  regenmeter kreeg een stip op zijn gemodelleerde temperatuur, en een perceel met een
+  bodemsensor kreeg er geen op regen die het zelf gemeten had.
+- **Verschillende stippen stonden op verwachtingen.** Regen die nog moet komen, de
+  minimumtemperatuur van vannacht, de spreiding van het ensemble, het
+  werkbaarheidsoordeel. Geen instrument meet morgen, dus daar hoort geen stip.
+- **In `SoilHero` kleurde de regenwaarde groen op elke sensor**, ook op een BASIC, die
+  helemaal geen regenmeter heeft. En de kaart gebruikte groene *iconen* in plaats van
+  de stip — een tweede vocabulaire voor hetzelfde idee.
+
+`measuredQuantities` in `core/model/station.ts` is nu de enige implementatie van de
+regel, gedeeld door `modelTiles` en de overzichtsrij. Er stonden er bijna drie.
+
+De regel zelf, uitgeschreven: **een groene stip betekent dat een instrument het getal
+ernaast heeft gerapporteerd.** Niet dat er een instrument in de buurt staat, en niet
+dat de locatie er een heeft.
+
+Verder komt op 'Nu' de weerhero nu weer onder de bodemkaart te staan in plaats van
+ervoor te wijken. Een teler op een perceel wil nog steeds weten wat de lucht erboven
+doet; twee kaarten in de volgorde waarin de vragen gesteld worden.
+
 ## Nog open
 
 - ~~De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt

@@ -274,7 +274,8 @@ export function AlertsWidget({ rows, alerts, settings, onOpen }: WidgetProps) {
         <LocationLine
           key={`alert-${row.index}`}
           name={row.name}
-          measured={row.hasStation}
+          // An alert is a statement about the hours ahead. Nothing measured it.
+          measured={false}
           divider={i > 0}
           // The reading is a phrase, not a figure; see `LocationLine`.
           compact
@@ -393,7 +394,7 @@ export function AdviceWidget({ rows, settings, onOpen }: WidgetProps) {
 /** The shared shape of the four ranked widgets: sort, then a line each. Extracted
  *  because four near-copies is how two of them end up sorting differently. */
 function RankedWidget({
-  title, hint, rows, pick, render, onPress, direction = 'desc', limit,
+  title, hint, rows, pick, render, onPress, direction = 'desc', measured, limit,
 }: {
   title: string;
   hint?: string;
@@ -402,6 +403,14 @@ function RankedWidget({
   render: (row: OverviewRow) => React.ReactNode;
   onPress: (row: OverviewRow) => void;
   direction?: 'desc' | 'asc';
+  /**
+   * Whether this row's figure was measured — per quantity, because the widget decides
+   * which quantity it is showing and this component cannot know.
+   *
+   * The default is no dot, which is the right answer for every widget built on the
+   * outlook or the ensemble: no instrument reports tomorrow.
+   */
+  measured?: (row: OverviewRow) => boolean;
   /** How many lines the reader allows it. The rest are counted, not dropped. */
   limit?: number;
 }) {
@@ -415,7 +424,7 @@ function RankedWidget({
         <LocationLine
           key={row.index}
           name={row.name}
-          measured={row.hasStation}
+          measured={measured?.(row) ?? false}
           divider={i > 0}
           onPress={() => onPress(row)}
         >
@@ -452,7 +461,8 @@ export function Rain24Widget({ rows, settings, onOpen }: WidgetProps) {
           <StackedLine
             key={row.index}
             name={row.name}
-            measured={row.hasStation}
+            // Rain that has fallen: a gauge measured it, or a PLUS/PRO soil sensor did.
+            measured={row.measured.precip}
             divider={i > 0}
             onPress={() => onOpen(row.index, 'grafiek')}
           >
@@ -490,7 +500,8 @@ export function RainNextWidget({ rows, settings, onOpen }: WidgetProps) {
           <StackedLine
             key={row.index}
             name={row.name}
-            measured={row.hasStation}
+            // Rain still to come. No instrument reports tomorrow.
+            measured={false}
             divider={i > 0}
             onPress={() => onOpen(row.index, 'forecast')}
           >
@@ -540,7 +551,7 @@ export function TempWidget({ rows, settings, onOpen }: WidgetProps) {
         <LocationLine
           key={row.index}
           name={row.name}
-          measured={row.hasStation}
+          measured={row.measured.temp}
           divider={i > 0}
           onPress={() => onOpen(row.index, 'actueel')}
         >
@@ -567,6 +578,7 @@ export function WindWidget({ rows, settings, onOpen }: WidgetProps) {
   return (
     <RankedWidget
       title={ta('ovWind', prefs.lang)}
+      measured={(r) => r.measured.wind}
       hint={ta('ovSpread', prefs.lang)}
       rows={rows}
       limit={settings.limit}
@@ -604,7 +616,8 @@ export function FrostWidget({ rows, settings, onOpen }: WidgetProps) {
           <LocationLine
             key={row.index}
             name={row.name}
-            measured={row.hasStation}
+            // Tonight's minimum is a forecast, however good the thermometer is.
+            measured={false}
             divider={i > 0}
             onPress={() => onOpen(row.index, 'forecast')}
           >
@@ -693,14 +706,9 @@ export function WorkWidget({ rows, settings, onOpen }: WidgetProps) {
                   built from `LocationLine` — the line inside this block carries its
                   own padding, and a row with two lots of padding in it is a row that
                   cannot be made compact. */}
+              {/* No dot: a workability verdict is about the hours ahead, and the
+                  green dot means an instrument reported the figure it sits beside. */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-                {row.hasStation ? (
-                  <View
-                    style={{
-                      width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright,
-                    }}
-                  />
-                ) : null}
                 <Text variant="label" color={palette.ink} numberOfLines={1} style={{ flex: 1 }}>
                   {row.name}
                 </Text>
@@ -759,14 +767,8 @@ export function OutlookWidget({ rows, settings, onOpen }: WidgetProps) {
             {/* The name keeps its own line. Squeezed into a column beside two days it
                 had seventy-eight points, which is a truncated place name, and a
                 location a grower cannot identify is a row they cannot use. */}
+            {/* Days ahead, so no dot — see the note in the workability ring. */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-              {row.hasStation ? (
-                <View
-                  style={{
-                    width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright,
-                  }}
-                />
-              ) : null}
               <Text
                 variant="bodySm"
                 weight="semibold"
@@ -904,7 +906,8 @@ export function ConfidenceWidget({ rows, onOpen }: WidgetProps) {
             <LocationLine
               key={row.index}
               name={row.name}
-              measured={row.hasStation}
+              // The members' spread about tomorrow — a forecast about a forecast.
+              measured={false}
               divider={i > 0}
               onPress={() => onOpen(row.index, 'forecast')}
             >

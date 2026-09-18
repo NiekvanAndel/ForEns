@@ -30,6 +30,9 @@ const hour = (time: string, over: Partial<OutlookHour> = {}): OutlookHour =>
 
 const row = (over: Partial<OverviewRow> = {}): OverviewRow => ({
   index: 0, name: 'Hedikhuizen', hasStation: false, loading: false,
+  measured: {
+    temp: false, humidity: false, wind: false, gusts: false, windDir: false, precip: false,
+  },
   tempC: 15, humidity: 70, windKmh: 12, gustKmh: 20, windDir: 180, wmo: 1,
   rain24: 0, rainToday: 0, rainNext24: 0, tonightMinC: 5, days: [], hours: [],
   rainTrail: [], tempTrail: [], ensemble: null,
