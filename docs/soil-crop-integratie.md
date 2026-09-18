@@ -585,6 +585,23 @@ Eén bug die het bouwen opleverde: de laatste meting werd op UTC gebucket terwij
 toekomst, telt `buildIndicator` hem niet als de huidige toestand, en verdwijnt de balk.
 De offset van de locatie gaat nu mee.
 
+### Twee antwoorden op dezelfde vraag — gevonden op een schermafdruk
+
+Het vergelijkscherm toonde voor een perceel een ander neerslaggetal dan het blok
+waaruit het geopend was, en de perceelsrijen misten hun groene stip terwijl het blok
+er wel een had.
+
+De oorzaak: het vergelijkscherm bouwt via `useAllLocationConditions` zijn **eigen**
+model, en daar liep de bodemmerge niet. De pagina merget de neerslag van de sensor in
+de uren, het vergelijkscherm niet — dus twee getallen voor dezelfde vraag, wat blad 2
+nu juist verbiedt. En `modelTiles` kreeg daar geen `precipMeasured` mee, dus de stip
+bleef uit.
+
+Nu draait dezelfde merge in beide paden en reist de vlag mee. De les is algemener dan
+deze bug: **elk tweede pad dat een model bouwt, moet elke merge draaien die het eerste
+draait.** Er zijn er twee (`state/forecast.tsx` en `state/allLocations.ts`), en een
+derde zou dezelfde fout opnieuw maken.
+
 ## Nog open
 
 - ~~De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt

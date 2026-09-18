@@ -121,12 +121,14 @@ export function TileSheet({ tile, labels, soilLabels, onClose }: TileSheetProps)
     };
   });
 
-  const weatherRows: Row[] = conditions.map(({ location, model, loading }, i) => {
+  const weatherRows: Row[] = conditions.map(({ location, model, precipMeasured, loading }, i) => {
     // The same blocks the grid behind is drawing, for this location; the one
     // being compared is picked out by id, so the two cannot describe different
-    // windows of the same quantity.
+    // windows of the same quantity. `precipMeasured` has to travel with it for the
+    // same reason: without it a field's rain row lost its green dot while the block
+    // it was opened from had one.
     const match = model
-      ? modelTiles(model, labels, nowcasts[i]).find((t) => t.id === tile?.id)
+      ? modelTiles(model, labels, nowcasts[i], precipMeasured).find((t) => t.id === tile?.id)
       : undefined;
     return {
       name: location.name,

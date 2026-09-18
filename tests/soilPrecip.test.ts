@@ -89,6 +89,35 @@ describe('a soil sensor with a rain gauge', () => {
   });
 });
 
+describe('the same number everywhere it is shown', () => {
+  it('feeds the rolling windows, so a block and a comparison row agree', () => {
+    // The bug this pins: the comparison sheet built its own model and never ran this
+    // merge, so tapping the rainfall block on a field showed one figure on the page
+    // and a different one in the list — and the field's row had no green dot while
+    // the block it was opened from did.
+    const hours = {
+      '2026-06-15T10:00': soilHour('2026-06-15T10:00', 4.2),
+      '2026-06-15T11:00': soilHour('2026-06-15T11:00', 1.1),
+    };
+    const soil = obs('PRO', hours);
+
+    const bare = modelTiles(model(), labels, null, false);
+    const merged = applySoilPrecip(model(), soil);
+    const withSoil = modelTiles(merged, labels, null, precipIsMeasured(merged, soil));
+
+    const sum = (tiles: ReturnType<typeof modelTiles>, id: string) =>
+      tiles.find((t) => t.id === id)?.value ?? null;
+
+    // Unmerged the hours are dry, merged they carry what the sensor caught.
+    expect(sum(bare, 'rain-24h')).toBe(0);
+    expect(sum(withSoil, 'rain-24h')).toBe(5.3);
+    expect(sum(withSoil, 'rain-6h')).toBe(5.3);
+    // And the dot follows the figure, rather than being decided separately.
+    expect(withSoil.find((t) => t.id === 'rain-24h')!.measured).toBe(true);
+    expect(bare.find((t) => t.id === 'rain-24h')!.measured).toBe(false);
+  });
+});
+
 describe('a soil sensor without one', () => {
   const rain = { '2026-06-15T10:00': soilHour('2026-06-15T10:00', 4.2) };
 

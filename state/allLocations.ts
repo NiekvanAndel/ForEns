@@ -32,25 +32,36 @@
 import { useQueries } from '@tanstack/react-query';
 import { processAll } from '../core/model/process';
 import { activeProvider, type NowcastProfile } from '../core/radar';
-import { applyStationObservations, stationForLocation } from '../core/model/station';
+import {
+  applySoilPrecip, applyStationObservations, precipIsMeasured, stationForLocation,
+  type SoilObservations,
+} from '../core/model/station';
 import { loadObservations } from '../core/sources/openMeteo';
 import { fetchOutlook } from '../core/sources/outlook';
 import { fetchEnsembleOutlook, type EnsembleOutlook } from '../core/sources/ensembleOutlook';
 import type { LocationOutlook } from '../core/overviewData';
 import {
-  AgroAuthError, fetchStationObservations, withAgroToken,
+  AgroAuthError, fetchSoilHours, fetchStationObservations, withAgroToken,
 } from '../core/sources/agroexact';
 import { agroIntegration, type SavedLocation } from '../core/prefs';
 import type { ForecastModel } from '../core/model/types';
 import { useAgroStations } from './stations';
+import { useAgroSoilStations } from './soilStations';
 import { useAgroAuth } from './auth';
 import { usePrefs } from './prefs';
 
 /** Conditions age by the hour, and a station reports every ten minutes. */
 const CONDITIONS_STALE_MS = 5 * 60_000;
 
-export const conditionsKey = (lat: number, lon: number, stationId: string | null) =>
-  ['conditions', lat.toFixed(4), lon.toFixed(4), stationId ?? ''] as const;
+export const conditionsKey = (
+  lat: number, lon: number, stationId: string | null, soilStationId: string | null
+) => ['conditions', lat.toFixed(4), lon.toFixed(4), stationId ?? '', soilStationId ?? ''] as const;
+
+/** What one location's query answers with: the model, and whether its rain is real. */
+interface Conditions {
+  model: ForecastModel | null;
+  precipMeasured: boolean;
+}
 
 export interface LocationConditions {
   location: SavedLocation;
@@ -58,6 +69,15 @@ export interface LocationConditions {
   model: ForecastModel | null;
   /** True where an AgroExact station speaks for this location. */
   hasStation: boolean;
+  /**
+   * Whether an instrument answered for the rainfall here.
+   *
+   * Carried beside the model rather than on it, exactly as the page's own forecast
+   * does: a soil sensor's rain is merged into the hours and leaves no `station`
+   * overlay behind, because that overlay is what a hero reads to put a measurement
+   * time beside a temperature.
+   */
+  precipMeasured: boolean;
   loading: boolean;
 }
 
@@ -71,18 +91,22 @@ export function useAllLocationConditions(enabled: boolean): LocationConditions[]
   const { prefs } = usePrefs();
   const auth = useAgroAuth();
   const { data: stations } = useAgroStations();
+  const { data: soilSensors } = useAgroSoilStations();
   const useForCurrent = agroIntegration(prefs).useForCurrentLocation;
 
   const results = useQueries({
     queries: prefs.locations.map((l) => {
       const station = stationForLocation(l, stations, useForCurrent);
+      const sensor = l.soilStationId
+        ? soilSensors?.find((s) => s.id === l.soilStationId) ?? null
+        : null;
       return {
-        queryKey: conditionsKey(l.lat, l.lon, station?.id ?? null),
+        queryKey: conditionsKey(l.lat, l.lon, station?.id ?? null, sensor?.id ?? null),
         enabled,
         staleTime: CONDITIONS_STALE_MS,
         retry: (count: number, error: Error) =>
           !(error instanceof AgroAuthError) && count < 1,
-        queryFn: async ({ signal }: { signal: AbortSignal }): Promise<ForecastModel | null> => {
+        queryFn: async ({ signal }: { signal: AbortSignal }): Promise<Conditions> => {
           const observations = await loadObservations({ lat: l.lat, lon: l.lon }, { signal });
           const model = processAll(observations, null, null, null, null, null, {
             lat: l.lat,
@@ -92,17 +116,45 @@ export function useAllLocationConditions(enabled: boolean): LocationConditions[]
             useHarmonie: false,
             harmFailed: false,
           });
-          if (!model || !station || auth.status !== 'connected') return model;
+          if (!model || auth.status !== 'connected') return { model, precipMeasured: false };
 
           // The feed's own offset, not the device's: a Dutch station's hours have to
           // bucket into Dutch hours on a phone set to another zone.
           const offsetSec = observations?.utc_offset_seconds ?? 0;
-          const obs = await withAgroToken(
-            auth.getAccessToken,
-            (token) => fetchStationObservations(token, station.id, offsetSec, { signal }),
-            auth.reportUnauthorized
-          ).catch(() => null);
-          return applyStationObservations(model, obs);
+
+          const obs = station
+            ? await withAgroToken(
+                auth.getAccessToken,
+                (token) => fetchStationObservations(token, station.id, offsetSec, { signal }),
+                auth.reportUnauthorized
+              ).catch(() => null)
+            : null;
+
+          // The soil sensor's rain, on the same terms as the page's own model — rain
+          // and irrigation are one number, and a sheet that compared a modelled
+          // figure against the merged one on the page behind it would be showing two
+          // answers to the same question.
+          const soilHours = sensor
+            ? await withAgroToken(
+                auth.getAccessToken,
+                (token) => fetchSoilHours(
+                  token, sensor.id, offsetSec, sensor.depthCm ?? 0, 26, { signal }
+                ),
+                auth.reportUnauthorized
+              ).catch(() => null)
+            : null;
+
+          const soil: SoilObservations | null = sensor
+            ? {
+                stationId: sensor.id,
+                stationName: sensor.name,
+                type: sensor.type,
+                hours: soilHours?.hours ?? {},
+              }
+            : null;
+
+          const merged = applySoilPrecip(applyStationObservations(model, obs), soil);
+          return { model: merged, precipMeasured: precipIsMeasured(merged, soil) };
         },
       };
     }),
@@ -112,8 +164,9 @@ export function useAllLocationConditions(enabled: boolean): LocationConditions[]
     const q = results[i];
     return {
       location,
-      model: q?.data ?? null,
+      model: q?.data?.model ?? null,
       hasStation: !!stationForLocation(location, stations, useForCurrent),
+      precipMeasured: q?.data?.precipMeasured ?? false,
       loading: !!q?.isLoading,
     };
   });
