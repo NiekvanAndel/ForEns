@@ -44,7 +44,9 @@ export type OverviewSource =
   /** A short forecast per saved location: the coming days, and tonight. */
   | 'outlook'
   /** The 51 members' daily rainfall per location — how much they disagree. */
-  | 'ensemble';
+  | 'ensemble'
+  /** The latest reading of every soil sensor on the account — `useAllLocationSoil`. */
+  | 'soil';
 
 /** How much of a row a widget wants. Two halves sit side by side; a full one does
  *  not, whatever is next to it. */
@@ -156,6 +158,12 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   // weeks a year and is noise for the rest.
   { id: 'frost', size: 'half', needs: ['outlook'], options: ['limit'], defaultHidden: true },
   // The one widget that answers "can I work" rather than "what is the weather".
+  // Every field on the account, driest first. Its own widget rather than a column on
+  // an existing one, because it answers a question none of the others can: not "what
+  // is the weather doing" but "which of my fields needs water, and how badly". The
+  // thresholds are the fields' own, so the colours mean the same on every row while
+  // the numbers behind them differ per field.
+  { id: 'soil', size: 'full', needs: ['soil'], options: ['limit'] },
   { id: 'workability', size: 'full', needs: ['conditions', 'outlook'], options: ['limit'] },
   // The coming days, a row per location, each a way into that location's own page.
   // The ensemble as well as the forecast: each day carries the members' rain chance

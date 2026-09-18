@@ -374,6 +374,8 @@ export function useSoilObservations(
 /** One location's soil sensor and what it last reported, for the comparison sheet. */
 export interface LocationSoil {
   location: SavedLocation;
+  /** Its slot in the saved list — what selecting it from a widget needs. */
+  index: number;
   station: SoilStation;
   latest: SoilSample | null;
   loading: boolean;
@@ -398,8 +400,12 @@ export function useAllLocationSoil(enabled: boolean): LocationSoil[] {
   const fields = useMemo(() => {
     const byId = new Map((sensors ?? []).map((s) => [s.id, s]));
     return prefs.locations
-      .map((location) => ({ location, station: byId.get(location.soilStationId ?? '') }))
-      .filter((r): r is { location: SavedLocation; station: SoilStation } => !!r.station);
+      .map((location, index) => ({
+        location, index, station: byId.get(location.soilStationId ?? ''),
+      }))
+      .filter(
+        (r): r is { location: SavedLocation; index: number; station: SoilStation } => !!r.station
+      );
   }, [prefs.locations, sensors]);
 
   const results = useQueries({

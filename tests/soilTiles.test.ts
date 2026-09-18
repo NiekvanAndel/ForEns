@@ -7,7 +7,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import { soilTiles, placementContext, type SoilTileLabels } from '../core/model/soilTiles';
-import { soilCapabilities, soilProbeSilent, type Placement } from '../core/model/soil';
+import {
+  rankFieldsByDryness, soilCapabilities, soilProbeSilent, type Placement,
+} from '../core/model/soil';
 import type { MeasuredHour, SoilSample } from '../core/sources/agroexact';
 import { measuredSeriesKeys } from '../core/model/series';
 
@@ -154,5 +156,56 @@ describe('measured against filled in', () => {
     // Which is what keeps an ordinary town from growing a row labelled "filled in"
     // over everything on it.
     expect(measuredSeriesKeys([])).toEqual([]);
+  });
+});
+
+describe('ranking the fields on the overview', () => {
+  const field = (
+    name: string, tension: number | null, status: 0 | 1 | 2 | 3 | null, measTime: string
+  ) => ({
+    name,
+    thresholds: HEESCH.thresholds,
+    latest: measTime ? { measTime, tension, status } : null,
+  });
+
+  const now = new Date('2026-07-01T12:00:00Z');
+
+  it('puts the driest field at the top, because that is where the reel goes', () => {
+    const ranked = rankFieldsByDryness([
+      field('Nat', 18, 0, '2026-07-01T11:00:00Z'),
+      field('Droog', 52, 2, '2026-07-01T11:00:00Z'),
+      field('Middel', 31, 1, '2026-07-01T11:00:00Z'),
+    ], now);
+    expect(ranked.map((r) => r.field.name)).toEqual(['Droog', 'Middel', 'Nat']);
+  });
+
+  it('sinks a sensor that is out of the ground, rather than calling it soaking wet', () => {
+    // Nothing is not zero. A lifted sensor at the top of a list headed "driest first"
+    // would be the page saying that field is fine when nobody has looked since August.
+    const ranked = rankFieldsByDryness([
+      field('Opgeruimd', 40, 1, '2026-06-01T11:00:00Z'),
+      field('Nat', 18, 0, '2026-07-01T11:00:00Z'),
+    ], now);
+    expect(ranked.map((r) => r.field.name)).toEqual(['Nat', 'Opgeruimd']);
+    expect(ranked[1]).toMatchObject({ dormant: true, tension: null, level: null });
+  });
+
+  it('keeps the status the API froze, and only fills in where there is none', () => {
+    const [frozen] = rankFieldsByDryness([field('A', 48, 1, '2026-07-01T11:00:00Z')], now);
+    // 48 kPa would recompute to 2 against these thresholds; the stored 1 wins.
+    expect(frozen!.level).toBe(1);
+
+    const [derived] = rankFieldsByDryness([field('B', 48, null, '2026-07-01T11:00:00Z')], now);
+    expect(derived!.level).toBe(2);
+  });
+
+  it('has no level to show for a field whose thresholds nobody has set', () => {
+    const [none] = rankFieldsByDryness(
+      [{ name: 'C', thresholds: null, latest: { measTime: '2026-07-01T11:00:00Z', tension: 48, status: null } }],
+      now
+    );
+    expect(none!.level).toBeNull();
+    // The reading itself is still worth showing; it is the colour that has no basis.
+    expect(none!.tension).toBe(48);
   });
 });

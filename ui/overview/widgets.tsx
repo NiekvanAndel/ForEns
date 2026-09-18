@@ -54,6 +54,8 @@ import {
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useAgroAuth } from '../../state/auth';
+import type { LocationSoil } from '../../state/soilStations';
+import { rankFieldsByDryness, type SoilStatus } from '../../core/model/soil';
 import { agroIntegration } from '../../core/prefs';
 import { greetingFor, greetingName, type GreetingKind } from '../../core/greeting';
 import { alertValueLabel } from '../settings/UserAlertList';
@@ -72,12 +74,15 @@ import { briefFor, type Brief } from '../../core/overviewBrief';
 import { BarSpark, LineSpark, RestLine, Ring, SpreadBand } from './marks';
 import type { WeatherAlert } from '../../core/model/alert';
 import {
-  convTemp, convWind, dayNames, fmtMm, ta, tempUnitLabel, windUnitLabel,
+  convTemp, convWind, dayNames, fmtDecimal, fmtMm, ta, tempUnitLabel, windUnitLabel,
   type AppStringKey,
 } from '../../core/i18n';
 
 export interface WidgetProps {
   rows: OverviewRow[];
+  /** Every saved location that has a soil sensor, with its latest reading. Empty on an
+   *  account with none, and while the source is switched off. */
+  fields: LocationSoil[];
   /** One per row, in the same order; null where nothing is worth saying. */
   alerts: (WeatherAlert | null)[];
   /** The observation model per saved location, same order again. What a widget
@@ -1196,5 +1201,96 @@ export function LongTermWidget() {
         router.push({ pathname: '/forecast', params: { day: day.date } })
       }
     />
+  );
+}
+
+/**
+ * Every field on the account, driest first.
+ *
+ * The question none of the other widgets can answer: not what the weather is doing but
+ * which field needs water, and how badly. A grower with eight fields reads this row
+ * before anything else on the page, and the order *is* the answer — the top line is
+ * where to send the reel.
+ *
+ * ## The colour is the field's own threshold, not a scale
+ *
+ * Each row's colour comes from the state the API froze for that reading, against that
+ * field's own boundaries. So 34 kPa can be amber on a light soil under onions and
+ * green on heavy clay under potatoes, and both are right. That is the whole argument
+ * for soil being the first indicator: the colours mean the same thing on every row
+ * while the numbers behind them properly differ.
+ *
+ * ## Why a bar and not a dot
+ *
+ * The green dot in this app means one thing — an instrument reported this — and every
+ * row here has one by construction. A green *status* dot beside it would be two round
+ * green marks saying different things, which is how a vocabulary stops being one. So
+ * the state is a short upright bar, and the dot is left to mean what it means.
+ */
+export function SoilWidget({ fields, settings, onOpen }: WidgetProps) {
+  const { palette } = useTheme();
+  const { prefs } = usePrefs();
+
+  const ink = [palette.agroInk, palette.valSun, palette.valTemp, palette.valHigh];
+  const word = (level: SoilStatus) =>
+    ta((['soilStatus0', 'soilStatus1', 'soilStatus2', 'soilStatus3'] as const)[level], prefs.lang);
+
+  // Nothing at all draws nothing at all, the same rule the alerts widget follows: a
+  // card that takes height to report that this account has no soil sensors is a card
+  // every reader without one would have to switch off by hand.
+  if (!fields.length) return null;
+
+  const ranked = rankFieldsByDryness(
+    fields.map((f) => ({ ...f, thresholds: f.station.thresholds }))
+  ).slice(0, settings.limit);
+
+  return (
+    <WidgetCard title={ta('ovSoil', prefs.lang)} hint={ta('ovSoilDry', prefs.lang)}>
+      {ranked.map(({ field: f, tension, level, dormant }, i) => (
+        <Pressable
+          key={f.station.id}
+          onPress={() => onOpen(f.index, 'index')}
+          accessibilityRole="button"
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: space[3],
+            paddingVertical: 9,
+            borderTopWidth: i > 0 ? 1 : 0,
+            borderTopColor: palette.hairlineSoft,
+          }}
+        >
+          <View
+            style={{
+              width: 3, height: 20, borderRadius: 2,
+              backgroundColor: level == null ? palette.hairline : ink[level] ?? palette.valHigh,
+            }}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="label" color={palette.inkHeading} numberOfLines={1}>
+              {f.location.name}
+            </Text>
+            <Text variant="caption" color={palette.muted} numberOfLines={1}>
+              {dormant
+                ? ta('agroSoilDormant', prefs.lang)
+                : [level == null ? null : word(level), f.station.crop]
+                    .filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+          {tension != null ? (
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+              <Text variant="stat" color={palette.appValue} tabular style={{ fontSize: 17 }}>
+                {fmtDecimal(tension)}
+              </Text>
+              <Text variant="caption" color={palette.muted}>
+                kPa
+              </Text>
+            </View>
+          ) : (
+            <Text variant="label" color={palette.muted}>
+              —
+            </Text>
+          )}
+        </Pressable>
+      ))}
+    </WidgetCard>
   );
 }

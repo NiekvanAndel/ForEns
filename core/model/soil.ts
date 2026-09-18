@@ -334,3 +334,46 @@ export function soilProbeSilent(
 ): boolean {
   return soilCapabilities(versionType)[probe] && value == null;
 }
+
+/** One field as the overview ranks it: where it stands, and how dry. */
+export interface RankedField<T> {
+  field: T;
+  /** Suction, kPa. Null where the sensor is out of the ground or silent. */
+  tension: number | null;
+  /** The state, from the reading's own frozen `status_code` where there is one. */
+  level: SoilStatus | null;
+  /** Out of the ground rather than broken — see `isDormant`. */
+  dormant: boolean;
+}
+
+/**
+ * Every field, driest first.
+ *
+ * The order *is* the answer on the overview: the top line is where to send the reel.
+ * So the two things that could quietly get it wrong are worth stating.
+ *
+ * **A dormant sensor sinks to the bottom**, rather than sorting as though the field
+ * were soaking wet. A sensor lifted at harvest reports nothing, and nothing is not
+ * zero — a lifted sensor at the top of a list headed "driest first" would be the page
+ * saying that field is fine when nobody has looked at it since August.
+ *
+ * **The stored status wins over a recomputed one**, as everywhere else: it was frozen
+ * against the settings in force that day. The field's current thresholds only stand in
+ * where a reading carries no status at all.
+ */
+export function rankFieldsByDryness<T extends {
+  latest: { measTime: string; tension: number | null; status: SoilStatus | null } | null;
+  thresholds: SoilThresholds | null;
+}>(fields: readonly T[], now: Date = new Date()): RankedField<T>[] {
+  return fields
+    .map((field) => {
+      const dormant = isDormant(field.latest?.measTime ?? null, now);
+      const tension = dormant ? null : field.latest?.tension ?? null;
+      const level = dormant
+        ? null
+        : field.latest?.status
+          ?? (field.thresholds ? statusFromTension(tension, field.thresholds) : null);
+      return { field, tension, level, dormant };
+    })
+    .sort((a, b) => (b.tension ?? -Infinity) - (a.tension ?? -Infinity));
+}

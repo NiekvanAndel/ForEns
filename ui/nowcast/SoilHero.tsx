@@ -23,14 +23,18 @@
  * them are — takes no width, so it draws as nothing rather than as a sliver of a state
  * that field can never be in.
  *
- * ## The green dot, per figure
+ * ## One dot, and nothing on it that was not measured
  *
- * The app's mark for "an instrument reported this" is a green dot, so that is what
- * this card uses too rather than a second vocabulary for the same idea. And it is per
- * figure, not per card: the rainfall beside the suction comes from the model unless
- * this sensor has a gauge, and on a BASIC it always does. Tinting it green because
- * the card belongs to an instrument would be the mistake the whole layer is built to
- * avoid.
+ * Everywhere else in the app the green dot goes per figure, because a block sits in a
+ * grid where its neighbour may be modelled. Here there are no such neighbours: this
+ * card shows what this sensor reported and nothing else, so one dot beside its name
+ * says it once. A dot before every figure was four marks for one fact.
+ *
+ * That only works because the second half holds. **A quantity this sensor does not
+ * measure is not on the card** — not as a dash, and certainly not as the model's
+ * figure in an instrument's card. A BASIC has no rain gauge, so a BASIC's card has no
+ * rainfall on it, and the reader is never left working out which of four numbers came
+ * from where.
  */
 import { View } from 'react-native';
 import { Card } from '../Card';
@@ -80,6 +84,10 @@ export function SoilHero({
             which probes are in the ground, and so which of the numbers below can
             exist at all. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+          {/* One dot for the card: everything on it is this instrument's. */}
+          <View
+            style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright }}
+          />
           <Text
             variant="bodySm"
             weight="semibold"
@@ -113,26 +121,25 @@ export function SoilHero({
             icon="drop-half"
             value={latest.tension == null ? null : fmtDecimal(latest.tension)}
             unit="kPa"
-            measured
           />
           <Reading
             icon="drop"
             value={latest.waterPercent == null ? null : fmtDecimal(latest.waterPercent)}
             unit="%"
-            measured
           />
           <Reading
             icon="thermometer-simple"
             value={latest.soilTemp == null ? null : fmtTempValue(latest.soilTemp, prefs.tempUnit)}
             unit={tempUnitLabel(prefs.tempUnit)}
-            measured
           />
+          {/* Only where this sensor has a gauge. On a BASIC the figure would be the
+              model's, and a modelled number inside an instrument's card is exactly
+              the claim this app must not make. */}
           <Reading
             icon="cloud-rain"
-            value={rain24 == null ? null : fmtDecimal(rain24)}
+            value={rainMeasured && rain24 != null ? fmtDecimal(rain24) : null}
             unit="mm"
             sub={ta('last24h', lang)}
-            measured={rainMeasured}
           />
         </View>
 
@@ -160,27 +167,21 @@ export function SoilHero({
 /**
  * One figure with its mark, its unit and an optional window under it.
  *
- * The green dot is the app's mark for an instrument, so it is the mark here — and it
- * goes per figure. The icon says which quantity, which is a different job, so it stays
- * in the ordinary ink whatever the dot does.
+ * Nothing at all where there is no value. A dash would be the card saying this sensor
+ * has a probe for this and it is silent, which on a BASIC is untrue and on a PRO is a
+ * fault worth its own words rather than a quiet gap in a row of numbers.
  */
 function Reading({
-  icon, value, unit, sub, measured,
-}: { icon: IconName; value: string | null; unit: string; sub?: string; measured: boolean }) {
+  icon, value, unit, sub,
+}: { icon: IconName; value: string | null; unit: string; sub?: string }) {
   const { palette } = useTheme();
+  if (value == null) return null;
   return (
     <View style={{ gap: 1 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-        {measured ? (
-          <View
-            style={{
-              width: 6, height: 6, borderRadius: 3, backgroundColor: palette.agroBright,
-            }}
-          />
-        ) : null}
         <Icon name={icon} size={15} color={palette.muted} />
         <Text variant="bodySm" weight="semibold" color={palette.inkHeading} tabular>
-          {value ?? '—'}
+          {value}
         </Text>
         <Text variant="caption" color={palette.muted}>
           {unit}

@@ -45,7 +45,8 @@ import { TileEditor } from '../ui/current/TileEditor';
 import {
   AdviceWidget, AlertsWidget, ConfidenceWidget, FrostWidget, HeroWidget, LongTermWidget,
   MapWidget, NearTermWidget, NowcastWidget, OutlookWidget, RadarWidget, Rain24Widget,
-  RainNextWidget, SummaryWidget, TempWidget, WindWidget, WorkWidget, type WidgetProps,
+  RainNextWidget, SoilWidget, SummaryWidget, TempWidget, WindWidget, WorkWidget,
+  type WidgetProps,
 } from '../ui/overview/widgets';
 import { WidgetSettingsForm } from '../ui/overview/WidgetSettingsForm';
 import { usePrefs } from '../state/prefs';
@@ -53,6 +54,7 @@ import {
   useAllLocationConditions, useAllLocationEnsembles, useAllLocationNowcasts,
   useAllLocationOutlooks,
 } from '../state/allLocations';
+import { useAllLocationSoil } from '../state/soilStations';
 import {
   arrangeWidgets, neededSources, OVERVIEW_WIDGETS, widgetRows, widgetSettings,
 } from '../core/overview';
@@ -74,6 +76,7 @@ const WIDGET_VIEWS: Record<string, (props: WidgetProps) => React.ReactElement | 
   workability: WorkWidget,
   outlook: OutlookWidget,
   confidence: ConfidenceWidget,
+  soil: SoilWidget,
   map: MapWidget,
   // The selected location's own cards. They take the same props and ignore them:
   // their subject is `usePrefs().location`, not the rows.
@@ -89,7 +92,7 @@ const WIDGET_LABEL: Record<string, AppStringKey> = {
   summary: 'ovSummary', advice: 'ovAdvice', alerts: 'ovAlerts',
   rain24: 'ovRain24', rainNext: 'ovRainNext', temp: 'ovTemp', wind: 'ovWind',
   frost: 'ovFrost', workability: 'ovWork', outlook: 'ovOutlook',
-  confidence: 'ovConfidence', map: 'ovMap',
+  confidence: 'ovConfidence', map: 'ovMap', soil: 'ovSoil',
   hero: 'ovHero', nowcast: 'ovNowcast', radar: 'ovRadar',
   nearTerm: 'ovNearTerm', longTerm: 'ovLongTerm',
 };
@@ -110,6 +113,9 @@ export default function OverviewScreen() {
   const nowcasts = useAllLocationNowcasts(sources.has('nowcast'));
   const outlooks = useAllLocationOutlooks(sources.has('outlook'));
   const ensembles = useAllLocationEnsembles(sources.has('ensemble'));
+  // Every field on the account, for the soil widget. One request per sensor, and only
+  // once that widget is actually on the page.
+  const fields = useAllLocationSoil(sources.has('soil'));
 
   const rows = useMemo(
     () =>
@@ -157,7 +163,7 @@ export default function OverviewScreen() {
   const rowsOfWidgets = widgetRows(widgets, wide);
 
   /** Everything a widget gets except its own settings, which differ per widget. */
-  const shared = { rows, alerts, models, nowcasts, onOpen: open };
+  const shared = { rows, alerts, models, nowcasts, fields, onOpen: open };
 
   return (
     <>

@@ -630,6 +630,42 @@ Verder komt op 'Nu' de weerhero nu weer onder de bodemkaart te staan in plaats v
 ervoor te wijken. Een teler op een perceel wil nog steeds weten wat de lucht erboven
 doet; twee kaarten in de volgorde waarin de vragen gesteld worden.
 
+### De bodemkaart opgeschoond, en een overzicht van alle percelen
+
+**Eén bolletje, niet vier.** Overal elders gaat de stip per getal, omdat een blok in
+een raster staat waar de buurman gemodelleerd kan zijn. Op de bodemkaart bestaan die
+buren niet: er staat wat déze sensor rapporteerde en verder niets, dus zegt één stip
+naast de naam het één keer. Vier stippen waren vier merktekens voor één feit.
+
+Dat kan alleen omdat de tweede helft klopt: **een grootheid die deze sensor niet meet
+staat niet op de kaart.** Niet als streepje, en zeker niet als het getal van het model
+in de kaart van een instrument. Een BASIC heeft geen regenmeter, dus een BASIC-kaart
+heeft geen neerslag, en de lezer hoeft nooit uit te zoeken welk van vier getallen
+waar vandaan komt.
+
+**`SoilWidget`** is het overzicht van alle percelen op de widgetpagina: per perceel een
+kleurcode en de zuigspanning, droogste eerst. De volgorde *is* het antwoord — de
+bovenste regel is waar de haspel heen moet.
+
+Drie dingen die het ontwerp bepaalden:
+
+- **De kleur komt uit de drempels van dat perceel**, niet uit een schaal. 34 kPa kan
+  oranje zijn op lichte grond onder uien en groen op zware klei onder aardappelen, en
+  allebei klopt. Dat is precies het argument waarom bodem de eerste indicator is: de
+  kleuren betekenen op elke regel hetzelfde terwijl de getallen erachter verschillen.
+- **Een staafje, geen stip.** De groene stip betekent in deze app één ding — een
+  instrument heeft dit gerapporteerd — en elke regel hier heeft er per definitie een.
+  Een groene *status*stip ernaast zouden twee ronde groene merktekens zijn die iets
+  anders zeggen, en zo houdt een vocabulaire op er één te zijn.
+- **Een sensor die eruit ligt zakt naar beneden**, in plaats van te sorteren alsof het
+  perceel kletsnat is. Niets is niet nul, en een opgeruimde sensor bovenaan een lijst
+  met "droogste eerst" zou zeggen dat het daar goed zit terwijl er sinds augustus
+  niemand gekeken heeft.
+
+De widget tekent niets op een account zonder bodemsensor — dezelfde regel als het
+meldingenblok. Een kaart die hoogte kost om te melden dát er niets is, is een kaart die
+iedereen zonder sensor met de hand moet uitzetten.
+
 ## Nog open
 
 - ~~De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt
