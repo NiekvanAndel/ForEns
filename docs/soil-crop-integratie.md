@@ -294,7 +294,8 @@ van 24 uur tot een zomerweek in juli: `total: 0`.
 De winterstand van §1 blijft daarmee gewoon staan als toestand die de app goed moet
 doen — maar het is niet aangetoond dat het de toestand van de meeste sensoren is.
 
-Het gevolg voor §9: **de eenheden zijn niet gepind.** `water_percentage` en
+Het gevolg voor §9 *op dat moment*: **de eenheden waren niet gepind.** (Op 18 september
+alsnog gedaan — zie "Wat de API écht meestuurt" verderop. Beide kloppen.) `water_percentage` en
 `bijvulruimte` konden niet tegen echte waarden gehouden worden zoals
 `global_radiation` dat wel is. `refillMm` volgt de webapp (vol-% × diepte / 10) en is
 daarmee zo goed als de bron. `waterPercent` moet gokken, en doet dat langs de enige
@@ -690,6 +691,69 @@ betekent.
 In de widget staat naast de kPa nu ook de **bijvulruimte in mm**. Dat is het enige wat
 geen enkele andere indicator kan zeggen, en het verschil tussen "dit perceel is droog"
 en een besluit waar een haspel op past.
+
+### Wat de API écht meestuurt — gecontroleerd 18 september 2026
+
+Tegen een sensor die wél meet (Dieleman, `884c085c`, PRO), dus dit is geen schema maar
+een antwoord.
+
+`/soilstations/` geeft tien velden: `station_id`, `name`, `latitude`, `longitude`,
+`version_type`, `crop`, `placement_depth`, `threshold_0_to_1`, `threshold_1_to_2`,
+`threshold_2_to_3`. Voor Dieleman: 25 / 36 / 87 kPa — **exact de drie grenzen uit de
+gewenste grafiek.**
+
+`/soilreadings/` en `/soil_aggregates/` geven: `water_tension`, `pF`, `bijvulruimte`,
+`water_percentage`, `temperature_placement_depth`, `temperature_10`, `humidity_10`,
+`dewpoint`, `precipitation`, `status_code`. De aggregaten hebben daarbovenop
+`temperature_10_min/max/avg` en `humidity_10_min/max/avg`.
+
+**Twee eenheidsvallen hiermee gepind, en §9 is daarmee af:**
+
+- `water_percentage` is **0,299** — dus een fractie 0–1, precies zoals de documentatie
+  zei en de app toont 30 %. De gok in `waterPercent` was goed.
+- `bijvulruimte` is **6,5** bij een diepte van 20 cm → 13 mm. De webapp toonde bij een
+  andere meting "tot 12,6 mm". De omrekening × diepte / 10 klopt dus.
+
+**Drie velden bestaan niet in API v2**, en dat bepaalt wat we kunnen tekenen:
+
+| ontbreekt | gevolg |
+| --- | --- |
+| `field_capacity` | de grijze zone onderaan kan niet getekend worden |
+| `water_until_nonschaarste` | "Bij te vullen" blijft leeg; alleen de bovengrens bestaat |
+| `leaf_wet` | geen bladnat, ook niet als proxy |
+| `soil` (grondsoortnaam) | de herkomstregel blijft "Ui · 20 cm" |
+
+Dus: **vier van de vijf zones zijn realiseerbaar, de vijfde niet.** De webapp tekent
+veldcapaciteit op 10 kPa, wat pF 2.0 is — de leerboekdefinitie — maar of dat daar een
+constante is of per grondsoort wordt afgeleid, valt van buitenaf niet te zien, en deze
+app raadt het niet. `Placement.fieldCapacity` staat er wel, vandaag altijd null; zodra
+de backend hem levert tekent de grafiek de zone zonder verdere wijziging.
+
+### De kleurschaal, herzien
+
+`valSun` en `valTemp` zijn **dezelfde kleur** — `#D9871F` licht, `#E8A94E` donker. Mijn
+statusschaal gebruikte ze voor *suboptimaal* en *beregen nu*, dus die twee waren op het
+scherm niet te onderscheiden en de vier-lampenvorm waar de hele laag op rust las als
+drie lampen. Het palet heeft bovendien helemaal geen geel.
+
+De schaal heeft daarom nu een eigen tabel — `core/model/soilStatusColor.ts` — om
+dezelfde reden als `temperatureColor`: hij heeft stops die het palet nooit gevraagd is.
+Vijf stops (grijs, groen, geel, oranje, rood), twee tabellen voor licht en donker, en
+`tests/soilStatusColor.test.ts` faalt als een stop onder 3:1 zakt of als er weer twee
+samenvallen.
+
+### De grafiek
+
+De zuigspanningsas staat vast van **0 tot iets voorbij kritiek**, nooit passend gemaakt
+op het venster. Een passende as maakt van een natte en een droge week hetzelfde plaatje
+— de lijn slingert in beide gevallen door het midden — terwijl de hoogte van de lijn
+juist de meting is. En een vaste as verbergt geen grenzen die ver van de data liggen,
+wat precies verkeerd om is: een perceel dat rustig op 20 kPa zit terwijl kritiek op 87
+ligt, is een perceel waarvan de eigenaar al die ruimte eronder wil zien.
+
+Staat de as vast, dan tekent de grafiek **alle** grenzen erbinnen in plaats van alleen
+die "in het spel" zijn: met een vaste as kan niets de as meer oprekken, dus verdwijnt
+de reden voor die filter.
 
 ## Nog open
 

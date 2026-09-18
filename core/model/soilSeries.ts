@@ -15,7 +15,7 @@
  * without the chart learning anything new.
  */
 import { DAY_RESOLUTION_FROM, daySpan, timeKeys, type Sample, type Series, type SeriesShape } from './series';
-import { soilCapabilities } from './soil';
+import { soilCapabilities, type SoilThresholds } from './soil';
 import type { SoilSample } from '../sources/agroexact';
 
 /** Which soil quantity a chart is about. */
@@ -34,9 +34,8 @@ export interface SoilSeriesMeta {
 }
 
 export const SOIL_SERIES_META: Record<SoilSeriesKey, SoilSeriesMeta> = {
-  // Suction cannot go below zero, and its ceiling is the field's own critical
-  // threshold rather than anything fixed — so no axisMax: the threshold lines stretch
-  // the axis exactly as far as the boundaries in play, and no further.
+  // Suction has no axis of its own: the field's thresholds set it, and the page pins
+  // it from zero to a little past critical. See `soilTensionAxis`.
   waterTension: { key: 'waterTension', shape: 'line', axisMin: 0 },
   /**
    * pF gets a fixed axis, and it is the one place here where that is not fussiness.
@@ -193,5 +192,44 @@ function summarise(samples: readonly Sample[]): Series['stats'] {
     avg: Math.round((total / values.length) * 10) / 10,
     total: Math.round(total * 10) / 10,
     secondaryMax: null,
+  };
+}
+
+/** How far past the critical threshold a suction chart reaches. */
+const CRITICAL_HEADROOM = 1.15;
+
+/**
+ * The axis a suction chart is pinned to: zero to a little past critical.
+ *
+ * Always the whole ladder, never fitted to the window. Two reasons, and the second is
+ * the one that matters.
+ *
+ * A fitted axis makes a wet week and a dry week the same picture — the line wanders
+ * across the middle of the plot either way, and only the numbers down the side say
+ * which is which. Pinned, the line's *height* is the reading, so a glance at the shape
+ * of the week is a glance at how the field is doing.
+ *
+ * And a fitted axis hides the boundaries that are not near the data, which is exactly
+ * backwards: a field sitting comfortably at 20 kPa when critical is 87 is a field
+ * whose owner wants to see all that room underneath it.
+ *
+ * Zero at the bottom because suction has a floor and it means something — saturated
+ * soil — unlike a temperature's. A little past critical at the top so the red band has
+ * height to be seen rather than being a line along the ceiling; and never below the
+ * data, because a reading above critical must still be on the chart.
+ */
+export function soilTensionAxis(
+  thresholds: SoilThresholds | null,
+  samples: readonly { value: number | null }[] = []
+): { axisMin: number; axisMax: number; axisFixed: true } | null {
+  if (!thresholds) return null;
+  const peak = samples.reduce(
+    (hi, s) => (s.value != null && s.value > hi ? s.value : hi),
+    0
+  );
+  return {
+    axisMin: 0,
+    axisMax: Math.max(thresholds.critical * CRITICAL_HEADROOM, peak),
+    axisFixed: true,
   };
 }

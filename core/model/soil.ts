@@ -79,6 +79,20 @@ export interface Placement {
   /** Frozen at creation: what was in force while this placement ran. */
   thresholds: SoilThresholds;
   /**
+   * Field capacity, kPa — the wet end of the scale, below which the soil is draining
+   * rather than drying.
+   *
+   * Null on every placement today, and that is the honest state of it: `/soilstations/`
+   * does not serve it, and neither `/soilreadings/` nor `/soil_aggregates/` carries it
+   * — checked against the live API on 18 September 2026. The web app draws the line at
+   * 10 kPa, which is pF 2.0, but whether that is a constant there or derived per soil
+   * type is not something this app can tell from the outside, so it does not guess.
+   *
+   * The zone is drawn wherever this is set. The day the backend serves it, it is one
+   * line in `placementFromStation` and the chart already knows what to do.
+   */
+  fieldCapacity?: number | null;
+  /**
    * The model of sensor that sat in this field — BASIC, PLUS or PRO.
    *
    * Placement-scoped rather than station-scoped because swapping the device is one of

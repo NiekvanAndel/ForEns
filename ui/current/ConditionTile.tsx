@@ -110,7 +110,7 @@ export function ConditionTile({ tile, onPress }: { tile: Tile; onPress?: () => v
   // would be two figures disagreeing about how urgent they are.
   const ink =
     tile.status != null
-      ? soilStatusInk(tile.status, palette)
+      ? soilStatusInk(tile.status, palette, appearance)
       : tile.kind === 'mm'
         ? (tile.value ?? 0) > 0 ? palette.valPrecip : palette.valPrecipZero
         : tile.id === 'temp-max' ? palette.valHigh

@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  SOIL_SERIES_META, buildSoilSeries, soilSeriesKeys,
+  SOIL_SERIES_META, buildSoilSeries, soilSeriesKeys, soilTensionAxis,
 } from '../core/model/soilSeries';
 import type { SoilSample } from '../core/sources/agroexact';
 
@@ -111,5 +111,28 @@ describe('soil series', () => {
     expect(out.stats).toBeNull();
     expect(out.anyMeasured).toBe(false);
     expect(out.samples).toHaveLength(24);
+  });
+});
+
+describe('the suction axis', () => {
+  const t = { scarce: 25, irrigate: 36, critical: 87 };
+
+  it('runs from zero to a little past critical, whatever the window did', () => {
+    // Dieleman's own thresholds, from the live API. A fitted axis would make a wet
+    // week and a dry week the same picture; pinned, the line's height is the reading.
+    const axis = soilTensionAxis(t, [{ value: 22 }, { value: 35 }]);
+    expect(axis).toMatchObject({ axisMin: 0, axisFixed: true });
+    expect(axis!.axisMax).toBeGreaterThan(87);
+    // Same axis for a wetter week: that is the whole point.
+    expect(soilTensionAxis(t, [{ value: 12 }])!.axisMax).toBe(axis!.axisMax);
+  });
+
+  it('still fits a reading that has gone past critical', () => {
+    // A field in trouble must not be drawn off the top of its own chart.
+    expect(soilTensionAxis(t, [{ value: 140 }])!.axisMax).toBe(140);
+  });
+
+  it('has no axis to pin for a field whose thresholds nobody has set', () => {
+    expect(soilTensionAxis(null, [{ value: 30 }])).toBeNull();
   });
 });

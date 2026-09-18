@@ -1229,7 +1229,7 @@ export function LongTermWidget() {
  * the state is a short upright bar, and the dot is left to mean what it means.
  */
 export function SoilWidget({ fields, settings, onOpen }: WidgetProps) {
-  const { palette } = useTheme();
+  const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
 
   const word = (level: SoilStatus) =>
@@ -1261,7 +1261,7 @@ export function SoilWidget({ fields, settings, onOpen }: WidgetProps) {
           <View
             style={{
               width: 3, height: 20, borderRadius: 2,
-              backgroundColor: soilStatusInk(level, palette),
+              backgroundColor: soilStatusInk(level, palette, appearance),
             }}
           />
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -1282,7 +1282,7 @@ export function SoilWidget({ fields, settings, onOpen }: WidgetProps) {
                     its colour then say the same thing. */}
                 <Text
                   variant="stat"
-                  color={soilStatusInk(level, palette)}
+                  color={soilStatusInk(level, palette, appearance)}
                   tabular
                   style={{ fontSize: 17 }}
                 >

@@ -35,7 +35,8 @@ import { tileReading } from './ConditionTile';
 import { TileAlertForm } from './TileAlertSheet';
 import { isAlertKind } from '../../core/alerts';
 import { useAllLocationSoil } from '../../state/soilStations';
-import { placementFromStation } from '../../core/model/soil';
+import { placementFromStation, type SoilStatus } from '../../core/model/soil';
+import { soilStatusInk } from '../soilStatusInk';
 import { placementContext, soilTiles, type SoilTileLabels } from '../../core/model/soilTiles';
 
 export interface TileSheetProps {
@@ -53,6 +54,8 @@ interface Row {
   value: number | null;
   measured: boolean;
   loading: boolean;
+  /** The field's state, where the block has one — see `Tile.status`. */
+  status?: SoilStatus;
   /**
    * The line that makes a soil reading readable — crop, soil and depth.
    *
@@ -114,6 +117,9 @@ export function TileSheet({ tile, labels, soilLabels, onClose }: TileSheetProps)
       name: location.name,
       value: match?.value ?? null,
       measured: match?.measured ?? false,
+      // Each field's own state, so a column of suctions reads as a column of verdicts
+      // rather than as numbers the reader has to place against four different ladders.
+      status: match?.status,
       loading,
       hint: placement
         ? placementContext(placement, `${placement.depthCm} cm`) || undefined
@@ -263,7 +269,7 @@ export function TileSheet({ tile, labels, soilLabels, onClose }: TileSheetProps)
 
 /** One location's answer, in the reader's own units. */
 function Reading({ row, tile }: { row: Row; tile: Tile | null }) {
-  const { palette } = useTheme();
+  const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
   if (!tile) return null;
 
@@ -279,14 +285,18 @@ function Reading({ row, tile }: { row: Row; tile: Tile | null }) {
 
   const { value, unit } = tileReading({ ...tile, value: row.value }, prefs);
 
+  // Coloured by the field's own state where there is one, as on 'Actueel': the figure
+  // and its ink then say the same thing, and two fields at the same suction can still
+  // come out different colours because their thresholds differ. That is the point.
+  const ink = row.value == null
+    ? palette.muted
+    : row.status != null
+      ? soilStatusInk(row.status, palette, appearance)
+      : palette.appValue;
+
   return (
     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
-      <Text
-        variant="stat"
-        color={row.value == null ? palette.muted : palette.appValue}
-        tabular
-        style={{ fontSize: 17 }}
-      >
+      <Text variant="stat" color={ink} tabular style={{ fontSize: 17 }}>
         {value}
       </Text>
       {unit ? (

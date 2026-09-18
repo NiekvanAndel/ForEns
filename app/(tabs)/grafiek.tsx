@@ -148,9 +148,13 @@ import { SeriesChart, type ChartSpread } from '../../ui/graph/SeriesChart';
 import { useEnsembleMembers } from '../../ui/graph/useEnsembleBand';
 import { PillSwitcher, type PillItem } from '../../ui/PillSwitcher';
 import {
-  SOIL_SERIES_META, buildSoilSeries, soilSeriesKeys, type SoilSeriesKey,
+  SOIL_SERIES_META, buildSoilSeries, soilSeriesKeys, soilTensionAxis,
+  type SoilSeriesKey,
 } from '../../core/model/soilSeries';
 import { soilThresholdSteps } from '../../core/model/indicators';
+import { soilStatusInk } from '../../ui/soilStatusInk';
+import { SOIL_FIELD_CAPACITY_INK } from '../../core/model/soilStatusColor';
+import type { SoilStatus } from '../../core/model/soil';
 import { SOIL_STEP_MIN } from '../../core/sources/agroexact';
 import type { IconName } from '../../ui/Icon';
 import {
@@ -263,7 +267,7 @@ const PEAK_LABEL = {
 } as const satisfies Record<string, AppStringKey>;
 
 function GraphPage() {
-  const { palette } = useTheme();
+  const { palette, appearance } = useTheme();
   const { prefs, location } = usePrefs();
   const { model, offsetSec, phase, precipMeasured } = useForecast();
   const insets = useSafeAreaInsets();
@@ -366,8 +370,14 @@ function GraphPage() {
    * and a day's driest hour of suction is not a number anyone plans around — so its
    * spread stays an area under the line rather than two lines with words under them.
    */
+  // Suction is pinned to its own ladder rather than fitted to the window — see
+  // `soilTensionAxis`. Every other quantity keeps the axis its table asks for.
+  const tensionAxis = key === 'waterTension'
+    ? soilTensionAxis(soil.placement?.thresholds ?? null, series.samples)
+    : null;
+
   const meta = isSoilKey(key)
-    ? { ...SOIL_SERIES_META[key], summary: 'range' as const, edges: false }
+    ? { ...SOIL_SERIES_META[key], ...(tensionAxis ?? {}), summary: 'range' as const, edges: false }
     : SERIES_META[key];
 
   /** Only where the series has edges worth naming and something to draw them from. */
@@ -566,16 +576,32 @@ function GraphPage() {
    */
   const thresholds = useMemo(() => {
     if (key !== 'waterTension' || !soil.placement) return null;
-    const ink: Record<number, string> = {
-      1: palette.valSun, 2: palette.valTemp, 3: palette.valHigh,
-    };
-    return soilThresholdSteps(soil.placement.thresholds).map((t) => ({
-      at: t.at,
-      color: ink[t.level] ?? palette.valHigh,
-      label: `${fmtDecimal(t.at)}`,
+    const p = soil.placement;
+
+    // Bottom up, so each zone is tinted in the ink of the state it opens. The optimal
+    // band starts at field capacity where the field has one and at zero where it does
+    // not, which is every field today — see `Placement.fieldCapacity`.
+    const zones = [
+      ...(p.fieldCapacity != null
+        ? [{ at: 0, level: null as SoilStatus | null, ink: SOIL_FIELD_CAPACITY_INK[appearance] }]
+        : []),
+      { at: p.fieldCapacity ?? 0, level: 0 as SoilStatus | null, ink: soilStatusInk(0, palette, appearance) },
+      ...soilThresholdSteps(p.thresholds).map((t) => ({
+        at: t.at,
+        level: t.level as SoilStatus | null,
+        ink: soilStatusInk(t.level as SoilStatus, palette, appearance),
+      })),
+    ];
+
+    return zones.map((z) => ({
+      at: z.at,
+      color: z.ink,
+      // The boundary at the very bottom carries no number: "0" under a chart that
+      // starts at zero is the axis saying its own name twice.
+      label: z.at > 0 ? fmtDecimal(z.at) : undefined,
       shade: true,
     }));
-  }, [key, soil.placement, palette]);
+  }, [key, soil.placement, palette, appearance]);
 
   // Both windows, because the pill row is one row: pulling down on a suction chart
   // that only refetched the weather would look like a refresh that did nothing.

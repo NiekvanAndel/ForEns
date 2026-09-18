@@ -247,11 +247,15 @@ export function SeriesChart({
   // The boundaries in play stretch the axis, or a line at 60 on a series that tops
   // out at 48 is clipped against the ceiling and reads as no boundary at all. Which
   // ones those are is decided from the data alone, before the axis moves for them.
-  const marks = thresholdsInPlay(
-    (thresholds ?? []).map((t, i) => ({ at: t.at, level: i })),
-    Math.min(...all),
-    Math.max(...all)
-  );
+  //
+  // A pinned axis skips that question entirely: the caller has already decided how far
+  // the chart reaches, so nothing here can stretch it and every boundary inside it
+  // belongs on screen. Suction wants exactly that — the whole ladder, every time, so a
+  // wet week and a dry one are the same picture at different heights.
+  const allMarks = (thresholds ?? []).map((t, i) => ({ at: t.at, level: i }));
+  const marks = axisFixed && axisMin != null && axisMax != null
+    ? allMarks.filter((m) => m.at >= axisMin && m.at <= axisMax).sort((a, b) => a.at - b.at)
+    : thresholdsInPlay(allMarks, Math.min(...all), Math.max(...all));
   const withMarks = [...all, ...marks.map((m) => m.at)];
 
   const range = niceRange(Math.min(...withMarks), Math.max(...withMarks));

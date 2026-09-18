@@ -205,7 +205,7 @@ function Reading({
  * 200 both fill the same track, and the marker means the same thing on both.
  */
 function StateBar({ indicator }: { indicator: Indicator }) {
-  const { palette } = useTheme();
+  const { palette, appearance } = useTheme();
   const value = indicator.now?.value ?? null;
 
   const steps = [...indicator.thresholds].sort((a, b) => a.at - b.at);
@@ -225,7 +225,7 @@ function StateBar({ indicator }: { indicator: Indicator }) {
         {widths.map((w, i) => (
           <View
             key={i}
-            style={{ flex: w, backgroundColor: soilStatusInk(i as SoilStatus, palette) }}
+            style={{ flex: w, backgroundColor: soilStatusInk(i as SoilStatus, palette, appearance) }}
           />
         ))}
       </View>
