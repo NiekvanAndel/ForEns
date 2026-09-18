@@ -228,8 +228,20 @@ export function nextTransition(
 export function certaintyOf(course: readonly IndicatorPoint[], now: string): Certainty {
   const ahead = course.filter((p) => p.time > now && p.value != null);
   if (!ahead.length) return 'high';
-  const last = ahead[ahead.length - 1]!;
-  const days = (new Date(last.time).getTime() - new Date(now).getTime()) / 86_400_000;
+  return certaintyAt(ahead[ahead.length - 1]!.time, now);
+}
+
+/**
+ * The same rule, for an indicator that claims one moment rather than a course.
+ *
+ * A spray window that opens tomorrow morning and a frost three nights out are both
+ * single statements about a single hour, and rule 2 applies to them exactly as it
+ * does to a series: at or behind now is `high`, ahead is `medium`, and past two days
+ * it is `low` because the app is describing a direction rather than a value.
+ */
+export function certaintyAt(time: string | null, now: string): Certainty {
+  if (!time || time <= now) return 'high';
+  const days = (new Date(time).getTime() - new Date(now).getTime()) / 86_400_000;
   return Number.isFinite(days) && days > 2 ? 'low' : 'medium';
 }
 

@@ -8,7 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   mergePrefs, activeLocation, currentLocationIndex, withCurrentLocation,
-  DEFAULT_PREFS, DEFAULT_LOCATION,
+  adviceFamilyOn, enabledAdviceFamilies, toggleAdviceFamily,
+  DEFAULT_PREFS, DEFAULT_LOCATION, DEFAULT_ADVICE_LAYER,
 } from '../core/prefs';
 
 describe('mergePrefs', () => {
@@ -154,5 +155,44 @@ describe('the stored grid arrangement', () => {
   it('falls back to the default when there is nothing stored', () => {
     expect(mergePrefs({}).tiles).toEqual({ order: [], hidden: [] });
     expect(mergePrefs({ tiles: 'broken' }).tiles).toEqual({ order: [], hidden: [] });
+  });
+});
+
+describe('the advice layer', () => {
+  it('is on, whole, for somebody who has never touched it', () => {
+    expect(mergePrefs({}).advice).toEqual({ enabled: true, hidden: [] });
+    expect(DEFAULT_PREFS.advice).toEqual({ enabled: true, hidden: [] });
+  });
+
+  it('reads as on when the stored value predates the master switch', () => {
+    // A store written before the switch existed says only what is off, and that is
+    // exactly what it means: on, minus these.
+    expect(mergePrefs({ advice: { hidden: ['spray'] } }).advice)
+      .toEqual({ enabled: true, hidden: ['spray'] });
+  });
+
+  it('keeps whichever half of a broken stored value is still readable', () => {
+    expect(mergePrefs({ advice: { enabled: false, hidden: ['spray', 3, null] } }).advice)
+      .toEqual({ enabled: false, hidden: ['spray'] });
+    expect(mergePrefs({ advice: 'broken' }).advice).toEqual({ enabled: true, hidden: [] });
+  });
+
+  it('switches one family off and back on again', () => {
+    const off = toggleAdviceFamily(DEFAULT_ADVICE_LAYER, 'frost');
+    expect(adviceFamilyOn(off, 'frost')).toBe(false);
+    expect(adviceFamilyOn(off, 'spray')).toBe(true);
+    expect(toggleAdviceFamily(off, 'frost')).toEqual(DEFAULT_ADVICE_LAYER);
+  });
+
+  it('silences every family when the master switch is off', () => {
+    const shut = { enabled: false, hidden: [] };
+    expect(adviceFamilyOn(shut, 'spray')).toBe(false);
+    expect(enabledAdviceFamilies(['spray', 'frost'], shut)).toEqual([]);
+  });
+
+  it('lets a family added later speak for somebody who arranged the old ones', () => {
+    const layer = { enabled: true, hidden: ['spray'] };
+    expect(enabledAdviceFamilies(['spray', 'frost', 'workability'], layer))
+      .toEqual(['frost', 'workability']);
   });
 });

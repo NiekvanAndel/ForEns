@@ -17,6 +17,11 @@ import {
   NavigationArrow,
   MapPin,
   Warning,
+  // The four advice families, in Instellingen. See `ADVICE_ROWS` in settings.
+  SprayBottle,
+  Snowflake,
+  Tractor,
+  Plant,
 } from 'phosphor-react-native';
 import Svg, { Rect } from 'react-native-svg';
 import type { ComponentType } from 'react';
@@ -90,6 +95,10 @@ const ICONS = {
   overview: OverviewBars,
   'map-trifold': MapTrifold,
   'pencil-simple': PencilSimple,
+  plant: Plant,
+  snowflake: Snowflake,
+  'spray-bottle': SprayBottle,
+  tractor: Tractor,
   'squares-four': SquaresFour,
   'trend-up': TrendUp,
   'trend-down': TrendDown,

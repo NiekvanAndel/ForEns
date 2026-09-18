@@ -36,6 +36,9 @@ import { waterTensionIndicator } from '../../core/model/indicators';
 import { soilCapabilities } from '../../core/model/soil';
 import { useDisease } from '../../state/disease';
 import { DiseaseCard } from '../../ui/nowcast/DiseaseCard';
+import { AdviceCard } from '../../ui/nowcast/AdviceCard';
+import { ADVICE_FAMILIES, fieldAdvice } from '../../core/model/fieldAdvice';
+import { enabledAdviceFamilies } from '../../core/prefs';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
 import { t, ta } from '../../core/i18n';
@@ -96,6 +99,26 @@ function NowcastPage() {
     sensor: soil.station,
     offsetSec,
   });
+
+  /**
+   * The rule-based advice for this location.
+   *
+   * Derived here rather than in a hook of its own: it needs nothing but the forecast
+   * the page already has, and a family the reader switched off is never computed —
+   * `enabledAdviceFamilies` decides what runs, not what is drawn.
+   */
+  const advice = useMemo(
+    () => (model
+      ? fieldAdvice({
+        hours: model.futureHours,
+        past: model.pastHours,
+        days: model.days,
+        nowKey: model.nowHour,
+        families: enabledAdviceFamilies(ADVICE_FAMILIES, prefs.advice),
+      })
+      : []),
+    [model, prefs.advice]
+  );
 
   const soilHero = useMemo(() => {
     if (!soil.placement || !soil.latest || !model) return null;
@@ -233,6 +256,11 @@ function NowcastPage() {
                 card, because the soil is what the page leads with and this is the
                 consequence of the weather on top of it. */}
             <DiseaseCard pressure={disease} />
+
+            {/* And what it means for the work: the spray window, frost, whether the
+                land carries a machine, whether to spread. Under the disease card
+                because that one is about the crop and this is about the day. */}
+            <AdviceCard readings={advice} />
 
             <ConditionsHero
               model={model}

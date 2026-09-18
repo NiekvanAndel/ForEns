@@ -23,6 +23,51 @@ export {
 } from './arrangement';
 export type { TileLayout } from './arrangement';
 
+/**
+ * Which of the rule-based advice families speak.
+ *
+ * The layer is on by default — it is the reason the app is opened on a field — but a
+ * grower with no sprayer is not served by a spray window, and somebody who wants only
+ * the readings must be able to have only the readings. So: a master switch, and a set
+ * of families switched off under it.
+ *
+ * Stored as what is *off*, for the same reason `TileLayout` is: a family added in a
+ * later version then appears for someone who set this up last month, instead of being
+ * withheld from exactly the people who bothered to arrange it.
+ *
+ * Switching a family off is not a filter over a result — nothing computes it. See
+ * `core/model/fieldAdvice`.
+ */
+export interface AdviceLayer {
+  /** The master switch. Off leaves every reading and removes every conclusion. */
+  enabled: boolean;
+  /** Family ids switched off. */
+  hidden: string[];
+}
+
+export const DEFAULT_ADVICE_LAYER: AdviceLayer = { enabled: true, hidden: [] };
+
+/** Whether one family speaks, master switch included. */
+export function adviceFamilyOn(layer: AdviceLayer, id: string): boolean {
+  return layer.enabled && !layer.hidden.includes(id);
+}
+
+/** The families that speak, out of everything the app can derive. */
+export function enabledAdviceFamilies<T extends string>(
+  all: readonly T[],
+  layer: AdviceLayer
+): T[] {
+  return layer.enabled ? all.filter((id) => !layer.hidden.includes(id)) : [];
+}
+
+/** Switch one family on or off. */
+export function toggleAdviceFamily(layer: AdviceLayer, id: string): AdviceLayer {
+  const hidden = layer.hidden.includes(id)
+    ? layer.hidden.filter((h) => h !== id)
+    : [...layer.hidden, id];
+  return { ...layer, hidden };
+}
+
 export type ThemeMode = 'light' | 'dark' | 'auto';
 /** Which deterministic model drives days 3–14. */
 export type ModelPref = 'ecmwf' | 'gfs' | 'mix';
@@ -170,6 +215,8 @@ export interface Prefs {
   notifyWind: boolean;
   notifyFrost: boolean;
   quietHours: boolean;
+  /** Which rule-based advice is drawn. See `AdviceLayer`. */
+  advice: AdviceLayer;
   /** The 'Actueel' grid's arrangement. See `TileLayout`. */
   tiles: TileLayout;
   /**
@@ -219,6 +266,7 @@ export const DEFAULT_PREFS: Prefs = {
   notifyWind: false,
   notifyFrost: false,
   quietHours: true,
+  advice: DEFAULT_ADVICE_LAYER,
   tiles: DEFAULT_TILE_LAYOUT,
   soilTiles: DEFAULT_TILE_LAYOUT,
   overview: DEFAULT_OVERVIEW_LAYOUT,
@@ -287,6 +335,17 @@ export function mergePrefs(stored: unknown): Prefs {
   if (tiles && typeof tiles === 'object') {
     out.tiles = { order: ids(tiles.order), hidden: ids(tiles.hidden) };
   }
+  // The master switch and the hidden set are read separately: a stored layer that
+  // lost one must not cost the reader the other, and a stored value with no `enabled`
+  // beside it was written before the switch existed — which means on, minus these.
+  const advice = s.advice as AdviceLayer | undefined;
+  if (advice && typeof advice === 'object') {
+    out.advice = {
+      enabled: typeof advice.enabled === 'boolean' ? advice.enabled : true,
+      hidden: ids(advice.hidden),
+    };
+  }
+
   const overview = s.overview as TileLayout | undefined;
   if (overview && typeof overview === 'object') {
     out.overview = { order: ids(overview.order), hidden: ids(overview.hidden) };

@@ -50,8 +50,11 @@ import { usePrefs } from '../../state/prefs';
 import { enablePush, pushEndpoint } from '../../state/push';
 import { useForecast } from '../../state/forecast';
 import { t, ta, LANG_CODES, tempUnitLabel, windUnitLabel } from '../../core/i18n';
-import type { LangCode } from '../../core/i18n';
-import { agroIntegration, type ThemeMode } from '../../core/prefs';
+import type { AppStringKey, LangCode } from '../../core/i18n';
+import {
+  adviceFamilyOn, agroIntegration, toggleAdviceFamily, type ThemeMode,
+} from '../../core/prefs';
+import { ADVICE_FAMILIES, type AdviceFamily } from '../../core/model/fieldAdvice';
 import type { FontSizePref, PresUnit, TempUnit, WindUnit } from '../../core/i18n/units';
 
 const APP_VERSION = '0.1';
@@ -61,7 +64,7 @@ type Page =
   | 'display' | 'lang' | 'fontSize' | 'theme'
   | 'units' | 'windUnit' | 'tempUnit' | 'presUnit'
   | 'model' | 'source'
-  | 'notifications'
+  | 'notifications' | 'advice'
   | 'locations' | 'integrations';
 
 /** Which subject a page belongs to, so a subject stays presented while one of its
@@ -70,6 +73,25 @@ const PARENT: Partial<Record<Page, Page>> = {
   lang: 'display', fontSize: 'display', theme: 'display',
   windUnit: 'units', tempUnit: 'units', presUnit: 'units',
 };
+
+/**
+ * The four advice families, with the words and the glyph each is listed under.
+ *
+ * Here rather than in `core/model/fieldAdvice`, because which icon stands for
+ * spraying is a design decision and that module is pure — it holds no words and no
+ * colours, and an icon name is both.
+ */
+const ADVICE_ROWS: readonly {
+  family: AdviceFamily;
+  icon: string;
+  label: AppStringKey;
+  hint: AppStringKey;
+}[] = [
+  { family: 'spray', icon: 'spray-bottle', label: 'adviceSpray', hint: 'adviceSprayHint' },
+  { family: 'frost', icon: 'snowflake', label: 'adviceFrost', hint: 'adviceFrostHint' },
+  { family: 'workability', icon: 'tractor', label: 'adviceWork', hint: 'adviceWorkHint' },
+  { family: 'fertilise', icon: 'plant', label: 'adviceFert', hint: 'adviceFertHint' },
+];
 
 const LANG_NAMES: Record<LangCode, string> = {
   nl: 'Nederlands', en: 'English', de: 'Deutsch', fr: 'Français', es: 'Español',
@@ -120,6 +142,13 @@ export default function SettingsScreen() {
   const windLabel = windUnitLabel(prefs.windUnit);
   const modelLabel = prefs.useHarmonie ? 'HARMONIE-AROME' : 'ECMWF IFS';
   const agro = agroIntegration(prefs);
+
+  // The index row answers "what is this set to?" without opening it: off, or how many
+  // of the four families still speak.
+  const adviceOn = ADVICE_FAMILIES.filter((f) => adviceFamilyOn(prefs.advice, f)).length;
+  const adviceLabel = prefs.advice.enabled
+    ? `${adviceOn}/${ADVICE_FAMILIES.length}`
+    : ta('adviceOff', prefs.lang);
 
   /**
    * Turning push on asks iOS for permission, and there are three answers, not two.
@@ -195,6 +224,12 @@ export default function SettingsScreen() {
               label={ta('notifications', prefs.lang)}
               value={notifyLabel}
               onPress={() => { tap(); setPage('notifications'); }}
+            />
+            <NavRow
+              icon="plant"
+              label={ta('adviceSettings', prefs.lang)}
+              value={adviceLabel}
+              onPress={() => { tap(); setPage('advice'); }}
             />
             <NavRow
               icon="dots-six-vertical"
@@ -528,6 +563,60 @@ export default function SettingsScreen() {
             )}
           </>
         ) : null}
+      </SubjectPage>
+
+      {/* ── Adviezen ─────────────────────────────────────────────────────────── */}
+      <SubjectPage
+        visible={page === 'advice'}
+        title={ta('adviceSettings', prefs.lang)}
+        onClose={() => setPage(null)}
+      >
+        {/* The outer layer, as on Meldingen: whether the app draws conclusions at
+            all. Somebody who wants the readings and nothing else says so here, and
+            the four families below go with it. */}
+        <Group label={ta('settingsInApp', prefs.lang)}>
+          <Row
+            icon="plant"
+            label={ta('adviceShow', prefs.lang)}
+            hint={ta('adviceShowHint', prefs.lang)}
+            last
+          >
+            <Toggle
+              on={prefs.advice.enabled}
+              onChange={(v) => { tap(); setPref('advice', { ...prefs.advice, enabled: v }); }}
+              label={ta('adviceShow', prefs.lang)}
+            />
+          </Row>
+        </Group>
+
+        {/* Hidden rather than greyed while the layer is off — a row of switches that
+            cannot move invites tapping at nothing, and the group above says why. */}
+        {prefs.advice.enabled ? (
+          <Group label={ta('adviceParts', prefs.lang)}>
+            {ADVICE_ROWS.map((row, i) => (
+              <Row
+                key={row.family}
+                icon={row.icon}
+                label={ta(row.label, prefs.lang)}
+                hint={ta(row.hint, prefs.lang)}
+                last={i === ADVICE_ROWS.length - 1}
+              >
+                <Toggle
+                  on={adviceFamilyOn(prefs.advice, row.family)}
+                  onChange={() => {
+                    tap();
+                    setPref('advice', toggleAdviceFamily(prefs.advice, row.family));
+                  }}
+                  label={ta(row.label, prefs.lang)}
+                />
+              </Row>
+            ))}
+          </Group>
+        ) : null}
+
+        <Text variant="caption" color={palette.muted} align="center" style={{ lineHeight: 18 }}>
+          {ta('advicePartsHint', prefs.lang)}
+        </Text>
       </SubjectPage>
 
       {/* ── Integraties ──────────────────────────────────────────────────────── */}
