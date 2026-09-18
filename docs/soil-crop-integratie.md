@@ -800,6 +800,44 @@ dat dat nooit *stilzwijgend* mag, en dat is precies de voorwaarde die hier geldt
 bronregel zegt "gewassensor 10 cm" en de groene stip gaat aan. Het is geen betere
 meting op 1,50 m, het is een andere grootheid — en op een perceel de juiste.
 
+### De badge, en stap 5's rekenkern
+
+**`IndicatorBadge`** is de vorm waar de hele laag omheen ontworpen is: een lampje, wat
+de toestand is, en waaróm — de bindende drempel. Tot nu toe stond de indicatorlaag
+gebouwd en getest maar bereikte hij geen scherm: er werd één veld van gelezen, de
+waarde, voor de positie van het streepje op de balk. De schermen lazen de rauwe meting.
+
+Bewust niet bodemspecifiek. Wind leest straks "Niet spuitbaar · 21 km/u, grens 18" door
+hetzelfde component. Dat was het argument om de indicator als zelfstandig naamwoord te
+bouwen, en dit is de eerste keer dat het zich uitbetaalt.
+
+**`core/model/humidHours.ts`** is de rekenkern onder alle ziektemodellen:
+aaneengesloten uren op of boven een RV-drempel, met de temperatuur erover. Smith, DIV,
+10-10-48 en Gubler-Thomas zijn dezelfde berekening met andere parameters — dat één keer
+schrijven is precies waarom het voorstel de ziektemodellen in de basis zet.
+
+Twee regels die het verschil maken:
+
+- **Op of bóven de drempel.** De gepubliceerde modellen zeggen 90%, en 90 telt mee.
+  Dat als "boven" lezen is onzichtbaar in een droge week en verschuift elke periode in
+  een vochtige.
+- **Een gat breekt de reeks.** Een infectieperiode beweert dat het blad elf uur
+  achtereen nat bleef; een uur dat niemand gemeten heeft kan daar niet aan meetellen.
+  Het gat overbruggen maakt van een sensoruitval een waarschuwing. En andersom: een
+  halve dag mag niet als een rustige dag lezen, want stations vallen uit in precies het
+  weer dat infectieperioden maakt.
+
+**`core/model/smith.ts`** is de eerste klant: twee dagen op rij met minimaal elf uur op
+of boven 90% RV en een minimumtemperatuur van 10 °C. Signaleren, niet voorschrijven —
+"ga kijken", nooit "ga spuiten".
+
+**`humidHoursFrom`** legt de beslissing van blad 3 vast: RV op 10 cm waar een CropExact
+staat, anders op 1,50 m, nooit beide. De hoogte reist mee als herkomst, want een
+Smith-periode gevonden op 10 cm is een andere bewering dan een op 1,50 m.
+
+**Nog niet op een scherm.** Smith heeft een week aan uren nodig en de bestaande
+ophaalpaden reiken 26 uur terug; dat is een eigen slice.
+
 ## Nog open
 
 - ~~De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt
