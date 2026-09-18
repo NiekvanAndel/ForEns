@@ -444,7 +444,10 @@ describe('parseEnsembleOutlook', () => {
 
 describe('dayAgreement', () => {
   const day = (p10: number, p50: number, p90: number) =>
-    ({ date: 'x', p10, p50, p90, wetShare: 50, members: 51 });
+    ({
+      date: 'x', p10, p50, p90, wetShare: 50, members: 51,
+      minP10: null, minP50: null, minP90: null, frostShare: null,
+    });
 
   it('calls a narrow band agreement whatever the total', () => {
     expect(dayAgreement(day(0, 0, 0))).toBe('agree');

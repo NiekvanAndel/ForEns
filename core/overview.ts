@@ -112,10 +112,25 @@ export const WIDGET_OPTION_DEFAULTS:
   window: '24h',
 };
 
+/**
+ * Which tier a widget belongs to.
+ *
+ * Absent means the basis version, which is everything that works on one location at a
+ * time. `agroIntel` is the add-on: conclusions that only exist once locations are put
+ * beside each other, and statements about the forecast itself.
+ *
+ * Declared here rather than checked at each widget, so that switching the tier off is
+ * one filter — and so that a tier that is off is not merely undrawn but **unfetched**,
+ * because `neededSources` reads the same filtered list.
+ */
+export type OverviewTier = 'agroIntel';
+
 export interface OverviewWidget {
   id: string;
   size: OverviewSize;
   needs: readonly OverviewSource[];
+  /** Which tier this belongs to. Absent is the basis version. */
+  tier?: OverviewTier;
   /** Defaults to `all`. */
   scope?: OverviewScope;
   /** Which controls this widget's settings sheet offers. Absent means it has none,
@@ -186,6 +201,22 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   // about confidence rather than weather, which is why it sits after the forecast it
   // qualifies rather than among the readings.
   { id: 'confidence', size: 'full', needs: ['ensemble'] },
+  // ── AgroIntelligence · the add-on tier ──────────────────────────────────────
+  // Everything here is a statement about *the farm* or about *the forecast itself*,
+  // which is exactly the line the plan draws between the two tiers. With the tier off
+  // none of it is drawn, arranged or fetched.
+  //
+  // What can only be said with the locations beside each other: the joint window,
+  // which field first, how unevenly it rained, and the same boundary shutting five
+  // fields said once. See `core/areaConclusions`.
+  { id: 'area', size: 'full', needs: ['conditions', 'outlook'], tier: 'agroIntel', options: ['limit'] },
+  // A chance instead of a value, on a ladder whose rungs are actions — and the one
+  // setting behind it, the reader's own appetite for risk. See `core/riskLadder`.
+  { id: 'risk', size: 'full', needs: ['ensemble'], tier: 'agroIntel', options: ['limit'] },
+  // The coming days as windows, a row per location, drawn paler where the members
+  // disagree. The bar for one location is the basis version's; comparing them is not.
+  { id: 'windows', size: 'full', needs: ['outlook', 'ensemble'], tier: 'agroIntel', options: ['limit'] },
+
   // Every location on one map, as a way in rather than as a map to read.
   { id: 'map', size: 'full', needs: [] },
 
@@ -222,9 +253,22 @@ export const DEFAULT_OVERVIEW_LAYOUT: TileLayout = {
   hidden: OVERVIEW_WIDGETS.filter((w) => w.defaultHidden).map((w) => w.id),
 };
 
+/** What a reader has access to, beyond their own arrangement. */
+export interface TierAccess {
+  /** Whether the AgroIntelligence add-on is on. Off by default, everywhere: this is
+   *  a licence flag in everything but name, and a caller that forgets to pass it gets
+   *  the basis version rather than a tier nobody paid for. */
+  agroIntel?: boolean;
+}
+
+/** Every widget this reader may see, in the catalogue's own order. */
+export function widgetsFor(access: TierAccess = {}): OverviewWidget[] {
+  return OVERVIEW_WIDGETS.filter((w) => w.tier !== 'agroIntel' || access.agroIntel === true);
+}
+
 /** The widgets to draw, in the reader's order. */
-export function arrangeWidgets(layout: TileLayout): OverviewWidget[] {
-  return arrangeTiles(OVERVIEW_WIDGETS, layout);
+export function arrangeWidgets(layout: TileLayout, access: TierAccess = {}): OverviewWidget[] {
+  return arrangeTiles(widgetsFor(access), layout);
 }
 
 /**
@@ -233,9 +277,12 @@ export function arrangeWidgets(layout: TileLayout): OverviewWidget[] {
  * The saving is per saved location and per source, so on a page with four locations
  * and the nowcast widget hidden this is four requests not eight.
  */
-export function neededSources(layout: TileLayout): Set<OverviewSource> {
+export function neededSources(
+  layout: TileLayout,
+  access: TierAccess = {}
+): Set<OverviewSource> {
   const out = new Set<OverviewSource>();
-  for (const w of arrangeWidgets(layout)) for (const n of w.needs) out.add(n);
+  for (const w of arrangeWidgets(layout, access)) for (const n of w.needs) out.add(n);
   return out;
 }
 

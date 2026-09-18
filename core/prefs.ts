@@ -69,6 +69,43 @@ export function toggleAdviceFamily(layer: AdviceLayer, id: string): AdviceLayer 
   return { ...layer, hidden };
 }
 
+/**
+ * How much certainty a reader wants before they act — the one setting the whole of
+ * the add-on tier's certainty half runs on.
+ *
+ * "Voorzichtig" acts on the lower rungs of the ladder: a one-in-three chance of frost
+ * is enough to go out and cover. "Afwachtend" waits for the forecast to commit.
+ * Nobody has to know what p25 means, which is the point — the alternative was
+ * percentile controls, and a grower who has to learn a statistics vocabulary to set
+ * up an app has been handed the modeller's problem.
+ */
+export type RiskAppetite = 'cautious' | 'normal' | 'patient';
+
+/**
+ * AgroIntelligence — the second tier, as a switch.
+ *
+ * Everything in it is what the plan calls "alles wat pas ontstaat als je locaties
+ * combineert, of wat over de verwachting zelf gaat": area conclusions, probabilities
+ * and the comparison of windows. None of it replaces anything in the basis version,
+ * which is what makes it separable — with this off the app is exactly the app it was.
+ *
+ * It is a licence flag in everything but name. When the add-on is sold, what sets
+ * this is a subscription rather than a switch, and nothing else has to move: the
+ * widgets that belong to the tier already declare it, and a tier that is off is not
+ * drawn, not arranged and — this is the part that matters — **not fetched**.
+ */
+export interface AgroIntelLayer {
+  enabled: boolean;
+  risk: RiskAppetite;
+}
+
+export const DEFAULT_AGRO_INTEL: AgroIntelLayer = { enabled: false, risk: 'normal' };
+
+/** Whether the add-on tier speaks at all. */
+export function agroIntelOn(prefs: Pick<Prefs, 'agroIntel'>): boolean {
+  return prefs.agroIntel.enabled;
+}
+
 export type ThemeMode = 'light' | 'dark' | 'auto';
 /** Which deterministic model drives days 3–14. */
 export type ModelPref = 'ecmwf' | 'gfs' | 'mix';
@@ -218,6 +255,8 @@ export interface Prefs {
   quietHours: boolean;
   /** Which rule-based advice is drawn. See `AdviceLayer`. */
   advice: AdviceLayer;
+  /** The AgroIntelligence add-on, and what it is set to. See `AgroIntelLayer`. */
+  agroIntel: AgroIntelLayer;
   /** The order of the cards on 'Nu'. See `core/nowCards`. */
   nowCards: TileLayout;
   /** The 'Actueel' grid's arrangement. See `TileLayout`. */
@@ -270,6 +309,7 @@ export const DEFAULT_PREFS: Prefs = {
   notifyFrost: false,
   quietHours: true,
   advice: DEFAULT_ADVICE_LAYER,
+  agroIntel: DEFAULT_AGRO_INTEL,
   nowCards: DEFAULT_NOW_LAYOUT,
   tiles: DEFAULT_TILE_LAYOUT,
   soilTiles: DEFAULT_TILE_LAYOUT,
@@ -347,6 +387,17 @@ export function mergePrefs(stored: unknown): Prefs {
     out.advice = {
       enabled: typeof advice.enabled === 'boolean' ? advice.enabled : true,
       hidden: ids(advice.hidden),
+    };
+  }
+
+  // The tier and its one setting, read separately: a stored layer that lost the risk
+  // appetite must not switch the tier off, and one that lost the switch must not turn
+  // a paid tier on for somebody who never had it — so `enabled` falls back to off.
+  const intel = s.agroIntel as AgroIntelLayer | undefined;
+  if (intel && typeof intel === 'object') {
+    out.agroIntel = {
+      enabled: intel.enabled === true,
+      risk: intel.risk === 'cautious' || intel.risk === 'patient' ? intel.risk : 'normal',
     };
   }
 

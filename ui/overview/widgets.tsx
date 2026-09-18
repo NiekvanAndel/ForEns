@@ -57,7 +57,12 @@ import { useAgroAuth } from '../../state/auth';
 import type { LocationSoil } from '../../state/soilStations';
 import type { LocationDisease } from '../../state/disease';
 import { worstPerLocation, type LocationAdvice } from '../../core/overviewFieldAdvice';
-import { adviceReason, adviceTitle } from '../advice/words';
+import { adviceReason, adviceTitle, FAMILY_LABEL } from '../advice/words';
+import type { AreaConclusion } from '../../core/areaConclusions';
+import type { RiskStatement, Rung } from '../../core/riskLadder';
+import {
+  certaintyOpacity, workableShare, type DayWindow,
+} from '../../core/dayWindows';
 import { rankFieldsByDryness, type SoilStatus } from '../../core/model/soil';
 import { soilStatusBg, soilStatusInk } from '../soilStatusInk';
 import { agroIntegration } from '../../core/prefs';
@@ -93,6 +98,11 @@ export interface WidgetProps {
   /** The four rule-based families per saved location, in row order. Empty while the
    *  sources they read are switched off. */
   advice: LocationAdvice[];
+  /** AgroIntelligence. All three are empty with the tier off — nothing is computed
+   *  and nothing is fetched for them. See `TierAccess` in `core/overview`. */
+  area: AreaConclusion[];
+  risk: RiskStatement[];
+  windows: { index: number; name: string; days: DayWindow[] }[];
   /** One per row, in the same order; null where nothing is worth saying. */
   alerts: (WeatherAlert | null)[];
   /** The observation model per saved location, same order again. What a widget
@@ -833,6 +843,275 @@ export function FieldAdviceWidget({ advice, settings, onOpen }: WidgetProps) {
       {rest > 0 ? (
         <RestLine>{ta('ovRest', prefs.lang).replace('{n}', String(rest))}</RestLine>
       ) : null}
+    </WidgetCard>
+  );
+}
+
+/**
+ * AgroIntelligence · what the farm says, rather than what a field says.
+ *
+ * Four kinds of line, and every one of them is a sentence no single location's page
+ * could produce: the same boundary shutting several fields said once, the stretch
+ * they can all be worked in, which one to start on, and how unevenly it rained.
+ *
+ * Facts in, sentences here — `core/areaConclusions` carries the numbers and this
+ * turns them into language, the same division the brief above it follows.
+ */
+export function AreaWidget({ area, settings, onOpen }: WidgetProps) {
+  const { prefs } = usePrefs();
+
+  const shown = area.slice(0, settings.limit);
+  if (!shown.length) return null;
+
+  const clock = (stamp?: string) => (stamp ? stamp.slice(11, 16) : '');
+
+  const wording = (c: AreaConclusion): { key: AppStringKey; values: Record<string, string> } => {
+    switch (c.kind) {
+      case 'shared':
+        return {
+          key: 'areaShared',
+          values: {
+            n: String(c.count ?? 0),
+            total: String(c.total ?? 0),
+            // The family, not the factor: "spuitvenster" is what five shut fields
+            // have in common, and which boundary shut each of them is on its own page.
+            what: c.factor ? ta(FAMILY_LABEL[familyOf(c.factor)], prefs.lang) : '',
+          },
+        };
+      case 'commonWindow':
+        return {
+          key: 'areaCommonWindow',
+          values: { from: clock(c.from), to: clock(c.to), n: String(c.count ?? 0) },
+        };
+      case 'noCommonWindow':
+        return {
+          key: 'areaNoCommonWindow',
+          values: { n: String(c.count ?? 0), total: String(c.total ?? 0) },
+        };
+      case 'order':
+        return {
+          key: 'areaOrder',
+          values: { place: c.place ?? '', place2: c.place2 ?? '', to: clock(c.to) },
+        };
+      case 'spread':
+        return {
+          key: 'areaSpread',
+          values: {
+            place: c.place ?? '', mm: fmtMm(c.mm ?? 0),
+            place2: c.place2 ?? '', mm2: fmtMm(c.mm2 ?? 0),
+          },
+        };
+    }
+  };
+
+  return (
+    <WidgetCard title={ta('areaTitle', prefs.lang)} hint={ta('agroIntelTier', prefs.lang)}>
+      {shown.map((c) => {
+        const { key, values } = wording(c);
+        const line = <Sentence template={ta(key, prefs.lang)} values={values} />;
+        // A conclusion about one named field opens it; one about the farm has
+        // nowhere to go, and a row that looks pressable and is not is worse than a
+        // row that does not.
+        return c.index != null ? (
+          <Pressable
+            key={c.kind + (c.factor ?? '')}
+            onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(c.index!, 'index'); }}
+            accessibilityRole="button"
+          >
+            {line}
+          </Pressable>
+        ) : (
+          <View key={c.kind}>{line}</View>
+        );
+      })}
+      <WidgetNote>{ta('areaNote', prefs.lang)}</WidgetNote>
+    </WidgetCard>
+  );
+}
+
+/** Which family a boundary belongs to, for the de-duplicated line's wording. */
+function familyOf(factor: string): 'spray' | 'frost' | 'workability' | 'fertilise' {
+  if (factor.startsWith('spray')) return 'spray';
+  if (factor.startsWith('frost')) return 'frost';
+  if (factor.startsWith('fert')) return 'fertilise';
+  return 'workability';
+}
+
+/**
+ * AgroIntelligence · a chance instead of a value, on a ladder of actions.
+ *
+ * "65% kans op nachtvorst" beats "−1 °C" for the decision it is actually supporting,
+ * because the question is not how cold it will be but whether to go out. The rung
+ * says what to do about it and moves with the reader's own appetite for risk; the
+ * line beside it says whether waiting would improve the answer.
+ *
+ * The count of members rides along. A chance over eight members and one over
+ * fifty-one are not the same claim, and honesty rule 4 applies to a probability as
+ * much as to a reading.
+ */
+export function RiskWidget({ risk, settings, onOpen }: WidgetProps) {
+  const { palette, appearance } = useTheme();
+  const { prefs } = usePrefs();
+  const names = dayNames(prefs.lang);
+
+  const shown = risk.slice(0, settings.limit);
+  if (!shown.length) return null;
+
+  // The rungs in the scale's own inks: watching is the quiet one, acting is the loud
+  // one, and they are the same three colours every other verdict on this page uses.
+  const tone = (rung: Rung) =>
+    soilStatusInk(rung === 'act' ? 2 : rung === 'prepare' ? 1 : 0, palette, appearance);
+
+  const RUNG_KEY: Record<Rung, AppStringKey> = {
+    watch: 'riskWatch', prepare: 'riskPrepare', act: 'riskAct',
+  };
+
+  return (
+    <WidgetCard
+      title={ta('riskTitle', prefs.lang)}
+      hint={ta(`riskAppetite_${prefs.agroIntel.risk}` as AppStringKey, prefs.lang)}
+    >
+      {shown.map((r, i) => (
+        <Pressable
+          key={`${r.index}-${r.kind}-${r.date}`}
+          onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(r.index, 'forecast'); }}
+          accessibilityRole="button"
+          accessibilityLabel={`${r.name}, ${r.percent}%`}
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: space[3],
+            paddingVertical: 9,
+            borderTopWidth: i > 0 ? 1 : 0,
+            borderTopColor: palette.hairlineSoft,
+          }}
+        >
+          {/* The chance, as the figure the row is about. Not a bar: a probability
+              drawn as a bar invites reading two rows as a comparison of severity,
+              and a 40% frost is not "less bad" than a 90% shower. */}
+          <Text variant="stat" color={tone(r.rung)} tabular style={{ fontSize: 19, minWidth: 46 }}>
+            {`${r.percent}%`}
+          </Text>
+
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="label" color={palette.inkHeading} numberOfLines={1}>
+              {`${ta(r.kind === 'frost' ? 'riskFrost' : 'riskRain', prefs.lang)} · ${r.name}`}
+            </Text>
+            <Text variant="caption" color={palette.muted} numberOfLines={1}>
+              {[
+                names[new Date(`${r.date}T12:00:00Z`).getUTCDay()],
+                r.median != null
+                  ? r.kind === 'frost'
+                    ? `${ta('riskMedian', prefs.lang)} ${convTemp(r.median, prefs.tempUnit)}${tempUnitLabel(prefs.tempUnit)}`
+                    : `${ta('riskMedian', prefs.lang)} ${fmtMm(r.median)} mm`
+                  : '',
+                ta('riskMembers', prefs.lang).replace('{n}', String(r.members)),
+              ].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text variant="label" weight="semibold" color={tone(r.rung)} numberOfLines={1}>
+              {ta(RUNG_KEY[r.rung], prefs.lang)}
+            </Text>
+            {/* Whether waiting would improve the answer — the half of a probability
+                that a number on its own never carries. */}
+            <Text variant="caption" color={palette.inkDisabled} numberOfLines={1}>
+              {ta(
+                r.decision === 'open' ? 'riskOpen'
+                  : r.decision === 'settled-yes' ? 'riskSettledYes' : 'riskSettledNo',
+                prefs.lang
+              )}
+            </Text>
+          </View>
+        </Pressable>
+      ))}
+    </WidgetCard>
+  );
+}
+
+/**
+ * AgroIntelligence · the coming days as windows, one row per location.
+ *
+ * Three bars a row, each the share of that day that can be worked, drawn **paler
+ * where the members disagree**. Saturation is certainty — honesty rule 2 given a
+ * shape — so a solid Thursday and a ghost of a Saturday are two different promises
+ * and look like it.
+ *
+ * Comparing the rows is the whole product: one location's bar belongs to the basis
+ * version, and "Thursday works everywhere and Friday only in the north" is a sentence
+ * that needs all of them at once.
+ */
+export function WindowsWidget({ windows, settings, onOpen }: WidgetProps) {
+  const { palette } = useTheme();
+  const { prefs } = usePrefs();
+  const names = dayNames(prefs.lang);
+
+  const shown = windows.filter((w) => w.days.length).slice(0, settings.limit);
+  if (!shown.length) return null;
+
+  const first = shown[0]!.days;
+
+  return (
+    <WidgetCard title={ta('windowsTitle', prefs.lang)} hint={ta('windowsHint', prefs.lang)}>
+      {/* The day names once, over the columns, rather than on every row. */}
+      <View style={{ flexDirection: 'row', gap: space[2], paddingLeft: 92 }}>
+        {first.map((d) => (
+          <Text
+            key={d.date}
+            variant="caption"
+            color={palette.muted}
+            style={{ flex: 1 }}
+            numberOfLines={1}
+          >
+            {names[new Date(`${d.date}T12:00:00Z`).getUTCDay()]}
+          </Text>
+        ))}
+      </View>
+
+      {shown.map((w, i) => (
+        <Pressable
+          key={w.index}
+          onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(w.index, 'forecast'); }}
+          accessibilityRole="button"
+          accessibilityLabel={w.name}
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: space[2],
+            paddingVertical: 7,
+            borderTopWidth: i > 0 ? 1 : 0,
+            borderTopColor: palette.hairlineSoft,
+          }}
+        >
+          <Text
+            variant="label"
+            color={palette.ink}
+            numberOfLines={1}
+            style={{ width: 88 }}
+          >
+            {w.name}
+          </Text>
+          {w.days.map((d) => (
+            <View
+              key={d.date}
+              style={{
+                flex: 1, height: 18, borderRadius: 4,
+                backgroundColor: palette.hairlineSoft,
+                overflow: 'hidden',
+                justifyContent: 'flex-end',
+              }}
+            >
+              <View
+                style={{
+                  // The share of the day that works, as the filled part — and the
+                  // agreement as how solidly it is filled.
+                  height: `${Math.round(workableShare(d) * 100)}%`,
+                  backgroundColor: palette.agroBright,
+                  opacity: certaintyOpacity(d.agreement),
+                }}
+              />
+            </View>
+          ))}
+        </Pressable>
+      ))}
+      <WidgetNote>{ta('windowsNote', prefs.lang)}</WidgetNote>
     </WidgetCard>
   );
 }

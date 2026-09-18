@@ -43,11 +43,12 @@ import { Text } from '../ui/Text';
 import { Icon } from '../ui/Icon';
 import { TileEditor } from '../ui/current/TileEditor';
 import {
-  AdviceWidget, AlertsWidget, ConfidenceWidget, DiseaseWidget, FieldAdviceWidget,
-  FrostWidget, HeroWidget,
+  AdviceWidget, AlertsWidget, AreaWidget, ConfidenceWidget, DiseaseWidget,
+  FieldAdviceWidget, FrostWidget, HeroWidget,
   LongTermWidget,
   MapWidget, NearTermWidget, NowcastWidget, OutlookWidget, RadarWidget, Rain24Widget,
-  RainNextWidget, SoilWidget, SummaryWidget, TempWidget, WindWidget, WorkWidget,
+  RainNextWidget, RiskWidget, SoilWidget, SummaryWidget, TempWidget, WindWidget,
+  WindowsWidget, WorkWidget,
   type WidgetProps,
 } from '../ui/overview/widgets';
 import { WidgetSettingsForm } from '../ui/overview/WidgetSettingsForm';
@@ -59,10 +60,13 @@ import {
 import { useAllLocationSoil } from '../state/soilStations';
 import { useAllLocationDisease } from '../state/disease';
 import {
-  arrangeWidgets, neededSources, OVERVIEW_WIDGETS, widgetRows, widgetSettings,
+  arrangeWidgets, neededSources, widgetRows, widgetSettings, widgetsFor,
 } from '../core/overview';
 import { buildOverviewRow } from '../core/overviewData';
 import { locationAdvice } from '../core/overviewFieldAdvice';
+import { areaConclusions } from '../core/areaConclusions';
+import { riskStatements } from '../core/riskLadder';
+import { dayWindows } from '../core/dayWindows';
 import { enabledAdviceFamilies } from '../core/prefs';
 import { ADVICE_FAMILIES } from '../core/model/fieldAdvice';
 import { deriveAlert } from '../core/model/alert';
@@ -81,6 +85,11 @@ const WIDGET_VIEWS: Record<string, (props: WidgetProps) => React.ReactElement | 
   frost: FrostWidget,
   workability: WorkWidget,
   fieldAdvice: FieldAdviceWidget,
+  // AgroIntelligence. Absent from the arrangement entirely with the tier off, so
+  // these are never reached — see `widgetsFor`.
+  area: AreaWidget,
+  risk: RiskWidget,
+  windows: WindowsWidget,
   outlook: OutlookWidget,
   confidence: ConfidenceWidget,
   soil: SoilWidget,
@@ -102,6 +111,7 @@ const WIDGET_LABEL: Record<string, AppStringKey> = {
   frost: 'ovFrost', workability: 'ovWork', outlook: 'ovOutlook',
   confidence: 'ovConfidence', map: 'ovMap', soil: 'ovSoil', disease: 'diseaseTitle',
   fieldAdvice: 'adviceTitle',
+  area: 'areaTitle', risk: 'riskTitle', windows: 'windowsTitle',
   hero: 'ovHero', nowcast: 'ovNowcast', radar: 'ovRadar',
   nearTerm: 'ovNearTerm', longTerm: 'ovLongTerm',
 };
@@ -115,8 +125,16 @@ export default function OverviewScreen() {
   const [editing, setEditing] = useState(false);
 
   const layout = prefs.overview;
-  const widgets = useMemo(() => arrangeWidgets(layout), [layout]);
-  const sources = useMemo(() => neededSources(layout), [layout]);
+  /**
+   * What this reader has access to.
+   *
+   * Passed to the arrangement *and* to the sources, which is the whole of what makes
+   * a tier a tier: with AgroIntelligence off its widgets are not in the list, so they
+   * are not drawn, not offered in the editor, and their sources are never fetched.
+   */
+  const access = useMemo(() => ({ agroIntel: prefs.agroIntel.enabled }), [prefs.agroIntel.enabled]);
+  const widgets = useMemo(() => arrangeWidgets(layout, access), [layout, access]);
+  const sources = useMemo(() => neededSources(layout, access), [layout, access]);
 
   const conditions = useAllLocationConditions(sources.has('conditions'));
   const nowcasts = useAllLocationNowcasts(sources.has('nowcast'));
@@ -191,6 +209,42 @@ export default function OverviewScreen() {
     [conditions, outlooks, prefs.advice]
   );
 
+  /**
+   * AgroIntelligence, in three parts — and nothing at all with the tier off.
+   *
+   * Every one of them is a statement about the farm rather than about a field, which
+   * is the line between the two tiers. They read what the page has already fetched:
+   * the conclusions from the rows and the field conditions, the chances from the
+   * ensemble, the windows from the short outlook.
+   */
+  const area = useMemo(
+    () => (prefs.agroIntel.enabled ? areaConclusions(rows, advice) : []),
+    [prefs.agroIntel.enabled, rows, advice]
+  );
+
+  const risk = useMemo(
+    () => (prefs.agroIntel.enabled
+      ? riskStatements(
+        conditions.map((c, i) => ({
+          index: i, name: c.location.name, ensemble: ensembles[i] ?? null,
+        })),
+        prefs.agroIntel.risk
+      )
+      : []),
+    [prefs.agroIntel.enabled, prefs.agroIntel.risk, conditions, ensembles]
+  );
+
+  const windows = useMemo(
+    () => (prefs.agroIntel.enabled
+      ? conditions.map((c, i) => ({
+        index: i,
+        name: c.location.name,
+        days: dayWindows(outlooks[i]?.hours ?? [], ensembles[i] ?? null),
+      }))
+      : []),
+    [prefs.agroIntel.enabled, conditions, outlooks, ensembles]
+  );
+
   /** Select a location and go to the tab that answers for what was tapped. */
   const open = (index: number, page: 'index' | 'forecast' | 'grafiek' | 'actueel') => {
     selectLocation(index);
@@ -204,7 +258,10 @@ export default function OverviewScreen() {
   const rowsOfWidgets = widgetRows(widgets, wide);
 
   /** Everything a widget gets except its own settings, which differ per widget. */
-  const shared = { rows, alerts, models, nowcasts, fields, disease, advice, onOpen: open };
+  const shared = {
+    rows, alerts, models, nowcasts, fields, disease, advice,
+    area, risk, windows, onOpen: open,
+  };
 
   return (
     <>
@@ -310,7 +367,7 @@ export default function OverviewScreen() {
           onClose={() => setEditing(false)}
           title={ta('ovEdit', prefs.lang)}
           hint={ta('ovEditHint', prefs.lang)}
-          all={OVERVIEW_WIDGETS.map((w) => ({
+          all={widgetsFor(access).map((w) => ({
             id: w.id,
             title: ta(WIDGET_LABEL[w.id] ?? 'ovSummary', prefs.lang),
             settings: !!w.options?.length,

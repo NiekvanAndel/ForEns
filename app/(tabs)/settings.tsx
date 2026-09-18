@@ -52,7 +52,8 @@ import { useForecast } from '../../state/forecast';
 import { t, ta, LANG_CODES, tempUnitLabel, windUnitLabel } from '../../core/i18n';
 import type { AppStringKey, LangCode } from '../../core/i18n';
 import {
-  adviceFamilyOn, agroIntegration, toggleAdviceFamily, type ThemeMode,
+  adviceFamilyOn, agroIntegration, toggleAdviceFamily,
+  type RiskAppetite, type ThemeMode,
 } from '../../core/prefs';
 import { ADVICE_FAMILIES, type AdviceFamily } from '../../core/model/fieldAdvice';
 import type { FontSizePref, PresUnit, TempUnit, WindUnit } from '../../core/i18n/units';
@@ -64,7 +65,7 @@ type Page =
   | 'display' | 'lang' | 'fontSize' | 'theme'
   | 'units' | 'windUnit' | 'tempUnit' | 'presUnit'
   | 'model' | 'source'
-  | 'notifications' | 'advice'
+  | 'notifications' | 'advice' | 'agroIntel' | 'risk'
   | 'locations' | 'integrations';
 
 /** Which subject a page belongs to, so a subject stays presented while one of its
@@ -72,6 +73,7 @@ type Page =
 const PARENT: Partial<Record<Page, Page>> = {
   lang: 'display', fontSize: 'display', theme: 'display',
   windUnit: 'units', tempUnit: 'units', presUnit: 'units',
+  risk: 'agroIntel',
 };
 
 /**
@@ -230,6 +232,14 @@ export default function SettingsScreen() {
               label={ta('adviceSettings', prefs.lang)}
               value={adviceLabel}
               onPress={() => { tap(); setPage('advice'); }}
+            />
+            <NavRow
+              icon="chart-line"
+              label={ta('agroIntelTitle', prefs.lang)}
+              value={prefs.agroIntel.enabled
+                ? ta(`riskAppetite_${prefs.agroIntel.risk}` as AppStringKey, prefs.lang)
+                : ta('adviceOff', prefs.lang)}
+              onPress={() => { tap(); setPage('agroIntel'); }}
             />
             <NavRow
               icon="dots-six-vertical"
@@ -617,6 +627,82 @@ export default function SettingsScreen() {
         <Text variant="caption" color={palette.muted} align="center" style={{ lineHeight: 18 }}>
           {ta('advicePartsHint', prefs.lang)}
         </Text>
+      </SubjectPage>
+
+      {/* ── AgroIntelligence ─────────────────────────────────────────────────── */}
+      <SubjectPage
+        visible={showing('agroIntel')}
+        title={ta('agroIntelTitle', prefs.lang)}
+        onClose={() => setPage(null)}
+      >
+        <Group label={ta('agroIntelTitle', prefs.lang)}>
+          <Row
+            icon="chart-line"
+            label={ta('agroIntelShow', prefs.lang)}
+            hint={ta('agroIntelHint', prefs.lang)}
+            last
+          >
+            <Toggle
+              on={prefs.agroIntel.enabled}
+              onChange={(v) => {
+                tap();
+                setPref('agroIntel', { ...prefs.agroIntel, enabled: v });
+              }}
+              label={ta('agroIntelShow', prefs.lang)}
+            />
+          </Row>
+        </Group>
+
+        {/* The one setting the whole certainty half runs on. Hidden while the tier is
+            off, as the families are under Adviezen: a control that governs something
+            switched off is a control that does nothing. */}
+        {prefs.agroIntel.enabled ? (
+          <Card pad={0}>
+            <NavRow
+              icon="warning"
+              label={ta('riskAppetiteLabel', prefs.lang)}
+              value={ta(`riskAppetite_${prefs.agroIntel.risk}` as AppStringKey, prefs.lang)}
+              last
+              onPress={() => { tap(); setPage('risk'); }}
+            />
+          </Card>
+        ) : null}
+
+        <Text variant="caption" color={palette.muted} align="center" style={{ lineHeight: 18 }}>
+          {ta('agroIntelOffNote', prefs.lang)}
+        </Text>
+
+        <SubjectPage
+          visible={page === 'risk'}
+          title={ta('riskAppetiteLabel', prefs.lang)}
+          onClose={() => setPage('agroIntel')}
+        >
+          <ChoiceList<RiskAppetite>
+            value={prefs.agroIntel.risk}
+            onChange={(risk) => {
+              tap();
+              setPref('agroIntel', { ...prefs.agroIntel, risk });
+              setPage('agroIntel');
+            }}
+            options={[
+              {
+                value: 'cautious',
+                label: ta('riskAppetite_cautious', prefs.lang),
+                hint: ta('riskAppetiteCautiousHint', prefs.lang),
+              },
+              {
+                value: 'normal',
+                label: ta('riskAppetite_normal', prefs.lang),
+                hint: ta('riskAppetiteNormalHint', prefs.lang),
+              },
+              {
+                value: 'patient',
+                label: ta('riskAppetite_patient', prefs.lang),
+                hint: ta('riskAppetitePatientHint', prefs.lang),
+              },
+            ]}
+          />
+        </SubjectPage>
       </SubjectPage>
 
       {/* ── Integraties ──────────────────────────────────────────────────────── */}
