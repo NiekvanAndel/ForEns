@@ -12,7 +12,7 @@ uit deze drie bestanden; wijzigt er een drempel, dan wijzigt het daar ook.
 
 | | |
 | --- | --- |
-| `core/thresholds.ts` | **elk getal**, met eenheid, herkomst (`legal` / `published` / `practice` / `app`) en bronverwijzing. Modules lezen hieruit; ze houden geen eigen kopie. |
+| `core/thresholds.ts` | **elk getal**, met eenheid, herkomst (`legal` / `published` / `practice` / `app`) en bron. Wie `legal` of `published` claimt, draagt een `url` naar de tekst zelf — een test bewaakt dat. Modules lezen hieruit; ze houden geen eigen kopie, ook `alert.ts` niet meer. |
 | `core/i18n/*Strings.ts` | **elke tekst**, per model: `alertStrings`, `adviceStrings`, `diseaseStrings`, `agroIntelStrings`, `layerStrings`. Vijf talen per bestand. |
 | `core/notifyScope.ts` | **wie mag melden**, en de drie poorten waar dat langs moet. |
 
@@ -28,8 +28,10 @@ dat de twee niet uit elkaar lopen.
 
 ### Waarom `basis` het belangrijkste veld is
 
-- **legal** — staat in de wet. Niet aan ons om te verschuiven. Twee stuks:
-  spuiten boven 5 m/s, en uitrijden op bevroren grond.
+- **legal** — staat in de wet. Niet aan ons om te verschuiven. Twee stuks: spuiten
+  boven 5 m/s (Bal art. 4.723e, sinds 2024; niet meer het Activiteitenbesluit) en
+  uitrijden op bevroren grond. Let op de meethoogte: de wet meet op twee meter, onze
+  verwachting op tien. De app is dus strenger dan de wet, niet losser.
 - **published** — van een genoemd model of instituut (Smith, IRS, KNMI). Ons werk is
   het getrouw implementeren, niet het bijstellen.
 - **practice** — wat een Nederlandse teler of adviseur herkent, zonder één publicatie
@@ -102,8 +104,13 @@ moment nodig om over te gaan.
 
 ## Wat nog niet klopt of nog moet
 
-- **De DIV-tabel is niet tegen de IRS-publicatie gelegd.** Staat als `caveat` bij de
-  bron. Een tabel die te laag scoort vertelt een teler dat zijn biet veilig is.
+- **De DIV-tabel is niet regel voor regel tegen de IRS-publicatie gelegd.** De
+  drempel van 6 over twee dagen inmiddels wel: die staat zo op de bladschimmelpagina
+  van het IRS. De omrekentabel eronder is nog steeds de gangbare reproductie, en een
+  tabel die te laag scoort vertelt een teler dat zijn biet veilig is.
+- **Bladnat staat op 95 %, Sentelhas e.a. (2008) valideren 90 %.** Wij zijn dus
+  strenger dan de publicatie. Daarom blijft die grens `app` ondanks de bron, en staat
+  het verschil in de `caveat`.
 - **`app`-drempels zijn eerste concepten** — vijfendertig stuks. Ze zijn nu vindbaar, wat
   de voorwaarde is om ze te herzien.
 - **De T-som** wacht op een seizoen aan dagwaarden; **trips** en **10-10-48** op een
