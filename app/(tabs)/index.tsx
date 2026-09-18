@@ -32,6 +32,7 @@ import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useLocationSoil } from '../../state/soilStations';
 import { waterTensionIndicator } from '../../core/model/indicators';
+import { soilCapabilities } from '../../core/model/soil';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
 import { t, ta } from '../../core/i18n';
@@ -42,7 +43,7 @@ function NowcastPage() {
   const { prefs, location } = usePrefs();
   const {
     model, alert, harmonie, phase, error, refresh, extendedLoaded, loadExtendedDays,
-    offsetSec, precipMeasured,
+    offsetSec,
   } = useForecast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -50,21 +51,33 @@ function NowcastPage() {
   /**
    * Everything the field's card needs, or null on a place that is not one.
    *
-   * The rainfall comes off the model rather than off the sample, because the sensor's
-   * own hours have already been merged into it — rain and irrigation are one number,
-   * and this is the number.
+   * No rainfall: that is weather, and it belongs on the weather card underneath, where
+   * the sensor's own hours have already been merged in.
    */
   const soil = useLocationSoil(location, offsetSec);
+  /**
+   * The canopy readings, where a PRO stands at this location.
+   *
+   * Only a PRO has the probe — `soilCapabilities` is the authority on that, not
+   * whether a value happens to be present — so a BASIC or a PLUS leaves the hero on
+   * the model, which is the honest answer for a field with no thermometer in the crop.
+   */
+  const canopy = useMemo(() => {
+    if (!soil.latest || !soilCapabilities(soil.station?.type).canopy) return null;
+    if (soil.latest.temp10 == null && soil.latest.humidity10 == null) return null;
+    return {
+      temp: soil.latest.temp10,
+      humidity: soil.latest.humidity10,
+      label: ta('soilCanopyLabel', prefs.lang),
+    };
+  }, [soil.latest, soil.station?.type, prefs.lang]);
+
   const soilHero = useMemo(() => {
     if (!soil.placement || !soil.latest || !model) return null;
-    const rain24 = model.pastHours
-      .slice(-24)
-      .reduce((sum, h) => sum + (h.precip ?? 0), 0);
     return {
       placement: soil.placement,
       latest: soil.latest,
       indicator: waterTensionIndicator([soil.latest], soil.placement, model.nowHour),
-      rain24: Math.round(rain24 * 10) / 10,
     };
   }, [soil.placement, soil.latest, model]);
   const pagePadding = usePagePadding();
@@ -188,8 +201,6 @@ function NowcastPage() {
                 placement={soilHero.placement}
                 latest={soilHero.latest}
                 indicator={soilHero.indicator}
-                rain24={soilHero.rain24}
-                rainMeasured={precipMeasured}
               />
             ) : null}
 
@@ -198,6 +209,10 @@ function NowcastPage() {
               location={location}
               sourceLabel={sourceLabel}
               timeLabel={timeLabel}
+              // On a PRO the air in the crop is measured here, 10 cm up. Named on the
+              // source line, never substituted silently: it is a different quantity
+              // from the standard 1.50 m, not a better reading of the same one.
+              canopy={canopy}
               // The card's own subject at full length. See `ConditionsHero`.
               onPress={() => router.push('/actueel')}
             />

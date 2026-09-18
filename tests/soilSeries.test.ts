@@ -7,8 +7,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  SOIL_SERIES_META, buildSoilSeries, soilSeriesKeys, soilTensionAxis,
+  SOIL_SERIES_META, buildSoilSeries, refillSeriesBars, soilSeriesKeys, soilTensionAxis,
 } from '../core/model/soilSeries';
+import { FIELD_CAPACITY_KPA, kPaToPf } from '../core/model/soil';
 import type { SoilSample } from '../core/sources/agroexact';
 
 function s(time: string, over: Partial<SoilSample> = {}): SoilSample {
@@ -86,9 +87,13 @@ describe('soil series', () => {
     expect(soilSeriesKeys('PRO', [s('2026-07-01T09:00')])).not.toContain('temp10');
   });
 
-  it('pins pF to its own range instead of letting it scale', () => {
+  it('pins pF from field capacity upward instead of letting it scale', () => {
+    // Two is field capacity: 10 kPa is pF 2.008, so the axis starts where the soil
+    // stops draining and starts drying. Below it the reading says "wetter than the
+    // crop needs", which is one state and does not want two thirds of a chart.
     // Logarithmic and self-scaling together turn a wet week into one straight line.
-    expect(SOIL_SERIES_META.pF).toMatchObject({ axisMin: 0, axisMax: 4.2, axisFixed: true });
+    expect(SOIL_SERIES_META.pF).toMatchObject({ axisMin: 2, axisMax: 4, axisFixed: true });
+    expect(kPaToPf(FIELD_CAPACITY_KPA)).toBeCloseTo(2, 1);
     // Suction has no ceiling of its own: the thresholds decide how far the axis
     // reaches, and they differ per field.
     expect(SOIL_SERIES_META.waterTension.axisMax).toBeUndefined();
@@ -134,5 +139,62 @@ describe('the suction axis', () => {
 
   it('has no axis to pin for a field whose thresholds nobody has set', () => {
     expect(soilTensionAxis(null, [{ value: 30 }])).toBeNull();
+  });
+});
+
+describe('pF, and the refill room with its rain', () => {
+  it('converts a suction boundary to pF exactly, as the API computes it', () => {
+    // Pinned against the live API on 18 September 2026: a reading of 35.30 kPa came
+    // back with `pF: 2.56`. So the same four zones can sit behind either chart.
+    expect(kPaToPf(35.30160866806753)).toBeCloseTo(2.56, 2);
+    expect(kPaToPf(FIELD_CAPACITY_KPA)).toBeCloseTo(2.01, 2);
+    // Saturated soil has no logarithm to take.
+    expect(kPaToPf(0)).toBeNull();
+    expect(kPaToPf(null)).toBeNull();
+  });
+
+  it('puts the rain in the bars and the room in the line, on one axis', () => {
+    const rows = [
+      s('2026-07-01T09:00', { refillMm: 30, precip: 2 }),
+      s('2026-07-01T10:00', { refillMm: 22, precip: 8 }),
+    ];
+    const built = buildSoilSeries({
+      key: 'refillMm', from: '2026-07-01', to: '2026-07-01', samples: rows,
+    });
+    const out = refillSeriesBars(rows, built);
+
+    // Sharing the axis is the point: it is how you see that 8 mm did not close a
+    // 30 mm gap.
+    expect(out.samples[9]).toMatchObject({ value: 2, cumulative: 30 });
+    expect(out.samples[10]).toMatchObject({ value: 8, cumulative: 22 });
+    expect(SOIL_SERIES_META.refillMm.shape).toBe('bar');
+  });
+
+  it('sums the rain per day, where everything else here averages', () => {
+    // A day's rainfall is a total. The mean of its hours is a number with no meaning,
+    // which is why it cannot ride along on the series' own bucketing.
+    const rows = [
+      s('2026-07-01T09:00', { refillMm: 30, precip: 2 }),
+      s('2026-07-01T15:00', { refillMm: 28, precip: 6 }),
+      s('2026-07-05T09:00', { refillMm: 40, precip: 1 }),
+    ];
+    const built = buildSoilSeries({
+      key: 'refillMm', from: '2026-07-01', to: '2026-07-05', samples: rows,
+    });
+    const out = refillSeriesBars(rows, built);
+    expect(out.resolution).toBe('day');
+    expect(out.samples[0]).toMatchObject({ key: '2026-07-01', value: 8 });
+    expect(out.samples[4]).toMatchObject({ key: '2026-07-05', value: 1 });
+  });
+
+  it('draws no bar at all where the sensor has no gauge', () => {
+    // A BASIC. No bar rather than a bar of nothing.
+    const rows = [s('2026-07-01T09:00', { refillMm: 30, precip: null })];
+    const built = buildSoilSeries({
+      key: 'refillMm', from: '2026-07-01', to: '2026-07-01', samples: rows,
+    });
+    expect(refillSeriesBars(rows, built).samples[9]).toMatchObject({
+      value: null, cumulative: 30,
+    });
   });
 });

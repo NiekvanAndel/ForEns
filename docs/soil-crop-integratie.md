@@ -110,6 +110,20 @@ Geen van deze punten raakt de bestaande webapp-pagina's.
    `last_reading_at` voor de winterstand zonder eerst metingen op te halen.
 6. **`leaf_wet` in `SoilReadingSerializer`.** Staat in het model, niet in de API.
 
+> **Bevestigd op 18 september 2026** tegen een sensor die meet. Drie velden moeten aan
+> API v2 worden toegevoegd, en tot die tijd kan de app ze niet tonen:
+>
+> | veld | wat het blokkeert |
+> | --- | --- |
+> | `water_until_nonschaarste` | "Bij te vullen" — alleen de bovengrens bestaat, dus geen "vul 18 tot 33 mm bij" |
+> | `leaf_wet` | bladnat, ook niet als proxy — en daarmee de vochturen |
+> | `soil` (grondsoortnaam) | de herkomstregel blijft "Ui · 20 cm"; **en** de kleurzones op waterpercentage en bijvulruimte, want die grenzen zijn pas een toestand als de grondsoort bekend is |
+>
+> `field_capacity` staat hier niet meer bij: die is op 18 september vastgezet op
+> **10 kPa** als app-brede standaard — pF 2,0, de leerboekdefinitie en de lijn die de
+> webapp ook trekt. Een per-perceel-waarde blijft wenselijk zodra `soil` er is, want
+> zand houdt minder vast dan zware klei.
+
 ## 4. Bladnat: proxy, geen meting
 
 `SoilMeasurement.leaf_wet` wordt niet gemeten. Het wordt afgeleid in
@@ -754,6 +768,37 @@ ligt, is een perceel waarvan de eigenaar al die ruimte eronder wil zien.
 Staat de as vast, dan tekent de grafiek **alle** grenzen erbinnen in plaats van alleen
 die "in het spel" zijn: met een vaste as kan niets de as meer oprekken, dus verdwijnt
 de reden voor die filter.
+
+### pF, bijvulruimte en de twee hero's
+
+**pF krijgt dezelfde vier zones als zuigspanning**, want het is dezelfde grootheid op
+een andere schaal: pF = log₁₀(kPa × 10,197). Gepind tegen de live API — 35,30 kPa kwam
+terug met `pF: 2,56`, en de formule geeft 2,556. Elke grens is dus exact te converteren.
+
+De pF-as loopt van **2 tot 4**. Twee ís veldcapaciteit (10 kPa → pF 2,008), dus de as
+begint waar de grond ophoudt met uitzakken en begint met drogen. Daaronder zegt de
+meting "natter dan het gewas nodig heeft", en dat is één toestand die geen twee derde
+van een grafiek verdient.
+
+**Bijvulruimte krijgt de neerslagbalkjes eronder**, op één as — precies wat blad 3
+vroeg: zo zie je dat een bui van 8 mm een gat van 33 mm niet dichtte. De regen sommeert
+per dag waar elke andere bodemgrootheid middelt, dus die vouwing gebeurt apart; het
+gemiddelde van de uren van een regendag is een getal zonder betekenis.
+
+**Kleurzones op waterpercentage en bijvulruimte** volgen zodra `soil` in de API zit:
+een volumeprocent of een aantal millimeter is pas een toestand als je weet wat de grond
+vasthoudt.
+
+**Op de bodemkaart** staat de bijvulruimte nu naast "Ui · 20 cm", en de neerslag is
+eraf. Die kaart gaat over het water *in* de grond; wat er uit de lucht viel is weer, en
+dat staat op de weerkaart eronder — waar het op een PLUS of PRO de sensor zijn eigen
+cijfer is, wat de hele reden voor de merge was.
+
+**Op de weerkaart neemt een PRO de lucht in het gewas over**: temperatuur en
+luchtvochtigheid op 10 cm in plaats van de gemodelleerde waarden op 1,50 m. Blad 3 zei
+dat dat nooit *stilzwijgend* mag, en dat is precies de voorwaarde die hier geldt: de
+bronregel zegt "gewassensor 10 cm" en de groene stip gaat aan. Het is geen betere
+meting op 1,50 m, het is een andere grootheid — en op een perceel de juiste.
 
 ## Nog open
 

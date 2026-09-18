@@ -23,6 +23,14 @@
  * them are — takes no width, so it draws as nothing rather than as a sliver of a state
  * that field can never be in.
  *
+ * ## Rainfall is not on this card
+ *
+ * It was, and it did not belong: this card is about the water *in* the ground, and the
+ * rain that fell on it is weather. It sits on the weather card underneath, where the
+ * reader is already looking for what the sky did — and on a PLUS or PRO it is that
+ * sensor's own figure rather than the model's, which is the whole reason the merge
+ * exists.
+ *
  * ## One dot, and nothing on it that was not measured
  *
  * Everywhere else in the app the green dot goes per figure, because a block sits in a
@@ -57,26 +65,21 @@ export interface SoilHeroProps {
   /** Suction as an indicator, for the bar and the binding threshold. Null where the
    *  field has no thresholds, in which case the bar is left off rather than guessed. */
   indicator: Indicator | null;
-  /** Rain over the last 24 hours, from the model this sensor's own hours were merged
-   *  into. Rain and irrigation are one number, by decision. */
-  rain24: number | null;
-  /** Whether that rainfall is this sensor's own. False on a BASIC, which has no
-   *  gauge, and then the figure is the model's. */
-  rainMeasured: boolean;
 }
 
 /** How far above the critical threshold the bar runs, so a field past it still has
  *  somewhere to sit rather than pinning to the very end. */
 const BAR_HEADROOM = 1.15;
 
-export function SoilHero({
-  name, placement, latest, indicator, rain24, rainMeasured,
-}: SoilHeroProps) {
+export function SoilHero({ name, placement, latest, indicator }: SoilHeroProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const lang = prefs.lang;
 
-  const amount = indicator?.now?.amount ?? null;
+  // How much it would take to fill the root zone. Shown whenever the sensor reports
+  // it, not only once the field is at "irrigate now": the card is a set of readings,
+  // and withholding a measurement is different from withholding advice.
+  const refill = latest.refillMm;
 
   return (
     <Card>
@@ -133,31 +136,22 @@ export function SoilHero({
             value={latest.soilTemp == null ? null : fmtTempValue(latest.soilTemp, prefs.tempUnit)}
             unit={tempUnitLabel(prefs.tempUnit)}
           />
-          {/* Only where this sensor has a gauge. On a BASIC the figure would be the
-              model's, and a modelled number inside an instrument's card is exactly
-              the claim this app must not make. */}
-          <Reading
-            icon="cloud-rain"
-            value={rainMeasured && rain24 != null ? fmtDecimal(rain24) : null}
-            unit="mm"
-            sub={ta('last24h', lang)}
-          />
+
         </View>
 
-        {/* Provenance, not decoration: 48 kPa means one thing on sand under onions and
-            another on heavy clay under potatoes. */}
+        {/* Provenance and the amount on one line. The first is not decoration — 48 kPa
+            means one thing on sand under onions and another on heavy clay under
+            potatoes — and the second is the only thing any indicator in this app can
+            say about *how much*, so it belongs where the field is named rather than in
+            a sentence of its own further down. */}
         <Text variant="caption" color={palette.muted}>
           {placementContext(placement, `${placement.depthCm} cm`)}
-        </Text>
-
-        {amount ? (
-          <Text variant="bodySm" color={palette.muted}>
-            {`${ta('soilRefill', lang)}: ${fmtDecimal(amount.min)} – ${fmtDecimal(amount.max)} mm`}
-            <Text variant="caption" color={palette.inkDisabled}>
-              {`  (${ta('soilToDepth', lang)})`}
+          {refill != null ? (
+            <Text variant="caption" color={palette.muted}>
+              {`  ·  ${ta('soilRefill', lang)} ${fmtDecimal(refill)} mm`}
             </Text>
-          </Text>
-        ) : null}
+          ) : null}
+        </Text>
 
         {indicator ? <StateBar indicator={indicator} /> : null}
       </View>

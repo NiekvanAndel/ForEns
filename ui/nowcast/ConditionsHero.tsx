@@ -92,13 +92,24 @@ export interface ConditionsHeroProps {
   sourceLabel: string;
   /** Local time string for the header. */
   timeLabel: string;
+  /**
+   * Readings from a sensor in the crop, 10 cm above the ground, where one stands here.
+   *
+   * A PRO soil sensor measures the air the crop actually sits in, and on a field that
+   * is a better answer than a temperature modelled for the region. It is **not** a
+   * better 1.50 m reading — it is a different quantity, and warmer or damper than the
+   * standard height by a margin that matters — so it never arrives silently: `label`
+   * names the height on the card's own source line, which is the condition the plan
+   * set for using it at all.
+   */
+  canopy?: { temp: number | null; humidity: number | null; label: string } | null;
   /** Opens 'Actueel'. Optional, so a caller with nowhere to send the reader gets the
    *  plain card — without it there is no caret and nothing to press. */
   onPress?: () => void;
 }
 
 export function ConditionsHero({
-  model, location, sourceLabel, timeLabel, onPress,
+  model, location, sourceLabel, timeLabel, canopy, onPress,
 }: ConditionsHeroProps) {
   const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
@@ -111,14 +122,18 @@ export function ConditionsHero({
   const now = {
     // The exact readings, not the whole-unit ones the dense rows draw: this card
     // has the room for the tenth the station or the model actually reported.
-    temp: measured?.temp ?? modelled?.tempExact ?? modelled?.temp ?? null,
+    // The canopy sensor first where there is one: on a field, the air in the crop is
+    // what the reader came for, and the alternative is a figure modelled for a region.
+    temp: canopy?.temp ?? measured?.temp ?? modelled?.tempExact ?? modelled?.temp ?? null,
     wind: measured?.wind ?? modelled?.windExact ?? modelled?.wind ?? null,
     windDir: measured?.windDir ?? modelled?.windDir ?? null,
-    humidity: measured?.humidity ?? modelled?.humidity ?? null,
+    humidity: canopy?.humidity ?? measured?.humidity ?? modelled?.humidity ?? null,
     wmo: modelled?.wmo ?? 3,
     isDay: modelled?.isDay ?? 1,
   };
-  const station = !!model.station || !!location.stationId;
+  // The green dot and the green source line: an instrument stands here. A canopy
+  // sensor is one, even where no weather station is.
+  const station = !!model.station || !!location.stationId || !!canopy;
 
   const { tempMin: lo, tempMax: hi, precip: precip24 } = recent24(model);
 
@@ -149,7 +164,7 @@ export function ConditionsHero({
             numberOfLines={1}
             style={{ flexShrink: 1 }}
           >
-            {sourceLabel}
+            {canopy ? `${sourceLabel} · ${canopy.label}` : sourceLabel}
           </Text>
           {onPress ? (
             <View style={{ marginLeft: 'auto' }}>

@@ -82,14 +82,10 @@ export interface Placement {
    * Field capacity, kPa — the wet end of the scale, below which the soil is draining
    * rather than drying.
    *
-   * Null on every placement today, and that is the honest state of it: `/soilstations/`
-   * does not serve it, and neither `/soilreadings/` nor `/soil_aggregates/` carries it
-   * — checked against the live API on 18 September 2026. The web app draws the line at
-   * 10 kPa, which is pF 2.0, but whether that is a constant there or derived per soil
-   * type is not something this app can tell from the outside, so it does not guess.
-   *
-   * The zone is drawn wherever this is set. The day the backend serves it, it is one
-   * line in `placementFromStation` and the chart already knows what to do.
+   * `/soilstations/` does not serve it, and neither `/soilreadings/` nor
+   * `/soil_aggregates/` carries it — checked against the live API on 18 September 2026.
+   * So it comes from `FIELD_CAPACITY_KPA` until the backend has a per-field figure,
+   * which is a stated default rather than a measurement and is marked as one.
    */
   fieldCapacity?: number | null;
   /**
@@ -170,6 +166,36 @@ export function waterPercent(raw: number | null): number | null {
   if (raw == null || !Number.isFinite(raw)) return null;
   const pct = raw <= 1 ? raw * 100 : raw;
   return Math.round(pct * 10) / 10;
+}
+
+/**
+ * Field capacity, kPa — where the soil stops draining and starts drying.
+ *
+ * Ten, which is pF 2.0: the textbook definition, the figure the web app draws its own
+ * line at, and the reason a pF chart is read from 2 upwards. Set by the grower on
+ * 18 September 2026 as the app-wide default.
+ *
+ * A default and not a measurement. Field capacity properly depends on the soil — a
+ * light sand holds less and drains sooner than heavy clay — so this is the same figure
+ * for every field until `/soilstations/` serves `soil` and a per-field value. The app
+ * draws the zone from it and says nothing about it being measured, because it is not.
+ */
+export const FIELD_CAPACITY_KPA = 10;
+
+/**
+ * Suction as pF, the logarithm of the water column that holds it.
+ *
+ * pF is log₁₀ of the tension in centimetres of water, and a kilopascal is 10.197 cm of
+ * it. Verified against the live API on 18 September 2026: a reading of 35.30 kPa came
+ * back with `pF: 2.56`, and this gives 2.556.
+ *
+ * Here so a pF chart can draw the field's own thresholds, which arrive in kPa and
+ * nothing else. Converting the boundary is exact; there is nothing approximate about
+ * it, which is why the same four zones can sit behind either chart.
+ */
+export function kPaToPf(kPa: number | null): number | null {
+  if (kPa == null || !(kPa > 0)) return null;
+  return Math.round(Math.log10(kPa * 10.197) * 1000) / 1000;
 }
 
 /** Fourteen days without a measurement: the same grace `SoilStation.last_reading`
@@ -289,6 +315,8 @@ export function placementFromStation(
     depthCm: station.depthCm,
     thresholds: station.thresholds,
     sensorType: station.type ?? null,
+    // The stated default, not a measurement — see `FIELD_CAPACITY_KPA`.
+    fieldCapacity: FIELD_CAPACITY_KPA,
     assumed: true,
   };
 }

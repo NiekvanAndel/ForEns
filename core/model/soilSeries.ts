@@ -38,16 +38,21 @@ export const SOIL_SERIES_META: Record<SoilSeriesKey, SoilSeriesMeta> = {
   // it from zero to a little past critical. See `soilTensionAxis`.
   waterTension: { key: 'waterTension', shape: 'line', axisMin: 0 },
   /**
-   * pF gets a fixed axis, and it is the one place here where that is not fussiness.
+   * pF runs from 2 to 4, pinned.
    *
-   * It is a logarithm, so its whole meaningful range is 0 to 4,2 — and on an axis that
-   * scales to the data, a week in which the field stayed wet becomes one straight line
-   * across the middle of the plot. Logarithmic and self-scaling together throw away
-   * the only thing the reader came to see.
+   * Two is field capacity — `FIELD_CAPACITY_KPA` is 10 kPa and that is pF 2.008 — so
+   * the axis starts where the soil stops draining and starts drying. Below it the
+   * reading says "wetter than the crop needs", which is one state and does not want
+   * two thirds of a chart. Four is about 100 bar, drier than any crop survives.
+   *
+   * Pinned for the same reason the suction axis is: logarithmic and self-scaling
+   * together turn a week in which the field stayed wet into one straight line across
+   * the middle of the plot, which is the only thing the reader came to see.
    */
-  pF: { key: 'pF', shape: 'line', axisMin: 0, axisMax: 4.2, axisFixed: true },
+  pF: { key: 'pF', shape: 'line', axisMin: 2, axisMax: 4, axisFixed: true },
   waterPercent: { key: 'waterPercent', shape: 'line', axisMin: 0, axisMax: 100 },
-  refillMm: { key: 'refillMm', shape: 'line', axisMin: 0 },
+  // Refill room draws as bars with the rainfall over them — see `refillSeriesBars`.
+  refillMm: { key: 'refillMm', shape: 'bar', axisMin: 0 },
   soilTemp: { key: 'soilTemp', shape: 'line' },
   temp10: { key: 'temp10', shape: 'line', canopy: true },
   humidity10: { key: 'humidity10', shape: 'line', axisMin: 0, axisMax: 100, canopy: true },
@@ -231,5 +236,47 @@ export function soilTensionAxis(
     axisMin: 0,
     axisMax: Math.max(thresholds.critical * CRITICAL_HEADROOM, peak),
     axisFixed: true,
+  };
+}
+
+/**
+ * Refill room with the rainfall that filled it, on one axis.
+ *
+ * Both are millimetres over the same ground, so they share an axis rather than
+ * arguing across two — and sharing it is the whole point: it is how you see that
+ * Wednesday's 8 mm did not close a 33 mm gap. Two axes would let the bar and the line
+ * meet anywhere and mean nothing.
+ *
+ * The rainfall is the bars and the refill room the line over them, which is the same
+ * arrangement the rainfall chart already uses for its running total. The chart's
+ * `cumulative` slot carries the line; it is named for rainfall's own total because
+ * that was its first caller, and what it actually is is "the line over the bars".
+ */
+export function refillSeriesBars(
+  samples: readonly SoilSample[],
+  series: Series
+): Series {
+  // Rainfall *sums* where every other quantity here averages, so it cannot ride along
+  // on the series' own bucketing — a day of it would come out as the mean of its
+  // hours, which is a number with no meaning. It is folded separately, onto whatever
+  // keys the series ended up with.
+  const byKey = new Map<string, number>();
+  const toKey = (time: string) => (series.resolution === 'day' ? time.slice(0, 10) : time);
+  for (const row of samples) {
+    if (row.precip == null) continue;
+    const key = toKey(row.time);
+    byKey.set(key, Math.round(((byKey.get(key) ?? 0) + row.precip) * 10) / 10);
+  }
+
+  return {
+    ...series,
+    samples: series.samples.map((s) => ({
+      ...s,
+      // The bars: what fell. Absent where the sensor has no gauge, which draws no bar
+      // rather than a bar of nothing.
+      value: byKey.get(s.key) ?? null,
+      // The line: how much room is left.
+      cumulative: s.value,
+    })),
   };
 }

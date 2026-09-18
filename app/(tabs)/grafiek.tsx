@@ -148,13 +148,13 @@ import { SeriesChart, type ChartSpread } from '../../ui/graph/SeriesChart';
 import { useEnsembleMembers } from '../../ui/graph/useEnsembleBand';
 import { PillSwitcher, type PillItem } from '../../ui/PillSwitcher';
 import {
-  SOIL_SERIES_META, buildSoilSeries, soilSeriesKeys, soilTensionAxis,
+  SOIL_SERIES_META, buildSoilSeries, refillSeriesBars, soilSeriesKeys, soilTensionAxis,
   type SoilSeriesKey,
 } from '../../core/model/soilSeries';
 import { soilThresholdSteps } from '../../core/model/indicators';
 import { soilStatusInk } from '../../ui/soilStatusInk';
 import { SOIL_FIELD_CAPACITY_INK } from '../../core/model/soilStatusColor';
-import type { SoilStatus } from '../../core/model/soil';
+import { kPaToPf, type SoilStatus } from '../../core/model/soil';
 import { SOIL_STEP_MIN } from '../../core/sources/agroexact';
 import type { IconName } from '../../ui/Icon';
 import {
@@ -324,10 +324,13 @@ function GraphPage() {
       // builder — see `core/model/soilSeries`. Both produce the same `Series`, which
       // is what lets everything below this line stay one path.
       if (isSoilKey(key)) {
-        return buildSoilSeries({
+        const built = buildSoilSeries({
           key, from: range.from, to: range.to, samples: soilRows,
           stepMinutes: fine && soilRows.length > 0 ? SOIL_STEP_MIN : 60,
         });
+        // Refill room and the rain that fills it share one axis, which is how you see
+        // that an 8 mm shower did not close a 33 mm gap.
+        return key === 'refillMm' ? refillSeriesBars(soilRows, built) : built;
       }
       return buildSeries({
         key, from: range.from, to: range.to,
@@ -575,20 +578,32 @@ function GraphPage() {
    * across both halves.
    */
   const thresholds = useMemo(() => {
-    if (key !== 'waterTension' || !soil.placement) return null;
+    // Suction and pF are the same quantity on two scales, so they take the same four
+    // zones — `kPaToPf` converts each boundary exactly. The other soil charts have no
+    // zones yet: a water percentage and a refill room only become states once the soil
+    // type is known, and `/soilstations/` does not serve it. See the backend list.
+    const asPf = key === 'pF';
+    if ((key !== 'waterTension' && !asPf) || !soil.placement) return null;
     const p = soil.placement;
+    const at = (kPa: number) => (asPf ? kPaToPf(kPa) ?? 0 : kPa);
 
     // Bottom up, so each zone is tinted in the ink of the state it opens. The optimal
     // band starts at field capacity where the field has one and at zero where it does
     // not, which is every field today — see `Placement.fieldCapacity`.
+    const floor = asPf ? 2 : 0;
     const zones = [
-      ...(p.fieldCapacity != null
-        ? [{ at: 0, level: null as SoilStatus | null, ink: SOIL_FIELD_CAPACITY_INK[appearance] }]
+      // Below field capacity the soil is draining rather than drying. On a pF chart
+      // that band is off the bottom of the axis — 2 *is* field capacity — so it is
+      // only ever drawn on the suction chart.
+      ...(p.fieldCapacity != null && !asPf
+        ? [{ at: floor, ink: SOIL_FIELD_CAPACITY_INK[appearance] }]
         : []),
-      { at: p.fieldCapacity ?? 0, level: 0 as SoilStatus | null, ink: soilStatusInk(0, palette, appearance) },
+      {
+        at: p.fieldCapacity != null && !asPf ? at(p.fieldCapacity) : floor,
+        ink: soilStatusInk(0, palette, appearance),
+      },
       ...soilThresholdSteps(p.thresholds).map((t) => ({
-        at: t.at,
-        level: t.level as SoilStatus | null,
+        at: at(t.at),
         ink: soilStatusInk(t.level as SoilStatus, palette, appearance),
       })),
     ];
@@ -596,9 +611,9 @@ function GraphPage() {
     return zones.map((z) => ({
       at: z.at,
       color: z.ink,
-      // The boundary at the very bottom carries no number: "0" under a chart that
-      // starts at zero is the axis saying its own name twice.
-      label: z.at > 0 ? fmtDecimal(z.at) : undefined,
+      // The boundary the axis already starts at carries no number: a "0" under a chart
+      // that starts at zero is the axis saying its own name twice.
+      label: z.at > floor ? fmtDecimal(z.at) : undefined,
       shade: true,
     }));
   }, [key, soil.placement, palette, appearance]);
@@ -792,8 +807,15 @@ function GraphPage() {
                   formatAxis={key === 'windDir' ? degToCompass : undefined}
                   gridLines={key === 'windDir' ? 4 : undefined}
                   showCumulative={meta.shape === 'bar' && showCumulative}
-                  cumulativeLabel={ta('cumulative', prefs.lang)}
-                  cumulativeColor={palette.inkHeading}
+                  // The line over the bars. On rainfall that is the running total; on
+                  // refill room it is the room itself, with the rain that filled it as
+                  // the bars underneath. Same mechanism, two different sentences.
+                  cumulativeLabel={
+                    key === 'refillMm'
+                      ? ta('soilRefillRoom', prefs.lang)
+                      : ta('cumulative', prefs.lang)
+                  }
+                  cumulativeColor={key === 'refillMm' ? palette.agroInk : palette.inkHeading}
                   spread={showSpread ? spread : null}
                   spreadLabel={ta('spread', prefs.lang)}
                   thresholds={thresholds}
