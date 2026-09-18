@@ -43,7 +43,8 @@ import { Text } from '../ui/Text';
 import { Icon } from '../ui/Icon';
 import { TileEditor } from '../ui/current/TileEditor';
 import {
-  AdviceWidget, AlertsWidget, ConfidenceWidget, FrostWidget, HeroWidget, LongTermWidget,
+  AdviceWidget, AlertsWidget, ConfidenceWidget, DiseaseWidget, FrostWidget, HeroWidget,
+  LongTermWidget,
   MapWidget, NearTermWidget, NowcastWidget, OutlookWidget, RadarWidget, Rain24Widget,
   RainNextWidget, SoilWidget, SummaryWidget, TempWidget, WindWidget, WorkWidget,
   type WidgetProps,
@@ -55,6 +56,7 @@ import {
   useAllLocationOutlooks,
 } from '../state/allLocations';
 import { useAllLocationSoil } from '../state/soilStations';
+import { useAllLocationDisease } from '../state/disease';
 import {
   arrangeWidgets, neededSources, OVERVIEW_WIDGETS, widgetRows, widgetSettings,
 } from '../core/overview';
@@ -77,6 +79,7 @@ const WIDGET_VIEWS: Record<string, (props: WidgetProps) => React.ReactElement | 
   outlook: OutlookWidget,
   confidence: ConfidenceWidget,
   soil: SoilWidget,
+  disease: DiseaseWidget,
   map: MapWidget,
   // The selected location's own cards. They take the same props and ignore them:
   // their subject is `usePrefs().location`, not the rows.
@@ -92,7 +95,7 @@ const WIDGET_LABEL: Record<string, AppStringKey> = {
   summary: 'ovSummary', advice: 'ovAdvice', alerts: 'ovAlerts',
   rain24: 'ovRain24', rainNext: 'ovRainNext', temp: 'ovTemp', wind: 'ovWind',
   frost: 'ovFrost', workability: 'ovWork', outlook: 'ovOutlook',
-  confidence: 'ovConfidence', map: 'ovMap', soil: 'ovSoil',
+  confidence: 'ovConfidence', map: 'ovMap', soil: 'ovSoil', disease: 'diseaseTitle',
   hero: 'ovHero', nowcast: 'ovNowcast', radar: 'ovRadar',
   nearTerm: 'ovNearTerm', longTerm: 'ovLongTerm',
 };
@@ -116,6 +119,16 @@ export default function OverviewScreen() {
   // Every field on the account, for the soil widget. One request per sensor, and only
   // once that widget is actually on the page.
   const fields = useAllLocationSoil(sources.has('soil'));
+  // The models per location. One offset for all of them — see `useAllLocationDisease`.
+  //
+  // The device's own offset, which is the one place in this app that uses it. This
+  // page has no forecast context and so no location offset, and the alternative is a
+  // request per place to learn one. It is exact while the grower is in the country
+  // they farm in, which is nearly always; while travelling a day boundary sits off by
+  // the difference, which can move an hour between days. 'Nu' and 'Actueel' use the
+  // location's real offset, so the surfaces a decision is made on are not affected.
+  const deviceOffsetSec = -new Date().getTimezoneOffset() * 60;
+  const disease = useAllLocationDisease(deviceOffsetSec, sources.has('disease'));
 
   const rows = useMemo(
     () =>
@@ -163,7 +176,7 @@ export default function OverviewScreen() {
   const rowsOfWidgets = widgetRows(widgets, wide);
 
   /** Everything a widget gets except its own settings, which differ per widget. */
-  const shared = { rows, alerts, models, nowcasts, fields, onOpen: open };
+  const shared = { rows, alerts, models, nowcasts, fields, disease, onOpen: open };
 
   return (
     <>

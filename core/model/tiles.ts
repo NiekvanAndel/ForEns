@@ -37,10 +37,15 @@ import type { NowcastBar } from '../radar/types';
  * `kpa`, `pf` and `status` arrived with the soil blocks. The first two have no
  * reader-facing alternative — suction is kPa everywhere and pF is a logarithm with no
  * unit at all — and `status` is not a quantity but a level the page names in words.
+ *
+ * `count` came with the disease blocks: days toward a Smith period, a two-day DIV
+ * total. A bare number in the model's own terms, with no unit to convert and no word
+ * to look up. It is not `status` — that one prints a *word*, and printing "2 days" as
+ * "Beregen nu" is the mistake this kind exists to prevent.
  */
 export type TileKind =
   | 'temp' | 'wind' | 'mm' | 'percent' | 'direction'
-  | 'kpa' | 'pf' | 'status';
+  | 'kpa' | 'pf' | 'status' | 'count';
 
 export interface Tile {
   /** Stable within a grid, for React's key. */

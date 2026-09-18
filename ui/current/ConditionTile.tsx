@@ -76,6 +76,10 @@ export function tileReading(
     // asking the reader to know the API's own numbering.
     case 'status':
       return { value: ta(soilStatusKey(tile.value), units.lang), unit: '' };
+    // A figure in a model's own terms — days, a DIV total. No unit to convert, and
+    // deliberately not `status`, which prints a word.
+    case 'count':
+      return { value: String(Math.round(tile.value)), unit: '' };
   }
 }
 

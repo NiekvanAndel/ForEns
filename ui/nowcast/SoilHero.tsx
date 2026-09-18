@@ -54,7 +54,7 @@ import { fmtDecimal, fmtTempValue, ta, tempUnitLabel } from '../../core/i18n';
 import type { Indicator } from '../../core/model/indicators';
 import { placementContext } from '../../core/model/soilTiles';
 import type { Placement, SoilStatus } from '../../core/model/soil';
-import { soilStatusInk } from '../soilStatusInk';
+import { soilStatusBg, soilStatusInk } from '../soilStatusInk';
 import { IndicatorBadge } from '../indicator/IndicatorBadge';
 import type { SoilSample } from '../../core/sources/agroexact';
 
@@ -265,7 +265,7 @@ function StateBar({ indicator }: { indicator: Indicator }) {
         {widths.map((w, i) => (
           <View
             key={i}
-            style={{ flex: w, backgroundColor: soilStatusInk(i as SoilStatus, palette, appearance) }}
+            style={{ flex: w, backgroundColor: soilStatusBg(i as SoilStatus, palette, appearance) }}
           />
         ))}
       </View>

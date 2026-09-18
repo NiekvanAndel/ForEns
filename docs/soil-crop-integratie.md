@@ -119,6 +119,14 @@ Geen van deze punten raakt de bestaande webapp-pagina's.
 > | `leaf_wet` | bladnat, ook niet als proxy — en daarmee de vochturen |
 > | `soil` (grondsoortnaam) | de herkomstregel blijft "Ui · 20 cm"; **en** de kleurzones op waterpercentage en bijvulruimte, want die grenzen zijn pas een toestand als de grondsoort bekend is |
 >
+> **Bij IRS na te vragen, vóór release:**
+>
+> | wat | waarom |
+> | --- | --- |
+> | De **DIV-tabel** van Cercospora | `DIV_TABLE` is de gangbare reproductie van Shane & Teng en niet tegen de publicatie van IRS gehouden. Een tabel die te laag scoort vertelt een teler dat zijn biet veilig is terwijl dat niet zo is. |
+> | De **DIV-drempel** (`DIV_RECENT_THRESHOLD`, nu 6 over twee dagen) | Zelfde reden: het is het getal waarop gewaarschuwd wordt. |
+> | De **Mills-tabel** en de NL-**Beaumont**-parameters | Stond al op de lijst van blad 2; nog steeds open. |
+>
 > `field_capacity` staat hier niet meer bij: die is op 18 september vastgezet op
 > **10 kPa** als app-brede standaard — pF 2,0, de leerboekdefinitie en de lijn die de
 > webapp ook trekt. Een per-perceel-waarde blijft wenselijk zodra `soil` er is, want
@@ -903,6 +911,45 @@ Beide modellen staan op 'Nu' in één `DiseaseCard`, met een badge per model dat
 gewas van toepassing is. Een perceel draagt één gewas, dus in de praktijk is dat één
 badge — maar de vorm is een lijst, zodat het volgende model een regel is en geen
 herschrijving.
+
+### Kleuren, gewassen, en de modellen op drie schermen
+
+**De lichte kleuren kwamen uit het ontwerp zelf.** De klacht was terecht: mijn geel en
+oranje waren allebei middendonker en liepen in elkaar over. De zones van blad 3
+(`#5C9452`, `#F9EB39`, `#D9871F`, `#C0433F`) spreiden ook de *lichtheid* — een heel
+licht geel naast een middeldonker oranje — en dat is wat ze op een balkje van zes punten
+uit elkaar houdt.
+
+Dat dwong een splitsing die ik eerder had afgewezen: **een vulling en een inkt zijn
+verschillende rollen.** Een vulling wordt gelezen tegen zijn buren, dus moeten de vijf
+onderling verschillen. Een inkt wordt gelezen tegen de kaart, dus moet hij de
+contrastvloer halen. Eén tabel die beide deed, betaalde dat in de vullingen: een geel
+dat als tekst leesbaar is, is een olijfgroen. Nu zijn de vullingen die van het ontwerp
+en de inkten de donkere varianten, met dezelfde tint.
+
+**Gewassen per locatie** (`core/model/crops.ts`), meervoud vanaf het begin:
+
+| | |
+| --- | --- |
+| Bodemsensor | **één** gewas, uit `/soilstations/` — de teler heeft het de webapp al verteld |
+| Weerstation | **meerdere**, straks uit de profielwizard; nu aardappel, ui en suikerbiet als *aanname*, en het gemarkeerd als aanname |
+| Gewone plek | geen — een model over een onbekend gewas is een gok met een naam erop |
+
+Het meervoud staat er met opzet nu al in. "Eén gewas" later tot "meerdere" ombouwen
+raakt elk model, elke kaart en elke opgeslagen voorkeur; een lijst van één dragen kost
+vandaag niets en maakt de wizard een kwestie van hem vullen.
+
+**`diseasePressure` is het enige pad.** Drie oppervlakken stellen dezelfde vraag — de
+kaart op 'Nu', de blokjes op 'Actueel', de rij per locatie op het overzicht — en de les
+van de neerslagbug is dat een tweede pad binnen een week uit de pas loopt.
+
+**De blokjes zijn afgeleid, dus geen groene stip.** Een Smith-periode is geen meting
+maar een conclusie uit metingen — de derde soort waarde waar blad 1 voor waarschuwde.
+De kleur van de toestand draagt wat ertoe doet; de stip blijft van instrumenten.
+
+`TileKind` kreeg daarvoor `count`: een kaal getal in de termen van het model. Nadrukkelijk
+niet `status`, want die drukt een *woord* af, en "2 dagen" afdrukken als "Beregen nu" is
+precies de fout die deze soort voorkomt.
 
 ## Nog open
 

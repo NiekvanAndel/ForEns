@@ -11,7 +11,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  SOIL_FIELD_CAPACITY_INK, soilScale, soilStatusColor, type SoilAppearance,
+  SOIL_FIELD_CAPACITY_INK, soilFillScale, soilScale, soilStatusColor, soilStatusFill,
+  type SoilAppearance,
 } from '../core/model/soilStatusColor';
 
 /** The ground each appearance prints on: the card, not the page behind it. */
@@ -66,5 +67,49 @@ describe('the soil scale', () => {
     // the colour of a field that is fine.
     expect(soilStatusColor(null, 'light')).toBeNull();
     expect(soilStatusColor(undefined, 'dark')).toBeNull();
+  });
+});
+
+/** How far apart two hues are on the wheel, in degrees. */
+function hueOf(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => c / 255) as
+    [number, number, number];
+  const mx = Math.max(r, g, b);
+  const d = mx - Math.min(r, g, b);
+  if (!d) return 0;
+  const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+const apart = (a: string, b: string) => {
+  const d = Math.abs(hueOf(a) - hueOf(b));
+  return Math.min(d, 360 - d);
+};
+
+describe('the fills, which are read against each other', () => {
+  it.each(APPEARANCES)('has five that are all different in %s', (appearance) => {
+    const fills = soilFillScale(appearance);
+    expect(fills).toHaveLength(5);
+    expect(new Set(fills).size).toBe(5);
+  });
+
+  it.each(APPEARANCES)('keeps yellow and orange apart in %s', (appearance) => {
+    // The pair that has to work hardest, and the one that failed: two mid-dark stops
+    // twenty degrees apart merged into one colour on a bar six points high.
+    const [, , yellow, orange] = soilFillScale(appearance);
+    expect(apart(yellow!, orange!)).toBeGreaterThanOrEqual(15);
+    // And lightness does the rest of the work — the design's own zones spread it
+    // deliberately, which is why they read where a readable pair did not.
+    expect(Math.abs(luminance(yellow!) - luminance(orange!))).toBeGreaterThan(0.15);
+  });
+
+  it('is not the same table as the inks', () => {
+    // A fill that can be read as text is a fill that gave up its distinction to do it.
+    expect(soilStatusFill(1, 'light')).not.toBe(soilStatusColor(1, 'light'));
+  });
+
+  it('has no fill for a state nobody knows', () => {
+    expect(soilStatusFill(null, 'light')).toBeNull();
   });
 });

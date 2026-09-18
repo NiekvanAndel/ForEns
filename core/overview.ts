@@ -46,7 +46,9 @@ export type OverviewSource =
   /** The 51 members' daily rainfall per location — how much they disagree. */
   | 'ensemble'
   /** The latest reading of every soil sensor on the account — `useAllLocationSoil`. */
-  | 'soil';
+  | 'soil'
+  /** A week of humid hours per location, for the disease models — `useAllLocationDisease`. */
+  | 'disease';
 
 /** How much of a row a widget wants. Two halves sit side by side; a full one does
  *  not, whatever is next to it. */
@@ -164,6 +166,10 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   // thresholds are the fields' own, so the colours mean the same on every row while
   // the numbers behind them differ per field.
   { id: 'soil', size: 'full', needs: ['soil'], options: ['limit'] },
+  // Which field to walk, rather than which to water. Its own widget because it answers
+  // a different question from the soil one and can apply where that one does not — a
+  // weather pole with crops under it has disease pressure and no suction.
+  { id: 'disease', size: 'full', needs: ['disease'], options: ['limit'] },
   { id: 'workability', size: 'full', needs: ['conditions', 'outlook'], options: ['limit'] },
   // The coming days, a row per location, each a way into that location's own page.
   // The ensemble as well as the forecast: each day carries the members' rain chance

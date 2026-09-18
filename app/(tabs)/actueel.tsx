@@ -71,6 +71,8 @@ import { useLocationSoil } from '../../state/soilStations';
 import { arrangeTiles, DEFAULT_TILE_LAYOUT } from '../../core/prefs';
 import { modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
 import { placementContext, soilTiles, type SoilTileLabels } from '../../core/model/soilTiles';
+import { diseaseTiles, type DiseaseTileLabels } from '../../core/model/diseaseTiles';
+import { useDisease } from '../../state/disease';
 import { measurementTimeLabel } from '../../core/model/station';
 import { ta } from '../../core/i18n';
 
@@ -129,6 +131,28 @@ function CurrentPage() {
     [prefs.lang, soil.placement]
   );
 
+  /**
+   * The disease models that apply to what grows here.
+   *
+   * The same hook 'Nu' reads, so the badge there and the blocks here cannot disagree —
+   * that is the whole reason `diseasePressure` exists as one path.
+   */
+  const disease = useDisease({
+    station: station ?? null,
+    sensor: soil.station,
+    offsetSec,
+  });
+
+  const diseaseLabels: DiseaseTileLabels = useMemo(
+    () => ({
+      smith: ta('smithTitle', prefs.lang),
+      div: ta('divTitle', prefs.lang),
+      smithWindow: ta('diseaseSmithWindow', prefs.lang),
+      divWindow: ta('diseaseDivWindow', prefs.lang),
+    }),
+    [prefs.lang]
+  );
+
   // Every block the app can draw, before the reader's arrangement is applied. The
   // editor lists these; the grid draws the arrangement of them.
   //
@@ -139,8 +163,13 @@ function CurrentPage() {
     () => [
       ...(model ? modelTiles(model, labels, nowcast, precipMeasured) : []),
       ...(soil.placement ? soilTiles(soil.placement, soil.latest, soilLabels) : []),
+      ...diseaseTiles(disease.readings, diseaseLabels),
     ],
-    [model, labels, nowcast, precipMeasured, soil.placement, soil.latest, soilLabels]
+    [
+      model, labels, nowcast, precipMeasured,
+      soil.placement, soil.latest, soilLabels,
+      disease.readings, diseaseLabels,
+    ]
   );
   /**
    * Measured blocks first, before the reader's own order is applied.

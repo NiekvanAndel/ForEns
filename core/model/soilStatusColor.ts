@@ -21,11 +21,20 @@
  * `tests/soilStatusColor.test.ts` fails if an edit drops one under it or lets two
  * stops collapse into each other again.
  *
- * ## Fills come from these too
+ * ## Two roles, because a bar and a number want different things
  *
- * A chart's zones are these same inks at low opacity, so the band behind the line and
- * the figure above it cannot disagree about what state they describe. That is why the
- * table holds one ink per stop rather than a separate pale set.
+ * A **fill** — a bar, a chart zone, a chip — is read against its neighbours, so what
+ * matters is that the five are unmistakably different from each other. An **ink** — a
+ * figure printed on a card — is read against the card, so what matters is that it
+ * clears the contrast floor.
+ *
+ * One table tried to do both and the light-mode fills paid for it: a yellow dark
+ * enough to read as text is an olive, and beside a readable orange the two merged.
+ * The design system's own soil zones solve it by spreading *lightness* as well as hue
+ * — a very light yellow next to a mid orange — which reads instantly as a bar and
+ * would be unreadable as a number. So the fills are the design's, the inks are
+ * darkened to clear 3:1, and both keep the same hue so a zone and the figure over it
+ * still describe the same state.
  */
 import type { SoilStatus } from './soil';
 
@@ -39,6 +48,37 @@ export type SoilAppearance = 'light' | 'dark';
 export const SOIL_FIELD_CAPACITY_INK: Record<SoilAppearance, string> = {
   light: '#7F8FA3',
   dark: '#6E8199',
+};
+
+/** The same stop as a fill — lighter, because a bar is read against its neighbours. */
+export const SOIL_FIELD_CAPACITY_FILL: Record<SoilAppearance, string> = {
+  light: '#C9CDD2',
+  dark: '#4A5D75',
+};
+
+/**
+ * The fills: the design system's own soil zones.
+ *
+ * Taken from the proposal's own charts rather than derived, so a grower moving between
+ * the web app and this one meets the same four colours. The light set spreads lightness
+ * as well as hue — `#F9EB39` is very light and `#D9871F` is mid — and that spread is
+ * what makes yellow and orange tell apart at a glance in a bar six points high.
+ */
+const FILLS: Record<SoilAppearance, Record<SoilStatus, string>> = {
+  light: {
+    0: '#5C9452',
+    1: '#F9EB39',
+    2: '#D9871F',
+    3: '#C0433F',
+  },
+  // On navy the same hues, lifted. There is more room above the floor here, so these
+  // are already far enough apart without the light set's extremes.
+  dark: {
+    0: '#7BB570',
+    1: '#E8D14E',
+    2: '#E8A94E',
+    3: '#E8817D',
+  },
 };
 
 const SCALE: Record<SoilAppearance, Record<SoilStatus, string>> = {
@@ -76,7 +116,29 @@ export function soilStatusColor(
   return SCALE[appearance][level] ?? null;
 }
 
-/** Every stop, wet end first — what a legend and the tests walk. */
+/**
+ * The fill for a state — a bar, a chart zone, a chip. Null where there is no state.
+ *
+ * Never for text. `#F9EB39` on a white card is a yellow nobody can read, which is
+ * exactly what makes it a good bar segment beside an orange one.
+ */
+export function soilStatusFill(
+  level: SoilStatus | null | undefined,
+  appearance: SoilAppearance
+): string | null {
+  if (level == null) return null;
+  return FILLS[appearance][level] ?? null;
+}
+
+/** Every ink, wet end first — what the tests walk for legibility. */
 export function soilScale(appearance: SoilAppearance): string[] {
   return [SOIL_FIELD_CAPACITY_INK[appearance], ...([0, 1, 2, 3] as const).map((l) => SCALE[appearance][l])];
+}
+
+/** Every fill, wet end first — what the tests walk for mutual distinction. */
+export function soilFillScale(appearance: SoilAppearance): string[] {
+  return [
+    SOIL_FIELD_CAPACITY_FILL[appearance],
+    ...([0, 1, 2, 3] as const).map((l) => FILLS[appearance][l]),
+  ];
 }

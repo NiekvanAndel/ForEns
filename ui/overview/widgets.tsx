@@ -55,8 +55,9 @@ import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
 import { useAgroAuth } from '../../state/auth';
 import type { LocationSoil } from '../../state/soilStations';
+import type { LocationDisease } from '../../state/disease';
 import { rankFieldsByDryness, type SoilStatus } from '../../core/model/soil';
-import { soilStatusInk } from '../soilStatusInk';
+import { soilStatusBg, soilStatusInk } from '../soilStatusInk';
 import { agroIntegration } from '../../core/prefs';
 import { greetingFor, greetingName, type GreetingKind } from '../../core/greeting';
 import { alertValueLabel } from '../settings/UserAlertList';
@@ -84,6 +85,9 @@ export interface WidgetProps {
   /** Every saved location that has a soil sensor, with its latest reading. Empty on an
    *  account with none, and while the source is switched off. */
   fields: LocationSoil[];
+  /** The disease models that apply at each saved location. Empty where none do, and
+   *  while the source is switched off. */
+  disease: LocationDisease[];
   /** One per row, in the same order; null where nothing is worth saying. */
   alerts: (WeatherAlert | null)[];
   /** The observation model per saved location, same order again. What a widget
@@ -1261,7 +1265,7 @@ export function SoilWidget({ fields, settings, onOpen }: WidgetProps) {
           <View
             style={{
               width: 3, height: 20, borderRadius: 2,
-              backgroundColor: soilStatusInk(level, palette, appearance),
+              backgroundColor: soilStatusBg(level, palette, appearance),
             }}
           />
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -1306,6 +1310,84 @@ export function SoilWidget({ fields, settings, onOpen }: WidgetProps) {
               —
             </Text>
           )}
+        </Pressable>
+      ))}
+    </WidgetCard>
+  );
+}
+
+/**
+ * Disease pressure across every field, worst first.
+ *
+ * The overview's question applied to the models: not "what is the weather doing" but
+ * "which of my fields needs walking". A grower with eight places reads the top line and
+ * knows where to start.
+ *
+ * Every figure here is **derived, not measured** — a Smith period is a conclusion drawn
+ * from readings — so nothing on this widget carries the green dot, whatever instrument
+ * produced the hours behind it. The state's colour does the work instead, and the
+ * height the humidity was read at is on the line, because a period found at 10 cm is a
+ * different claim from one found at 1.50 m.
+ */
+export function DiseaseWidget({ disease, settings, onOpen }: WidgetProps) {
+  const { palette, appearance } = useTheme();
+  const { prefs } = usePrefs();
+
+  const rows = disease
+    .flatMap((d) => d.readings.map((reading) => ({ ...d, reading })))
+    .sort((a, b) => b.reading.level - a.reading.level || b.reading.value - a.reading.value)
+    .slice(0, settings.limit);
+
+  // Nothing applies anywhere: no card, the same rule the alerts widget follows.
+  if (!rows.length) return null;
+
+  return (
+    <WidgetCard title={ta('diseaseTitle', prefs.lang)}>
+      {rows.map(({ name, index, reading }, i) => (
+        <Pressable
+          key={`${index}-${reading.model}-${reading.crop}`}
+          onPress={() => onOpen(index, 'index')}
+          accessibilityRole="button"
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: space[3],
+            paddingVertical: 9,
+            borderTopWidth: i > 0 ? 1 : 0,
+            borderTopColor: palette.hairlineSoft,
+          }}
+        >
+          <View
+            style={{
+              width: 3, height: 20, borderRadius: 2,
+              backgroundColor: soilStatusBg(reading.level as SoilStatus, palette, appearance),
+            }}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="label" color={palette.inkHeading} numberOfLines={1}>
+              {name}
+            </Text>
+            <Text variant="caption" color={palette.muted} numberOfLines={1}>
+              {[
+                ta(reading.model === 'smith' ? 'smithTitle' : 'divTitle', prefs.lang),
+                reading.crop,
+                ta(reading.source === 'canopy10cm' ? 'soilCanopyLabel' : 'smithAt150', prefs.lang),
+              ].join(' · ')}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+            <Text
+              variant="stat"
+              color={soilStatusInk(reading.level as SoilStatus, palette, appearance)}
+              tabular
+              style={{ fontSize: 17 }}
+            >
+              {reading.value}
+            </Text>
+            {reading.limit != null ? (
+              <Text variant="caption" color={palette.muted} tabular>
+                {`/ ${reading.limit}`}
+              </Text>
+            ) : null}
+          </View>
         </Pressable>
       ))}
     </WidgetCard>

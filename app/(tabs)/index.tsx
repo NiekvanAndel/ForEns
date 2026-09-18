@@ -30,12 +30,11 @@ import { ForecastPreview } from '../../ui/nowcast/ForecastPreview';
 import { DaySheet } from '../../ui/forecast/DaySheet';
 import { usePrefs } from '../../state/prefs';
 import { useForecast } from '../../state/forecast';
-import { useLocationSoil, useSoilCanopyWeek } from '../../state/soilStations';
+import { useLocationSoil } from '../../state/soilStations';
+import { useLocationStation } from '../../state/stations';
 import { waterTensionIndicator } from '../../core/model/indicators';
 import { soilCapabilities } from '../../core/model/soil';
-import { humidHoursFrom, leafWetHours } from '../../core/model/humidHours';
-import { cercospora, cercosporaAppliesTo } from '../../core/model/cercospora';
-import { smith, smithAppliesTo, smithVerdict } from '../../core/model/smith';
+import { useDisease } from '../../state/disease';
 import { DiseaseCard } from '../../ui/nowcast/DiseaseCard';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
@@ -59,6 +58,7 @@ function NowcastPage() {
    * the sensor's own hours have already been merged in.
    */
   const soil = useLocationSoil(location, offsetSec);
+  const station = useLocationStation(location);
   /**
    * The canopy readings, where a PRO stands at this location.
    *
@@ -84,24 +84,18 @@ function NowcastPage() {
    * answer: a field has no weather station, and the model's own past hours reach about
    * a day back where Smith needs two.
    */
-  const crop = soil.station?.crop ?? null;
-  const modelled = smithAppliesTo(crop) || cercosporaAppliesTo(crop);
-  const canopyWeek = useSoilCanopyWeek(soil.station, offsetSec, modelled);
-
-  const disease = useMemo(() => {
-    const { hours, source } = humidHoursFrom([], canopyWeek.hours);
-    // Nothing measured is not "no infection period". With no hours at all the fallback
-    // would name a height nobody read from, and the card would report a quiet week on
-    // the strength of a probe that said nothing.
-    if (!hours.length) return { smith: null, div: null, leafWet: null };
-    return {
-      smith: smithAppliesTo(crop) ? smithVerdict(smith({ hours, source })) : null,
-      div: cercosporaAppliesTo(crop) ? cercospora({ hours, source }) : null,
-      // A supporting figure under whichever model is on screen, and a proxy — so it is
-      // only offered where a model is already being shown.
-      leafWet: modelled ? leafWetHours(hours) : null,
-    };
-  }, [crop, modelled, canopyWeek.hours]);
+  /**
+   * Every disease model that applies to what grows here.
+   *
+   * One hook for both instruments and both kinds of location — a field's own crop from
+   * the API, a weather pole's several from the profile — so the card, the blocks on
+   * 'Actueel' and the overview row cannot drift apart. See `state/disease`.
+   */
+  const disease = useDisease({
+    station: station ?? null,
+    sensor: soil.station,
+    offsetSec,
+  });
 
   const soilHero = useMemo(() => {
     if (!soil.placement || !soil.latest || !model) return null;
@@ -238,7 +232,7 @@ function NowcastPage() {
             {/* What the weather has been doing to the crop. Under the field's own
                 card, because the soil is what the page leads with and this is the
                 consequence of the weather on top of it. */}
-            <DiseaseCard smith={disease.smith} div={disease.div} leafWet={disease.leafWet} />
+            <DiseaseCard pressure={disease} />
 
             <ConditionsHero
               model={model}

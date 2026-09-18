@@ -7,7 +7,9 @@
  * fall back on where a field has no state to show.
  */
 import type { Palette } from '../theme';
-import { soilStatusColor, type SoilAppearance } from '../core/model/soilStatusColor';
+import {
+  soilStatusColor, soilStatusFill, type SoilAppearance,
+} from '../core/model/soilStatusColor';
 import type { SoilStatus } from '../core/model/soil';
 
 export function soilStatusInk(
@@ -17,4 +19,18 @@ export function soilStatusInk(
 ): string {
   // A field the app cannot place must not borrow the colour of one it can.
   return soilStatusColor(level, appearance) ?? palette.hairline;
+}
+
+/**
+ * The same stop as a fill — a bar, a chart zone, a chip.
+ *
+ * Never for text: the light-mode yellow is deliberately too light to read, which is
+ * what makes it tell apart from the orange beside it. See `soilStatusColor`.
+ */
+export function soilStatusBg(
+  level: SoilStatus | null | undefined,
+  palette: Palette,
+  appearance: SoilAppearance
+): string {
+  return soilStatusFill(level, appearance) ?? palette.hairline;
 }

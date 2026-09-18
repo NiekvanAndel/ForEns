@@ -152,8 +152,8 @@ import {
   type SoilSeriesKey,
 } from '../../core/model/soilSeries';
 import { soilThresholdSteps } from '../../core/model/indicators';
-import { soilStatusInk } from '../../ui/soilStatusInk';
-import { SOIL_FIELD_CAPACITY_INK } from '../../core/model/soilStatusColor';
+import { soilStatusBg } from '../../ui/soilStatusInk';
+import { SOIL_FIELD_CAPACITY_FILL } from '../../core/model/soilStatusColor';
 import { kPaToPf, type SoilStatus } from '../../core/model/soil';
 import { SOIL_STEP_MIN } from '../../core/sources/agroexact';
 import type { IconName } from '../../ui/Icon';
@@ -596,15 +596,15 @@ function GraphPage() {
       // that band is off the bottom of the axis — 2 *is* field capacity — so it is
       // only ever drawn on the suction chart.
       ...(p.fieldCapacity != null && !asPf
-        ? [{ at: floor, ink: SOIL_FIELD_CAPACITY_INK[appearance] }]
+        ? [{ at: floor, ink: SOIL_FIELD_CAPACITY_FILL[appearance] }]
         : []),
       {
         at: p.fieldCapacity != null && !asPf ? at(p.fieldCapacity) : floor,
-        ink: soilStatusInk(0, palette, appearance),
+        ink: soilStatusBg(0, palette, appearance),
       },
       ...soilThresholdSteps(p.thresholds).map((t) => ({
         at: at(t.at),
-        ink: soilStatusInk(t.level as SoilStatus, palette, appearance),
+        ink: soilStatusBg(t.level as SoilStatus, palette, appearance),
       })),
     ];
 
