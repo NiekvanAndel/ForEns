@@ -13,6 +13,7 @@ import {
   SPRAY_WIND_MAX, SPRAY_DELTA_T_MIN, SPRAY_DELTA_T_MAX, FROST_BLOSSOM, TSUM_TARGET,
 } from '../core/model/fieldAdvice';
 import { SMITH } from '../core/model/smith';
+import { deriveAlert } from '../core/model/alert';
 import { DIV_HUMIDITY, DIV_RECENT_THRESHOLD } from '../core/model/cercospora';
 import { LEAF_WET_HUMIDITY } from '../core/model/humidHours';
 import { LADDER, SETTLED_HIGH, APPETITE_SHIFT } from '../core/riskLadder';
@@ -58,6 +59,29 @@ describe('every boundary says where it came from', () => {
     for (const t of thresholdsOf('smith')) expect(t.basis).toBe('published');
   });
 
+  it('can be looked up: a legal or published boundary links to its text', () => {
+    // The point of the distinction is that the reader can go and check. A boundary
+    // that claims a law or a paper and then cannot say where it is has claimed
+    // nothing. Practice and this app's own choices have no document to link to,
+    // which is exactly what those two words mean.
+    for (const id of ids) {
+      const spec = THRESHOLDS[id];
+      if (spec.basis !== 'legal' && spec.basis !== 'published') continue;
+      const source = SOURCES[spec.source];
+      expect(source.url, `${id} claims ${spec.basis} but cites no document`).toBeTruthy();
+      expect(source.url?.startsWith('https://'), `${id} source is not a link`).toBe(true);
+    }
+  });
+
+  it('says out loud where a published source and this app disagree', () => {
+    // Two figures deviate from the publication they cite, both deliberately, both
+    // towards caution. Each keeps `app` as its basis and says so in the source's
+    // caveat, so nobody reads them as the published number.
+    expect(THRESHOLDS['leafWet.humidity'].basis).toBe('app');
+    expect(SOURCES['sentelhas-2008'].caveat).toContain('95');
+    expect(SOURCES['bal-gewasbescherming'].caveat).toContain('tien meter');
+  });
+
   it('marks the app own choices, so they can be found and argued with', () => {
     const app = ids.filter((id) => THRESHOLDS[id].basis === 'app');
     expect(app.length).toBeGreaterThan(10);
@@ -74,6 +98,16 @@ describe('the modules read the register, not their own copy', () => {
     expect(SPRAY_DELTA_T_MAX).toBe(8);
     expect(FROST_BLOSSOM).toBe(-2);
     expect(TSUM_TARGET).toBe(180);
+  });
+
+  it('feeds the oldest model in the app, which kept its own numbers longest', () => {
+    // `alert.ts` held literal 60s and 75s until the register existed. It reads them
+    // now, so the figures the significant-weather block fires on are the same ones
+    // the documentation prints.
+    expect(threshold('alert.gust')).toBe(60);
+    expect(threshold('alert.gustHeavy')).toBe(75);
+    expect(threshold('alert.window')).toBe(12);
+    expect(deriveAlert(null, null)).toBeNull();
   });
 
   it('feeds the disease models, whose numbers are somebody else published work', () => {

@@ -23,6 +23,7 @@
  * and with which figure. That is the part that must not be duplicated anywhere — see
  * `docs/push_contract.md`.
  */
+import { threshold } from '../thresholds';
 import { alertPhrases } from '../i18n/alertStrings';
 import { convTemp, convWind, tempUnitLabel, windUnitLabel } from '../i18n/units';
 import type { LangCode } from '../i18n/strings';
@@ -50,22 +51,22 @@ export interface WeatherAlert {
 }
 
 /** Gusts, km/h. KNMI issues code yellow at 75; 60 is "you would want to know". */
-const GUST_ALERT = 60;
-const GUST_HEAVY = 75;
-/** Thunderstorm WMO codes. */
+const GUST_ALERT = threshold('alert.gust');
+const GUST_HEAVY = threshold('alert.gustHeavy');
+/** Thunderstorm WMO codes. Not a boundary anyone chose: the code says what it says. */
 const STORM_CODES = new Set([95, 96, 99]);
-/** Fog WMO codes. */
+/** Fog WMO codes, likewise. */
 const FOG_CODES = new Set([45, 48]);
 /** Precipitation over the alert window, mm. */
-const RAIN_ALERT_MM = 1.0;
-const RAIN_HEAVY_MM = 5.0;
+const RAIN_ALERT_MM = threshold('alert.rain');
+const RAIN_HEAVY_MM = threshold('alert.rainHeavy');
 /** Frost and heat, °C. */
-const FROST_BELOW = 0;
-const HEAT_ABOVE = 30;
+const FROST_BELOW = threshold('alert.frost');
+const HEAT_ABOVE = threshold('alert.heat');
 
 /** How far ahead the hero looks. The design's bars span two hours, but wind and
  *  storm are worth flagging over the rest of the day. */
-const ALERT_WINDOW_HOURS = 12;
+const ALERT_WINDOW_HOURS = threshold('alert.window');
 
 /** Flat bars, used when there is no nowcast profile to draw. */
 const FLAT_BARS = [4, 4, 4, 4];
