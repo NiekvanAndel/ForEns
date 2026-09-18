@@ -860,6 +860,50 @@ De formulering is "ga kijken", nooit "ga spuiten", en het model wordt bij naam g
 Wie weet wat Smith is kan het wegen; wie het niet weet kan het opzoeken. Aan "risico
 hoog" heeft geen van beiden iets.
 
+### Cercospora-DIV, en de bladnat-proxy
+
+**DIV is de tweede klant van de rekenkern, en een andere vorm dan Smith.** Smith stelt
+een ja-of-nee-vraag per dag; DIV geeft de dag een cijfer van 0 tot 7 door het aantal
+vochtige uren te wegen tegen de temperatuur erover — warm en vochtig scoort hoog,
+vochtig en koud scoort niets. Die cijfers stapelen, en de gangbare regel leest de som
+over twee dagen.
+
+> ### ⚠ De tabel moet nog tegen de primaire bron
+>
+> De matrix in `core/model/cercospora.ts` is de Shane & Teng-tabel zoals die gangbaar
+> wordt gereproduceerd. **Hij is niet geverifieerd tegen de eigen publicatie van IRS**,
+> en dat kan deze app van buitenaf ook niet. Het voorstel zegt zelf: geen indicator
+> zonder gepubliceerde bron, en het noemt precies deze soort — de Mills-tabel, de
+> NL-Beaumont-parameters — als iets dat vóór de eerste regel code uit de primaire bron
+> moet komen.
+>
+> Daarom staan de getallen geïsoleerd in `DIV_TABLE` en weet de rest van het bestand er
+> niets van. Wijkt de tabel van IRS af, dan is die constante vervangen de héle
+> wijziging. `tests/cercospora.test.ts` bewaakt ondertussen de eigenschappen die hoe
+> dan ook moeten gelden: méér vochtige uren scoort nooit lager, en beide
+> temperatuuruitersten scoren nul.
+>
+> De fout heeft een richting: een tabel die te laag scoort vertelt een teler dat zijn
+> biet veilig is terwijl dat niet zo is. Daar is tegen ontworpen; de drempel
+> `DIV_RECENT_THRESHOLD` moet om dezelfde reden bevestigd worden.
+
+**De bladnat-proxy** is RV > 95%, zoals afgesproken. Drie dingen eromheen:
+
+- Het is een afleiding van een afleiding — `leaf_wet` zit niet in API v2, en ook daar
+  wordt het afgeleid — dus het draagt het woord *proxy* op het resultaat zelf, waar geen
+  aanroeper omheen kan.
+- De webapp gebruikt neerslag in het laatste uur **of** RV boven 95. Dit is de
+  RV-helft; de regenhelft vraagt het uur van de regenmeter ernaast en een PLUS of PRO
+  kan die leveren. Dat is één plek om aan te passen.
+- **Niet goed genoeg voor Mills.** Het plan is expliciet: appelschurft wacht op een
+  echte bladnatsensor, want Mills telt natte uren rechtstreeks en een proxy die er twee
+  uur naast zit verschuift een infectieperiode.
+
+Beide modellen staan op 'Nu' in één `DiseaseCard`, met een badge per model dat op het
+gewas van toepassing is. Een perceel draagt één gewas, dus in de praktijk is dat één
+badge — maar de vorm is een lijst, zodat het volgende model een regel is en geen
+herschrijving.
+
 ## Nog open
 
 - ~~De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt

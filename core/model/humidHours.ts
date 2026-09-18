@@ -200,3 +200,40 @@ export function humidHoursFrom(
     ? { hours: [...canopy], source: 'canopy10cm' }
     : { hours: [...standard], source: 'standard150cm' };
 }
+
+/**
+ * Leaf wetness, above which the app treats the leaf as wet.
+ *
+ * Ninety-five per cent relative humidity. Set by the grower on 18 September 2026, and
+ * it is the same rule the web app's own derivation uses on its humidity half.
+ */
+export const LEAF_WET_HUMIDITY = 95;
+
+/**
+ * Hours the leaf was probably wet — **a proxy, never a measurement.**
+ *
+ * `leaf_wet` is in the web app's model and not in API v2, and even there it is derived
+ * rather than measured. So this is a derivation of a derivation, and the honesty rules
+ * are the whole reason it is allowed at all: it is carried because it is genuinely
+ * useful, it is labelled a proxy wherever it is shown, and it never earns a green dot.
+ *
+ * The web app's own rule is rain in the last hour **or** humidity above 95%. This is
+ * the humidity half; rainfall would need the gauge's hour alongside, and a PLUS or PRO
+ * could supply it. Adding that clause is a change here and nowhere else.
+ *
+ * **Not good enough for Mills.** The plan is explicit: apple scab waits for a real leaf
+ * wetness sensor, because Mills counts wet hours directly and a proxy that is wrong by
+ * two hours moves an infection period. This feeds the wet-hour counts the other models
+ * use as a supporting figure, and that is its ceiling.
+ */
+export function leafWetHours(hours: readonly HumidHour[]): {
+  hours: number;
+  /** Always true. A field on the result, so no caller can print this figure without
+   *  having had to look at the word "proxy" on the way. */
+  proxy: true;
+} {
+  return {
+    hours: hours.filter((h) => h.humidity != null && h.humidity > LEAF_WET_HUMIDITY).length,
+    proxy: true,
+  };
+}
