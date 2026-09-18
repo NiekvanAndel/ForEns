@@ -79,6 +79,22 @@ tot die tijd is de stilte het eerlijke antwoord.
 
 ## Aan en uit
 
+Sinds 18 september staat de hele basislaag als één lijst in Instellingen →
+**Basislaag**: waarschuwingen, ziektedruk en de vier families, elk met een eigen
+schakelaar. De eerste twee waren er eerder dan die lijst en hadden er dus geen plek
+in; ze horen er wel in, want alle zes zijn de basisversie die iets zegt over één
+locatie.
+
+Ze schrijven niet allemaal hetzelfde veld, en dat is expres: de waarschuwingen sturen
+sinds jaar en dag zowel het blok op 'Nu' als élke melding via `alertsEnabled`, en die
+naar de adviezenlaag verhuizen zou een opgeslagen voorkeur migreren voor de netheid.
+`core/basisLayer.ts` is de lijst en de vertaling; elk onderdeel blijft schrijven wat
+het altijd schreef.
+
+Uitgezet betekent ook hier **niet berekend**. Ziektedruk kost een week meetwaarden per
+locatie — het duurste wat er in de basislaag staat — en wie het uitzet, betaalt er niet
+meer voor.
+
 `prefs.advice` is een `AdviceLayer`: een hoofdschakelaar plus een verzameling
 familie-ids die uit staan, opgeslagen zoals `TileLayout` dat doet.
 
@@ -116,6 +132,24 @@ is zonder de pagina te openen.
   gebied erboven gearceerd, in de eenheid van de lezer. Alleen wanneer het
   spuitvenster aanstaat: wie in Instellingen heeft gezegd niet te spuiten, krijgt geen
   rode lijn door zijn windgrafiek.
+
+## Mogen ze melden?
+
+Apart geregeld, per onderdeel, onder Instellingen → Meldingen → **Basislaag**. De
+waarschuwingen hadden hun eigen schakelaars (regen, wind, vorst) sinds het begin; de
+ziektemodellen en de vier families hadden er geen. Nu wel.
+
+Drie poorten, alle drie open voordat er iets gaat: de lezer heeft erom gevraagd, het
+onderdeel staat aan, en — voor de add-on — de laag is er. Een onderdeel dat uitstaat
+verschijnt niet in de lijst: een schakelaar voor een melding over iets wat de app niet
+uitrekent is een knop zonder iets erachter.
+
+Op de draad gaan ze mee als `agroKinds`, een eigen veld naast `kinds`. Twee redenen:
+geen van deze onderwerpen is een `WeatherAlert`-soort, en `frost` betekent op de twee
+lijsten iets anders — het weer boven een streek tegenover de vorstgrens van één
+perceel, met een natbol erachter. Zie `docs/push_contract.md`; er verstuurt nog niets
+deze onderwerpen, dus wie er een aanzet zegt wat hij wil hebben zodra de dienst het
+kan.
 
 ## Wat er nog niet in zit
 

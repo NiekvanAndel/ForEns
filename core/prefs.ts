@@ -249,6 +249,15 @@ export interface Prefs {
    * own crop. See `core/alerts`.
    */
   userAlerts: UserAlert[];
+  /**
+   * Which of the agro topics may notify, by id — see `core/notifyScope`.
+   *
+   * Opt-in, like every notification here, and stored as what was *asked for* rather
+   * than as what is allowed: whether a topic may actually send also depends on
+   * whether its component is switched on, and freezing that into storage would mean
+   * switching a family back on silently left its notifications off.
+   */
+  notifyAgro: string[];
   notifyRain: boolean;
   notifyWind: boolean;
   notifyFrost: boolean;
@@ -304,6 +313,7 @@ export const DEFAULT_PREFS: Prefs = {
   alertsEnabled: true,
   userAlerts: [],
   pushEnabled: false,
+  notifyAgro: [],
   notifyRain: false,
   notifyWind: false,
   notifyFrost: false,
@@ -400,6 +410,8 @@ export function mergePrefs(stored: unknown): Prefs {
       risk: intel.risk === 'cautious' || intel.risk === 'patient' ? intel.risk : 'normal',
     };
   }
+
+  out.notifyAgro = ids(s.notifyAgro);
 
   const nowCards = s.nowCards as TileLayout | undefined;
   if (nowCards && typeof nowCards === 'object') {

@@ -18,6 +18,7 @@ today — every sync is a no-op: no request, no error, no retry.
   "token": "ExponentPushToken[xxxxxxxx]",
   "platform": "ios",
   "kinds": ["rain", "storm", "wind"],
+  "agroKinds": ["disease", "spray", "area"],
   "places": [{ "name": "Wageningen", "lat": 51.969, "lon": 5.665 }],
   "rules": [
     { "id": "m1k2j3-a7f0", "tileId": "temp", "op": "below", "value": 2, "stationIds": ["1234"] }
@@ -37,6 +38,35 @@ today — every sync is a no-op: no request, no error, no retry.
 - **`kinds`** are the alert kinds from `core/model/alert`, filtered to the ones a
   reader can subscribe to (`PUSH_KINDS`). Sorted, always. Fog and heat are absent
   deliberately — they earn a block on the screen, not a buzz.
+- **`agroKinds`** are the agro topics the device is allowed to be told about. Its own
+  array rather than more entries in `kinds` for two reasons: none of them is a
+  `WeatherAlert` kind, and `frost` means two different things on the two lists — a
+  region's significant weather on one, a field's own frost boundary on the other.
+  Sorted, always, and empty on most devices.
+
+  | id | what it is about | where the rule lives |
+  | --- | --- | --- |
+  | `disease` | a Smith period starting, or cercospora days turning favourable | `core/model/smith.ts`, `core/model/cercospora.ts` |
+  | `spray` | the spray window opening or shutting | `core/model/fieldAdvice.ts` |
+  | `frost` | night, ground or blossom frost at a field, and whether irrigation still helps | idem |
+  | `workability` | the land drying out, or turning too wet to carry a machine | idem |
+  | `fertilise` | frozen ground, emission risk, rain that would leach | idem |
+  | `area` | a joint window across locations, or several fields shut on the same boundary | `core/areaConclusions.ts` |
+  | `risk` | a chance reaching a rung of the escalation ladder | `core/riskLadder.ts` |
+
+  The last two belong to the **AgroIntelligence** add-on. The device only ever sends
+  what a reader is entitled to and has asked for — the tier, the component and the
+  notification switch are three separate gates, all checked in `core/notifyScope.ts`
+  — so the service sends what is in this array and checks no entitlement of its own.
+
+  As with the built-in kinds: **the service must not hold a second copy of these
+  thresholds.** A notification that disagrees with the badge the app draws is the one
+  failure mode that makes people distrust both.
+
+  `risk` is the one topic whose rung depends on a per-device setting: the reader's
+  appetite for risk moves the 30/60/85 ladder by fifteen points either way. It is not
+  in this payload yet, so a service implementing `risk` needs it added — see the open
+  questions at the end.
 - **`places`** are every saved location, rounded to three decimals (~100 m).
 - **`rules`** are thresholds the reader set themselves, from a block on 'Actueel'.
   Empty on most devices. `tileId` identifies the quantity *and its window* — `temp` is
@@ -55,6 +85,10 @@ today — every sync is a no-op: no request, no error, no retry.
   every device at once.
 
 `DELETE <endpoint>/registrations/<url-encoded token>` withdraws it.
+
+Adding `agroKinds` did not bump `v`: a field that is *added* leaves the meaning of
+every existing one intact, and a service that ignores it behaves exactly as it did.
+`v` goes up when a field changes meaning.
 
 Both are **idempotent by token**. A device that registers twice is one row; a device
 that deregisters twice succeeds both times. The client re-sends whenever its digest
@@ -88,6 +122,18 @@ takes `{ lang, tempUnit, windUnit }` — so a service that honours the registrat
 `lang`, `tempUnit` and `windUnit` writes exactly what the block on the device says.
 
 ## Known gaps
+
+- **`risk` has a per-device setting the payload does not carry.** The escalation
+  ladder's rungs (30/60/85) move fifteen points either way with the reader's appetite
+  for risk — `cautious`, `normal`, `patient`, in `core/riskLadder.ts`. A service that
+  implements the `risk` topic needs that field added to the registration, and the
+  device needs it in the digest so changing the setting re-registers. Neither is done,
+  because nothing is sending `risk` yet.
+- **Nothing sends the agro topics yet.** `agroKinds` is what a device is *willing* to
+  be told; no service is computing them and there is no local fallback for them the
+  way `core/notifications.ts` is the fallback for the weather kinds. A reader who
+  switches one on is saying what they want, and it starts working when the service
+  learns to send it.
 
 - **Until the endpoint exists**, alerts are scheduled locally by the device from
   whatever the background task last fetched. iOS grants that window every few hours

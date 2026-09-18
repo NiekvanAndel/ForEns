@@ -18,6 +18,7 @@ import { usePrefs } from './prefs';
 import { stationForLocation } from '../core/model/station';
 import { soilCapabilities } from '../core/model/soil';
 import { agroIntegration } from '../core/prefs';
+import { basisComponentOn } from '../core/basisLayer';
 import {
   AgroAuthError, fetchSoilRange, fetchStationRange, withAgroToken,
 } from '../core/sources/agroexact';
@@ -113,13 +114,17 @@ export function useDiseaseWeek(): { from: string; to: string } {
 
 export function useDisease(input: DiseaseInput): DiseaseState {
   const { station, sensor, enabled = true } = input;
+  const { prefs } = usePrefs();
   const crops = useMemo(
     () => cropsFor({ sensorCrop: sensor?.crop, hasStation: !!station }),
     [sensor?.crop, station]
   );
 
-  // Only where a model actually applies to something growing here.
-  const wanted = enabled && crops.crops.length > 0;
+  // Only where a model actually applies to something growing here — and only where
+  // the reader has left the models on. Switched off means not computed *and not
+  // fetched*: this is a week of measurements per location, which is the most
+  // expensive thing on the basis version's list. See `core/basisLayer`.
+  const wanted = enabled && basisComponentOn(prefs, 'disease') && crops.crops.length > 0;
   const range = useDiseaseWeek();
   const { hours, source, loading } = useDiseaseHours({ ...input, enabled: wanted }, range);
 
@@ -174,6 +179,9 @@ export function useAllLocationDisease(
   enabled: boolean
 ): LocationDisease[] {
   const { prefs } = usePrefs();
+  // The same switch the location's own pages read, applied once here rather than at
+  // every caller: with the models off this page asks for nothing on their behalf.
+  const on = enabled && basisComponentOn(prefs, 'disease');
   const auth = useAgroAuth();
   const { data: stations } = useAgroStations();
   const { data: sensors } = useAgroSoilStations();
@@ -204,7 +212,7 @@ export function useAllLocationDisease(
       queryKey: diseaseKey(station?.id ?? null, sensor?.id ?? null, range.from, range.to),
       // Nothing is fetched where no model applies: an account of onion fields costs
       // no requests at all.
-      enabled: enabled && auth.status === 'connected' && crops.crops.length > 0
+      enabled: on && auth.status === 'connected' && crops.crops.length > 0
         && (!!sensor || !!station),
       staleTime: DISEASE_STALE_MS,
       retry: (count: number, error: Error) =>

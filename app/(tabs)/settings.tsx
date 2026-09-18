@@ -51,11 +51,15 @@ import { enablePush, pushEndpoint } from '../../state/push';
 import { useForecast } from '../../state/forecast';
 import { t, ta, LANG_CODES, tempUnitLabel, windUnitLabel } from '../../core/i18n';
 import type { AppStringKey, LangCode } from '../../core/i18n';
+import { agroIntegration, type RiskAppetite, type ThemeMode } from '../../core/prefs';
 import {
-  adviceFamilyOn, agroIntegration, toggleAdviceFamily,
-  type RiskAppetite, type ThemeMode,
-} from '../../core/prefs';
-import { ADVICE_FAMILIES, type AdviceFamily } from '../../core/model/fieldAdvice';
+  BASIS_COMPONENTS, basisComponentOn, isAdviceComponent, toggleBasisComponent,
+  type BasisComponent,
+} from '../../core/basisLayer';
+import {
+  BASIS_NOTIFY_TOPICS, INTEL_NOTIFY_TOPICS, notifyRequested, toggleNotifyTopic,
+  type NotifyTopic,
+} from '../../core/notifyScope';
 import type { FontSizePref, PresUnit, TempUnit, WindUnit } from '../../core/i18n/units';
 
 const APP_VERSION = '0.1';
@@ -83,17 +87,25 @@ const PARENT: Partial<Record<Page, Page>> = {
  * spraying is a design decision and that module is pure — it holds no words and no
  * colours, and an icon name is both.
  */
-const ADVICE_ROWS: readonly {
-  family: AdviceFamily;
-  icon: string;
-  label: AppStringKey;
-  hint: AppStringKey;
-}[] = [
-  { family: 'spray', icon: 'spray-bottle', label: 'adviceSpray', hint: 'adviceSprayHint' },
-  { family: 'frost', icon: 'snowflake', label: 'adviceFrost', hint: 'adviceFrostHint' },
-  { family: 'workability', icon: 'tractor', label: 'adviceWork', hint: 'adviceWorkHint' },
-  { family: 'fertilise', icon: 'plant', label: 'adviceFert', hint: 'adviceFertHint' },
-];
+const BASIS_ROWS: Record<BasisComponent, { icon: string; label: AppStringKey; hint: AppStringKey }> = {
+  alerts: { icon: 'warning', label: 'basisAlerts', hint: 'basisAlertsHint' },
+  disease: { icon: 'drop-half', label: 'diseaseTitle', hint: 'basisDiseaseHint' },
+  spray: { icon: 'spray-bottle', label: 'adviceSpray', hint: 'adviceSprayHint' },
+  frost: { icon: 'snowflake', label: 'adviceFrost', hint: 'adviceFrostHint' },
+  workability: { icon: 'tractor', label: 'adviceWork', hint: 'adviceWorkHint' },
+  fertilise: { icon: 'plant', label: 'adviceFert', hint: 'adviceFertHint' },
+};
+
+/** What each notifiable topic is called under Meldingen, and what it would say. */
+const NOTIFY_ROWS: Record<NotifyTopic, { icon: string; label: AppStringKey; hint: AppStringKey }> = {
+  disease: { icon: 'drop-half', label: 'diseaseTitle', hint: 'notifyDiseaseHint' },
+  spray: { icon: 'spray-bottle', label: 'adviceSpray', hint: 'notifySprayHint' },
+  frost: { icon: 'snowflake', label: 'adviceFrost', hint: 'notifyFieldFrostHint' },
+  workability: { icon: 'tractor', label: 'adviceWork', hint: 'notifyWorkHint' },
+  fertilise: { icon: 'plant', label: 'adviceFert', hint: 'notifyFertHint' },
+  area: { icon: 'stack', label: 'areaTitle', hint: 'notifyAreaHint' },
+  risk: { icon: 'chart-line', label: 'riskTitle', hint: 'notifyRiskHint' },
+};
 
 const LANG_NAMES: Record<LangCode, string> = {
   nl: 'Nederlands', en: 'English', de: 'Deutsch', fr: 'Français', es: 'Español',
@@ -103,7 +115,7 @@ export default function SettingsScreen() {
   const { palette } = useTheme();
   const insets = useSafeAreaInsets();
   const pagePadding = usePagePadding();
-  const { prefs, setPref } = usePrefs();
+  const { prefs, setPref, setPrefs } = usePrefs();
   const { refresh } = useForecast();
   const [page, setPage] = useState<Page | null>(null);
 
@@ -147,10 +159,8 @@ export default function SettingsScreen() {
 
   // The index row answers "what is this set to?" without opening it: off, or how many
   // of the four families still speak.
-  const adviceOn = ADVICE_FAMILIES.filter((f) => adviceFamilyOn(prefs.advice, f)).length;
-  const adviceLabel = prefs.advice.enabled
-    ? `${adviceOn}/${ADVICE_FAMILIES.length}`
-    : ta('adviceOff', prefs.lang);
+  const basisOn = BASIS_COMPONENTS.filter((c) => basisComponentOn(prefs, c)).length;
+  const adviceLabel = `${basisOn}/${BASIS_COMPONENTS.length}`;
 
   /**
    * Turning push on asks iOS for permission, and there are three answers, not two.
@@ -229,7 +239,7 @@ export default function SettingsScreen() {
             />
             <NavRow
               icon="plant"
-              label={ta('adviceSettings', prefs.lang)}
+              label={ta('basisLayer', prefs.lang)}
               value={adviceLabel}
               onPress={() => { tap(); setPage('advice'); }}
             />
@@ -475,28 +485,31 @@ export default function SettingsScreen() {
         title={ta('notifications', prefs.lang)}
         onClose={() => setPage(null)}
       >
-        {/* The outer layer: whether there is anything to notify about at all. With
-            this off the block goes and so does every notification, which is why it
-            is a group of its own above the rest rather than a fourth toggle in
-            among them. */}
-        <Group label={ta('settingsInApp', prefs.lang)}>
-          <Row
-            icon="warning"
-            label={ta('alertBlocks', prefs.lang)}
-            hint={ta('alertBlocksHint', prefs.lang)}
-            last
-          >
-            <Toggle
-              on={prefs.alertsEnabled}
-              onChange={(v) => { tap(); setPref('alertsEnabled', v); }}
-              label={ta('alertBlocks', prefs.lang)}
-            />
-          </Row>
-        </Group>
+        {/* The warnings' own switch used to sit here, doing double duty: it decides
+            both whether the block appears on 'Nu' and whether anything is ever sent.
+            It belongs with the other things the basis version says, so it moved —
+            and this page says so rather than leaving a reader wondering where the
+            settings went. See `core/basisLayer`. */}
+        {!prefs.alertsEnabled ? (
+          <>
+            <Card pad={0}>
+              <NavRow
+                icon="warning"
+                label={ta('basisAlerts', prefs.lang)}
+                value={ta('adviceOff', prefs.lang)}
+                last
+                onPress={() => { tap(); setPage('advice'); }}
+              />
+            </Card>
+            <Text variant="caption" color={palette.muted} align="center" style={{ lineHeight: 18 }}>
+              {ta('alertsOffNote', prefs.lang)}
+            </Text>
+          </>
+        ) : null}
 
-        {/* The inner one, and everything it governs. Hidden rather than disabled
-            while the block is off: a row of greyed switches invites tapping at
-            something that cannot move, and the group above says why it is gone. */}
+        {/* Everything the warnings govern. Hidden rather than disabled while they are
+            off: a row of greyed switches invites tapping at something that cannot
+            move, and the row above says where it went. */}
         {prefs.alertsEnabled ? (
           <>
             <Group label={ta('pushNotifications', prefs.lang)}>
@@ -555,6 +568,72 @@ export default function SettingsScreen() {
               </Row>
             </Group>
 
+            {/* And everything the app has learned to say since the warnings: the
+                disease models, the four field families, and — where the add-on is
+                licensed — the area conclusions and the chances.
+
+                Only the components that are actually on are listed. A switch that
+                governs a notification for something the app is not working out would
+                be a control with nothing behind it, and the note underneath says so
+                rather than leaving a gap in the list unexplained. */}
+            {BASIS_NOTIFY_TOPICS.some((t) => basisComponentOn(prefs, t as BasisComponent)) ? (
+              <Group label={ta('basisLayer', prefs.lang)}>
+                {BASIS_NOTIFY_TOPICS
+                  .filter((t) => basisComponentOn(prefs, t as BasisComponent))
+                  .map((topic, i, shown) => {
+                    const row = NOTIFY_ROWS[topic];
+                    return (
+                      <Row
+                        key={topic}
+                        icon={row.icon}
+                        label={ta(row.label, prefs.lang)}
+                        hint={ta(row.hint, prefs.lang)}
+                        last={i === shown.length - 1}
+                      >
+                        <Toggle
+                          on={notifyRequested(prefs, topic)}
+                          onChange={() => {
+                            tap();
+                            setPref('notifyAgro', toggleNotifyTopic(prefs.notifyAgro, topic));
+                          }}
+                          label={ta(row.label, prefs.lang)}
+                        />
+                      </Row>
+                    );
+                  })}
+              </Group>
+            ) : null}
+
+            {prefs.agroIntel.enabled ? (
+              <Group label={ta('agroIntelTitle', prefs.lang)}>
+                {INTEL_NOTIFY_TOPICS.map((topic, i) => {
+                  const row = NOTIFY_ROWS[topic];
+                  return (
+                    <Row
+                      key={topic}
+                      icon={row.icon}
+                      label={ta(row.label, prefs.lang)}
+                      hint={ta(row.hint, prefs.lang)}
+                      last={i === INTEL_NOTIFY_TOPICS.length - 1}
+                    >
+                      <Toggle
+                        on={notifyRequested(prefs, topic)}
+                        onChange={() => {
+                          tap();
+                          setPref('notifyAgro', toggleNotifyTopic(prefs.notifyAgro, topic));
+                        }}
+                        label={ta(row.label, prefs.lang)}
+                      />
+                    </Row>
+                  );
+                })}
+              </Group>
+            ) : null}
+
+            <Text variant="caption" color={palette.muted} style={{ paddingHorizontal: 6, lineHeight: 18 }}>
+              {ta('notifyAgroNote', prefs.lang)}
+            </Text>
+
             {/* The reader's own thresholds, made from a block on 'Actueel'. Listed
                 here and not there: a list of rules belongs with the other
                 notification settings, and the page the weather is on is no place to
@@ -575,15 +654,16 @@ export default function SettingsScreen() {
         ) : null}
       </SubjectPage>
 
-      {/* ── Adviezen ─────────────────────────────────────────────────────────── */}
+      {/* ── Basislaag ────────────────────────────────────────────────────────── */}
       <SubjectPage
         visible={page === 'advice'}
-        title={ta('adviceSettings', prefs.lang)}
+        title={ta('basisLayer', prefs.lang)}
         onClose={() => setPage(null)}
       >
-        {/* The outer layer, as on Meldingen: whether the app draws conclusions at
-            all. Somebody who wants the readings and nothing else says so here, and
-            the four families below go with it. */}
+        {/* The master switch over everything the app *concludes*. The warnings sit
+            outside it: they are the oldest thing on this page, they have governed
+            notifications since before this list existed, and they keep their own
+            field — see `core/basisLayer`. */}
         <Group label={ta('settingsInApp', prefs.lang)}>
           <Row
             icon="plant"
@@ -599,30 +679,31 @@ export default function SettingsScreen() {
           </Row>
         </Group>
 
-        {/* Hidden rather than greyed while the layer is off — a row of switches that
-            cannot move invites tapping at nothing, and the group above says why. */}
-        {prefs.advice.enabled ? (
-          <Group label={ta('adviceParts', prefs.lang)}>
-            {ADVICE_ROWS.map((row, i) => (
-              <Row
-                key={row.family}
-                icon={row.icon}
-                label={ta(row.label, prefs.lang)}
-                hint={ta(row.hint, prefs.lang)}
-                last={i === ADVICE_ROWS.length - 1}
-              >
-                <Toggle
-                  on={adviceFamilyOn(prefs.advice, row.family)}
-                  onChange={() => {
-                    tap();
-                    setPref('advice', toggleAdviceFamily(prefs.advice, row.family));
-                  }}
+        {/* Every component of the basis version in one list. A derived one is hidden
+            rather than greyed while the master is off — a row of switches that cannot
+            move invites tapping at nothing, and the group above says why it is gone. */}
+        <Group label={ta('adviceParts', prefs.lang)}>
+          {BASIS_COMPONENTS
+            .filter((id) => !isAdviceComponent(id) || prefs.advice.enabled)
+            .map((id, i, shown) => {
+              const row = BASIS_ROWS[id];
+              return (
+                <Row
+                  key={id}
+                  icon={row.icon}
                   label={ta(row.label, prefs.lang)}
-                />
-              </Row>
-            ))}
-          </Group>
-        ) : null}
+                  hint={ta(row.hint, prefs.lang)}
+                  last={i === shown.length - 1}
+                >
+                  <Toggle
+                    on={basisComponentOn(prefs, id)}
+                    onChange={() => { tap(); setPrefs(toggleBasisComponent(prefs, id)); }}
+                    label={ta(row.label, prefs.lang)}
+                  />
+                </Row>
+              );
+            })}
+        </Group>
 
         <Text variant="caption" color={palette.muted} align="center" style={{ lineHeight: 18 }}>
           {ta('advicePartsHint', prefs.lang)}

@@ -30,6 +30,7 @@
  */
 import type { WeatherAlert } from './model/alert';
 import type { Prefs, SavedLocation } from './prefs';
+import { allowedNotifyTopics, type NotifyTopic } from './notifyScope';
 
 /** The alert kinds a reader can subscribe to, and the preference behind each.
  *
@@ -44,6 +45,20 @@ export const PUSH_KINDS = {
 } as const satisfies Partial<Record<WeatherAlert['kind'], keyof Prefs>>;
 
 export type PushKind = keyof typeof PUSH_KINDS;
+
+/**
+ * The agro topics that may notify, on the wire.
+ *
+ * Their own field rather than more entries in `kinds`, for two reasons. They are not
+ * `WeatherAlert` kinds — no rule in `deriveAlert` produces them — and `frost` means
+ * two different things on the two lists: significant weather over a region, and a
+ * field's own frost boundary with a wet bulb behind it. Separate arrays keep both
+ * names honest instead of forcing one of them to be renamed on the wire.
+ *
+ * What each one is about, and when it is worth sending, is the contract's business:
+ * see `docs/push_contract.md`. The device's half is only which are allowed.
+ */
+export type AgroPushKind = NotifyTopic;
 
 /**
  * One threshold the reader set themselves, as the server needs it.
@@ -86,6 +101,15 @@ export interface PushRegistration {
   platform: 'ios' | 'android';
   /** Which alert kinds this device wants, in a stable order. */
   kinds: PushKind[];
+  /**
+   * And which agro topics — the disease models, the four field families, and the
+   * add-on's area conclusions and chances. Empty is normal and is not a reason to
+   * skip a registration: the weather kinds and the reader's own rules stand alone.
+   *
+   * Each has already passed all three gates on the device — asked for, component on,
+   * tier licensed — so the server sends what is in this list and asks nothing else.
+   */
+  agroKinds: AgroPushKind[];
   places: PushPlace[];
   /**
    * The reader's own thresholds. Empty is normal — most devices will have none.
@@ -135,6 +159,11 @@ export function buildRegistration(prefs: Prefs, opts: BuildOptions): PushRegistr
     .filter((kind) => prefs[PUSH_KINDS[kind]] === true)
     .sort();
 
+  // Already filtered by `notifyAllowed`: asked for, switched on, and licensed. In a
+  // stable order for the same reason `kinds` is — two identical sets of preferences
+  // must hash the same however the toggles were flipped.
+  const agroKinds = allowedNotifyTopics(prefs).slice().sort();
+
   const rules: PushRule[] = prefs.userAlerts
     .filter((a) => a.enabled && a.stationIds.length)
     .map((a) => ({
@@ -146,9 +175,9 @@ export function buildRegistration(prefs: Prefs, opts: BuildOptions): PushRegistr
     }))
     .sort((a, b) => (a.id < b.id ? -1 : 1));
 
-  // Either half is reason enough to register: a grower watching one station's
-  // temperature and nothing else still wants to hear about it.
-  if (!kinds.length && !rules.length) return null;
+  // Any of the three is reason enough to register: a grower who wants nothing but a
+  // Smith period, or nothing but one station's temperature, still wants it.
+  if (!kinds.length && !rules.length && !agroKinds.length) return null;
 
   const places = prefs.locations.map(toPlace);
   if (!places.length && !rules.length) return null;
@@ -158,6 +187,7 @@ export function buildRegistration(prefs: Prefs, opts: BuildOptions): PushRegistr
     token: opts.token,
     platform: opts.platform ?? 'ios',
     kinds,
+    agroKinds,
     places,
     rules,
     lang: prefs.lang,
@@ -198,7 +228,7 @@ export function registrationDigest(reg: PushRegistration | null): string {
     .map((r) => `${r.id}:${r.tileId}:${r.op}:${r.value}:${r.stationIds.join('+')}`)
     .join(';');
   return [
-    reg.v, reg.token, reg.kinds.join(','), places, rules,
+    reg.v, reg.token, reg.kinds.join(','), reg.agroKinds.join(','), places, rules,
     reg.lang, reg.tempUnit, reg.windUnit, reg.tzOffsetSec, reg.quietHours ? 'q' : '-',
   ].join('|');
 }

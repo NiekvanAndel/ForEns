@@ -30,6 +30,7 @@ verhuizen. Daarom staat hij standaard **uit**.
 | `core/sources/ensembleOutlook.ts` | de minimumtemperatuur per lid, voor de vorstkans |
 | `ui/overview/widgets.tsx` | `AreaWidget`, `RiskWidget`, `WindowsWidget` |
 | `app/(tabs)/settings.tsx` | Instellingen → AgroIntelligence, met risicobereidheid |
+| `core/notifyScope.ts` | of de gebiedsconclusies en de kansen mogen melden |
 | `tests/agroIntelligence.test.ts` | 28 gevallen, waarvan een derde over de laaggrens |
 
 ## A · Gebiedsconclusies
@@ -83,16 +84,37 @@ heeft.
 De dagen worden gesplitst op de **eigen kalenderdag van de locatie**, en vandaag is
 kort omdat hij al begonnen is. De balk zegt dat door kort te zijn.
 
+## Mogen ze melden?
+
+Ja, als de lezer erom vraagt. Onder Instellingen → Meldingen staat een groep
+**AgroIntelligence** met twee schakelaars: *gebiedsconclusies* (een gezamenlijk
+venster, of meerdere percelen die op dezelfde grens stilliggen) en *kansen* (een kans
+die een sport van de ladder haalt).
+
+Drie poorten moeten open voordat er iets verstuurd wordt: de lezer heeft erom
+gevraagd, het onderdeel staat aan, én de add-on is er. Die zijn met opzet apart —
+"stop met dit uitrekenen" is iets anders dan "maak me hier niet wakker voor" — en de
+groep verschijnt dan ook niet in Meldingen zolang de laag uitstaat. Zie
+`core/notifyScope.ts`; de sport waarop `risk` afgaat hangt aan de risicobereidheid, en
+dat veld moet nog aan het push-contract worden toegevoegd (`docs/push_contract.md`).
+
 ## Wat er bewust níét in zit
 
 - **C · AI.** Uitgesteld op verzoek. De regelgebaseerde samenvatter waar blad 2 hem
   bovenop wilde zetten bestaat wél — `overviewBrief` en nu `areaConclusions` — dus
   wanneer C landt, is het een laag over bestaande feiten en geen vervanging ervan.
   Dat was ook het argument om hem zo te bouwen: de regels beslissen, de AI verwoordt.
-- **Omslagmelding, stabiliteit en kalibratie.** Alle drie hebben de verwachting van
-  gisteren nodig om die van vandaag tegen af te zetten, en niets in deze app bewaart
-  er een. Dat is stap 8 van de volgorde. Ze uit de huidige run afleiden zou een
-  onweerlegbare zin opleveren, en dat is precies wat deze laag niet doet.
+- **Omslagmelding, stabiliteit en kalibratie** (punt 4 van §4B). **Komt niet in de
+  app.** Besloten 18 september 2026: als dit ergens thuishoort is het een
+  API-functie, niet iets wat een telefoon erbij gaat houden. Dat is ook de eerlijke
+  plek ervoor — alle drie vragen om een archief van verwachtingen om die van vandaag
+  tegen af te zetten, en zo'n archief hoort aan de serverkant, één keer, voor alle
+  gebruikers samen. Een telefoon die zijn eigen verwachtingshistorie bijhoudt, kan
+  alleen kalibreren tegen de dagen dat de app toevallig openstond.
+
+  Wat dat voor de app betekent: stap 8 van de volgorde ("verwachtingshistorie
+  opslaan") vervalt hier, en de drie uitspraken die eraan hingen komen terug zodra de
+  API ze levert — dan zijn ze een bron, geen berekening.
 - **Modelonenigheid tussen modellen.** De spreiding hier is die tussen de leden van
   één ensemble. Onenigheid tussen ECMWF en HARMONIE is een andere grootheid en wacht
   op de partnerverwachting van blad 2, §5.
