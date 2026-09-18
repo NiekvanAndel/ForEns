@@ -8,7 +8,7 @@
  * summary: every measurand for each of seven days, with the second week a tap away.
  * Tapping a day opens the same sheet 'Verwachting' opens, on its overview section.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +18,7 @@ import { Columns, usePagePadding } from '../../ui/layout';
 import { Text } from '../../ui/Text';
 import { TOP_BAR_CLEARANCE } from '../../ui/TopBar';
 import { LocationTitle } from '../../ui/LocationTitle';
+import { Icon } from '../../ui/Icon';
 import { Card } from '../../ui/Card';
 import { ScreenFrame } from '../../ui/ScreenFrame';
 import { useRefreshControl } from '../../ui/useRefreshControl';
@@ -37,16 +38,36 @@ import { soilCapabilities } from '../../core/model/soil';
 import { useDisease } from '../../state/disease';
 import { DiseaseCard } from '../../ui/nowcast/DiseaseCard';
 import { AdviceCard } from '../../ui/nowcast/AdviceCard';
-import { ADVICE_FAMILIES, fieldAdvice } from '../../core/model/fieldAdvice';
-import { enabledAdviceFamilies } from '../../core/prefs';
+import { useLocationAdvice } from '../../state/advice';
+import { TileEditor } from '../../ui/current/TileEditor';
+import { arrangeNowCards, NOW_CARDS } from '../../core/nowCards';
+import type { AppStringKey } from '../../core/i18n';
 import { DayEnsembleCache, type DayEnsemble } from '../../core/sources/ensembleHourly';
 import type { Day } from '../../core/model/types';
 import { t, ta } from '../../core/i18n';
 import { measurementTimeLabel } from '../../core/model/station';
 
+/**
+ * What each card is called, in the editor's list.
+ *
+ * Reusing the overview page's names rather than minting a second set: the hero on
+ * this page and the `hero` widget over there are the same card, and a reader who has
+ * arranged both should not have to learn two words for it.
+ */
+const CARD_LABEL: Record<string, AppStringKey> = {
+  alert: 'alertBlocks',
+  soil: 'ovSoil',
+  conditions: 'ovHero',
+  hours: 'ovNearTerm',
+  radar: 'ovRadar',
+  forecast: 'ovLongTerm',
+  disease: 'diseaseTitle',
+  advice: 'adviceTitle',
+};
+
 function NowcastPage() {
   const { palette } = useTheme();
-  const { prefs, location } = usePrefs();
+  const { prefs, location, setPrefs } = usePrefs();
   const {
     model, alert, harmonie, phase, error, refresh, extendedLoaded, loadExtendedDays,
     offsetSec,
@@ -100,25 +121,8 @@ function NowcastPage() {
     offsetSec,
   });
 
-  /**
-   * The rule-based advice for this location.
-   *
-   * Derived here rather than in a hook of its own: it needs nothing but the forecast
-   * the page already has, and a family the reader switched off is never computed —
-   * `enabledAdviceFamilies` decides what runs, not what is drawn.
-   */
-  const advice = useMemo(
-    () => (model
-      ? fieldAdvice({
-        hours: model.futureHours,
-        past: model.pastHours,
-        days: model.days,
-        nowKey: model.nowHour,
-        families: enabledAdviceFamilies(ADVICE_FAMILIES, prefs.advice),
-      })
-      : []),
-    [model, prefs.advice]
-  );
+  /** The same readings the blocks on 'Actueel' draw — see `state/advice`. */
+  const advice = useLocationAdvice();
 
   const soilHero = useMemo(() => {
     if (!soil.placement || !soil.latest || !model) return null;
@@ -131,6 +135,7 @@ function NowcastPage() {
   const pagePadding = usePagePadding();
 
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [sheetDay, setSheetDay] = useState<Day | null>(null);
   const [dayEnsemble, setDayEnsemble] = useState<DayEnsemble | undefined>();
   const [ensembleLoading, setEnsembleLoading] = useState(false);
@@ -196,6 +201,82 @@ function NowcastPage() {
       ? model.nowHour.slice(11, 16)
       : '';
 
+  /**
+   * Every card this page can draw, by the id `core/nowCards` knows it as.
+   *
+   * A map rather than a stack of JSX, because the order is the reader's now — see
+   * `arrangeNowCards`. The cards that have nothing to say still return null on their
+   * own (no alert, no field, no models that apply), so an id present here is not a
+   * promise that anything is drawn.
+   */
+  const cards: Record<string, React.ReactNode> = {
+    alert: <AlertHero alert={alert} />,
+
+    // On a field, the weather hero answers a question nobody asked: it leads with a
+    // temperature modelled for the region and leaves out the one reading that decides
+    // today. So a field gets its own card, and the weather it needs is underneath —
+    // two cards, in the order the questions are asked.
+    soil: soilHero ? (
+      <SoilHero
+        name={location.name}
+        placement={soilHero.placement}
+        latest={soilHero.latest}
+        indicator={soilHero.indicator}
+      />
+    ) : null,
+
+    // What the weather has been doing to the crop, and what it means for the work.
+    // Last in the natural order: they are conclusions drawn from the readings above
+    // them, and a page that opens on four verdicts serves a grower in April and
+    // nobody in November. Two gestures in the editor put them on top for good.
+    disease: <DiseaseCard pressure={disease} />,
+    advice: <AdviceCard readings={advice} />,
+
+    conditions: model ? (
+      <ConditionsHero
+        model={model}
+        location={location}
+        sourceLabel={sourceLabel}
+        timeLabel={timeLabel}
+        // On a PRO the air in the crop is measured here, 10 cm up. Named on the
+        // source line, never substituted silently: it is a different quantity from
+        // the standard 1.50 m, not a better reading of the same one.
+        canopy={canopy}
+        // The card's own subject at full length. See `ConditionsHero`.
+        onPress={() => router.push('/actueel')}
+      />
+    ) : null,
+
+    // The next hours. No heading: it said "Korte termijn (0–2 uur)" over a strip
+    // that runs a day and a half in both directions, and a row of hours labelled
+    // with their own times does not need to be told it is hours.
+    hours: model ? (
+      <Card pad={0} style={{ paddingTop: space[4] }}>
+        <HourSlider model={model} onPressHour={openHourDay} />
+      </Card>
+    ) : null,
+
+    radar: (
+      <RadarPreview
+        lat={location.lat}
+        lon={location.lon}
+        stationName={location.stationName}
+        onOpen={() => router.push('/radar')}
+      />
+    ),
+
+    forecast: model ? (
+      <ForecastPreview
+        model={model}
+        onOpen={() => router.push('/forecast')}
+        expanded={expanded}
+        onToggleExpanded={toggleExpanded}
+        extendedLoading={!extendedLoaded}
+        onOpenDay={setSheetDay}
+      />
+    ) : null,
+  };
+
   return (
     <>
     <ScrollView
@@ -208,7 +289,20 @@ function NowcastPage() {
       refreshControl={refreshControl}
     >
       <Columns spanning={2} spanningEnd={1}>
-        <LocationTitle />
+        <LocationTitle
+          action={
+            model ? (
+              <Pressable
+                onPress={() => { Haptics.selectionAsync().catch(() => {}); setEditing(true); }}
+                accessibilityRole="button"
+                accessibilityLabel={ta('nowCards', prefs.lang)}
+                hitSlop={10}
+              >
+                <Icon name="pencil-simple" size={16} color={palette.muted} />
+              </Pressable>
+            ) : null
+          }
+        />
 
         {phase === 'error' ? (
           <Card>
@@ -232,76 +326,12 @@ function NowcastPage() {
           </Card>
         ) : (
           <>
-            <AlertHero alert={alert} />
-
-            {/* On a field, the weather hero answers a question nobody asked: it leads
-                with a temperature modelled for the region, and leaves out the one
-                reading that decides today. So a field gets its own card, and the
-                weather it needs is still two taps away on 'Actueel'. */}
-            {/* A field leads with its own card, and the weather follows underneath.
-                The first replaced the second at first, which threw away something a
-                grower on a field still wants: the air over it. Two cards, in the order
-                the questions are asked — how is the soil, and then what is the
-                weather doing to it. */}
-            {soilHero ? (
-              <SoilHero
-                name={location.name}
-                placement={soilHero.placement}
-                latest={soilHero.latest}
-                indicator={soilHero.indicator}
-              />
-            ) : null}
-
-            {/* What the weather has been doing to the crop. Under the field's own
-                card, because the soil is what the page leads with and this is the
-                consequence of the weather on top of it. */}
-            <DiseaseCard pressure={disease} />
-
-            {/* And what it means for the work: the spray window, frost, whether the
-                land carries a machine, whether to spread. Under the disease card
-                because that one is about the crop and this is about the day. */}
-            <AdviceCard readings={advice} />
-
-            <ConditionsHero
-              model={model}
-              location={location}
-              sourceLabel={sourceLabel}
-              timeLabel={timeLabel}
-              // On a PRO the air in the crop is measured here, 10 cm up. Named on the
-              // source line, never substituted silently: it is a different quantity
-              // from the standard 1.50 m, not a better reading of the same one.
-              canopy={canopy}
-              // The card's own subject at full length. See `ConditionsHero`.
-              onPress={() => router.push('/actueel')}
-            />
-
-            {/* The next hours, as their own block: the hero says what it is doing
-                now, this says what happens next, and a tap on an hour opens that
-                day in 'Verwachting'.
-
-                No heading. It said "Korte termijn (0–2 uur)" over a strip that runs a
-                day and a half in both directions, so it was wrong about the one thing
-                a heading is for; and a row of hours labelled with their own times does
-                not need to be told it is hours. */}
-            <Card pad={0} style={{ paddingTop: space[4] }}>
-              <HourSlider model={model} onPressHour={openHourDay} />
-            </Card>
-
-            <RadarPreview
-              lat={location.lat}
-              lon={location.lon}
-              stationName={location.stationName}
-              onOpen={() => router.push('/radar')}
-            />
-
-            <ForecastPreview
-              model={model}
-              onOpen={() => router.push('/forecast')}
-              expanded={expanded}
-              onToggleExpanded={toggleExpanded}
-              extendedLoading={!extendedLoaded}
-              onOpenDay={setSheetDay}
-            />
+            {/* A fragment rather than a wrapper: the scroll's own `gap` spaces the
+                cards, and a wrapping view around a card that draws nothing would
+                leave a gap where the card is not. */}
+            {arrangeNowCards(prefs.nowCards).map((card) => (
+              <Fragment key={card.id}>{cards[card.id] ?? null}</Fragment>
+            ))}
 
             <Text variant="caption" color={palette.muted} align="center">
               {ta('refreshedAt', prefs.lang)} {timeLabel}
@@ -311,6 +341,19 @@ function NowcastPage() {
         )}
       </Columns>
     </ScrollView>
+
+    <TileEditor
+      visible={editing}
+      onClose={() => setEditing(false)}
+      title={ta('nowCards', prefs.lang)}
+      hint={ta('nowCardsHint', prefs.lang)}
+      all={NOW_CARDS.map((c) => ({
+        id: c.id,
+        title: ta(CARD_LABEL[c.id] ?? 'ovHero', prefs.lang),
+      }))}
+      layout={prefs.nowCards}
+      onChange={(next) => setPrefs({ nowCards: next(prefs.nowCards) })}
+    />
 
     <DaySheet
       visible={sheetDay != null}

@@ -43,7 +43,8 @@ import { Text } from '../ui/Text';
 import { Icon } from '../ui/Icon';
 import { TileEditor } from '../ui/current/TileEditor';
 import {
-  AdviceWidget, AlertsWidget, ConfidenceWidget, DiseaseWidget, FrostWidget, HeroWidget,
+  AdviceWidget, AlertsWidget, ConfidenceWidget, DiseaseWidget, FieldAdviceWidget,
+  FrostWidget, HeroWidget,
   LongTermWidget,
   MapWidget, NearTermWidget, NowcastWidget, OutlookWidget, RadarWidget, Rain24Widget,
   RainNextWidget, SoilWidget, SummaryWidget, TempWidget, WindWidget, WorkWidget,
@@ -61,6 +62,9 @@ import {
   arrangeWidgets, neededSources, OVERVIEW_WIDGETS, widgetRows, widgetSettings,
 } from '../core/overview';
 import { buildOverviewRow } from '../core/overviewData';
+import { locationAdvice } from '../core/overviewFieldAdvice';
+import { enabledAdviceFamilies } from '../core/prefs';
+import { ADVICE_FAMILIES } from '../core/model/fieldAdvice';
 import { deriveAlert } from '../core/model/alert';
 import { ta, type AppStringKey } from '../core/i18n';
 
@@ -76,6 +80,7 @@ const WIDGET_VIEWS: Record<string, (props: WidgetProps) => React.ReactElement | 
   wind: WindWidget,
   frost: FrostWidget,
   workability: WorkWidget,
+  fieldAdvice: FieldAdviceWidget,
   outlook: OutlookWidget,
   confidence: ConfidenceWidget,
   soil: SoilWidget,
@@ -96,6 +101,7 @@ const WIDGET_LABEL: Record<string, AppStringKey> = {
   rain24: 'ovRain24', rainNext: 'ovRainNext', temp: 'ovTemp', wind: 'ovWind',
   frost: 'ovFrost', workability: 'ovWork', outlook: 'ovOutlook',
   confidence: 'ovConfidence', map: 'ovMap', soil: 'ovSoil', disease: 'diseaseTitle',
+  fieldAdvice: 'adviceTitle',
   hero: 'ovHero', nowcast: 'ovNowcast', radar: 'ovRadar',
   nearTerm: 'ovNearTerm', longTerm: 'ovLongTerm',
 };
@@ -163,6 +169,28 @@ export default function OverviewScreen() {
     [conditions, nowcasts, prefs.alertsEnabled, prefs.lang, prefs.tempUnit, prefs.windUnit]
   );
 
+  /**
+   * The field conditions per location, from what this page already fetched.
+   *
+   * No request of its own: the short outlook carries the hours and the observation
+   * model the ones behind now. A family the reader switched off is never computed
+   * here either — the setting means the same thing on every page.
+   */
+  const advice = useMemo(
+    () => {
+      const families = enabledAdviceFamilies(ADVICE_FAMILIES, prefs.advice);
+      if (!families.length) return [];
+      return conditions.map((c, i) => locationAdvice({
+        index: i,
+        name: c.location.name,
+        outlook: outlooks[i] ?? null,
+        model: c.model,
+        families,
+      }));
+    },
+    [conditions, outlooks, prefs.advice]
+  );
+
   /** Select a location and go to the tab that answers for what was tapped. */
   const open = (index: number, page: 'index' | 'forecast' | 'grafiek' | 'actueel') => {
     selectLocation(index);
@@ -176,7 +204,7 @@ export default function OverviewScreen() {
   const rowsOfWidgets = widgetRows(widgets, wide);
 
   /** Everything a widget gets except its own settings, which differ per widget. */
-  const shared = { rows, alerts, models, nowcasts, fields, disease, onOpen: open };
+  const shared = { rows, alerts, models, nowcasts, fields, disease, advice, onOpen: open };
 
   return (
     <>

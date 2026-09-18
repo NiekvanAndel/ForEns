@@ -8,8 +8,9 @@
  * with eight fields pays eight of these on one page.
  *
  * So it carries exactly what the widgets read: the coming days' extremes and rainfall
- * for the outlook rows, and the coming hours' temperature, rain and wind for the
- * spray window and tonight's minimum. No ensemble, no cloud layers, no radiation.
+ * for the outlook rows, and the coming hours' temperature, humidity, rain, wind and
+ * day/night for the field conditions and tonight's minimum. No ensemble, no cloud
+ * layers, no radiation.
  */
 import { tryFetchJson } from './http';
 import { urls, type Coords } from './openMeteo';
@@ -50,9 +51,13 @@ export function parseOutlook(json: WeatherResponse | null, nowMs = Date.now()): 
     .map((time, i) => ({
       time,
       temp: at(h.temperature_2m, i),
+      humidity: at(h.relativehumidity_2m, i),
       precip: at(h.precipitation, i),
       wind: at(h.windspeed_10m, i),
       gusts: at(h.windgusts_10m, i) ?? at(h.wind_gusts_10m, i),
+      // Absent on a response from before this field was asked for, and then the one
+      // rule that reads it — the inversion proxy — simply does not fire.
+      isDay: dayFlag(at(h.is_day as NumArray | undefined, i)),
     }))
     .filter((row) => row.time >= nowKey);
 
@@ -67,6 +72,11 @@ export function parseOutlook(json: WeatherResponse | null, nowMs = Date.now()): 
   }));
 
   return { hours, days };
+}
+
+/** Open-Meteo's `is_day` as the flag the app carries, or null where it said nothing. */
+function dayFlag(v: number | null): 0 | 1 | null {
+  return v === 1 ? 1 : v === 0 ? 0 : null;
 }
 
 /** The location's own current hour as a key, from the offset the response carries —

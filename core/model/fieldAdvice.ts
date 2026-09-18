@@ -39,7 +39,40 @@
  */
 import { certaintyAt, type Certainty, type Provenance } from './indicators';
 import { deltaT, wetBulb } from './psychro';
-import type { Day, Hour } from './types';
+
+
+/**
+ * The hour this module reads, which is less than an `Hour` carries.
+ *
+ * Structural rather than the full type, because the overview page asks the same
+ * question of every saved location and pays for it in requests: its short outlook
+ * carries six fields per hour, not thirty. A `Hour` satisfies this, so the location's
+ * own pages hand theirs over unchanged and nothing converts anything.
+ */
+export interface AdviceHour {
+  /** Local wall-clock key, `YYYY-MM-DDTHH:00`. */
+  time: string;
+  temp: number | null;
+  /** The same reading to a tenth, where the source sent one. */
+  tempExact?: number | null;
+  humidity: number | null;
+  wind: number | null;
+  windExact?: number | null;
+  precip: number | null;
+  /** 1 by day, 0 by night. Absent or null where the source does not say, and then
+   *  the inversion rule — the only one that reads it — simply does not fire. */
+  isDay?: 0 | 1 | null;
+  /** Reference evaporation for the hour, mm. Absent outside the full model. */
+  et0h?: number | null;
+}
+
+/** The day this module reads. `Day` satisfies it, and so does the short outlook. */
+export interface AdviceDay {
+  date: string;
+  /** The day's rainfall, however the source arrives at it. */
+  precipMedian?: number | null;
+  precip?: number | null;
+}
 
 /** The four families, each switchable on its own. See `AdviceLayer` in `core/prefs`. */
 export type AdviceFamily = 'spray' | 'frost' | 'workability' | 'fertilise';
@@ -152,20 +185,20 @@ export const FERT_HORIZON_H = 48;
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /** The app carries whole units and a tenth beside them; the tenth is the true one. */
-const tempOf = (h: Hour) => h.tempExact ?? h.temp;
-const windOf = (h: Hour) => h.windExact ?? h.wind;
+const tempOf = (h: AdviceHour) => h.tempExact ?? h.temp;
+const windOf = (h: AdviceHour) => h.windExact ?? h.wind;
 
-const sumPrecip = (hours: readonly Hour[]) =>
+const sumPrecip = (hours: readonly AdviceHour[]) =>
   round1(hours.reduce((s, h) => s + (h.precip ?? 0), 0));
 
-const sumEt0 = (hours: readonly Hour[]) =>
+const sumEt0 = (hours: readonly AdviceHour[]) =>
   round1(hours.reduce((s, h) => s + (h.et0h ?? 0), 0));
 
 const modelled: Provenance = { kind: 'modelled', detail: null };
 const proxy: Provenance = { kind: 'proxy', detail: null };
 
 /** The hour a horizon reaches, or null where the series is shorter than the family. */
-function horizonOf(hours: readonly Hour[], span: number): string | null {
+function horizonOf(hours: readonly AdviceHour[], span: number): string | null {
   const last = hours.slice(0, span).at(-1);
   return last?.time ?? null;
 }
@@ -195,9 +228,9 @@ export interface SprayBlock {
  * hour and its context rather than of the whole series.
  */
 export function sprayBlock(
-  hour: Hour,
+  hour: AdviceHour,
   rainAfter: number,
-  after: readonly Hour[]
+  after: readonly AdviceHour[]
 ): SprayBlock | null {
   const wind = windOf(hour);
   if (wind != null && wind > SPRAY_WIND_MAX) {
@@ -248,7 +281,7 @@ export function sprayBlock(
  * One reading, because a grower asks one question here. Open, it names the stretch
  * and what closes it; shut, it names what is holding it and when it opens again.
  */
-function sprayReading(hours: readonly Hour[], nowKey: string): AdviceReading | null {
+function sprayReading(hours: readonly AdviceHour[], nowKey: string): AdviceReading | null {
   const span = hours.slice(0, SPRAY_HORIZON_H);
   if (!span.length) return null;
 
@@ -318,11 +351,11 @@ function sprayReading(hours: readonly Hour[], nowKey: string): AdviceReading | n
 
 // ── Frost ───────────────────────────────────────────────────────────────────────
 
-function frostReadings(hours: readonly Hour[], nowKey: string): AdviceReading[] {
+function frostReadings(hours: readonly AdviceHour[], nowKey: string): AdviceReading[] {
   const span = hours.slice(0, FROST_HORIZON_H);
   if (!span.length) return [];
 
-  let coldest: Hour | null = null;
+  let coldest: AdviceHour | null = null;
   for (const h of span) {
     const t = tempOf(h);
     if (t == null) continue;
@@ -390,8 +423,8 @@ function frostReadings(hours: readonly Hour[], nowKey: string): AdviceReading[] 
 // ── Workability ─────────────────────────────────────────────────────────────────
 
 function workabilityReadings(
-  past: readonly Hour[],
-  days: readonly Day[],
+  past: readonly AdviceHour[],
+  days: readonly AdviceDay[],
   nowKey: string
 ): AdviceReading[] {
   const out: AdviceReading[] = [];
@@ -427,7 +460,7 @@ function workabilityReadings(
     let run = 0;
     let from: string | null = null;
     for (const day of ahead) {
-      if ((day.precipMedian ?? 0) < MOWING_DRY_MM) {
+      if ((day.precipMedian ?? day.precip ?? 0) < MOWING_DRY_MM) {
         if (run === 0) from = day.date;
         run++;
         if (run >= MOWING_DAYS) break;
@@ -482,8 +515,8 @@ function workabilityReadings(
 // ── Fertilising ─────────────────────────────────────────────────────────────────
 
 function fertiliseReadings(
-  hours: readonly Hour[],
-  past: readonly Hour[],
+  hours: readonly AdviceHour[],
+  past: readonly AdviceHour[],
   nowKey: string,
   tSum: number | null | undefined
 ): AdviceReading[] {
@@ -605,11 +638,11 @@ export function tSum(dailyMeans: readonly (number | null | undefined)[]): number
 
 export interface FieldAdviceInput {
   /** The hours ahead, oldest first, starting at the hour in progress. */
-  hours: readonly Hour[];
+  hours: readonly AdviceHour[];
   /** The hours behind, oldest first, ending at now. */
-  past: readonly Hour[];
+  past: readonly AdviceHour[];
   /** The forecast days, for the families that reason in days rather than hours. */
-  days: readonly Day[];
+  days: readonly AdviceDay[];
   /** The key the page considers now, in the app's own local wall-clock form. */
   nowKey: string;
   /** Which families to run. Omitted means all of them. */

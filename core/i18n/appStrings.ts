@@ -87,6 +87,8 @@ export const APP_STRINGS = {
     leafWetHours: 'Uren bladnat', leafWetProxy: 'afgeleid uit luchtvochtigheid, niet gemeten',
     diseaseSmithWindow: 'richting periode', diseaseDivWindow: 'som over 2 dagen',
     // Field conditions — the four rule-based families. See `core/model/fieldAdvice`.
+    nowCards: 'Kaarten',
+    nowCardsHint: 'Houd een kaart vast om de volgorde te wijzigen',
     adviceTitle: 'Veldomstandigheden',
     adviceSprayOpen: 'Spuitbaar',
     adviceSprayShut: 'Nu niet spuitbaar',
@@ -390,6 +392,8 @@ export const APP_STRINGS = {
     leafWetHours: 'Leaf wetness hours', leafWetProxy: 'derived from humidity, not measured',
     diseaseSmithWindow: 'toward a period', diseaseDivWindow: 'total over 2 days',
     // Field conditions — the four rule-based families. See `core/model/fieldAdvice`.
+    nowCards: 'Cards',
+    nowCardsHint: 'Hold a card to change the order',
     adviceTitle: 'Field conditions',
     adviceSprayOpen: 'Sprayable',
     adviceSprayShut: 'Not sprayable now',
@@ -603,6 +607,8 @@ export const APP_STRINGS = {
     leafWetHours: 'Blattnässestunden', leafWetProxy: 'aus der Luftfeuchte abgeleitet, nicht gemessen',
     diseaseSmithWindow: 'Richtung Periode', diseaseDivWindow: 'Summe über 2 Tage',
     // Field conditions — the four rule-based families. See `core/model/fieldAdvice`.
+    nowCards: 'Karten',
+    nowCardsHint: 'Halte eine Karte, um die Reihenfolge zu ändern',
     adviceTitle: 'Feldbedingungen',
     adviceSprayOpen: 'Spritzbar',
     adviceSprayShut: 'Jetzt nicht spritzbar',
@@ -817,6 +823,8 @@ export const APP_STRINGS = {
     leafWetHours: 'Heures d\u2019humectation', leafWetProxy: 'déduit de l\u2019humidité, non mesuré',
     diseaseSmithWindow: 'vers une période', diseaseDivWindow: 'total sur 2 jours',
     // Field conditions — the four rule-based families. See `core/model/fieldAdvice`.
+    nowCards: 'Cartes',
+    nowCardsHint: 'Maintiens une carte pour changer l’ordre',
     adviceTitle: 'Conditions au champ',
     adviceSprayOpen: 'Pulvérisation possible',
     adviceSprayShut: 'Pulvérisation impossible',
@@ -1031,6 +1039,8 @@ export const APP_STRINGS = {
     leafWetHours: 'Horas de humectación', leafWetProxy: 'derivado de la humedad, no medido',
     diseaseSmithWindow: 'hacia un periodo', diseaseDivWindow: 'total en 2 días',
     // Field conditions — the four rule-based families. See `core/model/fieldAdvice`.
+    nowCards: 'Tarjetas',
+    nowCardsHint: 'Mantén una tarjeta para cambiar el orden',
     adviceTitle: 'Condiciones del campo',
     adviceSprayOpen: 'Se puede pulverizar',
     adviceSprayShut: 'Ahora no se puede pulverizar',

@@ -72,6 +72,9 @@ import { arrangeTiles, DEFAULT_TILE_LAYOUT } from '../../core/prefs';
 import { modelTiles, type Tile, type TileLabels } from '../../core/model/tiles';
 import { placementContext, soilTiles, type SoilTileLabels } from '../../core/model/soilTiles';
 import { diseaseTiles, type DiseaseTileLabels } from '../../core/model/diseaseTiles';
+import { adviceTiles, type AdviceTileLabels } from '../../core/model/adviceTiles';
+import { useLocationAdvice } from '../../state/advice';
+import { adviceBlockWindow, quantityLabel } from '../../ui/advice/words';
 import { useDisease } from '../../state/disease';
 import { measurementTimeLabel } from '../../core/model/station';
 import { ta } from '../../core/i18n';
@@ -153,6 +156,25 @@ function CurrentPage() {
     [prefs.lang]
   );
 
+  /**
+   * The rule-based readings for this location — the same ones the card on 'Nu' draws.
+   *
+   * One hook, so a spray window that is shut there cannot read as open here. A family
+   * the reader switched off is never computed; see `state/advice`.
+   */
+  const advice = useLocationAdvice();
+
+  const adviceLabels: AdviceTileLabels = useMemo(
+    () => ({
+      // The quantity is the title — "Wind", "Natbol", "Tekort 14 dagen" — and the
+      // family says which question it answers, so a spray block is tellable from the
+      // plain wind block beside it.
+      title: (r) => quantityLabel(r, prefs.lang),
+      timeLabel: (r) => adviceBlockWindow(r, prefs.lang),
+    }),
+    [prefs.lang]
+  );
+
   // Every block the app can draw, before the reader's arrangement is applied. The
   // editor lists these; the grid draws the arrangement of them.
   //
@@ -164,11 +186,13 @@ function CurrentPage() {
       ...(model ? modelTiles(model, labels, nowcast, precipMeasured) : []),
       ...(soil.placement ? soilTiles(soil.placement, soil.latest, soilLabels) : []),
       ...diseaseTiles(disease.readings, diseaseLabels),
+      ...adviceTiles(advice, adviceLabels),
     ],
     [
       model, labels, nowcast, precipMeasured,
       soil.placement, soil.latest, soilLabels,
       disease.readings, diseaseLabels,
+      advice, adviceLabels,
     ]
   );
   /**

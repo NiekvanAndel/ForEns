@@ -17,12 +17,24 @@
  * the green was colouring a town for the station behind it. The heading ink is what
  * a place gets; the dot beside it is the station, and that stays green.
  */
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import { space, useTheme } from '../theme';
 import { Text } from './Text';
 import { usePrefs } from '../state/prefs';
 
-export function LocationTitle() {
+export interface LocationTitleProps {
+  /**
+   * Something to put at the end of the row — the pencil on 'Nu'.
+   *
+   * Here rather than in the top bar for the reason 'Actueel' puts its own pencil
+   * beside the source line: arranging a page is something you do *to the page*, and
+   * the top row is for moving between places.
+   */
+  action?: ReactNode;
+}
+
+export function LocationTitle({ action }: LocationTitleProps = {}) {
   const { palette } = useTheme();
   // `location`, not `prefs.locations[prefs.activeLocation]`. They are the same thing
   // on the page in front and different things on the pages either side of it: the
@@ -54,6 +66,9 @@ export function LocationTitle() {
       >
         {location.name}
       </Text>
+      {action ? (
+        <View style={{ marginLeft: 'auto', paddingLeft: space[3] }}>{action}</View>
+      ) : null}
     </View>
   );
 }

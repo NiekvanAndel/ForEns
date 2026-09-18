@@ -36,9 +36,14 @@ export interface OutlookHour {
   /** Local wall-clock, `YYYY-MM-DDTHH:MM`. */
   time: string;
   temp: number | null;
+  /** Relative humidity, %. Delta T — and so the spray window — is unreadable
+   *  without it, which is why the short outlook carries it. */
+  humidity: number | null;
   precip: number | null;
   wind: number | null;
   gusts: number | null;
+  /** 1 by day, 0 by night. What the inversion proxy reads. */
+  isDay: 0 | 1 | null;
 }
 
 /** One saved location, as every widget on the page reads it. */

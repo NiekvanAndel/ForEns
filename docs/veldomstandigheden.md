@@ -12,10 +12,16 @@ is de uitgewerkte versie, met de codeverwijzingen erbij.
 | --- | --- |
 | `core/model/psychro.ts` | natbol en Delta T (Stull 2011) — eigen kernel, want twee families lezen hem |
 | `core/model/fieldAdvice.ts` | de vier families en hun grenzen; puur en woordloos |
+| `ui/advice/words.ts` | hoe een uitspraak heet — één vocabulaire voor vier oppervlakken |
 | `ui/nowcast/AdviceCard.tsx` | de kaart op 'Nu', één `IndicatorBadge` per uitspraak |
+| `core/model/adviceTiles.ts` | de blokjes op 'Actueel', in dezelfde `Tile`-vorm als de rest |
+| `core/nowCards.ts` | de kaartvolgorde op 'Nu' — potlood, met de conclusies onderaan |
+| `core/overviewFieldAdvice.ts` | dezelfde uitspraken per locatie, voor de widgetpagina |
+| `state/advice.ts` | één afleiding voor 'Nu', 'Actueel' en 'Grafiek' |
 | `core/prefs.ts` | `AdviceLayer` — hoofdschakelaar plus wat er uit staat |
 | `app/(tabs)/settings.tsx` | Instellingen → Adviezen |
 | `tests/fieldAdvice.test.ts` | 46 gevallen, waarvan de helft over zwijgen gaat |
+| `tests/adviceSurfaces.test.ts` | wat de oppervlakken ermee doen, vooral wat ze weglaten |
 
 De opzet volgt `diseasePressure` en niet de generieke `Indicator` uit
 `core/model/indicators.ts`. Reden: die vorm is één grootheid met een oplopende reeks
@@ -88,14 +94,40 @@ familie-ids die uit staan, opgeslagen zoals `TileLayout` dat doet.
 Instellingen → **Adviezen**. De indexrij zegt `Uit` of `3/4`, zodat de stand zichtbaar
 is zonder de pagina te openen.
 
+## Waar het te zien is
+
+- **'Nu'** — een kaart met één badge per uitspraak. De kaartvolgorde op die pagina is
+  nu van de lezer: potlood naast de plaatsnaam, dezelfde editor als op 'Actueel' en de
+  widgetpagina. Ziektedruk en veldomstandigheden staan **standaard onderaan** — het
+  zijn conclusies uit de metingen erboven, en een pagina die met vier oordelen opent
+  bedient een teler in april en niemand in november. Twee gebaren zetten ze bovenaan.
+  Alleen 'Nu ter plaatse' kan niet uit: dat is waar het tabblad naar heet.
+- **'Actueel'** — een blokje per uitspraak, in dezelfde `Tile`-vorm als de rest, dus
+  `arrangeTiles` en de editor dragen ze zonder te weten dat ze bestaan. De titel is de
+  grootheid ("Wind", "Natbol", "Tekort 14 dagen") en het tijdlabel de familie, zodat
+  een spuitblokje te onderscheiden is van het gewone windblokje ernaast. Nooit een
+  groene stip: een spuitvenster is een conclusie, geen meting.
+- **Widgetpagina** — één regel per locatie, ergste eerst, met de bindende reden erbij
+  en `+2` als er meer speelt. Locaties waar niets aan de hand is vallen weg; een lijst
+  van "goed, goed, goed" is een lijst waar niemand de bovenkant van leest. De
+  korte-termijnverwachting draagt nu ook luchtvochtigheid en dag/nacht mee, zodat dit
+  **geen extra request** kost — twee velden op een aanvraag die de pagina toch al doet.
+- **'Grafiek'** — de spuitgrens als stippellijn dwars door de windgrafiek, met het
+  gebied erboven gearceerd, in de eenheid van de lezer. Alleen wanneer het
+  spuitvenster aanstaat: wie in Instellingen heeft gezegd niet te spuiten, krijgt geen
+  rode lijn door zijn windgrafiek.
+
 ## Wat er nog niet in zit
 
 - **Datakwaliteit** (station stil, regenmeter verdacht) — komt uit de API, geen eigen
   berekening nodig.
 - **Vee** (THI ≥ 68) — bewust overgeslagen; de focus ligt op akkerbouw en fruitteelt.
-- **Drempellijnen in de grafieken.** Elke uitspraak draagt zijn `limit` en `unit` al
-  mee, en `thresholdsInPlay` / `thresholdZones` in `indicators.ts` tekenen de lijn
-  vandaag voor de bodem. De wind- en Delta T-lijn is het aansluiten van die twee.
+- **De Delta T-grafiek.** De windgrafiek heeft zijn grens; Delta T heeft nog geen
+  eigen reeks om er een lijn in te tekenen, en zijn band is tweezijdig — 2 tot 8 —
+  waar `thresholdZones` van oplopende grenzen uitgaat.
+- **Werkbaarheid op de widgetpagina.** Berijdbaarheid en droogte lezen een week en een
+  veertiendaagse balans, en die houdt die pagina niet per locatie vast. `fieldAdvice`
+  zwijgt er dan over, wat het eerlijke antwoord is — maar het is een gat.
 - **Meldingen op toestandsovergangen.** Stap 7 van de volgorde, en met opzet het
   sluitstuk: pas als elke melding in de app te controleren is, mag hij afgaan. De
   vorm is er — een uitspraak draagt niveau, grens en horizon, dus een overgang is een

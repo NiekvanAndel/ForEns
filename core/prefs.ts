@@ -14,6 +14,7 @@ import { sanitiseAlerts, type UserAlert } from './alerts';
 import { distanceKm } from './sources/agroexact';
 import { DEFAULT_OVERVIEW_LAYOUT, type WidgetSettings } from './overview';
 import { DEFAULT_TILE_LAYOUT, type TileLayout } from './arrangement';
+import { DEFAULT_NOW_LAYOUT } from './nowCards';
 
 // Re-exported so the many callers that reach for these through `core/prefs` keep
 // working: they are preferences to everything that uses them, and only the module
@@ -217,6 +218,8 @@ export interface Prefs {
   quietHours: boolean;
   /** Which rule-based advice is drawn. See `AdviceLayer`. */
   advice: AdviceLayer;
+  /** The order of the cards on 'Nu'. See `core/nowCards`. */
+  nowCards: TileLayout;
   /** The 'Actueel' grid's arrangement. See `TileLayout`. */
   tiles: TileLayout;
   /**
@@ -267,6 +270,7 @@ export const DEFAULT_PREFS: Prefs = {
   notifyFrost: false,
   quietHours: true,
   advice: DEFAULT_ADVICE_LAYER,
+  nowCards: DEFAULT_NOW_LAYOUT,
   tiles: DEFAULT_TILE_LAYOUT,
   soilTiles: DEFAULT_TILE_LAYOUT,
   overview: DEFAULT_OVERVIEW_LAYOUT,
@@ -344,6 +348,11 @@ export function mergePrefs(stored: unknown): Prefs {
       enabled: typeof advice.enabled === 'boolean' ? advice.enabled : true,
       hidden: ids(advice.hidden),
     };
+  }
+
+  const nowCards = s.nowCards as TileLayout | undefined;
+  if (nowCards && typeof nowCards === 'object') {
+    out.nowCards = { order: ids(nowCards.order), hidden: ids(nowCards.hidden) };
   }
 
   const overview = s.overview as TileLayout | undefined;

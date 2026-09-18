@@ -26,7 +26,7 @@ import { TWO_COLUMN_WIDTH } from '../core/layout';
 import { mergePrefs } from '../core/prefs';
 
 const hour = (time: string, over: Partial<OutlookHour> = {}): OutlookHour =>
-  ({ time, temp: 12, precip: 0, wind: 10, gusts: 18, ...over });
+  ({ time, temp: 12, humidity: 70, precip: 0, wind: 10, gusts: 18, isDay: 1, ...over });
 
 const row = (over: Partial<OverviewRow> = {}): OverviewRow => ({
   index: 0, name: 'Hedikhuizen', hasStation: false, loading: false,

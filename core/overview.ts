@@ -171,6 +171,12 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   // weather pole with crops under it has disease pressure and no suction.
   { id: 'disease', size: 'full', needs: ['disease'], options: ['limit'] },
   { id: 'workability', size: 'full', needs: ['conditions', 'outlook'], options: ['limit'] },
+  // And what the boundaries say about each field: the spray window, frost, whether
+  // the land carries a machine, whether to spread. Beside the workability widget
+  // because they answer the same morning, and separate from it because that one is a
+  // count of workable hours and this one is the reasons — a field with six workable
+  // hours and a wind over the legal limit is not a field anybody is spraying.
+  { id: 'fieldAdvice', size: 'full', needs: ['conditions', 'outlook'], options: ['limit'] },
   // The coming days, a row per location, each a way into that location's own page.
   // The ensemble as well as the forecast: each day carries the members' rain chance
   // and how much they agree, and reading those from a source another widget happened

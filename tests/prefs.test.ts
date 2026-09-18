@@ -196,3 +196,22 @@ describe('the advice layer', () => {
       .toEqual(['frost', 'workability']);
   });
 });
+
+describe('the card order on Nu', () => {
+  it('starts empty, so the catalogue\'s own order stands', () => {
+    expect(mergePrefs({}).nowCards).toEqual({ order: [], hidden: [] });
+  });
+
+  it('survives a stored value that lost half of itself', () => {
+    expect(mergePrefs({ nowCards: { order: ['advice', 7], hidden: 'nope' } }).nowCards)
+      .toEqual({ order: ['advice'], hidden: [] });
+  });
+
+  it('is kept apart from the grid and the overview', () => {
+    // Three arrangements over the same machinery, and a reader who drags a card on
+    // 'Nu' must not find their blocks reordered on 'Actueel'.
+    const merged = mergePrefs({ nowCards: { order: ['advice'], hidden: [] } });
+    expect(merged.tiles).toEqual({ order: [], hidden: [] });
+    expect(merged.overview.order).toEqual([]);
+  });
+});

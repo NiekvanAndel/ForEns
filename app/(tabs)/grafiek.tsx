@@ -152,6 +152,8 @@ import {
   type SoilSeriesKey,
 } from '../../core/model/soilSeries';
 import { soilThresholdSteps } from '../../core/model/indicators';
+import { SPRAY_WIND_MAX } from '../../core/model/fieldAdvice';
+import { adviceFamilyOn } from '../../core/prefs';
 import {
   MODEL_SERIES_META, buildModelSeries, type ModelSeriesKey,
 } from '../../core/model/modelSeries';
@@ -657,6 +659,37 @@ function GraphPage() {
     }];
   }, [key, palette, appearance]);
 
+  /**
+   * The spraying limit, across the wind chart.
+   *
+   * The first weather boundary to reach a chart, and the payoff the soil work was
+   * argued for: the mechanism is the same prop, so this is a line and a zone rather
+   * than a feature. Five metres a second is the legal figure, and a grower reading
+   * their own measured wind against it is reading a decision instead of a number —
+   * "een getal in een tabel is een feit; dezelfde lijn door je eigen meetreeks is een
+   * besluit."
+   *
+   * Only where the reader has the spray window switched on. Somebody who does not
+   * spray has said so in Instellingen, and a red line across their wind chart would
+   * be the app arguing with that.
+   *
+   * The label is in the reader's own units, as every other figure about this boundary
+   * is: the line sits at 18 internally, and says "5,0 m/s" to somebody who works in
+   * metres a second.
+   */
+  const sprayThreshold = useMemo(() => {
+    if (key !== 'wind' || !adviceFamilyOn(prefs.advice, 'spray')) return null;
+    return [{
+      at: SPRAY_WIND_MAX,
+      color: soilStatusBg(2, palette, appearance),
+      label: `${fmtWindValue(SPRAY_WIND_MAX, prefs.windUnit)} ${windUnitLabel(prefs.windUnit)}`,
+      // Shaded above, where spraying is out. Below it nothing is wrong, and a chart
+      // that shades "fine" has spent its loudest device on its least interesting
+      // state — the same rule the soil zones follow.
+      shade: true,
+    }];
+  }, [key, prefs.advice, prefs.windUnit, palette, appearance]);
+
   const thresholds = useMemo(() => {
     // Suction and pF are the same quantity on two scales, so they take the same four
     // zones — `kPaToPf` converts each boundary exactly. The other soil charts have no
@@ -920,7 +953,7 @@ function GraphPage() {
                   cumulativeColor={key === 'refillMm' ? palette.agroInk : palette.inkHeading}
                   spread={showSpread ? spread : null}
                   spreadLabel={ta('spread', prefs.lang)}
-                  thresholds={modelThreshold ?? thresholds}
+                  thresholds={modelThreshold ?? sprayThreshold ?? thresholds}
                   background={palette.appBg}
                   emptyLabel={ta('noSeries', prefs.lang)}
                 />

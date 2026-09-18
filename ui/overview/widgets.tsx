@@ -56,6 +56,8 @@ import { useForecast } from '../../state/forecast';
 import { useAgroAuth } from '../../state/auth';
 import type { LocationSoil } from '../../state/soilStations';
 import type { LocationDisease } from '../../state/disease';
+import { worstPerLocation, type LocationAdvice } from '../../core/overviewFieldAdvice';
+import { adviceReason, adviceTitle } from '../advice/words';
 import { rankFieldsByDryness, type SoilStatus } from '../../core/model/soil';
 import { soilStatusBg, soilStatusInk } from '../soilStatusInk';
 import { agroIntegration } from '../../core/prefs';
@@ -88,6 +90,9 @@ export interface WidgetProps {
   /** The disease models that apply at each saved location. Empty where none do, and
    *  while the source is switched off. */
   disease: LocationDisease[];
+  /** The four rule-based families per saved location, in row order. Empty while the
+   *  sources they read are switched off. */
+  advice: LocationAdvice[];
   /** One per row, in the same order; null where nothing is worth saying. */
   alerts: (WeatherAlert | null)[];
   /** The observation model per saved location, same order again. What a widget
@@ -744,6 +749,90 @@ export function WorkWidget({ rows, settings, onOpen }: WidgetProps) {
         <RestLine>{ta('ovRest', prefs.lang).replace('{n}', String(rest))}</RestLine>
       ) : null}
       {rows.every((r) => !r.hours.length) ? <WidgetNote>–</WidgetNote> : null}
+    </WidgetCard>
+  );
+}
+
+/**
+ * What the weather means for the work, across every saved location.
+ *
+ * The disease widget answers which field to walk; this answers which field can be
+ * worked, and why not. One line per location and not one per reading: a grower with
+ * eight fields and four families would otherwise get thirty-two rows on a page whose
+ * whole argument is that it fits on a screen. The worst thing about each field is on
+ * its line, with the boundary that decided it, and the field's own card has the rest.
+ *
+ * Fields with nothing wrong are left out entirely — a list of "fine, fine, fine" is a
+ * list nobody reads the top of. When every field is fine the widget draws nothing,
+ * which is the same rule the alerts widget follows and is most days in winter.
+ *
+ * Nothing here is measured: a spray window is a conclusion drawn from a forecast, so
+ * no green dot, whatever instrument stands in the field. The state's colour carries
+ * it, exactly as on the disease rows above.
+ */
+export function FieldAdviceWidget({ advice, settings, onOpen }: WidgetProps) {
+  const { palette, appearance } = useTheme();
+  const { prefs } = usePrefs();
+
+  const ranked = worstPerLocation(advice);
+  const rows = ranked.slice(0, settings.limit);
+  const rest = ranked.length - rows.length;
+
+  if (!rows.length) return null;
+
+  return (
+    <WidgetCard title={ta('adviceTitle', prefs.lang)}>
+      {rows.map(({ advice: a, reading, others }, i) => (
+        <Pressable
+          key={a.index}
+          onPress={() => { Haptics.selectionAsync().catch(() => {}); onOpen(a.index, 'index'); }}
+          accessibilityRole="button"
+          accessibilityLabel={`${a.name}, ${adviceTitle(reading, prefs.lang)}`}
+          style={{
+            flexDirection: 'row', alignItems: 'center', gap: space[3],
+            paddingVertical: 9,
+            borderTopWidth: i > 0 ? 1 : 0,
+            borderTopColor: palette.hairlineSoft,
+          }}
+        >
+          {/* The same bar the disease rows carry, in the same three inks: one ladder
+              across the page, whatever kind of thing is on the row. */}
+          <View
+            style={{
+              width: 3, height: 20, borderRadius: 2,
+              backgroundColor: soilStatusBg(reading.level as SoilStatus, palette, appearance),
+            }}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="label" color={palette.inkHeading} numberOfLines={1}>
+              {a.name}
+            </Text>
+            <Text variant="caption" color={palette.muted} numberOfLines={1}>
+              {adviceReason(reading, prefs)}
+            </Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text
+              variant="label"
+              weight="semibold"
+              color={soilStatusInk(reading.level as SoilStatus, palette, appearance)}
+              numberOfLines={1}
+            >
+              {adviceTitle(reading, prefs.lang)}
+            </Text>
+            {/* Not a list of the others, only that they exist: the field's own card
+                is one tap away and says all of them properly. */}
+            {others > 0 ? (
+              <Text variant="caption" color={palette.inkDisabled} tabular>
+                {`+${others}`}
+              </Text>
+            ) : null}
+          </View>
+        </Pressable>
+      ))}
+      {rest > 0 ? (
+        <RestLine>{ta('ovRest', prefs.lang).replace('{n}', String(rest))}</RestLine>
+      ) : null}
     </WidgetCard>
   );
 }

@@ -85,7 +85,10 @@ export const urls = {
    */
   outlook: (c: Coords, days: number) =>
     `${FORECAST}?${base(c)}` +
-    `&hourly=temperature_2m,precipitation,windspeed_10m,windgusts_10m` +
+    // Humidity and day/night ride along for the field-condition families: Delta T
+    // needs the first and the inversion proxy the second, and two more hourly fields
+    // on a request the page already makes is free where a second request is not.
+    `&hourly=temperature_2m,relativehumidity_2m,precipitation,windspeed_10m,windgusts_10m,is_day` +
     `&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,weather_code` +
     `&forecast_days=${days}`,
   ensemble: (c: Coords, days: number) =>
