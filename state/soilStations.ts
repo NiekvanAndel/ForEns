@@ -436,10 +436,6 @@ export function useAllLocationSoil(enabled: boolean): LocationSoil[] {
   }));
 }
 
-/** How far back the disease models look. A week is enough to see a period build,
- *  and Smith itself only ever needs two days of it. */
-const DISEASE_DAYS = 7;
-
 /**
  * A week of hours for the disease models, from the sensor in the crop.
  *
@@ -456,17 +452,12 @@ const DISEASE_DAYS = 7;
 export function useSoilCanopyWeek(
   station: SoilStation | null,
   offsetSec: number | null,
-  enabled = true
+  enabled = true,
+  /** The window to fetch. The card asks for a week; the chart asks for whatever the
+   *  reader picked. */
+  range: { from: string; to: string }
 ): { hours: HumidHour[]; loading: boolean } {
   const canopy = soilCapabilities(station?.type).canopy;
-  // Recomputed when the calendar day turns, and not on every render: the window has to
-  // follow the date, but a new object each render would refetch the week continuously.
-  const today = new Date().toISOString().slice(0, 10);
-  const range = useMemo(() => {
-    const to = new Date(`${today}T12:00:00Z`);
-    const from = new Date(to.getTime() - (DISEASE_DAYS - 1) * 86_400_000);
-    return { from: from.toISOString().slice(0, 10), to: today };
-  }, [today]);
 
   const query = useSoilRange(
     canopy ? station?.id ?? null : null,

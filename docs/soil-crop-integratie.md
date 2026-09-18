@@ -109,6 +109,11 @@ Geen van deze punten raakt de bestaande webapp-pagina's.
    `field_capacity` (voor de lijn *Veldcapaciteit*), en `online` /
    `last_reading_at` voor de winterstand zonder eerst metingen op te halen.
 6. **`leaf_wet` in `SoilReadingSerializer`.** Staat in het model, niet in de API.
+7. **Seizoenssommen als eindpunt.** Smith en DIV rekent de app zelf uit de uren die
+   `/readings/` al levert. Trips niet: dat is een graaddagsom vanaf een biofix in het
+   voorjaar, dus een som over maanden die vóór elk venster van de app begint. Hetzelfde
+   geldt voor 10-10-48 en Mills over een langere periode. Zonder een eindpunt dat de som
+   levert, moet de app een half seizoen aan uren trekken om één getal te tonen.
 
 > **Bevestigd op 18 september 2026** tegen een sensor die meet. Drie velden moeten aan
 > API v2 worden toegevoegd, en tot die tijd kan de app ze niet tonen:
@@ -950,6 +955,45 @@ De kleur van de toestand draagt wat ertoe doet; de stip blijft van instrumenten.
 `TileKind` kreeg daarvoor `count`: een kaal getal in de termen van het model. Nadrukkelijk
 niet `status`, want die drukt een *woord* af, en "2 dagen" afdrukken als "Beregen nu" is
 precies de fout die deze soort voorkomt.
+
+### De derde pillenrij — modelberekeningen in de grafiek
+
+De vraag vooraf was of dit backend-steun nodig had. **Voor Smith en DIV niet.** Beide
+zijn functies van uren die de app al mag ophalen: `/readings/` levert temperatuur en
+relatieve vochtigheid voor elk venster dat de lezer kiest, en de kern
+(`humidRuns` → `smith` / `cercospora`) rekent ze ter plekke door. Het venster van de
+grafiek is dan gewoon een ander venster dan dat van de kaart op 'Nu'.
+
+Dat gaat niet op voor alles wat er nog komt. **Trips is wél een backend-vraag**, want dat
+is een graaddagsom vanaf een biofix in het voorjaar: die begint maanden voor elk venster
+dat de app ophaalt, en de som over de tussenliggende maanden kan de app niet zelf maken
+zonder telkens een half seizoen aan uren te trekken. Hetzelfde geldt voor 10-10-48 en
+Mills zodra ze over meer dan een paar dagen lopen. Dat staat op de backend-lijst.
+
+`state/disease.ts` kreeg daarom een splitsing: `useDiseaseHours(input, range)` is het pad,
+en `useDiseaseWeek()` is dat pad met een vast venster van een week. De kaart en de grafiek
+vragen hetzelfde, in verschillende vensters — precies wat de neerslagbug leerde dat je
+niet twee keer moet bouwen. `useSoilCanopyWeek` neemt zijn `range` nu verplicht mee, zodat
+er geen stilzwijgend tweede venster kan ontstaan.
+
+`core/model/modelSeries.ts` zet de uitkomst om in een reeks. Drie keuzes staan erin vast:
+
+| | |
+| --- | --- |
+| Altijd dagresolutie | Smith en DIV zijn per definitie dagoordelen; een uurpunt zou een precisie voorwenden die het model niet heeft |
+| Gaten blijven gaten | een dag zonder complete uren krijgt geen punt, en `withRollingTwoDay` loopt er niet overheen — een tweedaagse som die een ontbrekende dag overslaat is een verzonnen som |
+| Vaste as en drempel | `smithHours` 0–24 met de lijn op 11, `divDaily` 0–14 met de lijn op 6 — de drempel is de reden dat je kijkt, dus mag hij niet uit beeld schuiven |
+
+Op het scherm is het een derde rij pillen onder 'gemeten' en 'aangevuld', met het label
+**"Berekend uit de metingen"**. De rij verschijnt alleen als de locatie een gewas heeft
+waar het model voor geldt en er uren zijn om mee te rekenen; wie naar een locatie veegt
+waar het model niet opgaat, valt terug op een reeks die er wel is.
+
+Eén ding heb ik daarna zelf teruggedraaid. De legenda-schakelaar die de opgetelde lijn
+aan- en uitzet, hoort bij *neerslag*: daar is het totaal een keuze, en de gedeelde as kost
+de balkjes hun hoogte. Bij bijvulruimte en bij DIV's tweedaagse som is de lijn de reeks —
+de schakelaar uitzetten liet een grafiek van kale neerslag achter, of haalde juist het
+getal weg waarop het advies gelezen wordt. Die twee staan nu vast aan.
 
 ## Nog open
 

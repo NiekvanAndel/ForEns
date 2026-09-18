@@ -152,6 +152,13 @@ import {
   type SoilSeriesKey,
 } from '../../core/model/soilSeries';
 import { soilThresholdSteps } from '../../core/model/indicators';
+import {
+  MODEL_SERIES_META, buildModelSeries, type ModelSeriesKey,
+} from '../../core/model/modelSeries';
+import { cropsFor } from '../../core/model/crops';
+import { smithAppliesTo } from '../../core/model/smith';
+import { cercosporaAppliesTo } from '../../core/model/cercospora';
+import { useDiseaseHours } from '../../state/disease';
 import { soilStatusBg } from '../../ui/soilStatusInk';
 import { SOIL_FIELD_CAPACITY_FILL } from '../../core/model/soilStatusColor';
 import { kPaToPf, type SoilStatus } from '../../core/model/soil';
@@ -193,9 +200,16 @@ import {
  * places to look. `isSoilKey` is the only branch; everything downstream reads the
  * `Series` that both builders produce.
  */
-export type ChartKey = SeriesKey | SoilSeriesKey;
+export type ChartKey = SeriesKey | SoilSeriesKey | ModelSeriesKey;
 
 const isSoilKey = (k: ChartKey): k is SoilSeriesKey => k in SOIL_SERIES_META;
+const isModelKey = (k: ChartKey): k is ModelSeriesKey => k in MODEL_SERIES_META;
+
+/** The model pills, and which crop each one speaks for. */
+const MODEL_PILLS: Record<ModelSeriesKey, { labelKey: AppStringKey; icon: IconName }> = {
+  smithHours: { labelKey: 'smithTitle', icon: 'drop-half' },
+  divDaily: { labelKey: 'divTitle', icon: 'chart-line' },
+};
 
 /** The soil pills, in the order the plan lists their blocks. */
 const SOIL_PILLS: Record<SoilSeriesKey, { labelKey: AppStringKey; icon: IconName }> = {
@@ -318,11 +332,44 @@ function GraphPage() {
   );
   const soilRows = useMemo(() => soilMeasurements.data ?? [], [soilMeasurements.data]);
 
+  /**
+   * The disease models over the window the reader picked.
+   *
+   * The same hours the card on 'Nu' reads, over a different period — one path, so the
+   * badge and the chart cannot disagree about a day.
+   */
+  const diseaseInput = useMemo(
+    () => ({ station: station ?? null, sensor: soil.station, offsetSec, enabled: !peeking }),
+    [station, soil.station, offsetSec, peeking]
+  );
+  const crops = useMemo(
+    () => cropsFor({ sensorCrop: soil.station?.crop, hasStation: !!station }),
+    [soil.station?.crop, station]
+  );
+  const modelHours = useDiseaseHours(
+    { ...diseaseInput, enabled: !peeking && crops.crops.length > 0 },
+    range
+  );
+
+  /** A pill per model that applies to something growing here, and has hours to run on. */
+  const modelKeys = useMemo<ModelSeriesKey[]>(() => {
+    if (!modelHours.hours.length) return [];
+    const keys: ModelSeriesKey[] = [];
+    if (crops.crops.some(smithAppliesTo)) keys.push('smithHours');
+    if (crops.crops.some(cercosporaAppliesTo)) keys.push('divDaily');
+    return keys;
+  }, [crops.crops, modelHours.hours]);
+
   const series = useMemo(
     () => {
       // Soil has no model behind it and nothing ahead of now, so it is its own
       // builder — see `core/model/soilSeries`. Both produce the same `Series`, which
       // is what lets everything below this line stay one path.
+      if (isModelKey(key)) {
+        return buildModelSeries({
+          key, from: range.from, to: range.to, hours: modelHours.hours,
+        });
+      }
       if (isSoilKey(key)) {
         const built = buildSoilSeries({
           key, from: range.from, to: range.to, samples: soilRows,
@@ -341,7 +388,7 @@ function GraphPage() {
         stepMinutes: fine && (measurements.data?.length ?? 0) > 0 ? 10 : 60,
       });
     },
-    [key, range.from, range.to, measurements.data, soilRows, model, fine]
+    [key, range.from, range.to, measurements.data, soilRows, modelHours.hours, model, fine]
   );
 
   // As far ahead as the model can be asked about.
@@ -357,7 +404,7 @@ function GraphPage() {
    */
   // A soil series has no ensemble behind it: nobody runs fifty members of a suction
   // measurement. So no band, and no request for one.
-  const bandField = isSoilKey(key) ? undefined : BAND_FIELD[key];
+  const bandField = isSoilKey(key) || isModelKey(key) ? undefined : BAND_FIELD[key];
   const ensemble = useEnsembleMembers({
     lat: location.lat,
     lon: location.lon,
@@ -379,9 +426,11 @@ function GraphPage() {
     ? soilTensionAxis(soil.placement?.thresholds ?? null, series.samples)
     : null;
 
-  const meta = isSoilKey(key)
-    ? { ...SOIL_SERIES_META[key], ...(tensionAxis ?? {}), summary: 'range' as const, edges: false }
-    : SERIES_META[key];
+  const meta = isModelKey(key)
+    ? { ...MODEL_SERIES_META[key], summary: 'range' as const, edges: false }
+    : isSoilKey(key)
+      ? { ...SOIL_SERIES_META[key], ...(tensionAxis ?? {}), summary: 'range' as const, edges: false }
+      : SERIES_META[key];
 
   /** Only where the series has edges worth naming and something to draw them from. */
   const hasEdges = !!meta.edges && series.samples.some((s) => s.band != null);
@@ -563,6 +612,25 @@ function GraphPage() {
   const filledPills = allPills.filter((p) => !measuredKeys.has(p.key));
   const splitPills = measuredPills.length > 0 && filledPills.length > 0;
 
+  /**
+   * The third row: what the models made of it.
+   *
+   * Its own row rather than a third kind of pill in the first two, because it is a
+   * third kind of *value* — neither measured here nor filled in from a model of the
+   * weather, but derived from the measurements by a published rule. Blad 1 called that
+   * out as the thing the reader would otherwise have no way to tell apart.
+   */
+  const modelPills: PillItem<ChartKey>[] = modelKeys.map((k) => ({
+    key: k as ChartKey,
+    icon: MODEL_PILLS[k].icon,
+    label: ta(MODEL_PILLS[k].labelKey, prefs.lang),
+  }));
+
+  // Swiping to a location the model does not apply to must not leave the page on it.
+  useEffect(() => {
+    if (isModelKey(key) && !modelKeys.includes(key)) setKey('temp');
+  }, [key, modelKeys]);
+
   // Swiping to a location without that sensor must not leave the page on a pill that
   // is no longer there — an empty chart with a selected pill reads as a failure.
   useEffect(() => {
@@ -577,6 +645,18 @@ function GraphPage() {
    * which is why a chart drawn over a move will step them rather than run one line
    * across both halves.
    */
+  const modelThreshold = useMemo(() => {
+    if (!isModelKey(key)) return null;
+    // One line, at the boundary the model is actually read on: eleven hours for Smith,
+    // the two-day total for DIV. The zone above it is the state's own colour.
+    return [{
+      at: MODEL_SERIES_META[key].threshold,
+      color: soilStatusBg(2, palette, appearance),
+      label: fmtDecimal(MODEL_SERIES_META[key].threshold),
+      shade: true,
+    }];
+  }, [key, palette, appearance]);
+
   const thresholds = useMemo(() => {
     // Suction and pF are the same quantity on two scales, so they take the same four
     // zones — `kPaToPf` converts each boundary exactly. The other soil charts have no
@@ -645,6 +725,10 @@ function GraphPage() {
       case 'soilTemp':
       case 'temp10': return `${fmtTempValue(v, prefs.tempUnit)}°`;
       case 'humidity10': return `${Math.round(v)}%`;
+      // The models speak in their own terms: hours in a day, a daily infection value.
+      // No unit to convert, and no word — the number is what a grower reads them on.
+      case 'smithHours': return `${Math.round(v)} ${ta(v === 1 ? 'smithHour' : 'smithHoursUnit', prefs.lang)}`;
+      case 'divDaily': return String(Math.round(v));
     }
   };
 
@@ -726,6 +810,13 @@ function GraphPage() {
           ) : (
             <PillSwitcher items={allPills} active={key} onChange={setKey} />
           )}
+
+          {modelPills.length ? (
+            <>
+              <RowLabel text={ta('pillModels', prefs.lang)} tone={palette.accentDark} />
+              <PillSwitcher items={modelPills} active={key} onChange={setKey} />
+            </>
+          ) : null}
         </View>
 
         {/* Not a card. A chart inside one is inset three times over — the page's own
@@ -806,19 +897,30 @@ function GraphPage() {
                   // land on the cardinal points rather than between them.
                   formatAxis={key === 'windDir' ? degToCompass : undefined}
                   gridLines={key === 'windDir' ? 4 : undefined}
-                  showCumulative={meta.shape === 'bar' && showCumulative}
+                  // Rainfall's total is a choice — the axis it shares costs the bars
+                  // their height, which is what the legend switch pays back. The other
+                  // two lines *are* the series: switching off the refill room leaves a
+                  // chart of rainfall, and switching off DIV's two-day total leaves the
+                  // figure the guidance is read on off the page.
+                  showCumulative={
+                    key === 'refillMm' || key === 'divDaily'
+                      ? true
+                      : meta.shape === 'bar' && showCumulative
+                  }
                   // The line over the bars. On rainfall that is the running total; on
                   // refill room it is the room itself, with the rain that filled it as
                   // the bars underneath. Same mechanism, two different sentences.
                   cumulativeLabel={
                     key === 'refillMm'
                       ? ta('soilRefillRoom', prefs.lang)
-                      : ta('cumulative', prefs.lang)
+                      : key === 'divDaily'
+                        ? ta('divTwoDays', prefs.lang)
+                        : ta('cumulative', prefs.lang)
                   }
                   cumulativeColor={key === 'refillMm' ? palette.agroInk : palette.inkHeading}
                   spread={showSpread ? spread : null}
                   spreadLabel={ta('spread', prefs.lang)}
-                  thresholds={thresholds}
+                  thresholds={modelThreshold ?? thresholds}
                   background={palette.appBg}
                   emptyLabel={ta('noSeries', prefs.lang)}
                 />

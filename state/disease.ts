@@ -21,7 +21,9 @@ import { agroIntegration } from '../core/prefs';
 import {
   AgroAuthError, fetchSoilRange, fetchStationRange, withAgroToken,
 } from '../core/sources/agroexact';
-import { humidHoursFrom, type HumidHour } from '../core/model/humidHours';
+import {
+  humidHoursFrom, type HumidHour, type HumidSource,
+} from '../core/model/humidHours';
 import { cropsFor, type LocationCrops } from '../core/model/crops';
 import { diseasePressure, type DiseasePressure } from '../core/model/diseasePressure';
 import type { SoilStation } from '../core/sources/agroexact';
@@ -56,33 +58,33 @@ export interface DiseaseState extends DiseasePressure {
  * all, which on an account of onion sensors is the difference between a page that
  * costs one request and one that costs five.
  */
-export function useDisease({
-  station, sensor, offsetSec, enabled = true,
-}: DiseaseInput): DiseaseState {
-  const crops = useMemo(
-    () => cropsFor({ sensorCrop: sensor?.crop, hasStation: !!station }),
-    [sensor?.crop, station]
-  );
+export interface DiseaseHours {
+  hours: HumidHour[];
+  source: HumidSource;
+  loading: boolean;
+}
 
-  // Only where a model actually applies to something growing here.
-  const wanted = enabled && crops.crops.length > 0;
-
-  const range = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const from = new Date(Date.parse(`${today}T12:00:00Z`) - (DISEASE_DAYS - 1) * 86_400_000);
-    return { from: from.toISOString().slice(0, 10), to: today };
-  }, []);
-
-  const canopy = useSoilCanopyWeek(sensor, offsetSec, wanted);
+/**
+ * The hours a location's models run on, over whatever window is asked for.
+ *
+ * Split out so the card's fixed week and the chart's chosen period take the same path.
+ * The choice between the two instruments is `humidHoursFrom`'s, made once; this only
+ * fetches what that rule may pick from.
+ */
+export function useDiseaseHours(
+  { station, sensor, offsetSec, enabled = true }: DiseaseInput,
+  range: { from: string; to: string }
+): DiseaseHours {
+  const canopy = useSoilCanopyWeek(sensor, offsetSec, enabled, range);
 
   // The 1.50 m record, from the weather station. A soil-only location has none — the
   // sync never puts a sensor on a station's page — so there the canopy is the only
   // answer, and a BASIC or PLUS field simply has no hours to run on.
   const standardQuery = useStationRange(
-    wanted ? station?.id ?? null : null,
+    enabled ? station?.id ?? null : null,
     offsetSec,
     range,
-    wanted && !!station
+    enabled && !!station
   );
 
   const standard = useMemo<HumidHour[]>(
@@ -92,16 +94,41 @@ export function useDisease({
     [standardQuery.data]
   );
 
-  const pressure = useMemo(() => {
-    const { hours, source } = humidHoursFrom(standard, canopy.hours);
-    return diseasePressure({ hours, crops: crops.crops, source });
-  }, [standard, canopy.hours, crops.crops]);
+  const picked = useMemo(
+    () => humidHoursFrom(standard, canopy.hours),
+    [standard, canopy.hours]
+  );
 
-  return {
-    ...pressure,
-    crops,
-    loading: canopy.loading || standardQuery.isFetching,
-  };
+  return { ...picked, loading: canopy.loading || standardQuery.isFetching };
+}
+
+/** The last week, as the card's window. */
+export function useDiseaseWeek(): { from: string; to: string } {
+  return useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const from = new Date(Date.parse(`${today}T12:00:00Z`) - (DISEASE_DAYS - 1) * 86_400_000);
+    return { from: from.toISOString().slice(0, 10), to: today };
+  }, []);
+}
+
+export function useDisease(input: DiseaseInput): DiseaseState {
+  const { station, sensor, enabled = true } = input;
+  const crops = useMemo(
+    () => cropsFor({ sensorCrop: sensor?.crop, hasStation: !!station }),
+    [sensor?.crop, station]
+  );
+
+  // Only where a model actually applies to something growing here.
+  const wanted = enabled && crops.crops.length > 0;
+  const range = useDiseaseWeek();
+  const { hours, source, loading } = useDiseaseHours({ ...input, enabled: wanted }, range);
+
+  const pressure = useMemo(
+    () => diseasePressure({ hours, crops: crops.crops, source }),
+    [hours, source, crops.crops]
+  );
+
+  return { ...pressure, crops, loading };
 }
 
 /**
