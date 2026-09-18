@@ -30,9 +30,10 @@
  * when they walk the field. "Ga kijken", never "ga spuiten".
  */
 import { humidDays, type HumidHour, type HumidSource } from './humidHours';
+import { threshold } from '../thresholds';
 
 /** Cercospora counts hours at or above this, in %. */
-export const DIV_HUMIDITY = 90;
+export const DIV_HUMIDITY = threshold('cercospora.humidity');
 
 /**
  * Upper bounds of the hour bands, in the table's own order.
@@ -112,7 +113,7 @@ export interface CercosporaResult {
  * named constant for the same reason the table is: so the number a grower is being
  * warned on is one line to correct.
  */
-export const DIV_RECENT_THRESHOLD = 6;
+export const DIV_RECENT_THRESHOLD = threshold('cercospora.recent');
 
 export interface CercosporaInput {
   hours: readonly HumidHour[];

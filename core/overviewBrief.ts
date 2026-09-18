@@ -25,6 +25,7 @@
  * with; see DEFERRED.
  */
 import { firstWorkRun, rankRows, workWindow, type OverviewRow } from './overviewData';
+import { threshold } from './thresholds';
 
 /** Which sentence, and therefore which blanks are filled. */
 export type BriefKind =
@@ -83,6 +84,14 @@ export interface BriefContext {
   rules?: number;
   nowcasts?: readonly (BriefNowcast | null)[];
   limits?: BriefLimits;
+  /**
+   * Whether the workability family is switched on.
+   *
+   * The brief's "where to go" line is that family's judgement in a sentence, so it
+   * answers to the same switch as the widget and the field's own page. Omitted means
+   * on, which keeps a caller with no preferences in hand working.
+   */
+  workability?: boolean;
 }
 
 /**
@@ -110,13 +119,13 @@ export interface BriefLimits {
 }
 
 export const DEFAULT_BRIEF_LIMITS: BriefLimits = {
-  wettestMm: 0.5,
+  wettestMm: threshold('brief.wettest'),
   soonMin: 60,
-  aheadMm: 1,
+  aheadMm: threshold('brief.ahead'),
   widespreadShare: 0.75,
   namesMax: 2,
-  tempSpanC: 1.5,
-  windSpanKmh: 5,
+  tempSpanC: threshold('brief.tempSpan'),
+  windSpanKmh: threshold('brief.windSpan'),
 };
 
 /** What the brief needs from the radar, per location and in the rows' own order. */
@@ -212,8 +221,12 @@ export function briefFor(
   }
 
   // ── Where to go ────────────────────────────────────────────────────────────
-  const best = bestWorkable(rows);
-  if (best) out.push({ kind: 'workable', place: best });
+  // The one line in the brief that is a judgement rather than a reading, so it is the
+  // one line that can be switched off. See `core/basisLayer`.
+  if (context.workability !== false) {
+    const best = bestWorkable(rows);
+    if (best) out.push({ kind: 'workable', place: best });
+  }
 
   // ── And what the reader asked to be told ───────────────────────────────────
   // Last, because it is about the app rather than about the weather. It is here at

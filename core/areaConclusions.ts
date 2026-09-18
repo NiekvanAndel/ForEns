@@ -28,17 +28,18 @@
  * put in an order. The bars are gathered at the top to be argued with.
  */
 import { firstWorkRun, workWindow, type OverviewRow, type WorkHour } from './overviewData';
+import { threshold } from './thresholds';
 import type { LocationAdvice } from './overviewFieldAdvice';
 import type { AdviceFactor } from './model/fieldAdvice';
 
 /** How far apart the wettest and driest field must be before it is worth a line. */
-export const SPREAD_MM = 10;
+export const SPREAD_MM = threshold('area.spreadMm');
 /** And by what factor, so two heavy fields five millimetres apart stay quiet. */
-export const SPREAD_RATIO = 3;
+export const SPREAD_RATIO = threshold('area.spreadRatio');
 /** A run shorter than this is not a window anybody plans a day around. */
-export const USEFUL_RUN_H = 2;
+export const USEFUL_RUN_H = threshold('area.usefulRun');
 /** Two fields with the same thing wrong is a pattern; one is a field. */
-export const SHARED_MIN = 2;
+export const SHARED_MIN = threshold('area.sharedMin');
 
 export type AreaKind =
   /** Every location workable at once, from `from` for `hours`. */

@@ -32,17 +32,18 @@
  * in exactly the weather that produces them.
  */
 import { humidDays, type HumidHour, type HumidSource } from './humidHours';
+import { threshold } from '../thresholds';
 
 /** Smith's own numbers. Named so a reader can check them against the literature. */
 export const SMITH = {
   /** Relative humidity, %. At or above. */
-  humidity: 90,
+  humidity: threshold('smith.humidity'),
   /** Hours per day at or above it. */
-  hoursPerDay: 11,
+  hoursPerDay: threshold('smith.hoursPerDay'),
   /** The day's minimum temperature, °C. At or above. */
-  minTemp: 10,
+  minTemp: threshold('smith.minTemp'),
   /** Consecutive qualifying days that make a period. */
-  days: 2,
+  days: threshold('smith.days'),
 } as const;
 
 /** One day, and whether the weather in it met both of Smith's conditions. */

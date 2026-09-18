@@ -34,6 +34,10 @@
 // From `core/arrangement`, never from `core/prefs`: preferences hold this page's
 // default layout, so importing them back would be a cycle — and was.
 import { arrangeTiles, type TileLayout } from './arrangement';
+// Type-only: `basisLayer` reaches `prefs`, which reaches this file for its default
+// layout. A type import is erased, so the cycle is a naming convenience and never a
+// module-evaluation order.
+import type { BasisComponent } from './basisLayer';
 
 /** What a widget needs fetched before it can say anything. */
 export type OverviewSource =
@@ -131,6 +135,16 @@ export interface OverviewWidget {
   needs: readonly OverviewSource[];
   /** Which tier this belongs to. Absent is the basis version. */
   tier?: OverviewTier;
+  /**
+   * Which basis component's judgement this widget draws, where it draws one.
+   *
+   * A widget that ranks locations by whether they can be worked is the workability
+   * family speaking, and it has to answer to the same switch — otherwise switching
+   * that family off silences the field's own page and leaves the overview cheerfully
+   * ranking the same fields by the same rules. Absent on the widgets that only show
+   * readings: a rainfall ranking is not a judgement and belongs to nobody.
+   */
+  component?: BasisComponent;
   /** Defaults to `all`. */
   scope?: OverviewScope;
   /** Which controls this widget's settings sheet offers. Absent means it has none,
@@ -158,13 +172,15 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   { id: 'summary', size: 'full', needs: ['conditions', 'outlook', 'nowcast'] },
   // And what to do about it. Second, because a summary that cannot be acted on is a
   // poster — see `core/overviewAdvice`.
-  { id: 'advice', size: 'full', needs: ['conditions', 'outlook'], options: ['limit'] },
+  // The attention list is the work window plus a frost and a rainfall rule — the
+  // workability family, said per location. Same switch.
+  { id: 'advice', size: 'full', needs: ['conditions', 'outlook'], component: 'workability', options: ['limit'] },
   // Everything worth telling somebody about: the app's own judgement per location and
   // the thresholds the reader set themselves, in one list. Draws nothing at all when
   // there is nothing, which is most days and the point.
   // It needs the nowcast as well as the conditions: "rain in seven minutes" is the
   // sharpest thing the app says and the radar is where it comes from.
-  { id: 'alerts', size: 'full', needs: ['conditions', 'nowcast'], options: ['limit'] },
+  { id: 'alerts', size: 'full', needs: ['conditions', 'nowcast'], component: 'alerts', options: ['limit'] },
   // What fell. The first number an arable grower wants in the morning.
   { id: 'rain24', size: 'half', needs: ['conditions'], options: ['limit', 'window'] },
   // And what is coming, over the same ranking, so the two read as one column.
@@ -184,8 +200,11 @@ export const OVERVIEW_WIDGETS: readonly OverviewWidget[] = [
   // Which field to walk, rather than which to water. Its own widget because it answers
   // a different question from the soil one and can apply where that one does not — a
   // weather pole with crops under it has disease pressure and no suction.
-  { id: 'disease', size: 'full', needs: ['disease'], options: ['limit'] },
-  { id: 'workability', size: 'full', needs: ['conditions', 'outlook'], options: ['limit'] },
+  { id: 'disease', size: 'full', needs: ['disease'], component: 'disease', options: ['limit'] },
+  // 'Werkbaar weer': hours workable per location, against the work window's own
+  // boundaries. Those are this app's own figures — see `core/thresholds` — which is
+  // exactly why the widget has to sit in a layer rather than beside one.
+  { id: 'workability', size: 'full', needs: ['conditions', 'outlook'], component: 'workability', options: ['limit'] },
   // And what the boundaries say about each field: the spray window, frost, whether
   // the land carries a machine, whether to spread. Beside the workability widget
   // because they answer the same morning, and separate from it because that one is a
@@ -259,11 +278,23 @@ export interface TierAccess {
    *  a licence flag in everything but name, and a caller that forgets to pass it gets
    *  the basis version rather than a tier nobody paid for. */
   agroIntel?: boolean;
+  /**
+   * Which basis components are switched on, by id.
+   *
+   * Omitted means "do not filter", which is what keeps this page's own tests and any
+   * caller that has no preferences in hand working. The app itself always passes it —
+   * a widget whose family is off must not draw, and must not fetch.
+   */
+  basis?: readonly string[];
 }
 
 /** Every widget this reader may see, in the catalogue's own order. */
 export function widgetsFor(access: TierAccess = {}): OverviewWidget[] {
-  return OVERVIEW_WIDGETS.filter((w) => w.tier !== 'agroIntel' || access.agroIntel === true);
+  return OVERVIEW_WIDGETS.filter((w) => {
+    if (w.tier === 'agroIntel' && access.agroIntel !== true) return false;
+    if (w.component && access.basis && !access.basis.includes(w.component)) return false;
+    return true;
+  });
 }
 
 /** The widgets to draw, in the reader's order. */

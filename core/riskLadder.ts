@@ -33,6 +33,7 @@
  *
  * Facts, not sentences, as everywhere else in `core/`.
  */
+import { threshold } from './thresholds';
 import type { EnsembleOutlook } from './sources/ensembleOutlook';
 import type { RiskAppetite } from './prefs';
 
@@ -43,20 +44,24 @@ import type { RiskAppetite } from './prefs';
  * these are the plan's own figures and are meant to be argued with, which is why they
  * are one table rather than scattered through the rules.
  */
-export const LADDER = { watch: 30, prepare: 60, act: 85 } as const;
+export const LADDER = {
+  watch: threshold('risk.watch'),
+  prepare: threshold('risk.prepare'),
+  act: threshold('risk.act'),
+} as const;
 
 export type Rung = keyof typeof LADDER;
 
 /** How far the ladder moves for a reader who is careful, or who would rather wait. */
 export const APPETITE_SHIFT: Record<RiskAppetite, number> = {
-  cautious: -15,
+  cautious: -threshold('risk.appetiteShift'),
   normal: 0,
-  patient: 15,
+  patient: threshold('risk.appetiteShift'),
 };
 
 /** Above this the forecast has committed; below the mirror of it, so has it. */
-export const SETTLED_HIGH = 85;
-export const SETTLED_LOW = 15;
+export const SETTLED_HIGH = threshold('risk.settledHigh');
+export const SETTLED_LOW = threshold('risk.settledLow');
 
 /** Whether the decision can be made now, or is still worth sleeping on. */
 export type Decision = 'settled-yes' | 'settled-no' | 'open';

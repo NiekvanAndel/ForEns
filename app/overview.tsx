@@ -68,6 +68,7 @@ import { areaConclusions } from '../core/areaConclusions';
 import { riskStatements } from '../core/riskLadder';
 import { dayWindows } from '../core/dayWindows';
 import { enabledAdviceFamilies } from '../core/prefs';
+import { enabledBasisComponents } from '../core/basisLayer';
 import { ADVICE_FAMILIES } from '../core/model/fieldAdvice';
 import { deriveAlert } from '../core/model/alert';
 import { ta, type AppStringKey } from '../core/i18n';
@@ -132,7 +133,15 @@ export default function OverviewScreen() {
    * a tier a tier: with AgroIntelligence off its widgets are not in the list, so they
    * are not drawn, not offered in the editor, and their sources are never fetched.
    */
-  const access = useMemo(() => ({ agroIntel: prefs.agroIntel.enabled }), [prefs.agroIntel.enabled]);
+  // Which basis components speak, and whether the add-on does. A widget that draws a
+  // family's judgement — 'werkbaar weer', the attention list, the warnings, the
+  // disease models — is dropped with its family, and its sources with it.
+  const basis = enabledBasisComponents(prefs);
+  const basisKey = basis.join(',');
+  const access = useMemo(
+    () => ({ agroIntel: prefs.agroIntel.enabled, basis: basisKey.split(',').filter(Boolean) }),
+    [prefs.agroIntel.enabled, basisKey]
+  );
   const widgets = useMemo(() => arrangeWidgets(layout, access), [layout, access]);
   const sources = useMemo(() => neededSources(layout, access), [layout, access]);
 

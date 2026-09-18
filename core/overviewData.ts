@@ -11,6 +11,7 @@
  * every other surface in this app does.
  */
 import type { EnsembleOutlook } from './sources/ensembleOutlook';
+import { threshold } from './thresholds';
 import { measuredQuantities, type MeasuredQuantities } from './model/station';
 import type { ForecastModel, Hour } from './model/types';
 
@@ -230,9 +231,9 @@ export interface WorkWindowLimits {
 }
 
 export const DEFAULT_WORK_LIMITS: WorkWindowLimits = {
-  wetMm: 0.1,
-  windKmh: 20,
-  minTempC: 1,
+  wetMm: threshold('workWindow.wet'),
+  windKmh: threshold('workWindow.wind'),
+  minTempC: threshold('workWindow.minTemp'),
 };
 
 export type WorkVerdict = 'yes' | 'wet' | 'windy' | 'cold' | 'unknown';

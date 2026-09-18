@@ -1,3 +1,4 @@
+import { threshold } from '../thresholds';
 /**
  * The one kernel under all the disease models: hours above a humidity threshold.
  *
@@ -207,7 +208,7 @@ export function humidHoursFrom(
  * Ninety-five per cent relative humidity. Set by the grower on 18 September 2026, and
  * it is the same rule the web app's own derivation uses on its humidity half.
  */
-export const LEAF_WET_HUMIDITY = 95;
+export const LEAF_WET_HUMIDITY = threshold('leafWet.humidity');
 
 /**
  * Hours the leaf was probably wet — **a proxy, never a measurement.**

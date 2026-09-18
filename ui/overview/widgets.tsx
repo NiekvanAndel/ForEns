@@ -56,6 +56,7 @@ import { useForecast } from '../../state/forecast';
 import { useAgroAuth } from '../../state/auth';
 import type { LocationSoil } from '../../state/soilStations';
 import type { LocationDisease } from '../../state/disease';
+import { basisComponentOn } from '../../core/basisLayer';
 import { worstPerLocation, type LocationAdvice } from '../../core/overviewFieldAdvice';
 import { adviceReason, adviceTitle, FAMILY_LABEL } from '../advice/words';
 import type { AreaConclusion } from '../../core/areaConclusions';
@@ -181,6 +182,9 @@ export function SummaryWidget({ rows, alerts, nowcasts }: WidgetProps) {
   const brief = briefFor(rows, nowcasts, {
     warnings: standing.map((x) => x.alert!.label),
     rules: prefs.userAlerts.filter((a) => a.enabled).length,
+    // The "where to go" line is the workability family speaking, so it follows that
+    // family's switch here as it does everywhere else.
+    workability: basisComponentOn(prefs, 'workability'),
   });
 
   const deg = (v: number) => `${convTemp(v, prefs.tempUnit)}${tempUnitLabel(prefs.tempUnit)}`;

@@ -25,6 +25,7 @@
  */
 import { firstWorkRun, workWindow, type OverviewRow, type WorkWindowLimits } from './overviewData';
 import { DEFAULT_WORK_LIMITS } from './overviewData';
+import { threshold } from './thresholds';
 
 /**
  * The numbers every rule is drawn against.
@@ -46,10 +47,10 @@ export interface AdviceLimits extends WorkWindowLimits {
 
 export const DEFAULT_ADVICE_LIMITS: AdviceLimits = {
   ...DEFAULT_WORK_LIMITS,
-  soakedMm: 15,
-  rainAheadMm: 10,
-  usefulRunHours: 3,
-  frostC: 0,
+  soakedMm: threshold('attention.soaked'),
+  rainAheadMm: threshold('attention.rainAhead'),
+  usefulRunHours: threshold('attention.usefulRun'),
+  frostC: threshold('attention.frost'),
 };
 
 /**

@@ -38,6 +38,7 @@
  *   would decide it — the variety, the machine, the last pass — is not in this app.
  */
 import { certaintyAt, type Certainty, type Provenance } from './indicators';
+import { threshold } from '../thresholds';
 import { deltaT, wetBulb } from './psychro';
 
 
@@ -128,57 +129,62 @@ export interface AdviceReading {
 }
 
 // ── The boundaries ──────────────────────────────────────────────────────────────
+//
+// Aliases of `core/thresholds`, which holds the figure *and* where it came from — a
+// legal limit, a published model, Dutch practice, or this app's own choice. The names
+// stay here because the rules read better with them; the numbers do not, because a
+// number nobody can look up is a number nobody can argue with.
 
 /** Wind, km/h. 5 m/s is the legal limit for spraying in the Netherlands. */
-export const SPRAY_WIND_MAX = 18;
+export const SPRAY_WIND_MAX = threshold('spray.wind');
 /** Delta T, °C: under 2 the droplets hang, over 8 they are gone before the leaf. */
-export const SPRAY_DELTA_T_MIN = 2;
-export const SPRAY_DELTA_T_MAX = 8;
+export const SPRAY_DELTA_T_MIN = threshold('spray.deltaTMin');
+export const SPRAY_DELTA_T_MAX = threshold('spray.deltaTMax');
 /** Air temperature, °C. */
-export const SPRAY_TEMP_MAX = 25;
-export const SPRAY_TEMP_MIN = 1;
+export const SPRAY_TEMP_MAX = threshold('spray.tempMax');
+export const SPRAY_TEMP_MIN = threshold('spray.tempMin');
 /** How long a spray needs to stay on, and how much rain takes it off again. */
-export const SPRAY_RAINFAST_H = 2;
-export const SPRAY_RAINFAST_MM = 0.2;
+export const SPRAY_RAINFAST_H = threshold('spray.rainfastH');
+export const SPRAY_RAINFAST_MM = threshold('spray.rainfastMm');
 /** The inversion proxy: a night that has lost its wind, km/h. */
-export const INVERSION_WIND_MAX = 5;
+export const INVERSION_WIND_MAX = threshold('spray.inversionWind');
 /** How many hours the calm has to hold before it counts as layered air. */
-const INVERSION_HOLD_H = 3;
+const INVERSION_HOLD_H = threshold('spray.inversionHold');
 /** How far ahead a spray window is worth naming, hours. */
-export const SPRAY_HORIZON_H = 48;
+export const SPRAY_HORIZON_H = threshold('spray.horizon');
 
 /** Air frost, and the ground-frost band above it: grass runs colder than 1.50 m. */
-export const FROST_AIR = 0;
-export const FROST_GROUND = 2;
+export const FROST_AIR = threshold('frost.air');
+export const FROST_GROUND = threshold('frost.ground');
 /** Blossom frost — the figure fruit growers act on, °C. */
-export const FROST_BLOSSOM = -2;
+export const FROST_BLOSSOM = threshold('frost.blossom');
 /** Below this wet bulb, frost irrigation takes more heat out than it puts in, °C. */
-export const FROST_WETBULB_LIMIT = -5;
-export const FROST_HORIZON_H = 72;
+export const FROST_WETBULB_LIMIT = threshold('frost.wetBulb');
+export const FROST_HORIZON_H = threshold('frost.horizon');
 
 /** The running water balance behind trafficability: days, and its surplus in mm. */
-export const BALANCE_DAYS = 7;
-export const TRAFFIC_MARGINAL_MM = 5;
-export const TRAFFIC_BLOCKED_MM = 15;
+export const BALANCE_DAYS = threshold('workability.balanceDays');
+export const TRAFFIC_MARGINAL_MM = threshold('workability.trafficMarginal');
+export const TRAFFIC_BLOCKED_MM = threshold('workability.trafficBlocked');
 /** A mowing window is three days under a millimetre. */
-export const MOWING_DAYS = 3;
-export const MOWING_DRY_MM = 1;
+export const MOWING_DAYS = threshold('workability.mowingDays');
+export const MOWING_DRY_MM = threshold('workability.mowingDryMm');
 /** The deficit over a fortnight, and when it is worth naming, mm. */
-export const DROUGHT_DAYS = 14;
-export const DROUGHT_MARGINAL_MM = 25;
-export const DROUGHT_BLOCKED_MM = 50;
+export const DROUGHT_DAYS = threshold('workability.droughtDays');
+export const DROUGHT_MARGINAL_MM = threshold('workability.droughtMarginal');
+export const DROUGHT_BLOCKED_MM = threshold('workability.droughtBlocked');
 
 /** Ammonia goes off warm, dry ground before it is in it: °C and %RH. */
-export const EMISSION_TEMP = 15;
-export const EMISSION_RH = 60;
+export const EMISSION_TEMP = threshold('fertilise.emissionTemp');
+export const EMISSION_RH = threshold('fertilise.emissionRh');
 /** How many of the next twelve hours have to be both before it is a risk. */
-const EMISSION_MARGINAL_H = 3;
-const EMISSION_BLOCKED_H = 6;
+const EMISSION_MARGINAL_H = threshold('fertilise.emissionMarginalH');
+const EMISSION_BLOCKED_H = threshold('fertilise.emissionBlockedH');
 /** Rain over two days that would take the nitrogen past the root zone, mm. */
-export const LEACHING_MM = 25;
+export const LEACHING_MM = threshold('fertilise.leaching');
 /** The published figure for the first grass dressing. */
-export const TSUM_TARGET = 180;
-export const FERT_HORIZON_H = 48;
+export const TSUM_TARGET = threshold('fertilise.tSum');
+export const FERT_HORIZON_H = threshold('fertilise.horizon');
 
 // ── Shared helpers ──────────────────────────────────────────────────────────────
 
