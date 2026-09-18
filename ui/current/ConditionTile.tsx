@@ -34,6 +34,7 @@ import { Text } from '../Text';
 import { usePrefs } from '../../state/prefs';
 import type { Tile } from '../../core/model/tiles';
 import { temperatureColor } from '../../core/model/temperatureColor';
+import { soilStatusInk } from '../soilStatusInk';
 import {
   degToCompass, fmtDecimal, fmtMm, fmtTempValue, fmtWindValue, ta, windUnitLabel,
 } from '../../core/i18n';
@@ -101,13 +102,21 @@ export function ConditionTile({ tile, onPress }: { tile: Tile; onPress?: () => v
   // ink say the same thing; a day's high and low keep red and blue, because there the
   // colour means 'this is the top of the day', not 'this is warm'. Everything else is
   // heading ink: a grid where every block shouts is a grid where nothing does.
+  //
+  // A soil figure the state judges takes the state's colour, for the same reason a
+  // temperature takes the scale's: the number and its ink then say the same thing. It
+  // comes first because it is the stronger claim — on a field, "beregen nu" is what
+  // the page is for, and a suction printed in heading ink beside a coloured state
+  // would be two figures disagreeing about how urgent they are.
   const ink =
-    tile.kind === 'mm'
-      ? (tile.value ?? 0) > 0 ? palette.valPrecip : palette.valPrecipZero
-      : tile.id === 'temp-max' ? palette.valHigh
-        : tile.id === 'temp-min' ? palette.valLow
-          : tile.kind === 'temp' ? temperatureColor(tile.value, appearance) ?? palette.valTemp
-            : palette.appValue;
+    tile.status != null
+      ? soilStatusInk(tile.status, palette)
+      : tile.kind === 'mm'
+        ? (tile.value ?? 0) > 0 ? palette.valPrecip : palette.valPrecipZero
+        : tile.id === 'temp-max' ? palette.valHigh
+          : tile.id === 'temp-min' ? palette.valLow
+            : tile.kind === 'temp' ? temperatureColor(tile.value, appearance) ?? palette.valTemp
+              : palette.appValue;
 
   const body = (
     <Card pad={0} style={{ flex: 1 }}>

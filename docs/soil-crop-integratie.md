@@ -666,6 +666,31 @@ De widget tekent niets op een account zonder bodemsensor — dezelfde regel als 
 meldingenblok. Een kaart die hoogte kost om te melden dát er niets is, is een kaart die
 iedereen zonder sensor met de hand moet uitzetten.
 
+### De kleur van de toestand, op drie oppervlakken
+
+Vier toestanden, vier inkten, op één plek: `ui/soilStatusInk.ts`. Er stonden twee
+kopieën van die tabel voordat er drie oppervlakken waren die hem gebruikten, en dat is
+één kopie voorbij het punt waarop ze uiteen gaan lopen. Anders dan
+`temperatureColor` is het geen eigen tabel maar zijn het palettokens: die schaal heeft
+elf stops die het palet nooit nodig had, terwijl dit de bestaande ok/warn/stop-inkten
+zijn die hun gewone werk doen.
+
+Op 'Actueel' krijgen **de drie blokken die de toestand beoordeelt** — zuigspanning,
+vochtstatus en waterpercentage — de waarde in die kleur. Dezelfde reden als bij
+temperatuur: het getal en zijn inkt zeggen dan hetzelfde. pF, de bijvulruimte en de
+temperaturen beschrijven de bodem zonder er een oordeel over te vellen, en een raster
+waarin elk getal gekleurd is, is een raster waarin de kleur niets zegt.
+
+`Tile` draagt daarvoor een optionele `status` — de toestand die de API bevroor tegen de
+drempels van dát perceel, niet een band die deze app afleidde. Draagt een meting geen
+toestand, dan krijgt het blok géén kleur, in plaats van de kleur van toestand 0: een
+perceel waarvan niemand de toestand kent mag niet in de inkt staan die "alles in orde"
+betekent.
+
+In de widget staat naast de kPa nu ook de **bijvulruimte in mm**. Dat is het enige wat
+geen enkele andere indicator kan zeggen, en het verschil tussen "dit perceel is droog"
+en een besluit waar een haspel op past.
+
 ## Nog open
 
 - ~~De grens van ~2 km waarbinnen een SoilExact aan een bestaande locatie wordt

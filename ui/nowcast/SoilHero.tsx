@@ -45,7 +45,8 @@ import { usePrefs } from '../../state/prefs';
 import { fmtDecimal, fmtTempValue, ta, tempUnitLabel } from '../../core/i18n';
 import type { Indicator } from '../../core/model/indicators';
 import { placementContext } from '../../core/model/soilTiles';
-import type { Placement } from '../../core/model/soil';
+import type { Placement, SoilStatus } from '../../core/model/soil';
+import { soilStatusInk } from '../soilStatusInk';
 import type { SoilSample } from '../../core/sources/agroexact';
 
 export interface SoilHeroProps {
@@ -212,7 +213,6 @@ function StateBar({ indicator }: { indicator: Indicator }) {
   if (!critical) return null;
 
   const scale = Math.max(critical * BAR_HEADROOM, value ?? 0);
-  const ink = [palette.agroInk, palette.valSun, palette.valTemp, palette.valHigh];
 
   // Each zone runs from the boundary that opens it to the next one, in fractions of
   // the track. The first runs from zero.
@@ -223,7 +223,10 @@ function StateBar({ indicator }: { indicator: Indicator }) {
     <View style={{ gap: 6 }}>
       <View style={{ flexDirection: 'row', height: 7, borderRadius: 4, overflow: 'hidden' }}>
         {widths.map((w, i) => (
-          <View key={i} style={{ flex: w, backgroundColor: ink[i] ?? palette.valHigh }} />
+          <View
+            key={i}
+            style={{ flex: w, backgroundColor: soilStatusInk(i as SoilStatus, palette) }}
+          />
         ))}
       </View>
       {value != null ? (

@@ -82,19 +82,26 @@ export function soilTiles(
     timeLabel: string,
     value: number | null,
     kind: TileKind,
-    measured = true
+    /** Whether this figure is one the state judges, and so takes the state's colour. */
+    judged = false
   ): Tile | null => {
     if (value == null || !Number.isFinite(value)) return null;
-    return { id: `soil-${id}`, title, timeLabel, value, kind, measured };
+    return {
+      id: `soil-${id}`, title, timeLabel, value, kind, measured: true,
+      ...(judged && latest.status != null ? { status: latest.status } : {}),
+    };
   };
 
   const depth = labels.atDepth;
   const { canopy } = soilCapabilities(placement.sensorType);
 
   return [
-    // The indicator itself, and the reason soil comes first in the layer.
-    tile('tension', labels.tension, depth, latest.tension, 'kpa'),
-    tile('status', labels.status, labels.now, latest.status, 'status'),
+    // The three the state judges, and so the three that take its colour: how dry it
+    // is, what that means, and how much water is in there. The rest — pF, the refill
+    // room, the temperatures — describe the soil without passing judgement on it, and
+    // a grid where every figure is coloured is a grid where the colour says nothing.
+    tile('tension', labels.tension, depth, latest.tension, 'kpa', true),
+    tile('status', labels.status, labels.now, latest.status, 'status', true),
     tile('refill-room', labels.refillRoom, depth, latest.refillMm, 'mm'),
     // The figure, not the recommendation. The badge only names an amount once the
     // field is at "irrigate now"; a block on a grid of figures is a figure, and
@@ -103,7 +110,7 @@ export function soilTiles(
     latest.status != null && latest.status >= 1
       ? tile('refill-needed', labels.refillNeeded, depth, latest.refillToScarceMm, 'mm')
       : null,
-    tile('water-percent', labels.waterPercent, depth, latest.waterPercent, 'percent'),
+    tile('water-percent', labels.waterPercent, depth, latest.waterPercent, 'percent', true),
     tile('pf', labels.pF, depth, latest.pF, 'pf'),
     tile('soil-temp', labels.soilTemp, depth, latest.soilTemp, 'temp'),
     // Canopy: PRO only, decided by the sensor's model rather than by whether a value

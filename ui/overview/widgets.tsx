@@ -56,6 +56,7 @@ import { useForecast } from '../../state/forecast';
 import { useAgroAuth } from '../../state/auth';
 import type { LocationSoil } from '../../state/soilStations';
 import { rankFieldsByDryness, type SoilStatus } from '../../core/model/soil';
+import { soilStatusInk } from '../soilStatusInk';
 import { agroIntegration } from '../../core/prefs';
 import { greetingFor, greetingName, type GreetingKind } from '../../core/greeting';
 import { alertValueLabel } from '../settings/UserAlertList';
@@ -1231,7 +1232,6 @@ export function SoilWidget({ fields, settings, onOpen }: WidgetProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
 
-  const ink = [palette.agroInk, palette.valSun, palette.valTemp, palette.valHigh];
   const word = (level: SoilStatus) =>
     ta((['soilStatus0', 'soilStatus1', 'soilStatus2', 'soilStatus3'] as const)[level], prefs.lang);
 
@@ -1245,7 +1245,7 @@ export function SoilWidget({ fields, settings, onOpen }: WidgetProps) {
   ).slice(0, settings.limit);
 
   return (
-    <WidgetCard title={ta('ovSoil', prefs.lang)} hint={ta('ovSoilDry', prefs.lang)}>
+    <WidgetCard title={ta('ovSoil', prefs.lang)}>
       {ranked.map(({ field: f, tension, level, dormant }, i) => (
         <Pressable
           key={f.station.id}
@@ -1261,7 +1261,7 @@ export function SoilWidget({ fields, settings, onOpen }: WidgetProps) {
           <View
             style={{
               width: 3, height: 20, borderRadius: 2,
-              backgroundColor: level == null ? palette.hairline : ink[level] ?? palette.valHigh,
+              backgroundColor: soilStatusInk(level, palette),
             }}
           />
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -1276,13 +1276,30 @@ export function SoilWidget({ fields, settings, onOpen }: WidgetProps) {
             </Text>
           </View>
           {tension != null ? (
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
-              <Text variant="stat" color={palette.appValue} tabular style={{ fontSize: 17 }}>
-                {fmtDecimal(tension)}
-              </Text>
-              <Text variant="caption" color={palette.muted}>
-                kPa
-              </Text>
+            <View style={{ alignItems: 'flex-end' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+                {/* The figure in the state's own ink, as on 'Actueel': the number and
+                    its colour then say the same thing. */}
+                <Text
+                  variant="stat"
+                  color={soilStatusInk(level, palette)}
+                  tabular
+                  style={{ fontSize: 17 }}
+                >
+                  {fmtDecimal(tension)}
+                </Text>
+                <Text variant="caption" color={palette.muted}>
+                  kPa
+                </Text>
+              </View>
+              {/* How much it would take. The one thing no other indicator can say, and
+                  the difference between "this field is dry" and a decision you can act
+                  on with a reel. */}
+              {f.latest?.refillMm != null ? (
+                <Text variant="caption" color={palette.muted} tabular>
+                  {`${fmtDecimal(f.latest.refillMm)} mm ${ta('soilRefillShort', prefs.lang)}`}
+                </Text>
+              ) : null}
             </View>
           ) : (
             <Text variant="label" color={palette.muted}>

@@ -56,6 +56,30 @@ describe('soil tiles', () => {
     });
   });
 
+  it('stamps the state on the figures it judges, and on no others', () => {
+    // The state is what makes a suction mean something, so those three carry it and
+    // take its colour on the page. pF, the refill room and the temperatures describe
+    // the soil without judging it — a grid where every figure is coloured is a grid
+    // where the colour says nothing.
+    const tiles = soilTiles(HEESCH, sample({ status: 2 }), L, clock);
+    const statusOf = (id: string) => tiles.find((t) => t.id === id)?.status;
+
+    expect(statusOf('soil-tension')).toBe(2);
+    expect(statusOf('soil-status')).toBe(2);
+    expect(statusOf('soil-water-percent')).toBe(2);
+
+    expect(statusOf('soil-refill-room')).toBeUndefined();
+    expect(statusOf('soil-pf')).toBeUndefined();
+    expect(statusOf('soil-soil-temp')).toBeUndefined();
+  });
+
+  it('leaves the state off entirely where the reading carries none', () => {
+    // No colour rather than the colour of state 0: a field whose state nobody knows
+    // must not be printed in the ink that means everything is fine.
+    const tiles = soilTiles(HEESCH, { ...sample(), status: null }, L, clock);
+    expect(tiles.find((t) => t.id === 'soil-tension')?.status).toBeUndefined();
+  });
+
   it('gives the canopy blocks to a PRO and to nothing else', () => {
     // BASIC is suction only, PLUS adds rainfall, PRO adds the air at 10 cm. It is the
     // model that decides, not whether a value happens to be in this reading.

@@ -28,6 +28,7 @@
  */
 import type { ForecastModel } from './types';
 import { measuredQuantities } from './station';
+import type { SoilStatus } from './soil';
 import type { NowcastBar } from '../radar/types';
 
 /**
@@ -52,6 +53,20 @@ export interface Tile {
   kind: TileKind;
   /** True where an instrument reported this rather than a model. */
   measured: boolean;
+  /**
+   * The soil state this figure sits in, where it has one.
+   *
+   * Carried so the page can print the number in the state's own colour: a suction, a
+   * moisture state and a water percentage all say the same thing about the same field,
+   * and printing them in the colour of that thing is what turns three figures into one
+   * answer. Absent on every weather block, and on the soil blocks — depth, pF, refill
+   * room — that describe the soil rather than judge it.
+   *
+   * It is the state the API froze against that field's own thresholds, not a band this
+   * app derived, so the same colour on two fields means the same thing about two very
+   * different numbers.
+   */
+  status?: SoilStatus;
 }
 
 /** The words the modelled grid needs, handed in so this module stays pure. */
