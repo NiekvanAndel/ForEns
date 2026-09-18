@@ -1,11 +1,12 @@
 # De modellen: wat de app zegt, waarop, en op wiens gezag
 
 Elk oordeel dat de app uitspreekt is een model: een regel met een grens eronder. Dit
-bestand is de index ervan — dertien modellen, hun data, hun drempels, waar ze
+bestand is de index ervan — vijftien modellen, zesenzestig drempels, waar ze
 verschijnen en welke tekst ze gebruiken. Vastgelegd 18 september 2026.
 
-De cliëntversie hiervan is een apart artifact (`Modellen en drempels`), met de
-bronnenlijst erbij.
+De cliëntversie hiervan is een apart artifact van tien A4-bladen, `Modellen en
+drempels`, met de bronnenlijst en de openstaande punten erbij. Wat daar staat komt
+uit deze drie bestanden; wijzigt er een drempel, dan wijzigt het daar ook.
 
 ## De drie bestanden waar alles samenkomt
 
@@ -103,7 +104,7 @@ moment nodig om over te gaan.
 
 - **De DIV-tabel is niet tegen de IRS-publicatie gelegd.** Staat als `caveat` bij de
   bron. Een tabel die te laag scoort vertelt een teler dat zijn biet veilig is.
-- **`app`-drempels zijn eerste concepten** — vijftien stuks. Ze zijn nu vindbaar, wat
+- **`app`-drempels zijn eerste concepten** — vijfendertig stuks. Ze zijn nu vindbaar, wat
   de voorwaarde is om ze te herzien.
 - **De T-som** wacht op een seizoen aan dagwaarden; **trips** en **10-10-48** op een
   biofix. Beide backend.
