@@ -55,6 +55,7 @@ import type { Indicator } from '../../core/model/indicators';
 import { placementContext } from '../../core/model/soilTiles';
 import type { Placement, SoilStatus } from '../../core/model/soil';
 import { soilStatusInk } from '../soilStatusInk';
+import { IndicatorBadge } from '../indicator/IndicatorBadge';
 import type { SoilSample } from '../../core/sources/agroexact';
 
 export interface SoilHeroProps {
@@ -72,7 +73,7 @@ export interface SoilHeroProps {
 const BAR_HEADROOM = 1.15;
 
 export function SoilHero({ name, placement, latest, indicator }: SoilHeroProps) {
-  const { palette } = useTheme();
+  const { palette, appearance } = useTheme();
   const { prefs } = usePrefs();
   const lang = prefs.lang;
 
@@ -153,10 +154,55 @@ export function SoilHero({ name, placement, latest, indicator }: SoilHeroProps) 
           ) : null}
         </Text>
 
+        {/* The verdict, and under it where that sits on the field's own ladder. The
+            badge says what to do and the bar says how far from the next boundary you
+            are; neither answers the other's question. */}
+        {indicator?.now ? (
+          <IndicatorBadge
+            level={indicator.now.level}
+            tone={soilStatusInk(indicator.now.level as SoilStatus, palette, appearance)}
+            title={ta(STATUS_WORD[indicator.now.level] ?? 'soilStatus0', lang)}
+            reason={bindingReason(indicator, lang)}
+          />
+        ) : null}
+
         {indicator ? <StateBar indicator={indicator} /> : null}
       </View>
     </Card>
   );
+}
+
+const STATUS_WORD = [
+  'soilStatus0', 'soilStatus1', 'soilStatus2', 'soilStatus3',
+] as const;
+
+/**
+ * Why the field is in the state it is, in one line.
+ *
+ * Read from the indicator rather than from the reading, which is the point of the
+ * indicator existing: the boundary that binds, the value that crossed it, and the
+ * amount where there is one. Nothing binds at level 0 — the field is simply fine —
+ * and a sentence that said so would be the card explaining that nothing is wrong.
+ */
+function bindingReason(indicator: Indicator, lang: Parameters<typeof ta>[1]): string | undefined {
+  const now = indicator.now;
+  if (!now || now.value == null || !now.binding) return undefined;
+
+  const parts = [
+    `${fmtDecimal(now.value)} kPa`,
+    `${ta('indicatorLimit', lang)} ${fmtDecimal(now.binding.at)}`,
+  ];
+
+  if (now.amount) {
+    // One figure where the two ends are the same, which is every field today: the API
+    // does not serve `water_until_nonschaarste`, so there is no lower end to name.
+    const amount = now.amount.min === now.amount.max
+      ? fmtDecimal(now.amount.max)
+      : `${fmtDecimal(now.amount.min)} – ${fmtDecimal(now.amount.max)}`;
+    parts.push(`${ta('soilRefill', lang)} ${amount} mm`);
+  }
+
+  return parts.join(' · ');
 }
 
 /**
