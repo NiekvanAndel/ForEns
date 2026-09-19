@@ -48,6 +48,8 @@ export type ModelId =
   | 'smith' | 'cercospora' | 'leafWet'
   /** The overview page's own judgements. */
   | 'workWindow' | 'attention' | 'brief'
+  /** How much the ensemble members agree — the spread behind every forecast line. */
+  | 'agreement'
   /** AgroIntelligence. */
   | 'area' | 'risk';
 
@@ -65,6 +67,8 @@ export type SourceKey =
   | 'irs-div'
   | 'sentelhas-2008'
   | 'huijsmans-ammoniak'
+  | 'ecmwf-ens'
+  | 'openmeteo-ensemble'
   /** Dutch growing practice, without one document behind it. */
   | 'spuittemperatuur'
   | 'regenvastheid'
@@ -169,6 +173,18 @@ export const SOURCES: Record<SourceKey, Source> = {
     where: 'Wageningen University & Research. De emissiesnelheid loopt op bij hogere luchttemperatuur, meer straling en meer wind, en daalt bij hogere luchtvochtigheid.',
     url: 'https://edepot.wur.nl/255878',
     caveat: 'Het onderzoek onderbouwt de richting, niet de twee getallen die de app gebruikt. 15 \u00b0C en 60 % zijn een praktijkvuistregel; straling en windsnelheid weegt de app nog niet mee.',
+  },
+  'ecmwf-ens': {
+    title: 'ECMWF \u2014 Atmospheric model Ensemble 15-day forecast (ENS)',
+    where: 'European Centre for Medium-Range Weather Forecasts. E\u00e9nenvijftig berekeningen van dezelfde dag: \u00e9\u00e9n controleberekening vanaf de analyse zoals die is, en vijftig met kleine verstoringen in de begintoestand en de modelfysica.',
+    url: 'https://www.ecmwf.int/en/forecasts/datasets/set-iii',
+    caveat: 'De spreiding tussen de leden is een maat voor de onzekerheid van de verwachting, niet voor de kans op een gebeurtenis in absolute zin. Systematische fouten die alle leden delen komen er niet in tot uiting.',
+  },
+  'openmeteo-ensemble': {
+    title: 'Open-Meteo \u2014 Ensemble API, model ecmwf_ifs025',
+    where: 'De weg waarlangs de app de leden ophaalt: het ECMWF-ensemble op 0,25 graden, alle 51 leden.',
+    url: 'https://open-meteo.com/en/docs/ensemble-api',
+    caveat: 'Vraagt de app om ledenkolommen die er niet zijn, dan antwoordt de dienst met de gewone deterministische reeks. Die telt als \u00e9\u00e9n lid, en daaruit wordt geen spreiding getekend.',
   },
   'spuittemperatuur': {
     title: 'Temperatuurgrenzen voor een bespuiting: 1 tot 25 \u00b0C',
@@ -318,6 +334,14 @@ export const THRESHOLDS = {
   'brief.windSpan': { model: 'brief', value: 5, unit: 'km/h', basis: 'app', source: 'eigen-keuze', means: 'Nor is a wind spread under this.' },
 
   // ── AgroIntelligence ───────────────────────────────────────────────────────
+  // \u2500\u2500 How much the members agree \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  'agreement.percentileLow': { model: 'agreement', value: 10, unit: '%', basis: 'app', source: 'ecmwf-ens', means: 'Lower edge of the band: a tenth of the members sit below it.' },
+  'agreement.percentileHigh': { model: 'agreement', value: 90, unit: '%', basis: 'app', source: 'ecmwf-ens', means: 'Upper edge. The outer tenth at each end is left out, so one stray member cannot widen the band.' },
+  'agreement.minMembers': { model: 'agreement', value: 2, unit: '', basis: 'app', source: 'openmeteo-ensemble', means: 'Fewer members than this and no band is drawn: one member is a line of zero width pretending to be a range.' },
+  'agreement.absoluteMm': { model: 'agreement', value: 1, unit: 'mm', basis: 'app', source: 'eigen-keuze', means: 'A band this narrow counts as agreement whatever the forecast total, so a dry day is never called disputed.' },
+  'agreement.floorMm': { model: 'agreement', value: 2, unit: 'mm', basis: 'app', source: 'eigen-keuze', means: 'Floor under the median before the ratio is taken, so a trace of drizzle does not read as a violent disagreement.' },
+  'agreement.relative': { model: 'agreement', value: 1, unit: '', basis: 'app', source: 'eigen-keuze', means: 'Band divided by that floored median. At or under it the members are mixed, above it they disagree.' },
+  'agreement.wetDay': { model: 'agreement', value: 0.2, unit: 'mm', basis: 'app', source: 'eigen-keuze', means: 'Rain over a day that makes a member count as wet, for the share that says whether it rains at all.' },
   'area.spreadMm': { model: 'area', value: 10, unit: 'mm', basis: 'app', source: 'eigen-keuze', means: 'Gap between wettest and driest field worth a line.' },
   'area.spreadRatio': { model: 'area', value: 3, unit: '', basis: 'app', source: 'eigen-keuze', means: 'And by what factor, so two wet fields stay quiet.' },
   'area.usefulRun': { model: 'area', value: 2, unit: 'h', basis: 'app', source: 'eigen-keuze', means: 'A joint window shorter than this is true and useless.' },

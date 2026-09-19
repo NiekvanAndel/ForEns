@@ -14,6 +14,8 @@ import {
 } from '../core/model/fieldAdvice';
 import { SMITH } from '../core/model/smith';
 import { deriveAlert } from '../core/model/alert';
+import { dayAgreement, type EnsembleDay } from '../core/sources/ensembleOutlook';
+import { certaintyOpacity } from '../core/dayWindows';
 import { DIV_HUMIDITY, DIV_RECENT_THRESHOLD } from '../core/model/cercospora';
 import { LEAF_WET_HUMIDITY } from '../core/model/humidHours';
 import { LADDER, SETTLED_HIGH, APPETITE_SHIFT } from '../core/riskLadder';
@@ -27,6 +29,13 @@ import { LANG_CODES, ta, type AppStringKey } from '../core/i18n';
 
 const ids = Object.keys(THRESHOLDS) as ThresholdId[];
 
+/** A day of the ensemble outlook, with only the rainfall percentiles filled in —
+ *  the three figures `dayAgreement` reads. */
+const day = (p: Pick<EnsembleDay, 'p10' | 'p50' | 'p90'>): EnsembleDay => ({
+  date: '2026-09-19', wetShare: 50, members: 51,
+  minP10: null, minP50: null, minP90: null, frostShare: null, ...p,
+});
+
 describe('every boundary says where it came from', () => {
   it('names a source that exists', () => {
     for (const id of ids) {
@@ -37,9 +46,10 @@ describe('every boundary says where it came from', () => {
   it('carries a unit unless the figure is a count or a ratio', () => {
     for (const id of ids) {
       const spec = THRESHOLDS[id];
-      // Only two figures are dimensionless on purpose: how many fields make a
-      // pattern, and by what factor a rainfall spread is a spread.
-      const dimensionless = id === 'area.sharedMin' || id === 'area.spreadRatio';
+      // Four figures are dimensionless on purpose: two counts — how many fields
+      // make a pattern, how many members make an ensemble — and two ratios.
+      const dimensionless = id === 'area.sharedMin' || id === 'area.spreadRatio'
+        || id === 'agreement.minMembers' || id === 'agreement.relative';
       expect(spec.unit === '', `${id}`).toBe(dimensionless);
       expect(Number.isFinite(spec.value), `${id} has no number`).toBe(true);
     }
@@ -115,6 +125,28 @@ describe('the modules read the register, not their own copy', () => {
     expect(DIV_HUMIDITY).toBe(threshold('cercospora.humidity'));
     expect(DIV_RECENT_THRESHOLD).toBe(6);
     expect(LEAF_WET_HUMIDITY).toBe(95);
+  });
+
+  it('feeds the agreement between the members, which had no register entry at all', () => {
+    // Only a narrow band in millimetres counts as full agreement, and it counts
+    // whatever the total: a dry day and a wet one are alike here.
+    expect(dayAgreement(day({ p10: 2, p50: 2.4, p90: 2.8 }))).toBe('agree');
+    expect(dayAgreement(day({ p10: 18, p50: 18.4, p90: 18.9 }))).toBe('agree');
+    // Wider than that, the ratio decides. Seven millimetres apart on a forecast of
+    // eight is disagreement about how much rain, not about whether: mixed.
+    expect(dayAgreement(day({ p10: 1, p50: 8, p90: 8.5 }))).toBe('mixed');
+    // The floor is what keeps a drizzly day out of 'disagree': 0.2 mm median with a
+    // 3 mm band is a ratio of 15 without it, and 1.5 with it.
+    expect(dayAgreement(day({ p10: 0, p50: 0.2, p90: 3 }))).toBe('disagree');
+    expect(dayAgreement(day({ p10: 0, p50: 0.2, p90: 2 }))).toBe('mixed');
+    // And a genuinely split forecast.
+    expect(dayAgreement(day({ p10: 0, p50: 1, p90: 14 }))).toBe('disagree');
+    // Saturation follows the word, and an unknown agreement is drawn solid: the app
+    // has no reason to doubt the day and will not invent one.
+    expect(certaintyOpacity('agree')).toBe(1);
+    expect(certaintyOpacity('mixed')).toBeLessThan(1);
+    expect(certaintyOpacity('disagree')).toBeLessThan(certaintyOpacity('mixed'));
+    expect(certaintyOpacity(null)).toBe(1);
   });
 
   it('feeds the ladder, and the shift the reader appetite makes to it', () => {

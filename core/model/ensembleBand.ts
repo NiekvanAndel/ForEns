@@ -39,6 +39,7 @@
  * to be a range.
  */
 import { percentile, round1 } from './stats';
+import { threshold } from '../thresholds';
 import type { EnsembleMembers } from '../sources/ensembleRange';
 
 /** Which quantity the band is for. The three the page bands. */
@@ -55,7 +56,7 @@ export interface Band {
 }
 
 /** Fewer than this and there is no spread to speak of. See the note above. */
-const MIN_MEMBERS = 2;
+const MIN_MEMBERS = threshold('agreement.minMembers');
 
 /** What a field's band is of unless the caller says otherwise. */
 export const DEFAULT_STAT: Record<BandField, BucketStat> = {

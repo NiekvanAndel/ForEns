@@ -22,6 +22,7 @@
 import { tryFetchJson } from './http';
 import { memberSeries } from './ensembleHourly';
 import { percentile, probAtLeast, round1 } from '../model/stats';
+import { threshold } from '../thresholds';
 import type { FetchOptions } from './http';
 import type { Coords } from './openMeteo';
 import type { DailyBlock } from '../model/types';
@@ -33,10 +34,10 @@ export const ENSEMBLE_OUTLOOK_DAYS = 3;
 
 /** Millimetres over a day that count as "this member is wet". The same threshold the
  *  nowcast uses for an hour being wet, applied to a total. */
-const WET_MM = 0.2;
+const WET_MM = threshold('agreement.wetDay');
 
 /** Air frost, the same boundary `fieldAdvice` draws it at. */
-const FROST_C = 0;
+const FROST_C = threshold('frost.air');
 
 export interface EnsembleDay {
   /** `YYYY-MM-DD`, local. */
@@ -132,8 +133,8 @@ export type Agreement = 'agree' | 'mixed' | 'disagree';
 
 export function dayAgreement(day: EnsembleDay): Agreement {
   const band = day.p90 - day.p10;
-  if (band <= 1) return 'agree';
-  const relative = band / Math.max(2, day.p50);
-  if (relative <= 1) return 'mixed';
+  if (band <= threshold('agreement.absoluteMm')) return 'agree';
+  const relative = band / Math.max(threshold('agreement.floorMm'), day.p50);
+  if (relative <= threshold('agreement.relative')) return 'mixed';
   return 'disagree';
 }
