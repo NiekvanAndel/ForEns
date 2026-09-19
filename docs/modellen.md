@@ -1,7 +1,7 @@
 # De modellen: wat de app zegt, waarop, en op wiens gezag
 
 Elk oordeel dat de app uitspreekt is een model: een regel met een grens eronder. Dit
-bestand is de index ervan — vijftien modellen, zesenzestig drempels, waar ze
+bestand is de index ervan — zestien modellen, drieënzeventig drempels, waar ze
 verschijnen en welke tekst ze gebruiken. Vastgelegd 18 september 2026.
 
 De cliëntversie hiervan is een apart artifact van tien A4-bladen, `Modellen en
@@ -59,9 +59,26 @@ Laag: **B** = basisversie · **A** = AgroIntelligence add-on.
 | 10 | Werkvenster (`werkbaar weer`) | B | uurverwachting per locatie, 24 u | `workWindow.*` | Widget 'Werkbaar weer'; voedt 11 en 13 | `appStrings` (ov*) |
 | 11 | Attentielijst | B | 10 plus 24-uurs neerslag, verwachte neerslag, nachtminimum | `attention.*` | Widget 'Wat vraagt aandacht' | `appStrings` (adv*) |
 | 12 | Bulletin | B | alle locaties: neerslag, temperatuur, wind, werkvenster | `brief.*` | Widget 'Samenvatting' | `appStrings` (bri*) |
-| 13 | Gebiedsconclusies | A | werkvensters, 24-uurs neerslag, de uitspraken van 6–9 | `area.*` | Widget 'Over je locaties heen' | `agroIntelStrings` |
-| 14 | Kansen | A | ensemble: 51 leden, dagneerslag en dagminimum | `risk.*` | Widget 'Kansen' | `agroIntelStrings` |
-| 15 | Vensters vergelijken | A | werkvenster per dag plus ensemble-overeenstemming | `workWindow.*` | Widget 'Vensters vergelijken' | `agroIntelStrings` |
+| 13 | Overeenstemming (`agreement`) | B | alle 51 ensembleleden: temperatuur, neerslag, wind | `agreement.*` | Band in 'Grafiek' en het dagblad; verzadiging in 16 | `appStrings` (showSpread) |
+| 14 | Gebiedsconclusies | A | werkvensters, 24-uurs neerslag, de uitspraken van 6–9 | `area.*` | Widget 'Over je locaties heen' | `agroIntelStrings` |
+| 15 | Kansen | A | ensemble: 51 leden, dagneerslag en dagminimum | `risk.*` | Widget 'Kansen' | `agroIntelStrings` |
+| 16 | Vensters vergelijken | A | werkvenster per dag plus ensemble-overeenstemming | `workWindow.*` | Widget 'Vensters vergelijken' | `agroIntelStrings` |
+
+## Waar de overeenstemming tussen de modelleden hoort
+
+Model 13 was het spiegelbeeld van model 10 van vorige ronde: het rekende, het tekende
+een band achter elke verwachtingslijn, en het zat in geen enkele laag — geen drempels
+in het register, geen bron, geen regel in dit bestand. Besloten 19 september: **de
+basislaag.**
+
+Twee redenen. De productgrens zegt dat de basis over één locatie gaat, en een spreiding
+gaat over één locatie. En zwaarder: een lijn zonder zijn band claimt een precisie die
+het model niet heeft, en "lieg niet" is het uitgangspunt van juist de basisversie. Een
+gratis versie die stelliger spreekt dan de betaalde is de verkeerde kant op.
+
+De grens ligt bij het **getal**: band en woord zijn basis, het percentage met een
+handeling eraan (`risk.*`, model 15) blijft de add-on. Dat staat ook al zo in de
+docstring van `Certainty`.
 
 ## 'Werkbaar weer' hoort nu bij de werkbaarheidsfamilie
 
@@ -98,7 +115,8 @@ Op de draad: `kinds` (weer) en `agroKinds` (de rest), zie `docs/push_contract.md
 Vandaag verstuurt er **niets**: de dienst bestaat nog niet, en voor de agro-onderwerpen
 is er ook geen lokale terugval zoals `core/notifications.ts` die voor het weer is.
 
-Niet te melden, met opzet: het venstervergelijk (model 15). Dat is een manier van
+Niet te melden, met opzet: het venstervergelijk (model 16) en de overeenstemming
+(model 13). Dat is een manier van
 kíjken naar drie dagen, geen moment waarop iets gebeurt — en een melding heeft een
 moment nodig om over te gaan.
 
@@ -111,9 +129,14 @@ moment nodig om over te gaan.
 - **Bladnat staat op 95 %, Sentelhas e.a. (2008) valideren 90 %.** Wij zijn dus
   strenger dan de publicatie. Daarom blijft die grens `app` ondanks de bron, en staat
   het verschil in de `caveat`.
-- **`app`-drempels zijn eerste concepten** — vijfendertig stuks. Ze zijn nu vindbaar, wat
+- **`app`-drempels zijn eerste concepten** — tweeënveertig stuks, waarvan zeven nieuw
+  onder `agreement`. Ze zijn nu vindbaar, wat
   de voorwaarde is om ze te herzien.
 - **De T-som** wacht op een seizoen aan dagwaarden; **trips** en **10-10-48** op een
   biofix. Beide backend.
-- **De risicobereidheid** moet in de push-registratie voordat een dienst model 14 kan
+- **De risicobereidheid** moet in de push-registratie voordat een dienst model 15 kan
   versturen: die verschuift de sporten van de ladder met vijftien punten.
+- **Model 13 rekent zijn woord uit en niemand in de basis leest het.** `dayAgreement`
+  geeft eens/verdeeld/oneens terug, maar alleen `dayWindows` gebruikt het, en dat is
+  de add-on. De basisversie tekent de band en zwijgt verder. Consistent zou zijn: de
+  grafiek zegt het ook in woorden.
