@@ -24,6 +24,7 @@
  * finger actually lands on.
  */
 import { Pressable, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { radius, shadowCard, space, useTheme } from '../theme';
 import { GlassSurface } from './GlassSurface';
@@ -94,11 +95,17 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
         return (
           <Pressable
             key={it.key}
-            onPress={() => onChange(it.key)}
+            // Only a change of tab earns a tick; re-tapping the current one is silent.
+            onPress={() => {
+              if (!on) Haptics.selectionAsync().catch(() => {});
+              onChange(it.key);
+            }}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             accessibilityLabel={it.label}
-            style={{
+            style={({ pressed }) => ({
+              // Acknowledged on touch-down, before the page has had time to change.
+              opacity: pressed && !on ? 0.55 : 1,
               // Across the bottom the tabs share the width equally; standing up they
               // are as tall as one icon needs, and the column is as long as it is.
               flex: landscape ? undefined : 1,
@@ -111,7 +118,7 @@ export function GlassTabBar({ items, activeKey, onChange }: GlassTabBarProps) {
               paddingVertical: 10 + (25 - size) / 2,
               borderRadius: radius.pill,
               backgroundColor: on ? capsule : 'transparent',
-            }}
+            })}
           >
             <Icon name={it.icon} size={size} color={on ? accent : idle} weight={on ? 'fill' : 'regular'} />
           </Pressable>

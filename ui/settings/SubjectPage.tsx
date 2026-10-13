@@ -20,18 +20,19 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-  runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
+  runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { duration, space, useTheme } from '../../theme';
+import { space, useTheme } from '../../theme';
+import { shouldCommit, spring } from '../../core/motion';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { usePrefs } from '../../state/prefs';
 import { ta } from '../../core/i18n';
 
-/** How far a drag from the left edge must travel to count as going back. */
+/** How far the projected end of a drag from the left edge must reach to count as
+ *  going back. */
 const BACK_FRACTION = 0.3;
-const BACK_VELOCITY = 500;
 
 export function SubjectPage({
   visible, title, onClose, children,
@@ -55,7 +56,7 @@ export function SubjectPage({
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      tx.value = reduceMotion ? 0 : withTiming(0, { duration: duration.base });
+      tx.value = reduceMotion ? 0 : withSpring(0, spring.settle);
       return;
     }
     if (reduceMotion) {
@@ -63,22 +64,31 @@ export function SubjectPage({
       setMounted(false);
       return;
     }
-    tx.value = withTiming(width, { duration: duration.base }, (done) => {
+    tx.value = withSpring(width, { ...spring.carry }, (done) => {
       if (done) runOnJS(setMounted)(false);
     });
   }, [visible, width, reduceMotion, tx]);
 
   // A drag from the left edge goes back, as it does anywhere else in iOS.
+  // The page is a spring, so a grab mid-flight starts from where it is on screen
+  // (`start`), not from where it was heading.
+  const start = useSharedValue(0);
   const swipeBack = Gesture.Pan()
     .activeOffsetX([-20, 20])
+    .onStart(() => {
+      start.value = tx.value;
+    })
     .onUpdate((e) => {
-      tx.value = Math.max(0, e.translationX);
+      tx.value = Math.max(0, start.value + e.translationX);
     })
     .onEnd((e) => {
-      const far = e.translationX > width * BACK_FRACTION;
-      const fast = e.velocityX > BACK_VELOCITY;
-      if (far || fast) runOnJS(onClose)();
-      else tx.value = withTiming(0, { duration: duration.fast });
+      if (shouldCommit(tx.value, e.velocityX, width * BACK_FRACTION)) {
+        // The exit effect carries the page off at the finger's speed.
+        tx.value = withSpring(width, { ...spring.carry, velocity: e.velocityX });
+        runOnJS(onClose)();
+      } else {
+        tx.value = withSpring(0, { ...spring.settle, velocity: e.velocityX });
+      }
     });
 
   const style = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }] }));

@@ -7,9 +7,11 @@
  */
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useEffect } from 'react';
-import { duration, radius, shadowFloat, space, useTheme } from '../../theme';
+import * as Haptics from 'expo-haptics';
+import { radius, shadowFloat, space, useTheme } from '../../theme';
+import { spring } from '../../core/motion';
 import { Card } from '../Card';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
@@ -154,7 +156,8 @@ export function Toggle({
   const progress = useSharedValue(on ? 1 : 0);
 
   useEffect(() => {
-    progress.value = withTiming(on ? 1 : 0, { duration: duration.fast });
+    // A spring, so flipping it again mid-travel reverses from where the knob is.
+    progress.value = withSpring(on ? 1 : 0, spring.settle);
   }, [on, progress]);
 
   const knob = useAnimatedStyle(() => ({
@@ -163,7 +166,7 @@ export function Toggle({
 
   return (
     <Pressable
-      onPress={() => onChange(!on)}
+      onPress={() => { Haptics.selectionAsync().catch(() => {}); onChange(!on); }}
       accessibilityRole="switch"
       accessibilityState={{ checked: on }}
       accessibilityLabel={label}

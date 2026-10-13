@@ -54,32 +54,29 @@
  * this one activates, so dragging a strip scrolls the strip and dragging the page
  * changes location.
  *
- * Under Reduce Motion the change is immediate and nothing moves.
+ * The release hands the finger's velocity to a critically damped spring, and whether
+ * the swipe counts is judged from where the throw would land, not where the finger
+ * lifted. Under Reduce Motion the change is immediate and nothing moves.
  */
 import { useEffect, useState, type ComponentType } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-  runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming,
+  runOnJS, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme';
+import { rubberband, shouldCommit, spring } from '../core/motion';
 import { LocationOverrideProvider, usePrefs } from '../state/prefs';
 import { ForecastOverrideProvider, useForecast } from '../state/forecast';
 import { PeekProvider } from './peek';
 import type { SavedLocation } from '../core/prefs';
 import type { ForecastModel } from '../core/model/types';
 
-/** Fraction of the screen a drag must cross to count, if it is not a flick. */
+/** Fraction of the screen the drag's *projected* end point must cross to count. The
+ *  projection is where the throw would come to rest, so a short, fast flick commits
+ *  and a long drag that is heading back does not. */
 const COMMIT_FRACTION = 0.25;
-/** Points per second above which a short drag counts anyway. */
-const COMMIT_VELOCITY = 500;
-/** How much of the finger's movement the page follows when there is nowhere to go. */
-const RUBBER = 0.25;
-/** Bounds on the travel after release, so a slow drag does not crawl to the edge and
- *  a flick does not snap there. */
-const EXIT_MIN_MS = 120;
-const EXIT_MAX_MS = 280;
 
 export function LocationPager({ page: Page }: { page: ComponentType }) {
   const { prefs, selectLocation } = usePrefs();
@@ -121,18 +118,17 @@ export function LocationPager({ page: Page }: { page: ComponentType }) {
     })
     .onUpdate((e) => {
       if (reduceMotion) return;
-      // Point for point while there is somewhere to go; damped when there is not.
-      tx.value = count > 1 ? e.translationX : e.translationX * RUBBER;
+      // Point for point while there is somewhere to go; resisting progressively when
+      // there is not, rather than following at a fixed fraction.
+      tx.value = count > 1 ? e.translationX : rubberband(e.translationX, width);
     })
     .onEnd((e) => {
       if (count < 2) {
-        tx.value = withSpring(0, { damping: 20, stiffness: 220 });
+        tx.value = withSpring(0, { ...spring.settle, velocity: e.velocityX });
         return;
       }
-      const far = Math.abs(e.translationX) > width * COMMIT_FRACTION;
-      const fast = Math.abs(e.velocityX) > COMMIT_VELOCITY;
-      if (!far && !fast) {
-        tx.value = withSpring(0, { damping: 20, stiffness: 220 }, (done) => {
+      if (!shouldCommit(e.translationX, e.velocityX, width * COMMIT_FRACTION)) {
+        tx.value = withSpring(0, { ...spring.settle, velocity: e.velocityX }, (done) => {
           if (done) runOnJS(setDragging)(false);
         });
         return;
@@ -147,13 +143,10 @@ export function LocationPager({ page: Page }: { page: ComponentType }) {
         return;
       }
 
-      // Carry the throw: the rest of one screen, at the speed it was let go.
-      const target = -dir * width;
-      const remaining = Math.abs(target - tx.value);
-      const speed = Math.max(Math.abs(e.velocityX), 900);
-      const ms = Math.min(EXIT_MAX_MS, Math.max(EXIT_MIN_MS, (remaining / speed) * 1000));
-
-      tx.value = withTiming(target, { duration: ms }, (done) => {
+      // Carry the throw: the spring starts at the speed the finger let go, so there is
+      // no seam between dragging and travelling. It cannot overshoot, or the gap
+      // behind the neighbour would show.
+      tx.value = withSpring(-dir * width, { ...spring.carry, velocity: e.velocityX }, (done) => {
         if (done) runOnJS(change)(next);
       });
     })
