@@ -10,7 +10,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  FIELD_VARIABLES, fieldUnitLabel, fieldValueIn, formatFieldValue, frameClock, inkOn,
+  FIELD_VARIABLES, FieldsUnavailable, detailchartsSource, fieldUnitLabel, loopStamps,
+  manifestFromFrames, stampMs, type DetailchartsFrameDoc, fieldValueIn, formatFieldValue, frameClock, inkOn,
   isSynthetic, legendColorFor, loopMinutes, orderedFrames, pixelFor, sampleField,
   unitLabel, type FieldVariable,
 } from '../core/fields';
@@ -342,5 +343,119 @@ describe('the layers in the reader’s own units', () => {
     // the printed figures convert, or the legend would be explaining a different map.
     expect(unitLabel('degC')).toBe('°C');
     expect(unitLabel('m s-1')).toBe('m/s');
+  });
+});
+
+describe('the operational Detailcharts source', () => {
+  const BASE = 'https://dc.test';
+  const base = fixtureManifest('temperature');
+
+  /** A frame document as `webexport.frame_document` writes it, on the fixture's geometry. */
+  function doc(stamp: string, over: Partial<DetailchartsFrameDoc> = {}): DetailchartsFrameDoc {
+    return {
+      variable: 'temperature',
+      label: 'Temperatuur',
+      time: new Date(stampMs(stamp)!).toISOString().replace('.000Z', 'Z'),
+      generated_at: '2026-11-12T14:31:00Z',
+      source: 'measured',
+      png: `${stamp}.png`,
+      values: `${stamp}.bin`,
+      projection: 'EPSG:3857',
+      bounds_3857: base.bounds_3857,
+      bounds_wgs84: base.bounds_wgs84,
+      image: base.image,
+      raster: base.raster,
+      legend: base.legend,
+      fade: base.fade,
+      xval: { xval_rmse: 0.6 },
+      stats: { uncertainty_median: 0.4, coverage: 0.7 },
+      ...over,
+    };
+  }
+
+  function sourceOver(files: Record<string, unknown>, frames = 4) {
+    const requested: string[] = [];
+    const fetchImpl = (async (url: string) => {
+      requested.push(url);
+      const path = url.slice(BASE.length + 1);
+      const body = files[path];
+      return {
+        ok: body !== undefined,
+        status: body === undefined ? 404 : 200,
+        json: async () => body,
+        arrayBuffer: async () => body as ArrayBuffer,
+      };
+    }) as unknown as typeof fetch;
+    return { source: detailchartsSource({ baseUrl: BASE, frames, fetchImpl }), requested };
+  }
+
+  it('walks back from the newest stamp in ten-minute steps, oldest first', () => {
+    expect(loopStamps('20261112T1410Z', 3)).toEqual([
+      '20261112T1350Z', '20261112T1400Z', '20261112T1410Z',
+    ]);
+    // Across midnight and a month end, in UTC.
+    expect(loopStamps('20261201T0000Z', 2)).toEqual(['20261130T2350Z', '20261201T0000Z']);
+    expect(loopStamps('not a stamp', 3)).toEqual([]);
+  });
+
+  it('builds the loop from the frames that exist, skipping a failed run', async () => {
+    const { source } = sourceOver({
+      'latest.json': { target: '2026-11-12T14:10:00+00:00', stamp: '20261112T1410Z', variables: ['temperature'] },
+      'temperature/20261112T1340Z.json': doc('20261112T1340Z'),
+      'temperature/20261112T1400Z.json': doc('20261112T1400Z'),
+      'temperature/20261112T1410Z.json': doc('20261112T1410Z'),
+    });
+    const manifest = await source.manifest('temperature');
+    expect(manifest.frames.map((f) => f.time)).toEqual([
+      '2026-11-12T13:40:00Z', '2026-11-12T14:00:00Z', '2026-11-12T14:10:00Z',
+    ]);
+    expect(manifest.anchor).toBe('2026-11-12T14:10:00Z');
+    expect(manifest.source).toBe('measured');
+    expect(isSynthetic(manifest)).toBe(false);
+    expect(manifest.unit).toBe(base.raster.unit);
+    expect(source.overlayUrl(manifest, manifest.frames[2]!)).toBe(
+      `${BASE}/temperature/20261112T1410Z.png`
+    );
+  });
+
+  it('drops a frame drawn on another raster rather than misplace it', async () => {
+    const other = { ...base.raster, rows: base.raster.rows + 1 };
+    const { source } = sourceOver({
+      'latest.json': { target: '', stamp: '20261112T1410Z', variables: ['temperature'] },
+      'temperature/20261112T1400Z.json': doc('20261112T1400Z', { raster: other }),
+      'temperature/20261112T1410Z.json': doc('20261112T1410Z'),
+    });
+    const manifest = await source.manifest('temperature');
+    expect(manifest.frames.map((f) => f.time)).toEqual(['2026-11-12T14:10:00Z']);
+  });
+
+  it('says "not available yet" when nothing in the window can be read', async () => {
+    const { source } = sourceOver({
+      'latest.json': { target: '', stamp: '20261112T1410Z', variables: [] },
+    });
+    await expect(source.manifest('wind')).rejects.toBeInstanceOf(FieldsUnavailable);
+    await expect(sourceOver({}).source.manifest('wind')).rejects.toBeInstanceOf(FieldsUnavailable);
+  });
+
+  it('asks for a frame document once: they never change', async () => {
+    const files = {
+      'latest.json': { target: '', stamp: '20261112T1410Z', variables: ['temperature'] },
+      'temperature/20261112T1410Z.json': doc('20261112T1410Z'),
+    };
+    const { source, requested } = sourceOver(files, 1);
+    await source.manifest('temperature');
+    await source.manifest('temperature');
+    expect(requested.filter((u) => u.endsWith('1410Z.json'))).toHaveLength(1);
+    expect(requested.filter((u) => u.endsWith('latest.json'))).toHaveLength(2);
+  });
+
+  it('reads the value raster and refuses one of the wrong size', async () => {
+    const stamp = '20261112T1410Z';
+    const manifest = manifestFromFrames([doc(stamp)])!;
+    const { rows, cols } = manifest.raster;
+    const good = sourceOver({ [`temperature/${stamp}.bin`]: new ArrayBuffer(rows * cols * 2) });
+    expect((await good.source.values(manifest, manifest.frames[0]!)).length).toBe(rows * cols);
+    const bad = sourceOver({ [`temperature/${stamp}.bin`]: new ArrayBuffer(6) });
+    await expect(bad.source.values(manifest, manifest.frames[0]!)).rejects.toThrow(/raster is 6 bytes/);
   });
 });

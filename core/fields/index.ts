@@ -4,7 +4,7 @@
  *
  * The regression behind them is a different thing from the radar entirely: station
  * observations of several qualities blended into a posterior field plus its own
- * uncertainty, over the Netherlands and Belgium. What arrives here, though, is shaped
+ * uncertainty, over the Netherlands, Belgium, Luxembourg and a strip of Germany. What arrives here, though, is shaped
  * exactly like the cumulative radar layer — a manifest, an overlay per frame, and a
  * value raster to read a number out of — because that is a shape this app already knows
  * how to draw, and reusing it made the app side wiring instead of architecture.
@@ -12,7 +12,9 @@
  * The contract is `docs/app_layer_plan.md` in the Detailcharts repo. Four things in it
  * are load-bearing and are honoured here rather than in the screens:
  *
- *  - **The manifest owns every URL**, cache stamp and all. Nothing here builds one.
+ *  - **The frame documents own every file name.** The operational run publishes one
+ *    self-contained frame per ten-minute slot plus a `latest.json`; the only thing
+ *    built here is the list of slot stamps to ask for (see `detailchartsSource`).
  *  - **The manifest owns the legend and the raster geometry.** Both can change
  *    server-side without a release, so the ramp is read from `legend` and every sampled
  *    read-out is placed with `raster.rows`/`raster.cols` — never with constants.
@@ -131,8 +133,8 @@ export interface FieldManifest {
 /**
  * The layers are not built yet.
  *
- * As with the cumulative radar, a backend that has not produced this hour's frames
- * answers 503 with `Retry-After`. That is a state to render — "not available yet" —
+ * No run in the loop's window could be read — the pipeline is down, or skipped this
+ * variable for want of stations. That is a state to render — "not available yet" —
  * rather than a failure, so it has its own class.
  */
 export class FieldsUnavailable extends Error {
@@ -145,10 +147,9 @@ export class FieldsUnavailable extends Error {
 /**
  * Where the layers come from.
  *
- * Two implementations: the bundled fixture in `./fixture`, and `httpSource` below.
- * Screens never touch either directly — they take whichever they are given — so moving
- * from the fixture to the live endpoints changes one line of wiring and nothing in the
- * UI.
+ * Two implementations: the bundled fixture in `./fixture` (kept for the tests), and
+ * `detailchartsSource` below, which the map uses. Screens never touch either directly —
+ * they take whichever they are given.
  */
 export interface FieldSource {
   /** One variable's manifest. Throws `FieldsUnavailable` while nothing is built. */
@@ -401,56 +402,201 @@ export function formatFieldValue(
 
 // --- The live source --------------------------------------------------------
 
-/**
- * The layers over HTTP.
- *
- * Unused while the fixture is in place and deliberately written anyway: it is what
- * proves the fixture is standing in for something, and what the screens are typed
- * against. The base URL and whether it needs a credential are the one thing still
- * undecided about hosting, so both are injected rather than assumed.
- */
-export function httpSource(options: {
-  /** Origin serving `<base>/<variable>/manifest.json`, no trailing slash. */
-  baseUrl: string;
-  /** Called per request, so a refreshed token is picked up without rebuilding. Return
-   *  null where the layers are served without one. */
-  token?: () => Promise<string | null>;
-  fetchImpl?: typeof fetch;
-}): FieldSource {
-  const { baseUrl, token, fetchImpl = fetch } = options;
+/** Where the operational Detailcharts run publishes its app layer. */
+export const DETAILCHARTS_BASE = 'https://detailcharts.agroexact.com';
 
-  const request = async (url: string, signal?: AbortSignal) => {
-    const bearer = token ? await token() : null;
-    const response = await fetchImpl(url, {
-      signal,
-      headers: bearer ? { Authorization: `Bearer ${bearer}` } : undefined,
-    });
-    if (response.status === 503) {
-      const after = Number(response.headers.get('Retry-After'));
-      throw new FieldsUnavailable(Number.isFinite(after) && after > 0 ? after : 60);
-    }
-    if (!response.ok) throw new Error(`fields: HTTP ${response.status}`);
+/** How many ten-minute frames the loop reaches back over: two hours, as the fixture. */
+export const DETAILCHARTS_LOOP_FRAMES = 12;
+
+/** `<base>/latest.json`: written last by every run, after all of its frames. */
+export interface DetailchartsLatest {
+  target: string;
+  /** `YYYYMMDDTHHMMZ`, the name every file of that run carries. */
+  stamp: string;
+  variables: string[];
+}
+
+/**
+ * `<base>/<variable>/<stamp>.json`: one self-contained frame, as
+ * `detailcharts_op/webexport.frame_document` writes it. Written after its PNG and value
+ * raster, so a document that exists describes a complete frame.
+ */
+export interface DetailchartsFrameDoc {
+  variable: FieldVariable;
+  label: string;
+  time: string;
+  generated_at: string;
+  source: string;
+  png: string;
+  values: string;
+  projection: string;
+  bounds_3857: [number, number, number, number];
+  bounds_wgs84: GeoBounds;
+  image: { rows: number; cols: number };
+  raster: FieldRaster;
+  legend: FieldLegend;
+  fade: FieldFade;
+  xval: Record<string, number>;
+  stats: { uncertainty_median?: number | null; coverage?: number };
+}
+
+const STAMP = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})Z$/;
+
+/** A run's stamp as epoch milliseconds, or null for something that is not one. */
+export function stampMs(stamp: string): number | null {
+  const m = STAMP.exec(stamp);
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m.map(Number) as number[];
+  return Date.UTC(y!, mo! - 1, d!, h!, mi!);
+}
+
+/** Epoch milliseconds as a run's stamp. */
+export function stampOf(ms: number): string {
+  const d = new Date(ms);
+  return (
+    `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
+    `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}Z`
+  );
+}
+
+/** The stamps the loop asks for, oldest first, ending at the newest run. */
+export function loopStamps(latestStamp: string, count: number, cadenceMinutes = 10): string[] {
+  const newest = stampMs(latestStamp);
+  if (newest == null) return [];
+  const step = cadenceMinutes * 60_000;
+  return Array.from({ length: count }, (_, i) => stampOf(newest - (count - 1 - i) * step));
+}
+
+function sameGeometry(a: DetailchartsFrameDoc, b: DetailchartsFrameDoc): boolean {
+  return (
+    a.raster.rows === b.raster.rows &&
+    a.raster.cols === b.raster.cols &&
+    a.raster.scale === b.raster.scale &&
+    a.raster.offset === b.raster.offset &&
+    a.bounds_3857.every((v, i) => Math.abs(v - b.bounds_3857[i]!) < 1)
+  );
+}
+
+/**
+ * The manifest the screens are typed against, put together from frame documents.
+ *
+ * The operational pipeline publishes frames that do not know about each other; the loop
+ * is assembled here. The newest frame sets the geometry, legend and fade, and a frame
+ * drawn on a different raster or box is dropped rather than placed: sampling it with
+ * the newest frame's geometry would read every number from the wrong place.
+ */
+export function manifestFromFrames(docs: DetailchartsFrameDoc[]): FieldManifest | null {
+  const ordered = [...docs].sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+  const newest = ordered[ordered.length - 1];
+  if (!newest) return null;
+  const kept = ordered.filter((doc) => sameGeometry(doc, newest));
+  const synthetic = (doc: DetailchartsFrameDoc) => doc.source === 'synthetic';
+
+  return {
+    variable: newest.variable,
+    label: newest.label,
+    unit: newest.raster.unit,
+    anchor: newest.time,
+    generated_at: newest.generated_at,
+    cadence_minutes: 10,
+    source: kept.some(synthetic) ? 'synthetic' : newest.source,
+    projection: newest.projection,
+    bounds_3857: newest.bounds_3857,
+    bounds_wgs84: newest.bounds_wgs84,
+    image: newest.image,
+    raster: newest.raster,
+    legend: newest.legend,
+    fade: newest.fade,
+    xval: newest.xval,
+    frames: kept.map((doc) => ({
+      time: doc.time,
+      png_url: doc.png,
+      values_url: doc.values,
+      uncertainty_median: doc.stats?.uncertainty_median ?? null,
+      coverage: doc.stats?.coverage ?? 0,
+      ...(synthetic(doc) ? { synthetic: true } : {}),
+    })),
+  };
+}
+
+/**
+ * The operational layers, from `detailcharts.agroexact.com`.
+ *
+ * The run publishes per ten-minute slot `<variable>/<stamp>.{png,bin,json}` and, last,
+ * `latest.json` naming the newest stamp. Frame files never change once written (they are
+ * served as immutable), so the documents are kept in memory and a reopened layer only
+ * asks for `latest.json` and the frames it has not seen.
+ *
+ * A slot whose run failed simply has no document; the loop closes over the gap. Only
+ * when not one frame of the window can be read is the layer "not available yet", with
+ * the next run ten minutes away.
+ */
+export function detailchartsSource(
+  options: {
+    baseUrl?: string;
+    frames?: number;
+    fetchImpl?: typeof fetch;
+  } = {}
+): FieldSource {
+  const {
+    baseUrl = DETAILCHARTS_BASE,
+    frames = DETAILCHARTS_LOOP_FRAMES,
+    fetchImpl = (...args: Parameters<typeof fetch>) => fetch(...args),
+  } = options;
+  const docs = new Map<string, DetailchartsFrameDoc>();
+
+  const get = async (url: string, signal?: AbortSignal) => {
+    const response = await fetchImpl(url, { signal });
+    if (!response.ok) throw new Error(`fields: HTTP ${response.status} for ${url}`);
     return response;
   };
 
-  /** A frame's URL as the manifest gave it, resolved against the variable's folder when
-   *  it is relative. Nothing is *built* here: the stamp the manifest put on it is what
-   *  keeps a new run out of the previous one's HTTP cache. */
-  const resolve = (manifest: FieldManifest, url: string) =>
-    /^https?:/.test(url) ? url : `${baseUrl}/${manifest.variable}/${url.replace(/^\.\//, '')}`;
+  const frameDoc = async (variable: FieldVariable, stamp: string, signal?: AbortSignal) => {
+    const key = `${variable}/${stamp}`;
+    const cached = docs.get(key);
+    if (cached) return cached;
+    const doc = (await (await get(`${baseUrl}/${key}.json`, signal)).json()) as DetailchartsFrameDoc;
+    docs.set(key, doc);
+    return doc;
+  };
+
+  const fileUrl = (manifest: FieldManifest, name: string) =>
+    /^https?:/.test(name) ? name : `${baseUrl}/${manifest.variable}/${name.replace(/^\.\//, '')}`;
 
   return {
     async manifest(variable, signal) {
-      const response = await request(`${baseUrl}/${variable}/manifest.json`, signal);
-      return (await response.json()) as FieldManifest;
+      let latest: DetailchartsLatest;
+      try {
+        // Served `no-cache`, so a reopened map revalidates it and moves on to the new run.
+        latest = (await (await get(`${baseUrl}/latest.json`, signal)).json()) as DetailchartsLatest;
+      } catch (error) {
+        if (signal?.aborted) throw error;
+        throw new FieldsUnavailable(300);
+      }
+
+      const stamps = loopStamps(latest.stamp, frames);
+      const settled = await Promise.allSettled(
+        stamps.map((stamp) => frameDoc(variable, stamp, signal))
+      );
+      if (signal?.aborted) throw new Error('fields: aborted');
+      const found = settled
+        .filter((r): r is PromiseFulfilledResult<DetailchartsFrameDoc> => r.status === 'fulfilled')
+        .map((r) => r.value)
+        .filter((doc) => doc.variable === variable);
+      const manifest = manifestFromFrames(found);
+      // Nothing in the window: the run is down or this variable was skipped (too few
+      // anchor stations). Either way the next run is ten minutes off.
+      if (!manifest) throw new FieldsUnavailable(600);
+      return manifest;
     },
 
     overlayUrl(manifest, frame) {
-      return resolve(manifest, frame.png_url);
+      return fileUrl(manifest, frame.png_url);
     },
 
     async values(manifest, frame, signal) {
-      const response = await request(resolve(manifest, frame.values_url), signal);
+      // Served with `Content-Encoding: gzip`, so the platform hands back the bare array.
+      const response = await get(fileUrl(manifest, frame.values_url), signal);
       const bytes = await response.arrayBuffer();
       const { rows, cols } = manifest.raster;
       if (bytes.byteLength !== rows * cols * 2) {

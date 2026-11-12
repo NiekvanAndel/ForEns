@@ -104,8 +104,7 @@ import { FieldBubbles } from '../fields/FieldBubbles';
 import { FieldLegend } from '../fields/FieldLegend';
 import { FieldPanel } from '../fields/FieldPanel';
 import { useFields } from '../fields/useFields';
-import { fixtureFieldSource } from '../fields/fixtureSource';
-import { sampleField } from '../../core/fields';
+import { detailchartsSource, sampleField } from '../../core/fields';
 import { CumulativeBubbles } from './CumulativeBubbles';
 import { useCumulative } from './useCumulative';
 import { useCumulativeReadings } from './useCumulativeReadings';
@@ -123,6 +122,10 @@ import { useLandscape } from '../layout';
 import { usePrefs } from '../../state/prefs';
 import type { SavedLocation } from '../../core/prefs';
 import { ta } from '../../core/i18n';
+
+/** The operational Detailcharts layers. Module-level, so the hook sees one source for
+ *  the life of the app and its frame-document cache survives the map being reopened. */
+const fieldSource = detailchartsSource();
 
 /** The header, the curve and its axis. Animating a fixed maximum is what lets the
  *  fold be a height rather than a measurement; set too high, the first part of it
@@ -228,7 +231,7 @@ export function FullMap({
   const totals = layer === 'cumulative';
   // The three Detailcharts layers are one thing to this screen: a scalar field on a
   // loop. Only the variable differs, so they share a hook, a panel and a legend.
-  const fields = useFields(fixtureFieldSource);
+  const fields = useFields(fieldSource);
   // A field sits deeper in the basemap than rain does — under the water as well — so
   // the two overlays this screen owns take their own depths. See `LAYER_DEPTH`.
   const fieldBeforeId = useWeatherBeforeId(LAYER_DEPTH.field);
@@ -377,7 +380,7 @@ export function FullMap({
                   manifest={fields.manifest}
                   frames={fields.frames}
                   active={fields.frame}
-                  source={fixtureFieldSource}
+                  source={fieldSource}
                   beforeId={fieldBeforeId}
                 />
                 <FieldBubbles
