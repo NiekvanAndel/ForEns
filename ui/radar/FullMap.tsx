@@ -151,6 +151,8 @@ const TIMELINE_HEIGHT = 68;
  *  reading as well as the chart — and deliberately a little over rather than under, so
  *  a location with a long name is folded rather than clipped while it is open. */
 const TOTALS_MAX_HEIGHT = 260;
+/** The field chart under its slider, with its air: `FieldChart`'s 72 plus margins. */
+const FIELD_CHART_MAX_HEIGHT = 96;
 
 /** How wide the floating panel gets in landscape. Wider than this and the play button
  *  and the far end of the track are a hand's width apart, which is a control nobody can
@@ -283,11 +285,9 @@ export function FullMap({
   // Only a panel with a curve in it has anything to fold. While the totals are still
   // loading — or cannot be built at all — the panel is a single line of explanation,
   // and a grabber over it would promise a drag that does nothing.
-  // A field layer has no curve to fold: its panel is one reading and the slider under
-  // it, which is the arrangement `FullMap` already uses where the nowcast has nothing
-  // to draw. Nothing to fold means no grabber, and the row simply stands.
+  // A field layer folds its chart, which sits under the slider; the slider stays.
   const foldable = showField
-    ? false
+    ? fields.status === 'ready' && !!fields.manifest
     : totals
       ? cumulative.status === 'ready' && !!cumulative.window
       : curve;
@@ -354,6 +354,11 @@ export function FullMap({
   // The panels themselves are different heights, so they keep separate styles: a fold
   // that animates the wrong one either clips the panel open or spends its first inches
   // on nothing. Their folded rows are the same shape, though, so those share `timelineStyle`.
+  const fieldChartStyle = useAnimatedStyle(() => ({
+    opacity: 1 - collapse.value,
+    maxHeight: (1 - collapse.value) * FIELD_CHART_MAX_HEIGHT,
+  }));
+
   const totalsStyle = useAnimatedStyle(() => ({
     opacity: 1 - collapse.value,
     maxHeight: (1 - collapse.value) * TOTALS_MAX_HEIGHT,
@@ -567,6 +572,8 @@ export function FullMap({
                 retryAfterSec={fields.retryAfterSec}
                 mapValues={fieldSeries}
                 location={location}
+                chartStyle={fieldChartStyle}
+                grabber={foldable}
               />
             ) : totals ? (
               <Animated.View
@@ -610,8 +617,8 @@ export function FullMap({
           </View>
         </GestureDetector>
 
-        {/* A field layer carries its own slider inside the panel, so there is no
-            second row to stand in for a folded curve. */}
+        {/* A field layer folds only its chart; its slider stays inside the panel, so
+            there is no second row to stand in for it. */}
         {showField ? null : totals ? (
           foldable ? (
             <Animated.View

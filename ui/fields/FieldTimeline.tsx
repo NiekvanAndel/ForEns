@@ -16,7 +16,6 @@
  * a forecast row, their own memory of the evening — is comparing times of day, and
  * arithmetic they have to do themselves is arithmetic they will get wrong.
  */
-import type React from 'react';
 import { Pressable, View } from 'react-native';
 import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
@@ -33,12 +32,10 @@ export interface FieldTimelineProps {
   onIndexChange: (index: number) => void;
   playing: boolean;
   onTogglePlay: () => void;
-  /** Drawn above the clocks, in the track's own column so it shares its x axis. */
-  chart?: React.ReactNode;
 }
 
 export function FieldTimeline({
-  frames, index, onIndexChange, playing, onTogglePlay, chart,
+  frames, index, onIndexChange, playing, onTogglePlay,
 }: FieldTimelineProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -48,7 +45,7 @@ export function FieldTimeline({
   const newest = frames[frames.length - 1];
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space[3] }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
       <Pressable
         onPress={onTogglePlay}
         accessibilityRole="button"
@@ -64,7 +61,6 @@ export function FieldTimeline({
       </Pressable>
 
       <View style={{ flex: 1 }}>
-        {chart}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
           <Text variant="caption" color={palette.muted} tabular>
             {oldest ? frameClock(oldest) : ''}

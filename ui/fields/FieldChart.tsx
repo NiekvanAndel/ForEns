@@ -4,9 +4,9 @@
  * what that station measured (solid). No legend, on purpose — there is no room, and the
  * dash is the whole distinction.
  *
- * x is the slider's own: frames evenly spaced, cursor on the thumb. Station readings
- * are placed between frames by time (`frameIndexAt`), which keeps that true should the
- * loop ever thin out further back.
+ * Under the slider, across the panel's full width, folded away like the rainfall
+ * curve. Frames evenly spaced as on the slider, so the cursor moves as the thumb does;
+ * station readings are placed between frames by time (`frameIndexAt`).
  */
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
@@ -21,8 +21,9 @@ import type { SavedLocation } from '../../core/prefs';
 import { usePrefs } from '../../state/prefs';
 import { useStationRange } from '../../state/stations';
 
-/** Half the scrubber's thumb: the track's first and last step sit this far in. */
-const INSET = 11;
+/** Room on the left for the min/max labels, and a little on the right for the dot. */
+const LEFT = 30;
+const RIGHT = 4;
 const HEIGHT = 72;
 const PAD_Y = 6;
 /** The chart follows the loading rasters at most this often, not once per frame. */
@@ -116,8 +117,8 @@ export function FieldChart({
   }, [mapSeries, stationSeries]);
 
   const last = Math.max(1, frames.length - 1);
-  const usable = Math.max(0, width - 2 * INSET);
-  const px = (i: number) => INSET + (i / last) * usable;
+  const usable = Math.max(0, width - LEFT - RIGHT);
+  const px = (i: number) => LEFT + (i / last) * usable;
   const py = (v: number) =>
     scale ? PAD_Y + (1 - (v - scale.lo) / (scale.hi - scale.lo)) * (HEIGHT - 2 * PAD_Y) : 0;
 
@@ -154,7 +155,7 @@ export function FieldChart({
   const mapNow = mapSeries[index];
 
   return (
-    <View onLayout={onLayout} style={{ height: HEIGHT, marginBottom: 6 }}>
+    <View onLayout={onLayout} style={{ height: HEIGHT }}>
       {paths ? (
         <ChartLines
           width={width}

@@ -15,7 +15,9 @@
  * track to drag and nothing on the map either, so it says so in a line; that is not a
  * reading, it is the reason the screen is empty.
  */
+import type { ComponentProps } from 'react';
 import { View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { FieldTimeline } from './FieldTimeline';
@@ -39,11 +41,15 @@ export interface FieldPanelProps {
   /** The selected location's value per frame, in the manifest's unit. */
   mapValues: readonly (number | null)[];
   location: SavedLocation;
+  /** Folds the chart under the slider; the slider itself never folds. */
+  chartStyle?: ComponentProps<typeof Animated.View>['style'];
+  /** A grabber is drawn above, which brings its own air. */
+  grabber?: boolean;
 }
 
 export function FieldPanel({
   status, manifest, frames, index, onIndexChange, playing, onTogglePlay, retryAfterSec,
-  mapValues, location,
+  mapValues, location, chartStyle, grabber,
 }: FieldPanelProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -66,14 +72,16 @@ export function FieldPanel({
   }
 
   return (
-    <View style={{ paddingHorizontal: space[5], paddingTop: space[4] }}>
+    <View style={{ paddingHorizontal: space[5], paddingTop: grabber ? 0 : space[4] }}>
       <FieldTimeline
         frames={frames}
         index={index}
         onIndexChange={onIndexChange}
         playing={playing}
         onTogglePlay={onTogglePlay}
-        chart={
+      />
+      <Animated.View style={[{ overflow: 'hidden' }, chartStyle]}>
+        <View style={{ paddingTop: space[3] }}>
           <FieldChart
             variable={manifest.variable}
             manifest={manifest}
@@ -82,8 +90,8 @@ export function FieldPanel({
             index={index}
             location={location}
           />
-        }
-      />
+        </View>
+      </Animated.View>
     </View>
   );
 }
