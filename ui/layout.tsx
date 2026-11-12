@@ -15,7 +15,7 @@ import { View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { space } from '../theme';
 import { cardsOf, splitColumns, TWO_COLUMN_WIDTH } from '../core/layout';
-import { TAB_BAR_CLEARANCE, TAB_BAR_CLEARANCE_SIDE } from './GlassTabBar';
+import { TAB_BAR_CLEARANCE, TAB_BAR_CLEARANCE_SIDE } from './tabBarMetrics';
 
 /**
  * Whether the screen is wider than it is tall.
