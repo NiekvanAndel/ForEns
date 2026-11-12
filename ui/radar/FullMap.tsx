@@ -160,6 +160,7 @@ const PANEL_MAX_WIDTH = 420;
 /** Stable empty list, so the readings hook is not handed a new array every render
  *  while the cumulative layer is off. */
 const EMPTY_LOCATIONS: SavedLocation[] = [];
+const EMPTY_SERIES: (number | null)[] = [];
 
 /** What the panel shows for the selected location before any reading exists — which
  *  is the moment between switching the layer on and the manifest arriving. */
@@ -266,6 +267,18 @@ export function FullMap({
         ? locations.map((l) => sampleField(fields.manifest!, fields.values!, l.lat, l.lon))
         : locations.map(() => null),
     [fields.manifest, fields.values, locations]
+  );
+  // The selected location's value per frame, for the chart. Numbers, never the rasters:
+  // a development build logs every changed prop, and React walks a typed array element
+  // by element — 19 rasters of ~155k values froze the app.
+  const fieldSeries = useMemo(
+    () =>
+      fields.manifest
+        ? fields.frameValues.map((v) =>
+            v ? sampleField(fields.manifest!, v, location.lat, location.lon) : null
+          )
+        : EMPTY_SERIES,
+    [fields.manifest, fields.frameValues, location.lat, location.lon]
   );
   // Only a panel with a curve in it has anything to fold. While the totals are still
   // loading — or cannot be built at all — the panel is a single line of explanation,
@@ -552,7 +565,7 @@ export function FullMap({
                 playing={fields.playing}
                 onTogglePlay={fields.togglePlay}
                 retryAfterSec={fields.retryAfterSec}
-                frameValues={fields.frameValues}
+                mapValues={fieldSeries}
                 location={location}
               />
             ) : totals ? (

@@ -4,18 +4,17 @@
  * what that station measured (solid). No legend, on purpose — there is no room, and the
  * dash is the whole distinction.
  *
- * Drawn with plain Views, not react-native-svg (see `segments`).
- *
  * x is the slider's own: frames evenly spaced, cursor on the thumb. Station readings
  * are placed between frames by time (`frameIndexAt`), which keeps that true should the
  * loop ever thin out further back.
  */
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../theme';
 import { Text } from '../Text';
 import {
-  fieldValueIn, frameIndexAt, sampleField, stationValueFor,
+  fieldValueIn, frameIndexAt, stationValueFor,
   type FieldFrame, type FieldManifest, type FieldVariable,
 } from '../../core/fields';
 import type { SavedLocation } from '../../core/prefs';
@@ -46,13 +45,14 @@ export interface FieldChartProps {
   variable: FieldVariable;
   manifest: FieldManifest;
   frames: readonly FieldFrame[];
-  frameValues: readonly (Uint16Array | null)[];
+  /** Per frame, in the manifest's unit. Numbers only — see `fieldSeries` in FullMap. */
+  mapValues: readonly (number | null)[];
   index: number;
   location: SavedLocation;
 }
 
 export function FieldChart({
-  variable, manifest, frames, frameValues, index, location,
+  variable, manifest, frames, mapValues, index, location,
 }: FieldChartProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -66,15 +66,12 @@ export function FieldChart({
   const unit = manifest.unit;
   const show = (v: number | null) => fieldValueIn(unit, v, prefs);
 
-  const settledValues = useSettled(frameValues, SETTLE_MS);
+  const settledValues = useSettled(mapValues, SETTLE_MS);
   const mapSeries = useMemo(
-    () =>
-      settledValues.map((values) =>
-        values ? show(sampleField(manifest, values, location.lat, location.lon)) : null
-      ),
+    () => settledValues.map(show),
     // `show` closes over prefs and unit only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [settledValues, manifest, location.lat, location.lon, prefs.tempUnit, prefs.windUnit]
+    [settledValues, unit, prefs.tempUnit, prefs.windUnit]
   );
 
   // The location's own station binding only: resolving "nearest station" would pull
@@ -124,23 +121,26 @@ export function FieldChart({
   const py = (v: number) =>
     scale ? PAD_Y + (1 - (v - scale.lo) / (scale.hi - scale.lo)) * (HEIGHT - 2 * PAD_Y) : 0;
 
-  // Segments as plain Views, no SVG: the SVG version froze the app on device. They
-  // depend on the data and the width only, never on the slider.
-  const segments = useMemo(() => {
+  // The lines depend on the data and the width only, never on the slider: a step moves
+  // the cursor (two plain Views) and leaves the SVG alone.
+  const paths = useMemo(() => {
     if (!scale || !width) return null;
-    const segs = (points: { x: number; v: number | null }[]) => {
-      const out: Seg[] = [];
-      for (let k = 1; k < points.length; k++) {
-        const a = points[k - 1]!;
-        const b = points[k]!;
-        if (a.v == null || b.v == null) continue;
-        out.push({ x1: px(a.x), y1: py(a.v), x2: px(b.x), y2: py(b.v) });
+    const pathOf = (points: { x: number; v: number | null }[]) => {
+      let d = '';
+      let pen = false;
+      for (const p of points) {
+        if (p.v == null) {
+          pen = false;
+          continue;
+        }
+        d += `${pen ? 'L' : 'M'}${px(p.x).toFixed(1)},${py(p.v).toFixed(1)}`;
+        pen = true;
       }
-      return out;
+      return d;
     };
     return {
-      map: segs(mapSeries.map((v, i) => ({ x: i, v }))),
-      station: segs(stationSeries),
+      map: pathOf(mapSeries.map((v, i) => ({ x: i, v }))),
+      station: pathOf(stationSeries),
     };
     // px/py derive from scale, width and the frame count.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,8 +155,13 @@ export function FieldChart({
 
   return (
     <View onLayout={onLayout} style={{ height: HEIGHT, marginBottom: 6 }}>
-      {segments ? (
-        <ChartLines map={segments.map} station={segments.station} color={palette.accent} />
+      {paths ? (
+        <ChartLines
+          width={width}
+          mapPath={paths.map}
+          stationPath={paths.station}
+          color={palette.accent}
+        />
       ) : null}
       <View
         pointerEvents="none"
@@ -191,47 +196,20 @@ export function FieldChart({
   );
 }
 
-interface Seg {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-}
-
 const ChartLines = memo(function ChartLines({
-  map, station, color,
+  width, mapPath, stationPath, color,
 }: {
-  map: Seg[];
-  station: Seg[];
+  width: number;
+  mapPath: string;
+  stationPath: string;
   color: string;
 }) {
   return (
-    <>
-      {station.map((seg, i) => <Segment key={`s${i}`} seg={seg} color={color} />)}
-      {map.map((seg, i) => <Segment key={`m${i}`} seg={seg} color={color} dashed />)}
-    </>
+    <Svg width={width} height={HEIGHT}>
+      {stationPath ? <Path d={stationPath} stroke={color} strokeWidth={2} fill="none" /> : null}
+      {mapPath ? (
+        <Path d={mapPath} stroke={color} strokeWidth={2} fill="none" strokeDasharray="4 3" />
+      ) : null}
+    </Svg>
   );
 });
-
-/** A line from (x1,y1) to (x2,y2): a 2 pt bar centred on the midpoint, rotated. */
-function Segment({ seg, color, dashed }: { seg: Seg; color: string; dashed?: boolean }) {
-  const dx = seg.x2 - seg.x1;
-  const dy = seg.y2 - seg.y1;
-  const len = Math.hypot(dx, dy);
-  return (
-    <View
-      pointerEvents="none"
-      style={{
-        position: 'absolute',
-        left: (seg.x1 + seg.x2) / 2 - len / 2,
-        top: (seg.y1 + seg.y2) / 2 - 1,
-        width: len,
-        height: 0,
-        borderTopWidth: 2,
-        borderColor: color,
-        borderStyle: dashed ? 'dashed' : 'solid',
-        transform: [{ rotate: `${Math.atan2(dy, dx)}rad` }],
-      }}
-    />
-  );
-}

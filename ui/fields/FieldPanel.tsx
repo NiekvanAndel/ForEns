@@ -36,13 +36,14 @@ export interface FieldPanelProps {
   onTogglePlay: () => void;
   /** Seconds the server asked us to wait, when it says the layers are not built. */
   retryAfterSec: number | null;
-  frameValues: readonly (Uint16Array | null)[];
+  /** The selected location's value per frame, in the manifest's unit. */
+  mapValues: readonly (number | null)[];
   location: SavedLocation;
 }
 
 export function FieldPanel({
   status, manifest, frames, index, onIndexChange, playing, onTogglePlay, retryAfterSec,
-  frameValues, location,
+  mapValues, location,
 }: FieldPanelProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -77,7 +78,7 @@ export function FieldPanel({
             variable={manifest.variable}
             manifest={manifest}
             frames={frames}
-            frameValues={frameValues}
+            mapValues={mapValues}
             index={index}
             location={location}
           />
