@@ -300,7 +300,10 @@ export function frameClock(frame: FieldFrame): string {
 
 /** How far back the loop reaches, in whole minutes, from its own cadence and length. */
 export function loopMinutes(manifest: FieldManifest): number {
-  return Math.max(0, (manifest.frames.length - 1) * manifest.cadence_minutes);
+  // From the frame times, not the cadence: the live loop thins out further back.
+  const times = manifest.frames.map((f) => Date.parse(f.time));
+  if (times.length < 2) return 0;
+  return Math.round((Math.max(...times) - Math.min(...times)) / 60_000);
 }
 
 /**
@@ -405,8 +408,18 @@ export function formatFieldValue(
 /** Where the operational Detailcharts run publishes its app layer. */
 export const DETAILCHARTS_BASE = 'https://detailcharts.agroexact.com';
 
-/** How many ten-minute frames the loop reaches back over: two hours, as the fixture. */
-export const DETAILCHARTS_LOOP_FRAMES = 12;
+/**
+ * How far back the loop reaches, and how finely. The last two hours every ten minutes
+ * (every run), the ten before that every half hour on the clock's :00 and :30: twelve
+ * hours in 33 frames instead of 72, with the detail where the reader looks.
+ */
+export const DETAILCHARTS_LOOP = {
+  denseHours: 2,
+  denseStepMin: 10,
+  totalHours: 12,
+  sparseStepMin: 30,
+};
+export type DetailchartsLoop = typeof DETAILCHARTS_LOOP;
 
 /** `<base>/latest.json`: written last by every run, after all of its frames. */
 export interface DetailchartsLatest {
@@ -460,11 +473,19 @@ export function stampOf(ms: number): string {
 }
 
 /** The stamps the loop asks for, oldest first, ending at the newest run. */
-export function loopStamps(latestStamp: string, count: number, cadenceMinutes = 10): string[] {
+export function loopStamps(latestStamp: string, loop: DetailchartsLoop = DETAILCHARTS_LOOP): string[] {
   const newest = stampMs(latestStamp);
   if (newest == null) return [];
-  const step = cadenceMinutes * 60_000;
-  return Array.from({ length: count }, (_, i) => stampOf(newest - (count - 1 - i) * step));
+  const minute = 60_000;
+  const denseStart = newest - loop.denseHours * 60 * minute;
+  const oldest = newest - loop.totalHours * 60 * minute;
+  const sparse = loop.sparseStepMin * minute;
+  const out: number[] = [];
+  // Snapped to the clock, so the half-hourly part reads 10:00, 10:30 whatever minute
+  // the newest run happens to carry.
+  for (let t = Math.ceil(oldest / sparse) * sparse; t < denseStart; t += sparse) out.push(t);
+  for (let t = denseStart; t <= newest; t += loop.denseStepMin * minute) out.push(t);
+  return out.map(stampOf);
 }
 
 function sameGeometry(a: DetailchartsFrameDoc, b: DetailchartsFrameDoc): boolean {
@@ -498,7 +519,7 @@ export function manifestFromFrames(docs: DetailchartsFrameDoc[]): FieldManifest 
     unit: newest.raster.unit,
     anchor: newest.time,
     generated_at: newest.generated_at,
-    cadence_minutes: 10,
+    cadence_minutes: 10, // the newest stretch; older frames are sparser
     source: kept.some(synthetic) ? 'synthetic' : newest.source,
     projection: newest.projection,
     bounds_3857: newest.bounds_3857,
@@ -534,13 +555,13 @@ export function manifestFromFrames(docs: DetailchartsFrameDoc[]): FieldManifest 
 export function detailchartsSource(
   options: {
     baseUrl?: string;
-    frames?: number;
+    loop?: DetailchartsLoop;
     fetchImpl?: typeof fetch;
   } = {}
 ): FieldSource {
   const {
     baseUrl = DETAILCHARTS_BASE,
-    frames = DETAILCHARTS_LOOP_FRAMES,
+    loop = DETAILCHARTS_LOOP,
     fetchImpl = (...args: Parameters<typeof fetch>) => fetch(...args),
   } = options;
   const docs = new Map<string, DetailchartsFrameDoc>();
@@ -574,7 +595,7 @@ export function detailchartsSource(
         throw new FieldsUnavailable(300);
       }
 
-      const stamps = loopStamps(latest.stamp, frames);
+      const stamps = loopStamps(latest.stamp, loop);
       const settled = await Promise.allSettled(
         stamps.map((stamp) => frameDoc(variable, stamp, signal))
       );
@@ -609,4 +630,35 @@ export function detailchartsSource(
       return new Uint16Array(bytes);
     },
   };
+}
+
+// --- The chart under the slider ---------------------------------------------
+
+/**
+ * Where an instant lands on the slider, as a fractional frame index; null outside the
+ * loop. The slider spaces frames evenly while the loop thins out further back, so the
+ * chart maps time through the frame times piecewise rather than linearly, and a station
+ * reading lines up with the frame the thumb is on.
+ */
+export function frameIndexAt(frameTimesMs: readonly number[], t: number): number | null {
+  const n = frameTimesMs.length;
+  if (!n || t < frameTimesMs[0]! || t > frameTimesMs[n - 1]!) return null;
+  if (n === 1) return 0;
+  for (let i = 0; i < n - 1; i++) {
+    const a = frameTimesMs[i]!;
+    const b = frameTimesMs[i + 1]!;
+    if (t <= b) return b === a ? i : i + (t - a) / (b - a);
+  }
+  return n - 1;
+}
+
+/** A station measurement as the field publishes it: °C, %, m/s. Station wind arrives
+ *  in km/h from `core/sources/agroexact`. */
+export function stationValueFor(
+  variable: FieldVariable,
+  row: { temp: number | null; humidity: number | null; wind: number | null }
+): number | null {
+  if (variable === 'temperature') return row.temp;
+  if (variable === 'humidity') return row.humidity;
+  return row.wind == null ? null : row.wind / MS_TO_KMH;
 }

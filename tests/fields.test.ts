@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FIELD_VARIABLES, FieldsUnavailable, detailchartsSource, fieldUnitLabel, loopStamps,
-  manifestFromFrames, stampMs, type DetailchartsFrameDoc, fieldValueIn, formatFieldValue, frameClock, inkOn,
+  manifestFromFrames, stampMs, frameIndexAt, stationValueFor, type DetailchartsFrameDoc, fieldValueIn, formatFieldValue, frameClock, inkOn,
   isSynthetic, legendColorFor, loopMinutes, orderedFrames, pixelFor, sampleField,
   unitLabel, type FieldVariable,
 } from '../core/fields';
@@ -373,7 +373,10 @@ describe('the operational Detailcharts source', () => {
     };
   }
 
-  function sourceOver(files: Record<string, unknown>, frames = 4) {
+  const SHORT = { denseHours: 0.5, denseStepMin: 10, totalHours: 0.5, sparseStepMin: 30 };
+  const ONE = { denseHours: 0, denseStepMin: 10, totalHours: 0, sparseStepMin: 30 };
+
+  function sourceOver(files: Record<string, unknown>, loop = SHORT) {
     const requested: string[] = [];
     const fetchImpl = (async (url: string) => {
       requested.push(url);
@@ -386,16 +389,23 @@ describe('the operational Detailcharts source', () => {
         arrayBuffer: async () => body as ArrayBuffer,
       };
     }) as unknown as typeof fetch;
-    return { source: detailchartsSource({ baseUrl: BASE, frames, fetchImpl }), requested };
+    return { source: detailchartsSource({ baseUrl: BASE, loop, fetchImpl }), requested };
   }
 
-  it('walks back from the newest stamp in ten-minute steps, oldest first', () => {
-    expect(loopStamps('20261112T1410Z', 3)).toEqual([
-      '20261112T1350Z', '20261112T1400Z', '20261112T1410Z',
+  it('walks back twelve hours: half-hourly on the clock, then every run for two hours', () => {
+    const stamps = loopStamps('20261112T1410Z');
+    expect(stamps[0]).toBe('20261112T0230Z');
+    expect(stamps.slice(18, 22)).toEqual([
+      '20261112T1130Z', '20261112T1200Z', '20261112T1210Z', '20261112T1220Z',
     ]);
+    expect(stamps[stamps.length - 1]).toBe('20261112T1410Z');
+    expect(stamps).toHaveLength(20 + 13);
     // Across midnight and a month end, in UTC.
-    expect(loopStamps('20261201T0000Z', 2)).toEqual(['20261130T2350Z', '20261201T0000Z']);
-    expect(loopStamps('not a stamp', 3)).toEqual([]);
+    const small = { denseHours: 1 / 6, denseStepMin: 10, totalHours: 1, sparseStepMin: 30 };
+    expect(loopStamps('20261201T0000Z', small)).toEqual([
+      '20261130T2300Z', '20261130T2330Z', '20261130T2350Z', '20261201T0000Z',
+    ]);
+    expect(loopStamps('not a stamp')).toEqual([]);
   });
 
   it('builds the loop from the frames that exist, skipping a failed run', async () => {
@@ -442,7 +452,7 @@ describe('the operational Detailcharts source', () => {
       'latest.json': { target: '', stamp: '20261112T1410Z', variables: ['temperature'] },
       'temperature/20261112T1410Z.json': doc('20261112T1410Z'),
     };
-    const { source, requested } = sourceOver(files, 1);
+    const { source, requested } = sourceOver(files, ONE);
     await source.manifest('temperature');
     await source.manifest('temperature');
     expect(requested.filter((u) => u.endsWith('1410Z.json'))).toHaveLength(1);
@@ -457,5 +467,26 @@ describe('the operational Detailcharts source', () => {
     expect((await good.source.values(manifest, manifest.frames[0]!)).length).toBe(rows * cols);
     const bad = sourceOver({ [`temperature/${stamp}.bin`]: new ArrayBuffer(6) });
     await expect(bad.source.values(manifest, manifest.frames[0]!)).rejects.toThrow(/raster is 6 bytes/);
+  });
+});
+
+describe('the chart under the slider', () => {
+  const t = [0, 30, 40, 50].map((m) => m * 60_000);
+
+  it('places an instant between the frames around it, on evenly spaced steps', () => {
+    expect(frameIndexAt(t, 0)).toBe(0);
+    expect(frameIndexAt(t, 15 * 60_000)).toBe(0.5);
+    expect(frameIndexAt(t, 45 * 60_000)).toBe(2.5);
+    expect(frameIndexAt(t, 50 * 60_000)).toBe(3);
+    expect(frameIndexAt(t, -1)).toBeNull();
+    expect(frameIndexAt(t, 51 * 60_000)).toBeNull();
+  });
+
+  it('reads a station row in the field s own units', () => {
+    const row = { temp: 12.3, humidity: 81, wind: 18 };
+    expect(stationValueFor('temperature', row)).toBe(12.3);
+    expect(stationValueFor('humidity', row)).toBe(81);
+    expect(stationValueFor('wind', row)).toBe(5);
+    expect(stationValueFor('wind', { ...row, wind: null })).toBeNull();
   });
 });

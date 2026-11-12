@@ -32,7 +32,7 @@
  * existing is the nowcast loop, and a reader who never opens the layer menu should not
  * pay for a manifest.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FieldsUnavailable, orderedFrames,
   type FieldFrame, type FieldManifest, type FieldSource, type FieldVariable,
@@ -65,6 +65,8 @@ export interface FieldLayerState {
   togglePlay: () => void;
   /** The active frame's raster, once it has arrived. */
   values: Uint16Array | null;
+  /** Every frame's raster, aligned with `frames`; null until it has arrived. */
+  frameValues: (Uint16Array | null)[];
   /** Seconds the server asked us to wait, when it says the layers are not built. */
   retryAfterSec: number | null;
 }
@@ -190,6 +192,10 @@ export function useFields(source: FieldSource): FieldLayerState {
   }, [variable, manifest, status, frames, index, source]);
 
   const frame = frames[index];
+  const frameValues = useMemo(
+    () => frames.map((f) => (variable && rasters.get(`${variable}/${f.time}`)) || null),
+    [frames, rasters, variable]
+  );
 
   return {
     variable,
@@ -204,5 +210,6 @@ export function useFields(source: FieldSource): FieldLayerState {
     togglePlay: useCallback(() => setPlaying((p) => !p), []),
     values: (variable && frame && rasters.get(`${variable}/${frame.time}`)) || null,
     retryAfterSec,
+    frameValues,
   };
 }
