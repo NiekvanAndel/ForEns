@@ -29,6 +29,7 @@
  * evaluated on a grid — so a smooth enlargement is closer to what the model says than a
  * staircase of kilometre squares would be.
  */
+import { memo, useMemo } from 'react';
 import { ImageSource, Layer } from '@maplibre/maplibre-react-native';
 import type { LngLat } from '@maplibre/maplibre-react-native';
 import { overlayBounds, type FieldFrame, type FieldManifest, type FieldSource } from '../../core/fields';
@@ -74,7 +75,11 @@ export interface FieldLayerProps {
 }
 
 export function FieldLayer({ manifest, frames, active, source, beforeId }: FieldLayerProps) {
-  const corners = cornersOf(overlayBounds(manifest));
+  const { west, east, south, north } = overlayBounds(manifest);
+  const corners = useMemo(
+    () => cornersOf({ west, east, south, north }),
+    [west, east, south, north]
+  );
 
   return (
     <>
@@ -90,19 +95,40 @@ export function FieldLayer({ manifest, frames, active, source, beforeId }: Field
         }
         const id = `field-${manifest.variable}-${frame.time}`;
         return (
-          <ImageSource key={id} id={id} url={url} coordinates={corners}>
-            <Layer
-              type="raster"
-              id={`${id}-layer`}
-              beforeId={beforeId}
-              paint={{
-                ...PAINT,
-                'raster-opacity': frame.time === active?.time ? OVERLAY_OPACITY : 0,
-              }}
-            />
-          </ImageSource>
+          <FrameOverlay
+            key={id}
+            id={id}
+            url={url}
+            corners={corners}
+            beforeId={beforeId}
+            visible={frame.time === active?.time}
+          />
         );
       })}
     </>
   );
 }
+
+/**
+ * One frame, memoised on primitives: a slider step then re-renders the two frames whose
+ * visibility changed instead of sending new props for every overlay across the bridge.
+ */
+const FrameOverlay = memo(function FrameOverlay({
+  id, url, corners, beforeId, visible,
+}: {
+  id: string;
+  url: string;
+  corners: [LngLat, LngLat, LngLat, LngLat];
+  beforeId?: string;
+  visible: boolean;
+}) {
+  const paint = useMemo(
+    () => ({ ...PAINT, 'raster-opacity': visible ? OVERLAY_OPACITY : 0 }),
+    [visible]
+  );
+  return (
+    <ImageSource id={id} url={url} coordinates={corners}>
+      <Layer type="raster" id={`${id}-layer`} beforeId={beforeId} paint={paint} />
+    </ImageSource>
+  );
+});

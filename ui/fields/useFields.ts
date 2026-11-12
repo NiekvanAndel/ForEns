@@ -47,6 +47,9 @@ import {
  */
 export const FIELD_PLAY_INTERVAL_MS = 600;
 
+/** Value rasters fetched at once. */
+const RASTER_PARALLEL = 4;
+
 export type FieldStatus = 'off' | 'loading' | 'ready' | 'unavailable' | 'error';
 
 export interface FieldLayerState {
@@ -83,6 +86,8 @@ export function useFields(source: FieldSource): FieldLayerState {
   /** Frames already being fetched, so a queue restarted by a layer switch cannot ask
    *  for one that is still on its way. */
   const pending = useRef(new Set<string>());
+  /** Mirrors the keys of `rasters`, readable synchronously when a pass starts. */
+  const loaded = useRef(new Set<string>());
 
   const setVariable = useCallback((next: FieldVariable | null) => {
     setVariableState(next);
@@ -146,50 +151,60 @@ export function useFields(source: FieldSource): FieldLayerState {
     return () => clearInterval(id);
   }, [playing, frames.length]);
 
-  // The rasters: the frame on screen first, then the rest, in loop order.
+  // The frame on screen, read by the loader below each time it picks the next frame,
+  // so moving the slider reorders the queue without restarting it.
+  const indexRef = useRef(index);
+  indexRef.current = index;
+
+  // The rasters. Started once per manifest, never per slider step: restarting on every
+  // index aborted the download in flight, so during playback a frame slower than one
+  // tick never arrived. A few in parallel, the frame on screen first, then newest to
+  // oldest, which is where the slider usually is.
   useEffect(() => {
     if (!variable || !manifest || status !== 'ready' || !frames.length) return;
     const controller = new AbortController();
     let cancelled = false;
-
     const key = (frame: FieldFrame) => `${variable}/${frame.time}`;
-    const queue = [frames[index], ...frames].filter(Boolean) as FieldFrame[];
+    // Tried this pass, plus everything decoded in earlier ones.
+    const done = new Set<string>(loaded.current);
 
-    (async () => {
-      for (const frame of queue) {
+    const next = (): FieldFrame | undefined => {
+      const take = (f: FieldFrame | undefined) =>
+        f && !done.has(key(f)) && !pending.current.has(key(f)) ? f : undefined;
+      const active = take(frames[indexRef.current]);
+      if (active) return active;
+      for (let i = frames.length - 1; i >= 0; i--) {
+        const f = take(frames[i]);
+        if (f) return f;
+      }
+      return undefined;
+    };
+
+    const worker = async () => {
+      for (let frame = next(); frame && !cancelled; frame = next()) {
         const id = key(frame);
-        if (cancelled) return;
-        if (pending.current.has(id)) continue;
-        // Read through the state setter rather than the captured map, so a frame
-        // fetched by the previous pass is not fetched again by this one.
-        let have = false;
-        setRasters((current) => {
-          have = current.has(id);
-          return current;
-        });
-        if (have) continue;
-
         pending.current.add(id);
         try {
           const values = await source.values(manifest, frame, controller.signal);
           if (cancelled) return;
+          loaded.current.add(id);
           setRasters((current) => new Map(current).set(id, values));
         } catch {
           // A frame whose raster will not load simply has no number to print; the
-          // overlay is a separate request and is still on the map. Nothing to say.
+          // overlay is a separate request and is still on the map.
         } finally {
+          done.add(id);
           pending.current.delete(id);
         }
       }
-    })();
+    };
+    for (let i = 0; i < RASTER_PARALLEL; i++) void worker();
 
     return () => {
       cancelled = true;
       controller.abort();
     };
-    // `index` is in the list so the frame the reader lands on jumps the queue; the
-    // loop above skips whatever is already decoded, so re-running is cheap.
-  }, [variable, manifest, status, frames, index, source]);
+  }, [variable, manifest, status, frames, source]);
 
   const frame = frames[index];
   const frameValues = useMemo(
