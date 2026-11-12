@@ -26,6 +26,19 @@ const TABS = [
   { key: 'settings', labelKey: 'tabSettings', icon: 'gear-six' },
 ] as const;
 
+type TabKey = (typeof TABS)[number]['key'];
+
+/** Each tab's route, spelled out so typed routes can check it: a path built as
+ *  `/${key}` is only a string to the router, and fails once `.expo/types` exists. */
+const HREF = {
+  index: '/',
+  actueel: '/actueel',
+  radar: '/radar',
+  grafiek: '/grafiek',
+  forecast: '/forecast',
+  settings: '/settings',
+} as const satisfies Record<TabKey, string>;
+
 export default function TabsLayout() {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -59,7 +72,7 @@ export default function TabsLayout() {
       <GlassTabBar
         items={items}
         activeKey={activeKey}
-        onChange={(key) => router.replace(key === 'index' ? '/' : `/${key}`)}
+        onChange={(key) => router.replace(HREF[key as TabKey] ?? '/')}
       />
     </View>
   );
