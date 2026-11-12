@@ -16,7 +16,9 @@
  * a forecast row, their own memory of the evening — is comparing times of day, and
  * arithmetic they have to do themselves is arithmetic they will get wrong.
  */
-import { Pressable, View } from 'react-native';
+import type { ComponentProps } from 'react';
+import { Pressable, View, type ViewStyle } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
@@ -32,17 +34,47 @@ export interface FieldTimelineProps {
   onIndexChange: (index: number) => void;
   playing: boolean;
   onTogglePlay: () => void;
+  /** Folds the clocks above the track away while the chart, which carries its own
+   *  under it, is open. */
+  labelsStyle?: ComponentProps<typeof Animated.View>['style'];
+}
+
+/** Height of a row of clocks: a caption plus its 4 pt gap. */
+export const FIELD_CLOCKS_HEIGHT = 20;
+
+/** The oldest frame, the one on screen (bold) and the newest. */
+export function FieldClocks({
+  frames, index, style,
+}: {
+  frames: readonly FieldFrame[];
+  index: number;
+  style?: ViewStyle;
+}) {
+  const { palette } = useTheme();
+  const current = frames[index];
+  const oldest = frames[0];
+  const newest = frames[frames.length - 1];
+  return (
+    <View style={[{ flexDirection: 'row', justifyContent: 'space-between' }, style]}>
+      <Text variant="caption" color={palette.muted} tabular>
+        {oldest ? frameClock(oldest) : ''}
+      </Text>
+      <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
+        {current ? frameClock(current) : ''}
+      </Text>
+      <Text variant="caption" color={palette.muted} tabular>
+        {newest ? frameClock(newest) : ''}
+      </Text>
+    </View>
+  );
 }
 
 export function FieldTimeline({
-  frames, index, onIndexChange, playing, onTogglePlay,
+  frames, index, onIndexChange, playing, onTogglePlay, labelsStyle,
 }: FieldTimelineProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const disabled = frames.length < 2;
-  const current = frames[index];
-  const oldest = frames[0];
-  const newest = frames[frames.length - 1];
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
@@ -61,17 +93,9 @@ export function FieldTimeline({
       </Pressable>
 
       <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-          <Text variant="caption" color={palette.muted} tabular>
-            {oldest ? frameClock(oldest) : ''}
-          </Text>
-          <Text variant="caption" weight="bold" color={palette.inkHeading} tabular>
-            {current ? frameClock(current) : ''}
-          </Text>
-          <Text variant="caption" color={palette.muted} tabular>
-            {newest ? frameClock(newest) : ''}
-          </Text>
-        </View>
+        <Animated.View style={[{ overflow: 'hidden' }, labelsStyle]}>
+          <FieldClocks frames={frames} index={index} style={{ marginBottom: 4 }} />
+        </Animated.View>
 
         <Scrubber
           value={index}

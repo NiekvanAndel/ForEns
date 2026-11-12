@@ -20,8 +20,8 @@ import { View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
-import { FieldTimeline } from './FieldTimeline';
-import { FieldChart } from './FieldChart';
+import { FieldClocks, FieldTimeline } from './FieldTimeline';
+import { CHART_LEFT, FieldChart } from './FieldChart';
 import type { SavedLocation } from '../../core/prefs';
 import type { FieldFrame, FieldManifest } from '../../core/fields';
 import type { FieldStatus } from './useFields';
@@ -43,13 +43,15 @@ export interface FieldPanelProps {
   location: SavedLocation;
   /** Folds the chart under the slider; the slider itself never folds. */
   chartStyle?: ComponentProps<typeof Animated.View>['style'];
+  /** Folds the clocks above the track; open exactly when the chart is folded. */
+  labelsStyle?: ComponentProps<typeof Animated.View>['style'];
   /** A grabber is drawn above, which brings its own air. */
   grabber?: boolean;
 }
 
 export function FieldPanel({
   status, manifest, frames, index, onIndexChange, playing, onTogglePlay, retryAfterSec,
-  mapValues, location, chartStyle, grabber,
+  mapValues, location, chartStyle, labelsStyle, grabber,
 }: FieldPanelProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -79,6 +81,7 @@ export function FieldPanel({
         onIndexChange={onIndexChange}
         playing={playing}
         onTogglePlay={onTogglePlay}
+        labelsStyle={labelsStyle}
       />
       <Animated.View style={[{ overflow: 'hidden' }, chartStyle]}>
         <View style={{ paddingTop: space[3] }}>
@@ -89,6 +92,11 @@ export function FieldPanel({
             mapValues={mapValues}
             index={index}
             location={location}
+          />
+          <FieldClocks
+            frames={frames}
+            index={index}
+            style={{ marginTop: 4, paddingLeft: CHART_LEFT }}
           />
         </View>
       </Animated.View>

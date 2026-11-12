@@ -22,7 +22,8 @@ import { usePrefs } from '../../state/prefs';
 import { useStationRange } from '../../state/stations';
 
 /** Room on the left for the min/max labels, and a little on the right for the dot. */
-const LEFT = 30;
+export const CHART_LEFT = 30;
+const LEFT = CHART_LEFT;
 const RIGHT = 4;
 const HEIGHT = 72;
 const PAD_Y = 6;

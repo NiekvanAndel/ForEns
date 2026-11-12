@@ -103,6 +103,7 @@ import { FieldLayer } from '../fields/FieldLayer';
 import { FieldBubbles } from '../fields/FieldBubbles';
 import { FieldLegend } from '../fields/FieldLegend';
 import { FieldPanel } from '../fields/FieldPanel';
+import { FIELD_CLOCKS_HEIGHT } from '../fields/FieldTimeline';
 import { useFields } from '../fields/useFields';
 import { detailchartsSource, sampleField } from '../../core/fields';
 import { CumulativeBubbles } from './CumulativeBubbles';
@@ -151,8 +152,9 @@ const TIMELINE_HEIGHT = 68;
  *  reading as well as the chart — and deliberately a little over rather than under, so
  *  a location with a long name is folded rather than clipped while it is open. */
 const TOTALS_MAX_HEIGHT = 260;
-/** The field chart under its slider, with its air: `FieldChart`'s 72 plus margins. */
-const FIELD_CHART_MAX_HEIGHT = 96;
+/** The field chart under its slider, with its air: `FieldChart`'s 72, its clocks and
+ *  margins. */
+const FIELD_CHART_MAX_HEIGHT = 116;
 
 /** How wide the floating panel gets in landscape. Wider than this and the play button
  *  and the far end of the track are a hand's width apart, which is a control nobody can
@@ -357,6 +359,12 @@ export function FullMap({
   const fieldChartStyle = useAnimatedStyle(() => ({
     opacity: 1 - collapse.value,
     maxHeight: (1 - collapse.value) * FIELD_CHART_MAX_HEIGHT,
+  }));
+
+  // The clocks above the field slider: the inverse of the chart, which has its own.
+  const fieldClocksStyle = useAnimatedStyle(() => ({
+    opacity: collapse.value,
+    maxHeight: collapse.value * FIELD_CLOCKS_HEIGHT,
   }));
 
   const totalsStyle = useAnimatedStyle(() => ({
@@ -573,6 +581,7 @@ export function FullMap({
                 mapValues={fieldSeries}
                 location={location}
                 chartStyle={fieldChartStyle}
+                labelsStyle={fieldClocksStyle}
                 grabber={foldable}
               />
             ) : totals ? (
