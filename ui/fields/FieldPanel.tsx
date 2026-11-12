@@ -19,6 +19,8 @@ import { View } from 'react-native';
 import { space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { FieldTimeline } from './FieldTimeline';
+import { FieldChart } from './FieldChart';
+import type { SavedLocation } from '../../core/prefs';
 import type { FieldFrame, FieldManifest } from '../../core/fields';
 import type { FieldStatus } from './useFields';
 import { usePrefs } from '../../state/prefs';
@@ -34,10 +36,13 @@ export interface FieldPanelProps {
   onTogglePlay: () => void;
   /** Seconds the server asked us to wait, when it says the layers are not built. */
   retryAfterSec: number | null;
+  frameValues: readonly (Uint16Array | null)[];
+  location: SavedLocation;
 }
 
 export function FieldPanel({
   status, manifest, frames, index, onIndexChange, playing, onTogglePlay, retryAfterSec,
+  frameValues, location,
 }: FieldPanelProps) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
@@ -67,6 +72,16 @@ export function FieldPanel({
         onIndexChange={onIndexChange}
         playing={playing}
         onTogglePlay={onTogglePlay}
+        chart={
+          <FieldChart
+            variable={manifest.variable}
+            manifest={manifest}
+            frames={frames}
+            frameValues={frameValues}
+            index={index}
+            location={location}
+          />
+        }
       />
     </View>
   );

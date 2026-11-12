@@ -71,6 +71,8 @@ export interface FieldLayerState {
   /** The frames the queue has admitted, in track order: only these go on the map, so
    *  MapLibre downloads a PNG when its frame's turn comes rather than all at once. */
   overlayFrames: FieldFrame[];
+  /** Every frame's raster, aligned with `frames`; null until it has arrived. */
+  frameValues: (Uint16Array | null)[];
   /** Seconds the server asked us to wait, when it says the layers are not built. */
   retryAfterSec: number | null;
 }
@@ -203,6 +205,10 @@ export function useFields(source: FieldSource): FieldLayerState {
   }, [variable, manifest, status, frames, source]);
 
   const frame = frames[index];
+  const frameValues = useMemo(
+    () => frames.map((f) => (variable && rasters.get(`${variable}/${f.time}`)) || null),
+    [frames, rasters, variable]
+  );
   const overlayFrames = useMemo(
     () => frames.filter((f) => admitted.has(`${variable}/${f.time}`)),
     [frames, admitted, variable]
@@ -222,5 +228,6 @@ export function useFields(source: FieldSource): FieldLayerState {
     values: (variable && frame && rasters.get(`${variable}/${frame.time}`)) || null,
     retryAfterSec,
     overlayFrames,
+    frameValues,
   };
 }

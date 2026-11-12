@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FIELD_VARIABLES, FieldsUnavailable, detailchartsSource, fieldUnitLabel, loopStamps,
-  manifestFromFrames, stampMs, type DetailchartsFrameDoc, fieldValueIn, formatFieldValue, frameClock, inkOn,
+  manifestFromFrames, stampMs, frameIndexAt, stationValueFor, type DetailchartsFrameDoc, fieldValueIn, formatFieldValue, frameClock, inkOn,
   isSynthetic, legendColorFor, loopMinutes, orderedFrames, pixelFor, sampleField,
   unitLabel, type FieldVariable,
 } from '../core/fields';
@@ -479,5 +479,26 @@ describe('the operational Detailcharts source', () => {
     expect(again.length).toBe(rows * cols);
     const bad = sourceOver({ [`temperature/${stamp}.bin`]: new ArrayBuffer(6) });
     await expect(bad.source.values(manifest, manifest.frames[0]!)).rejects.toThrow(/raster is 6 bytes/);
+  });
+});
+
+describe('the chart under the slider', () => {
+  const t = [0, 30, 40, 50].map((m) => m * 60_000);
+
+  it('places an instant between the frames around it, on evenly spaced steps', () => {
+    expect(frameIndexAt(t, 0)).toBe(0);
+    expect(frameIndexAt(t, 15 * 60_000)).toBe(0.5);
+    expect(frameIndexAt(t, 45 * 60_000)).toBe(2.5);
+    expect(frameIndexAt(t, 50 * 60_000)).toBe(3);
+    expect(frameIndexAt(t, -1)).toBeNull();
+    expect(frameIndexAt(t, 51 * 60_000)).toBeNull();
+  });
+
+  it('reads a station row in the field s own units', () => {
+    const row = { temp: 12.3, humidity: 81, wind: 18 };
+    expect(stationValueFor('temperature', row)).toBe(12.3);
+    expect(stationValueFor('humidity', row)).toBe(81);
+    expect(stationValueFor('wind', row)).toBe(5);
+    expect(stationValueFor('wind', { ...row, wind: null })).toBeNull();
   });
 });

@@ -648,3 +648,34 @@ export function detailchartsSource(
     },
   };
 }
+
+// --- The chart under the slider ---------------------------------------------
+
+/**
+ * Where an instant lands on the slider, as a fractional frame index; null outside the
+ * loop. The slider spaces frames evenly while the loop thins out further back, so the
+ * chart maps time through the frame times piecewise rather than linearly, and a station
+ * reading lines up with the frame the thumb is on.
+ */
+export function frameIndexAt(frameTimesMs: readonly number[], t: number): number | null {
+  const n = frameTimesMs.length;
+  if (!n || t < frameTimesMs[0]! || t > frameTimesMs[n - 1]!) return null;
+  if (n === 1) return 0;
+  for (let i = 0; i < n - 1; i++) {
+    const a = frameTimesMs[i]!;
+    const b = frameTimesMs[i + 1]!;
+    if (t <= b) return b === a ? i : i + (t - a) / (b - a);
+  }
+  return n - 1;
+}
+
+/** A station measurement as the field publishes it: °C, %, m/s. Station wind arrives
+ *  in km/h from `core/sources/agroexact`. */
+export function stationValueFor(
+  variable: FieldVariable,
+  row: { temp: number | null; humidity: number | null; wind: number | null }
+): number | null {
+  if (variable === 'temperature') return row.temp;
+  if (variable === 'humidity') return row.humidity;
+  return row.wind == null ? null : row.wind / MS_TO_KMH;
+}

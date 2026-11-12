@@ -552,6 +552,8 @@ export function FullMap({
                 playing={fields.playing}
                 onTogglePlay={fields.togglePlay}
                 retryAfterSec={fields.retryAfterSec}
+                frameValues={fields.frameValues}
+                location={location}
               />
             ) : totals ? (
               <Animated.View
