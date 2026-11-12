@@ -21,6 +21,8 @@ import { Text } from '../Text';
 import { FieldTimeline } from './FieldTimeline';
 import type { FieldFrame, FieldManifest } from '../../core/fields';
 import type { FieldStatus } from './useFields';
+import { usePrefs } from '../../state/prefs';
+import { ta } from '../../core/i18n';
 
 export interface FieldPanelProps {
   status: FieldStatus;
@@ -38,14 +40,16 @@ export function FieldPanel({
   status, manifest, frames, index, onIndexChange, playing, onTogglePlay, retryAfterSec,
 }: FieldPanelProps) {
   const { palette } = useTheme();
+  const { prefs } = usePrefs();
 
   if (status !== 'ready' || !manifest) {
     const message =
       status === 'loading'
-        ? 'Kaartlaag laden…'
+        ? ta('fieldLoading', prefs.lang)
         : status === 'unavailable'
-          ? `Nog niet beschikbaar${retryAfterSec ? `, probeer het over ${retryAfterSec} s` : ''}`
-          : 'Kaartlaag niet beschikbaar';
+          ? ta('fieldNotYet', prefs.lang)
+            + (retryAfterSec ? ta('fieldRetryIn', prefs.lang).replace('{n}', String(retryAfterSec)) : '')
+          : ta('fieldUnavailable', prefs.lang);
     return (
       <View style={{ paddingHorizontal: space[5], paddingVertical: space[4] }}>
         <Text variant="body" color={palette.muted}>

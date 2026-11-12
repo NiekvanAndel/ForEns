@@ -27,6 +27,8 @@ import { Text } from '../Text';
 import { MAP_CHROME_SIZE } from './RadarMap';
 import { mapChrome } from './mapStyle';
 import type { FieldVariable } from '../../core/fields';
+import { usePrefs } from '../../state/prefs';
+import { ta, type AppStringKey } from '../../core/i18n';
 
 export type MapLayer = 'nowcast' | 'cumulative' | 'temperature' | 'humidity' | 'wind';
 
@@ -41,8 +43,8 @@ export function fieldVariableOf(layer: MapLayer): FieldVariable | null {
 interface LayerOption {
   id: MapLayer;
   icon: string;
-  label: string;
-  detail: string;
+  label: AppStringKey;
+  detail: AppStringKey;
   /** Drawn with a hairline above it, opening the second group. */
   startsGroup?: boolean;
 }
@@ -51,33 +53,33 @@ const OPTIONS: LayerOption[] = [
   {
     id: 'nowcast',
     icon: 'broadcast',
-    label: 'Neerslag nu',
-    detail: 'Radarloop, −15 tot +90 min',
+    label: 'mapLayerNowcast',
+    detail: 'mapLayerNowcastDetail',
   },
   {
     id: 'cumulative',
     icon: 'drop',
-    label: 'Neerslagsom',
-    detail: 'Gekalibreerd, tot 48 uur terug',
+    label: 'mapLayerCumulative',
+    detail: 'mapLayerCumulativeDetail',
   },
   {
     id: 'temperature',
     icon: 'thermometer-simple',
-    label: 'Temperatuur',
-    detail: 'Meetnetten, per 10 minuten',
+    label: 'mapLayerTemperature',
+    detail: 'mapLayerNetworkDetail',
     startsGroup: true,
   },
   {
     id: 'humidity',
     icon: 'drop-half',
-    label: 'Luchtvochtigheid',
-    detail: 'Meetnetten, per 10 minuten',
+    label: 'mapLayerHumidity',
+    detail: 'mapLayerNetworkDetail',
   },
   {
     id: 'wind',
     icon: 'wind',
-    label: 'Wind',
-    detail: 'Op 2 meter, per 10 minuten',
+    label: 'mapLayerWind',
+    detail: 'mapLayerWindDetail',
   },
 ];
 
@@ -96,6 +98,7 @@ export function MapLayersControl({
   active, onSelect, open, onOpenChange, top, right,
 }: MapLayersControlProps) {
   const { palette, appearance } = useTheme();
+  const { prefs } = usePrefs();
   const chrome = mapChrome(palette, appearance);
   // The card's own ink, dimmed. Taken from the chrome rather than the page palette:
   // this floats on the map, whose appearance is its own.
@@ -108,7 +111,7 @@ export function MapLayersControl({
       {open ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Lagenmenu sluiten"
+          accessibilityLabel={ta('mapLayersClose', prefs.lang)}
           onPress={() => onOpenChange(false)}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         />
@@ -118,7 +121,7 @@ export function MapLayersControl({
         <Pressable
           onPress={() => onOpenChange(!open)}
           accessibilityRole="button"
-          accessibilityLabel="Kaartlagen"
+          accessibilityLabel={ta('mapLayersOpen', prefs.lang)}
           accessibilityState={{ expanded: open }}
           hitSlop={8}
           style={[
@@ -170,7 +173,7 @@ export function MapLayersControl({
                   }}
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
-                  accessibilityLabel={option.label}
+                  accessibilityLabel={ta(option.label, prefs.lang)}
                   style={({ pressed }) => ({
                     flexDirection: 'row', alignItems: 'center', gap: space[3],
                     paddingVertical: space[2], paddingHorizontal: space[4],
@@ -189,10 +192,10 @@ export function MapLayersControl({
                       weight={selected ? 'bold' : 'semibold'}
                       color={chrome.ink}
                     >
-                      {option.label}
+                      {ta(option.label, prefs.lang)}
                     </Text>
                     <Text variant="caption" color={detailInk}>
-                      {option.detail}
+                      {ta(option.detail, prefs.lang)}
                     </Text>
                   </View>
                   {/* The tick rather than a highlighted row: the card is translucent

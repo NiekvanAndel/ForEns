@@ -212,7 +212,7 @@ function LocationRow({
             <Pressable
               onPress={onRemove}
               accessibilityRole="button"
-              accessibilityLabel="Verwijderen"
+              accessibilityLabel={ta('alertDelete', prefs.lang)}
               hitSlop={8}
               style={{ padding: 2 }}
             >

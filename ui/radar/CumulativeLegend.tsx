@@ -22,6 +22,8 @@ import { radius, shadowFloat, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { legendStops, type CumulativeLegend as Legend } from '../../core/radar/cumulative';
 import { mapChrome } from './mapStyle';
+import { usePrefs } from '../../state/prefs';
+import { ta } from '../../core/i18n';
 
 /** The strip. Matches the field legend's, so the two layers' legends are one shape. */
 const STRIP_WIDTH = 8;
@@ -37,6 +39,7 @@ export interface CumulativeLegendProps {
 
 export function CumulativeLegend({ legend, top, left }: CumulativeLegendProps) {
   const { palette, appearance } = useTheme();
+  const { prefs } = usePrefs();
   const chrome = mapChrome(palette, appearance);
   const stops = legendStops(legend);
   if (!stops.length) return null;
@@ -56,7 +59,9 @@ export function CumulativeLegend({ legend, top, left }: CumulativeLegendProps) {
         shadowFloat,
       ]}
       accessibilityLabel={
-        `Legenda: ${stops[0]!.from} tot meer dan ${stops[stops.length - 1]!.from} millimeter`
+        ta('cumLegend', prefs.lang)
+          .replace('{from}', String(stops[0]!.from))
+          .replace('{to}', String(stops[stops.length - 1]!.from))
       }
     >
       {/* Wettest block at the top, so the strip reads the way the figures beside it do.

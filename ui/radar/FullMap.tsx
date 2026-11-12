@@ -520,7 +520,12 @@ export function FullMap({
               <Pressable
                 onPress={() => setOpen(!profileOpen)}
                 accessibilityRole="button"
-                accessibilityLabel={`${totals ? 'Neerslagsom' : 'Neerslaggrafiek'} ${profileOpen ? 'verbergen' : 'tonen'}`}
+                accessibilityLabel={ta(
+                  totals
+                    ? (profileOpen ? 'mapTotalsHide' : 'mapTotalsShow')
+                    : (profileOpen ? 'mapGraphHide' : 'mapGraphShow'),
+                  prefs.lang,
+                )}
                 accessibilityState={{ expanded: profileOpen }}
                 hitSlop={10}
                 style={{ alignItems: 'center', paddingTop: space[3], paddingBottom: space[2] }}

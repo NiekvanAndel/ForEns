@@ -35,6 +35,8 @@ import { radius, space, useTheme } from '../../theme';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { forecastBoundary, frameClock, type RadarFrame } from '../../core/radar';
+import { usePrefs } from '../../state/prefs';
+import { ta } from '../../core/i18n';
 
 export interface TimelineProps {
   frames: RadarFrame[];
@@ -55,6 +57,7 @@ export function Timeline({
   playing, onTogglePlay,
 }: TimelineProps) {
   const { palette } = useTheme();
+  const { prefs } = usePrefs();
   const last = Math.max(0, frames.length - 1);
 
   return (
@@ -63,7 +66,7 @@ export function Timeline({
         <Pressable
           onPress={onTogglePlay}
           accessibilityRole="button"
-          accessibilityLabel={playing ? 'Animatie pauzeren' : 'Animatie afspelen'}
+          accessibilityLabel={ta(playing ? 'mapAnimPause' : 'mapAnimPlay', prefs.lang)}
           disabled={frames.length < 2}
           style={{
             width: 42, height: 42, borderRadius: radius.pill,
@@ -97,7 +100,7 @@ export function Timeline({
           markerFraction={forecastBoundary(frames, stepPositions)}
           stepPositions={stepPositions}
           disabled={frames.length < 2}
-          accessibilityLabel="Tijdlijn"
+          accessibilityLabel={ta('mapTimeline', prefs.lang)}
         />
       </View>
     </View>

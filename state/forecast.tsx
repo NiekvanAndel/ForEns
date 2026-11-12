@@ -174,7 +174,9 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
 
       if (!s1.observations && !s1.hourly) {
         setPhase('error');
-        setError('Weerdata is tijdelijk niet beschikbaar. Probeer het later opnieuw.');
+        // No message of our own: the screens fall back to `noData`, which is said in
+        // the reader's language rather than always in Dutch.
+        setError(null);
         return;
       }
       setSources((p) => ({
@@ -214,7 +216,7 @@ export function ForecastProvider({ children }: { children: ReactNode }) {
     })().catch((e) => {
       if (!live()) return;
       setPhase('error');
-      setError((e as Error)?.message ?? 'Onbekende fout');
+      setError((e as Error)?.message ?? null);
     });
 
     return () => ctrl.abort();

@@ -55,6 +55,8 @@ import {
 } from '../../core/radar/cumulative';
 import type { CumulativeReading, SeriesPoint } from '../../core/radar/reading';
 import type { CumulativeStatus } from './useCumulative';
+import { usePrefs } from '../../state/prefs';
+import { ta } from '../../core/i18n';
 
 export interface CumulativePanelProps {
   status: CumulativeStatus;
@@ -79,17 +81,18 @@ export function CumulativePanel({
   reading, series, locationName, retryAfterSec, width,
 }: CumulativePanelProps) {
   const { palette } = useTheme();
+  const { prefs } = usePrefs();
   const window = windows[index];
 
   if (status === 'unavailable') {
     return (
       <Notice
         icon="clock"
-        title="Neerslagsom nog niet beschikbaar"
+        title={ta('cumUnavailable', prefs.lang)}
         detail={
           retryAfterSec
-            ? `De lagen worden opgebouwd. Probeer het over ${Math.ceil(retryAfterSec / 60)} min opnieuw.`
-            : 'De lagen worden opgebouwd. Probeer het zo opnieuw.'
+            ? ta('cumBuildingIn', prefs.lang).replace('{n}', String(Math.ceil(retryAfterSec / 60)))
+            : ta('cumBuildingSoon', prefs.lang)
         }
       />
     );
@@ -99,14 +102,14 @@ export function CumulativePanel({
     return (
       <Notice
         icon="warning"
-        title="Neerslagsom niet geladen"
-        detail="De som kon niet worden opgehaald. Controleer je verbinding."
+        title={ta('cumError', prefs.lang)}
+        detail={ta('cumErrorDetail', prefs.lang)}
       />
     );
   }
 
   if (!manifest || !window) {
-    return <Notice icon="drop" title="Neerslagsom laden…" detail="" />;
+    return <Notice icon="drop" title={ta('cumLoading', prefs.lang)} detail="" />;
   }
 
   return (
@@ -127,7 +130,7 @@ export function CumulativePanel({
         <Pressable
           onPress={onTogglePlay}
           accessibilityRole="button"
-          accessibilityLabel={playing ? 'Opbouw pauzeren' : 'Opbouw afspelen'}
+          accessibilityLabel={ta(playing ? 'cumPause' : 'cumPlay', prefs.lang)}
           disabled={windows.length < 2}
           hitSlop={8}
           style={{
@@ -169,6 +172,7 @@ export function CumulativePanel({
  */
 function Origin({ reading, source }: { reading: CumulativeReading; source: string }) {
   const { palette } = useTheme();
+  const { prefs } = usePrefs();
 
   if (reading.mm == null) {
     // The crop is tighter than the map, so this is a real answer rather than a gap:
@@ -188,15 +192,17 @@ function Origin({ reading, source }: { reading: CumulativeReading; source: strin
   if (reading.origin === 'station') {
     return (
       <Text variant="caption" color={palette.textStation} weight="semibold">
-        {reading.stationName ? `Gemeten · ${reading.stationName}` : 'Gemeten op dit station'}
+        {reading.stationName
+          ? ta('cumMeasuredAt', prefs.lang).replace('{name}', reading.stationName)
+          : ta('cumMeasuredHere', prefs.lang)}
       </Text>
     );
   }
   return (
     <Text variant="caption" color={palette.muted}>
       {source === 'radar'
-        ? 'Radar, gekalibreerd op regenmeters'
-        : `Radar · testdata (${source}), geen echte metingen`}
+        ? ta('cumSourceRadar', prefs.lang)
+        : ta('cumSourceTest', prefs.lang).replace('{source}', source)}
     </Text>
   );
 }

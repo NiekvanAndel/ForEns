@@ -152,7 +152,7 @@ export function RadarPreview({
             <Pressable
               onPress={togglePlaying}
               accessibilityRole="button"
-              accessibilityLabel={playing ? 'Radarbeelden pauzeren' : 'Radarbeelden afspelen'}
+              accessibilityLabel={ta(playing ? 'mapRadarPause' : 'mapRadarPlay', prefs.lang)}
               hitSlop={8}
               style={{ marginLeft: 2 }}
             >
@@ -166,7 +166,7 @@ export function RadarPreview({
           ) : null
         }
       />
-      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel="Open radar">
+      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={ta('mapRadarOpen', prefs.lang)}>
         <View
           style={[
             { borderRadius: 18, overflow: 'hidden' },

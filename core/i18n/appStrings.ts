@@ -14,6 +14,7 @@ import { ADVICE_STRINGS } from './adviceStrings';
 import { AGRO_INTEL_STRINGS } from './agroIntelStrings';
 import { DISEASE_STRINGS } from './diseaseStrings';
 import { LAYER_STRINGS } from './layerStrings';
+import { MAP_STRINGS } from './mapStrings';
 
 export const APP_STRINGS = {
   nl: {
@@ -21,6 +22,7 @@ export const APP_STRINGS = {
     ...AGRO_INTEL_STRINGS.nl,
     ...DISEASE_STRINGS.nl,
     ...LAYER_STRINGS.nl,
+    ...MAP_STRINGS.nl,
     tabNow: 'Nu',
     tabRadar: 'Radar',
     tabForecast: 'Verwachting',
@@ -145,7 +147,7 @@ export const APP_STRINGS = {
     ovSubtitle: 'Al je locaties in \u00e9\u00e9n beeld',
     ovEdit: 'Widgets',
     ovEditHint: 'Houd een widget vast om de volgorde te wijzigen',
-    ovSummary: 'Agro Intelligence',
+    ovSummary: 'AgroIntelligence',
     ovNextTwoDays: 'Morgen en overmorgen',
     greetNight: 'Goedenacht',
     greetMorning: 'Goedemorgen',
@@ -289,6 +291,7 @@ export const APP_STRINGS = {
     ...AGRO_INTEL_STRINGS.en,
     ...DISEASE_STRINGS.en,
     ...LAYER_STRINGS.en,
+    ...MAP_STRINGS.en,
     tabNow: 'Now', tabRadar: 'Radar', tabForecast: 'Forecast', tabSettings: 'Settings',
     full: 'Full', details: 'Details', refreshedAt: 'Updated at', source: 'Source',
     shortTerm: 'Short term (0–2 hours)', midTerm: '2 hours – 48 hours', longTerm: 'Day 3–14',
@@ -364,7 +367,7 @@ export const APP_STRINGS = {
     ovEverywhere: 'Everywhere', ovNothingNotable: 'Nothing to report.',
     ovTitle: 'Overview', ovSubtitle: 'All your locations at a glance',
     ovEdit: 'Widgets', ovEditHint: 'Hold a widget to change the order',
-    ovSummary: 'Agro Intelligence',
+    ovSummary: 'AgroIntelligence',
     ovNextTwoDays: 'The next two days',
     greetNight: 'Good night',
     greetMorning: 'Good morning',
@@ -444,6 +447,7 @@ export const APP_STRINGS = {
     ...AGRO_INTEL_STRINGS.de,
     ...DISEASE_STRINGS.de,
     ...LAYER_STRINGS.de,
+    ...MAP_STRINGS.de,
     tabNow: 'Jetzt', tabRadar: 'Radar', tabForecast: 'Vorhersage', tabSettings: 'Einstellungen',
     full: 'Vollbild', details: 'Details', refreshedAt: 'Aktualisiert um', source: 'Quelle',
     shortTerm: 'Kurzfristig (0–2 Stunden)', midTerm: '2 Stunden – 48 Stunden', longTerm: 'Tag 3–14',
@@ -520,7 +524,7 @@ export const APP_STRINGS = {
     ovEverywhere: '\u00dcberall', ovNothingNotable: 'Nichts zu melden.',
     ovTitle: '\u00dcbersicht', ovSubtitle: 'Alle Standorte auf einen Blick',
     ovEdit: 'Widgets', ovEditHint: 'Widget halten, um die Reihenfolge zu \u00e4ndern',
-    ovSummary: 'Agro Intelligence',
+    ovSummary: 'AgroIntelligence',
     ovNextTwoDays: 'Die n\u00e4chsten zwei Tage',
     greetNight: 'Gute Nacht',
     greetMorning: 'Guten Morgen',
@@ -600,6 +604,7 @@ export const APP_STRINGS = {
     ...AGRO_INTEL_STRINGS.fr,
     ...DISEASE_STRINGS.fr,
     ...LAYER_STRINGS.fr,
+    ...MAP_STRINGS.fr,
     tabNow: 'Maintenant', tabRadar: 'Radar', tabForecast: 'Prévisions', tabSettings: 'Réglages',
     full: 'Plein écran', details: 'Détails', refreshedAt: 'Actualisé à', source: 'Source',
     shortTerm: 'Court terme (0–2 heures)', midTerm: '2 heures – 48 heures', longTerm: 'Jour 3–14',
@@ -676,7 +681,7 @@ export const APP_STRINGS = {
     ovEverywhere: 'Partout', ovNothingNotable: 'Rien \u00e0 signaler.',
     ovTitle: 'Aper\u00e7u', ovSubtitle: 'Tous vos lieux en un coup d\u2019\u0153il',
     ovEdit: 'Widgets', ovEditHint: 'Maintenez un widget pour changer l\u2019ordre',
-    ovSummary: 'Agro Intelligence',
+    ovSummary: 'AgroIntelligence',
     ovNextTwoDays: 'Les deux prochains jours',
     greetNight: 'Bonne nuit',
     greetMorning: 'Bonjour',
@@ -756,6 +761,7 @@ export const APP_STRINGS = {
     ...AGRO_INTEL_STRINGS.es,
     ...DISEASE_STRINGS.es,
     ...LAYER_STRINGS.es,
+    ...MAP_STRINGS.es,
     tabNow: 'Ahora', tabRadar: 'Radar', tabForecast: 'Previsión', tabSettings: 'Ajustes',
     full: 'Pantalla completa', details: 'Detalles', refreshedAt: 'Actualizado a las', source: 'Fuente',
     shortTerm: 'Corto plazo (0–2 horas)', midTerm: '2 horas – 48 horas', longTerm: 'Día 3–14',
@@ -832,7 +838,7 @@ export const APP_STRINGS = {
     ovEverywhere: 'En todas partes', ovNothingNotable: 'Nada que informar.',
     ovTitle: 'Resumen', ovSubtitle: 'Todas tus ubicaciones de un vistazo',
     ovEdit: 'Widgets', ovEditHint: 'Mant\u00e9n pulsado un widget para cambiar el orden',
-    ovSummary: 'Agro Intelligence',
+    ovSummary: 'AgroIntelligence',
     ovNextTwoDays: 'Los pr\u00f3ximos dos d\u00edas',
     greetNight: 'Buenas noches',
     greetMorning: 'Buenos días',

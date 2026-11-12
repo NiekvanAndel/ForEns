@@ -1,17 +1,19 @@
 /**
  * The blocks on 'Actueel'.
  *
- * Twelve of them, fixed, in the app's own words. Every one is read out of the
- * forecast model — which, on a location an AgroExact station speaks for, has already
- * had that station's measurements merged into it per quantity by
- * `applyStationObservations`. So the same twelve blocks serve both kinds of location,
- * and on a station they are the station's own numbers.
+ * Fourteen of them, fixed, in the app's own words: twelve about what has happened,
+ * and two rainfall forecasts (the next hour and the next 24 hours). Every one is read
+ * out of the forecast model — which, on a location an AgroExact station speaks for,
+ * has already had that station's measurements merged into it per quantity by
+ * `applyStationObservations` — or, for the next hour, out of the radar nowcast. So
+ * the same blocks serve both kinds of location, and on a station they are the
+ * station's own numbers.
  *
  * ## Why the account's dashboard is not read here
  *
  * It was, at first: `/aggregations/` is the catalog behind the web app's dashboard,
  * and the blocks a grower picks there are a real statement about their own farm. Two
- * things ruled it out. The set is meant to be these twelve and no others, which a
+ * things ruled it out. The set is meant to be these blocks and no others, which a
  * catalog someone edits on the web cannot promise; and its titles and time labels
  * are translated server-side, so the page spoke whatever language the API chose
  * rather than the one set in Instellingen. Those two together leave nothing for the
@@ -121,14 +123,15 @@ export function nowcastDepth(series: readonly NowcastBar[] | undefined, minutes:
 }
 
 /**
- * The twelve blocks, from the model — which already carries the station's own
- * readings on a location that has one.
+ * The fourteen blocks, from the model — which already carries the station's own
+ * readings on a location that has one — and the nowcast.
  *
  * What it is doing now, what the wind has done today, rainfall over four windows,
- * and the day's extremes. Every figure is an observation or the hour in progress —
- * never an afternoon the model has not reached yet. 'Actueel' means actual, and a
- * grid of current readings with tomorrow's maximum in it would be answering a
- * question nobody on this page asked. The forecast has two tabs of its own.
+ * and the day's extremes. Apart from the two rainfall forecasts at the end, which are
+ * named as forecasts and never carry the station dot, every figure is an observation
+ * or the hour in progress — never an afternoon the model has not reached yet.
+ * 'Actueel' means actual, and a grid of current readings with tomorrow's maximum in
+ * it would be answering a question nobody on this page asked. The forecast has two tabs of its own.
  *
  * ## Rolling windows and calendar days are both here, and they are not the same
  *

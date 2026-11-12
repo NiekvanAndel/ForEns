@@ -141,7 +141,7 @@ function NowcastHeader({
         <Pressable
           onPress={onTogglePlay}
           accessibilityRole="button"
-          accessibilityLabel={playing ? 'Animatie pauzeren' : 'Animatie afspelen'}
+          accessibilityLabel={ta(playing ? 'mapAnimPause' : 'mapAnimPlay', prefs.lang)}
           disabled={playDisabled}
           hitSlop={8}
           style={{

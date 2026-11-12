@@ -19,6 +19,8 @@ import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { Scrubber } from './Scrubber';
 import { lookbackLabel, type CumulativeWindow } from '../../core/radar/cumulative';
+import { usePrefs } from '../../state/prefs';
+import { ta } from '../../core/i18n';
 
 export interface CumulativeTimelineProps {
   /** Shortest first, as the chart's axis runs. */
@@ -33,6 +35,7 @@ export function CumulativeTimeline({
   windows, index, onIndexChange, playing, onTogglePlay,
 }: CumulativeTimelineProps) {
   const { palette } = useTheme();
+  const { prefs } = usePrefs();
   const first = windows[0];
   const last = windows[windows.length - 1];
   const current = windows[index];
@@ -42,7 +45,7 @@ export function CumulativeTimeline({
       <Pressable
         onPress={onTogglePlay}
         accessibilityRole="button"
-        accessibilityLabel={playing ? 'Opbouw pauzeren' : 'Opbouw afspelen'}
+        accessibilityLabel={ta(playing ? 'cumPause' : 'cumPlay', prefs.lang)}
         disabled={windows.length < 2}
         style={{
           width: 42, height: 42, borderRadius: radius.pill,
@@ -73,7 +76,7 @@ export function CumulativeTimeline({
           steps={windows.length}
           onChange={onIndexChange}
           disabled={windows.length < 2}
-          accessibilityLabel="Terugkijkperiode"
+          accessibilityLabel={ta('cumPeriod', prefs.lang)}
         />
       </View>
     </View>

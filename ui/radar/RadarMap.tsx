@@ -29,6 +29,8 @@ import { activeProvider, type RadarFrame } from '../../core/radar';
 import type { MapView } from '../../core/radar/bubbles';
 import { usePeeking } from '../peek';
 import type { SavedLocation } from '../../core/prefs';
+import { usePrefs } from '../../state/prefs';
+import { ta } from '../../core/i18n';
 
 /** One of the reader's other saved locations, as the map draws it. */
 export interface PlacePin {
@@ -125,6 +127,7 @@ export function RadarMap({
   style,
 }: RadarMapProps) {
   const { palette, appearance } = useTheme();
+  const { prefs } = usePrefs();
   // Labels in the app's language, falling back to the plain style URL. See
   // `useMapStyle`.
   const mapStyle = useLocalisedMapStyle();
@@ -271,8 +274,8 @@ export function RadarMap({
 
 {showControls ? (
         <View style={{ position: 'absolute', left: chromeLeft, top: chromeTop, gap: space[2] }}>
-          <ControlButton icon="plus" label="Inzoomen" bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(ZOOM_STEP)} />
-          <ControlButton icon="minus" label="Uitzoomen" bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(-ZOOM_STEP)} />
+          <ControlButton icon="plus" label={ta('mapZoomIn', prefs.lang)} bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(ZOOM_STEP)} />
+          <ControlButton icon="minus" label={ta('mapZoomOut', prefs.lang)} bg={chromeBg} ink={chromeInk} onPress={() => stepZoom(-ZOOM_STEP)} />
         </View>
       ) : null}
 
@@ -289,12 +292,12 @@ export function RadarMap({
             shadowFloat,
           ]}
         >
-          <LegendRow color={chrome.here} ring="#fff" label="Deze locatie" textColor={chromeInk} />
+          <LegendRow color={chrome.here} ring="#fff" label={ta('mapThisLocation', prefs.lang)} textColor={chromeInk} />
           {places.length ? (
             <LegendRow
               color="#fff"
               ring={chrome.here}
-              label="Andere locatie"
+              label={ta('mapOtherLocation', prefs.lang)}
               textColor={chromeInk}
             />
           ) : null}

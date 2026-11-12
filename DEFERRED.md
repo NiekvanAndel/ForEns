@@ -18,20 +18,26 @@ widget reads the same mapping, so the two cannot disagree.
 
 ## Hidden pending a decision
 
-Three surfaces are built, tested and working, but **not shown in the UI** at the
-client's direction (31 Aug 2026). The fourth, AgroExact, is now shipped. Each is hidden rather than deleted: preferences,
-plumbing and tests all remain, so re-exposing one means restoring its rows in
-`app/(tabs)/settings.tsx`.
+On 31 Aug 2026 several surfaces were built and tested but kept **out of the UI** at
+the client's direction. All but one have since shipped: the AgroExact integration,
+the app and widget icon, and Instellingen → Meldingen (see below). What is still
+hidden stays hidden rather than deleted: preferences, plumbing and tests all remain,
+so re-exposing it means restoring its rows in `app/(tabs)/settings.tsx`.
 
 | Hidden | Where the code still lives | Why |
 | --- | --- | --- |
 | **Korte termijn: Nowcast / Radar** | `prefs.shortModel` | Needs a second 0–2h source to choose between |
 | ~~**AgroExact integration**~~ | ~~`core/sources/agroexact.ts`, `state/stations.ts`~~ | **Done** — see below |
 | ~~App and widget icon~~ | ~~—~~ | **Done** — see `logos/README.md` |
+| ~~Meldingen~~ | ~~`core/notifications.ts`, `core/push.ts`~~ | **Shown** — see below |
 
-The background task still runs and still keeps the widget current; it simply
-schedules no notifications while every notify preference is off, which is the
-default.
+**Meldingen is visible in Instellingen.** Its warnings, field topics and own alerts
+are scheduled on the phone (`core/notifications.ts`) by the background task. The
+push switch is there too, but `extra.pushEndpoint` in `app.json` is empty, so no
+server registration happens and the page says so (`pushUnavailable`): switching it on
+asks for permission and fetches a token, nothing more. The background task still
+keeps the widget current, and schedules nothing while every notify preference is
+off, which is the default.
 
 ## The AgroExact integration (8 Sep 2026)
 

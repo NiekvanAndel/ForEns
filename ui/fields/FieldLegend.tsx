@@ -32,6 +32,7 @@ import {
 } from '../../core/fields';
 import { usePrefs } from '../../state/prefs';
 import { mapChrome } from '../radar/mapStyle';
+import { ta } from '../../core/i18n';
 
 /** Slices down the strip. Enough that the steps are invisible at this height. */
 const SLICES = 40;
@@ -80,7 +81,10 @@ export function FieldLegend({ legend, unit, top, left }: FieldLegendProps) {
         },
         shadowFloat,
       ]}
-      accessibilityLabel={`Legenda: ${shown(0)} tot ${shown(1)} ${label}`}
+      accessibilityLabel={ta('fieldLegend', prefs.lang)
+        .replace('{from}', String(shown(0)))
+        .replace('{to}', String(shown(1)))
+        .replace('{label}', label)}
     >
       <View style={{ width: STRIP_WIDTH, height: STRIP_HEIGHT, borderRadius: 3, overflow: 'hidden' }}>
         {Array.from({ length: SLICES }, (_, i) => (

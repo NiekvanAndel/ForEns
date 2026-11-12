@@ -46,8 +46,10 @@ prebuild, so EAS knows it needs a second profile without anything being listed t
 
 Nothing else in `app.json` needs a capability Apple has to approve. Location is a usage
 string, not an entitlement; background fetch and processing likewise; push is declared
-but `enableBackgroundRemoteNotifications` is off and the notification surface is hidden
-(see `DEFERRED.md`), so no APNs key is required to ship.
+but `enableBackgroundRemoteNotifications` is off and there is no push server yet
+(`extra.pushEndpoint` in `app.json` is empty). Instellingen → Meldingen is visible, but
+everything it sends is a local notification scheduled on the phone, so no APNs key is
+required to ship (see `DEFERRED.md`).
 
 ## First release, step by step
 

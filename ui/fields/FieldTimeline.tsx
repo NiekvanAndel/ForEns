@@ -22,6 +22,8 @@ import { Text } from '../Text';
 import { Icon } from '../Icon';
 import { Scrubber } from '../radar/Scrubber';
 import { frameClock, type FieldFrame } from '../../core/fields';
+import { usePrefs } from '../../state/prefs';
+import { ta } from '../../core/i18n';
 
 export interface FieldTimelineProps {
   /** Oldest first, as the track runs. */
@@ -36,6 +38,7 @@ export function FieldTimeline({
   frames, index, onIndexChange, playing, onTogglePlay,
 }: FieldTimelineProps) {
   const { palette } = useTheme();
+  const { prefs } = usePrefs();
   const disabled = frames.length < 2;
   const current = frames[index];
   const oldest = frames[0];
@@ -46,7 +49,7 @@ export function FieldTimeline({
       <Pressable
         onPress={onTogglePlay}
         accessibilityRole="button"
-        accessibilityLabel={playing ? 'Tijdlijn pauzeren' : 'Tijdlijn afspelen'}
+        accessibilityLabel={ta(playing ? 'mapTimelinePause' : 'mapTimelinePlay', prefs.lang)}
         disabled={disabled}
         style={{
           width: 42, height: 42, borderRadius: radius.pill,
@@ -75,7 +78,7 @@ export function FieldTimeline({
           steps={frames.length}
           onChange={onIndexChange}
           disabled={disabled}
-          accessibilityLabel="Tijdlijn"
+          accessibilityLabel={ta('mapTimeline', prefs.lang)}
         />
       </View>
     </View>
