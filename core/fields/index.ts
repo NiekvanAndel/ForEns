@@ -409,14 +409,13 @@ export function formatFieldValue(
 export const DETAILCHARTS_BASE = 'https://detailcharts.agroexact.com';
 
 /**
- * How far back the loop reaches, and how finely. The last two hours every ten minutes
- * (every run), the ten before that every half hour on the clock's :00 and :30: twelve
- * hours in 33 frames instead of 72, with the detail where the reader looks.
+ * How far back the loop reaches, and how finely: the last `denseHours` every run, and
+ * back to `totalHours` every `sparseStepMin` on the clock. Now the last hour, every run.
  */
 export const DETAILCHARTS_LOOP = {
-  denseHours: 2,
+  denseHours: 1,
   denseStepMin: 10,
-  totalHours: 12,
+  totalHours: 1,
   sparseStepMin: 30,
 };
 export type DetailchartsLoop = typeof DETAILCHARTS_LOOP;
@@ -647,35 +646,4 @@ export function detailchartsSource(
       return values;
     },
   };
-}
-
-// --- The chart under the slider ---------------------------------------------
-
-/**
- * Where an instant lands on the slider, as a fractional frame index; null outside the
- * loop. The slider spaces frames evenly while the loop thins out further back, so the
- * chart maps time through the frame times piecewise rather than linearly, and a station
- * reading lines up with the frame the thumb is on.
- */
-export function frameIndexAt(frameTimesMs: readonly number[], t: number): number | null {
-  const n = frameTimesMs.length;
-  if (!n || t < frameTimesMs[0]! || t > frameTimesMs[n - 1]!) return null;
-  if (n === 1) return 0;
-  for (let i = 0; i < n - 1; i++) {
-    const a = frameTimesMs[i]!;
-    const b = frameTimesMs[i + 1]!;
-    if (t <= b) return b === a ? i : i + (t - a) / (b - a);
-  }
-  return n - 1;
-}
-
-/** A station measurement as the field publishes it: °C, %, m/s. Station wind arrives
- *  in km/h from `core/sources/agroexact`. */
-export function stationValueFor(
-  variable: FieldVariable,
-  row: { temp: number | null; humidity: number | null; wind: number | null }
-): number | null {
-  if (variable === 'temperature') return row.temp;
-  if (variable === 'humidity') return row.humidity;
-  return row.wind == null ? null : row.wind / MS_TO_KMH;
 }

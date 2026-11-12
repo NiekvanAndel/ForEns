@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FIELD_VARIABLES, FieldsUnavailable, detailchartsSource, fieldUnitLabel, loopStamps,
-  manifestFromFrames, stampMs, frameIndexAt, stationValueFor, type DetailchartsFrameDoc, fieldValueIn, formatFieldValue, frameClock, inkOn,
+  manifestFromFrames, stampMs, type DetailchartsFrameDoc, fieldValueIn, formatFieldValue, frameClock, inkOn,
   isSynthetic, legendColorFor, loopMinutes, orderedFrames, pixelFor, sampleField,
   unitLabel, type FieldVariable,
 } from '../core/fields';
@@ -392,8 +392,16 @@ describe('the operational Detailcharts source', () => {
     return { source: detailchartsSource({ baseUrl: BASE, loop, fetchImpl }), requested };
   }
 
-  it('walks back twelve hours: half-hourly on the clock, then every run for two hours', () => {
-    const stamps = loopStamps('20261112T1410Z');
+  it('walks back the last hour, every run', () => {
+    expect(loopStamps('20261112T1410Z')).toEqual([
+      '20261112T1310Z', '20261112T1320Z', '20261112T1330Z', '20261112T1340Z',
+      '20261112T1350Z', '20261112T1400Z', '20261112T1410Z',
+    ]);
+  });
+
+  it('can thin out further back: half-hourly on the clock, then every run', () => {
+    const long = { denseHours: 2, denseStepMin: 10, totalHours: 12, sparseStepMin: 30 };
+    const stamps = loopStamps('20261112T1410Z', long);
     expect(stamps[0]).toBe('20261112T0230Z');
     expect(stamps.slice(18, 22)).toEqual([
       '20261112T1130Z', '20261112T1200Z', '20261112T1210Z', '20261112T1220Z',
@@ -470,26 +478,5 @@ describe('the operational Detailcharts source', () => {
     expect(again.length).toBe(rows * cols);
     const bad = sourceOver({ [`temperature/${stamp}.bin`]: new ArrayBuffer(6) });
     await expect(bad.source.values(manifest, manifest.frames[0]!)).rejects.toThrow(/raster is 6 bytes/);
-  });
-});
-
-describe('the chart under the slider', () => {
-  const t = [0, 30, 40, 50].map((m) => m * 60_000);
-
-  it('places an instant between the frames around it, on evenly spaced steps', () => {
-    expect(frameIndexAt(t, 0)).toBe(0);
-    expect(frameIndexAt(t, 15 * 60_000)).toBe(0.5);
-    expect(frameIndexAt(t, 45 * 60_000)).toBe(2.5);
-    expect(frameIndexAt(t, 50 * 60_000)).toBe(3);
-    expect(frameIndexAt(t, -1)).toBeNull();
-    expect(frameIndexAt(t, 51 * 60_000)).toBeNull();
-  });
-
-  it('reads a station row in the field s own units', () => {
-    const row = { temp: 12.3, humidity: 81, wind: 18 };
-    expect(stationValueFor('temperature', row)).toBe(12.3);
-    expect(stationValueFor('humidity', row)).toBe(81);
-    expect(stationValueFor('wind', row)).toBe(5);
-    expect(stationValueFor('wind', { ...row, wind: null })).toBeNull();
   });
 });

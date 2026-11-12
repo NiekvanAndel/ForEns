@@ -378,7 +378,7 @@ export function FullMap({
               <>
                 <FieldLayer
                   manifest={fields.manifest}
-                  frames={fields.frames}
+                  frames={fields.overlayFrames}
                   active={fields.frame}
                   source={fieldSource}
                   beforeId={fieldBeforeId}
@@ -552,8 +552,6 @@ export function FullMap({
                 playing={fields.playing}
                 onTogglePlay={fields.togglePlay}
                 retryAfterSec={fields.retryAfterSec}
-                frameValues={fields.frameValues}
-                location={location}
               />
             ) : totals ? (
               <Animated.View

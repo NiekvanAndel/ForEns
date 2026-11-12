@@ -47,8 +47,8 @@ import {
  */
 export const FIELD_PLAY_INTERVAL_MS = 600;
 
-/** Value rasters fetched at once. */
-const RASTER_PARALLEL = 4;
+/** Frames (PNG + raster) loading at once. */
+const FRAMES_PARALLEL = 2;
 
 export type FieldStatus = 'off' | 'loading' | 'ready' | 'unavailable' | 'error';
 
@@ -68,8 +68,9 @@ export interface FieldLayerState {
   togglePlay: () => void;
   /** The active frame's raster, once it has arrived. */
   values: Uint16Array | null;
-  /** Every frame's raster, aligned with `frames`; null until it has arrived. */
-  frameValues: (Uint16Array | null)[];
+  /** The frames the queue has admitted, in track order: only these go on the map, so
+   *  MapLibre downloads a PNG when its frame's turn comes rather than all at once. */
+  overlayFrames: FieldFrame[];
   /** Seconds the server asked us to wait, when it says the layers are not built. */
   retryAfterSec: number | null;
 }
@@ -83,11 +84,7 @@ export function useFields(source: FieldSource): FieldLayerState {
   const [playing, setPlaying] = useState(false);
   const [rasters, setRasters] = useState<ReadonlyMap<string, Uint16Array>>(new Map());
   const [retryAfterSec, setRetryAfterSec] = useState<number | null>(null);
-  /** Frames already being fetched, so a queue restarted by a layer switch cannot ask
-   *  for one that is still on its way. */
-  const pending = useRef(new Set<string>());
-  /** Mirrors the keys of `rasters`, readable synchronously when a pass starts. */
-  const loaded = useRef(new Set<string>());
+  const [admitted, setAdmitted] = useState<ReadonlySet<string>>(new Set());
 
   const setVariable = useCallback((next: FieldVariable | null) => {
     setVariableState(next);
@@ -156,21 +153,23 @@ export function useFields(source: FieldSource): FieldLayerState {
   const indexRef = useRef(index);
   indexRef.current = index;
 
-  // The rasters. Started once per manifest, never per slider step: restarting on every
-  // index aborted the download in flight, so during playback a frame slower than one
-  // tick never arrived. A few in parallel, the frame on screen first, then newest to
-  // oldest, which is where the slider usually is.
+  // One queue for both halves of a frame: admitting it puts its PNG on the map (MapLibre
+  // starts that download) and fetches its raster here, so image and value arrive
+  // together instead of two downloads racing from opposite ends of the loop. Started
+  // once per manifest, never per slider step, so the download in flight is not aborted.
+  // The frame on screen first, then newest to oldest.
   useEffect(() => {
     if (!variable || !manifest || status !== 'ready' || !frames.length) return;
     const controller = new AbortController();
     let cancelled = false;
     const key = (frame: FieldFrame) => `${variable}/${frame.time}`;
-    // Tried this pass, plus everything decoded in earlier ones.
-    const done = new Set<string>(loaded.current);
+    // Claimed by a worker this pass. Per pass, so a frame aborted by a layer switch is
+    // asked for again when the layer comes back; a repeat is a cache hit in the source.
+    const taken = new Set<string>();
 
     const next = (): FieldFrame | undefined => {
       const take = (f: FieldFrame | undefined) =>
-        f && !done.has(key(f)) && !pending.current.has(key(f)) ? f : undefined;
+        f && !taken.has(key(f)) ? f : undefined;
       const active = take(frames[indexRef.current]);
       if (active) return active;
       for (let i = frames.length - 1; i >= 0; i--) {
@@ -183,22 +182,19 @@ export function useFields(source: FieldSource): FieldLayerState {
     const worker = async () => {
       for (let frame = next(); frame && !cancelled; frame = next()) {
         const id = key(frame);
-        pending.current.add(id);
+        taken.add(id);
+        setAdmitted((current) => (current.has(id) ? current : new Set(current).add(id)));
         try {
           const values = await source.values(manifest, frame, controller.signal);
           if (cancelled) return;
-          loaded.current.add(id);
           setRasters((current) => new Map(current).set(id, values));
         } catch {
-          // A frame whose raster will not load simply has no number to print; the
-          // overlay is a separate request and is still on the map.
-        } finally {
-          done.add(id);
-          pending.current.delete(id);
+          // A frame whose raster will not load simply has no number to print; its
+          // overlay was admitted above and is still on the map.
         }
       }
     };
-    for (let i = 0; i < RASTER_PARALLEL; i++) void worker();
+    for (let i = 0; i < FRAMES_PARALLEL; i++) void worker();
 
     return () => {
       cancelled = true;
@@ -207,9 +203,9 @@ export function useFields(source: FieldSource): FieldLayerState {
   }, [variable, manifest, status, frames, source]);
 
   const frame = frames[index];
-  const frameValues = useMemo(
-    () => frames.map((f) => (variable && rasters.get(`${variable}/${f.time}`)) || null),
-    [frames, rasters, variable]
+  const overlayFrames = useMemo(
+    () => frames.filter((f) => admitted.has(`${variable}/${f.time}`)),
+    [frames, admitted, variable]
   );
 
   return {
@@ -225,6 +221,6 @@ export function useFields(source: FieldSource): FieldLayerState {
     togglePlay: useCallback(() => setPlaying((p) => !p), []),
     values: (variable && frame && rasters.get(`${variable}/${frame.time}`)) || null,
     retryAfterSec,
-    frameValues,
+    overlayFrames,
   };
 }
