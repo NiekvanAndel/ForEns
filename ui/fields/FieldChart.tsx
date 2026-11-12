@@ -8,7 +8,7 @@
  * are placed between frames by time (`frameIndexAt`), which keeps that true should the
  * loop ever thin out further back.
  */
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../theme';
@@ -19,12 +19,24 @@ import {
 } from '../../core/fields';
 import type { SavedLocation } from '../../core/prefs';
 import { usePrefs } from '../../state/prefs';
-import { useLocationStation, useStationRange } from '../../state/stations';
+import { useStationRange } from '../../state/stations';
 
 /** Half the scrubber's thumb: the track's first and last step sit this far in. */
 const INSET = 11;
 const HEIGHT = 72;
 const PAD_Y = 6;
+/** The chart follows the loading rasters at most this often, not once per frame. */
+const SETTLE_MS = 400;
+
+/** `value`, once it has stopped changing for `ms`. */
+function useSettled<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return settled;
+}
 
 /** `YYYY-MM-DD` in UTC. */
 const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -53,17 +65,20 @@ export function FieldChart({
   const unit = manifest.unit;
   const show = (v: number | null) => fieldValueIn(unit, v, prefs);
 
+  const settledValues = useSettled(frameValues, SETTLE_MS);
   const mapSeries = useMemo(
     () =>
-      frameValues.map((values) =>
+      settledValues.map((values) =>
         values ? show(sampleField(manifest, values, location.lat, location.lon)) : null
       ),
     // `show` closes over prefs and unit only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [frameValues, manifest, location.lat, location.lon, prefs.tempUnit, prefs.windUnit]
+    [settledValues, manifest, location.lat, location.lon, prefs.tempUnit, prefs.windUnit]
   );
 
-  const station = useLocationStation(location);
+  // The location's own station binding only: resolving "nearest station" would pull
+  // the account's station list into this screen as well.
+  const stationId = location.stationId ?? null;
   // Offset 0: the rows come back keyed on the UTC clock, which is what the frames use.
   const range = useMemo(
     () => ({
@@ -72,7 +87,7 @@ export function FieldChart({
     }),
     [times]
   );
-  const { data: rows } = useStationRange(station?.id ?? null, 0, range, !!station, true);
+  const { data: rows } = useStationRange(stationId, 0, range, !!stationId, true);
 
   const stationSeries = useMemo(() => {
     if (!rows?.length) return [];
