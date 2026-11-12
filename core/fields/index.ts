@@ -410,13 +410,13 @@ export const DETAILCHARTS_BASE = 'https://detailcharts.agroexact.com';
 
 /**
  * How far back the loop reaches, and how finely: the last `denseHours` every run, and
- * back to `totalHours` every `sparseStepMin` on the clock. Now the last three hours,
- * every run.
+ * back to `totalHours` every `sparseStepMin` on the clock: the last two hours every run,
+ * twelve hours back every half hour — 33 frames instead of 72.
  */
 export const DETAILCHARTS_LOOP = {
-  denseHours: 3,
+  denseHours: 2,
   denseStepMin: 10,
-  totalHours: 3,
+  totalHours: 12,
   sparseStepMin: 30,
 };
 export type DetailchartsLoop = typeof DETAILCHARTS_LOOP;

@@ -392,12 +392,14 @@ describe('the operational Detailcharts source', () => {
     return { source: detailchartsSource({ baseUrl: BASE, loop, fetchImpl }), requested };
   }
 
-  it('walks back the last three hours, every run', () => {
+  it('walks back twelve hours: half-hourly on the clock, then every run for two hours', () => {
     const stamps = loopStamps('20261112T1410Z');
-    expect(stamps).toHaveLength(19);
-    expect(stamps[0]).toBe('20261112T1110Z');
-    expect(stamps[1]).toBe('20261112T1120Z');
-    expect(stamps[18]).toBe('20261112T1410Z');
+    expect(stamps).toHaveLength(20 + 13);
+    expect(stamps[0]).toBe('20261112T0230Z');
+    expect(stamps.slice(18, 22)).toEqual([
+      '20261112T1130Z', '20261112T1200Z', '20261112T1210Z', '20261112T1220Z',
+    ]);
+    expect(stamps[32]).toBe('20261112T1410Z');
   });
 
   it('can thin out further back: half-hourly on the clock, then every run', () => {
