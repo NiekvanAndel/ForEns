@@ -465,6 +465,9 @@ describe('the operational Detailcharts source', () => {
     const { rows, cols } = manifest.raster;
     const good = sourceOver({ [`temperature/${stamp}.bin`]: new ArrayBuffer(rows * cols * 2) });
     expect((await good.source.values(manifest, manifest.frames[0]!)).length).toBe(rows * cols);
+    const again = await good.source.values(manifest, manifest.frames[0]!);
+    expect(good.requested.filter((u) => u.endsWith('.bin'))).toHaveLength(1);
+    expect(again.length).toBe(rows * cols);
     const bad = sourceOver({ [`temperature/${stamp}.bin`]: new ArrayBuffer(6) });
     await expect(bad.source.values(manifest, manifest.frames[0]!)).rejects.toThrow(/raster is 6 bytes/);
   });

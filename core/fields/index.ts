@@ -421,6 +421,9 @@ export const DETAILCHARTS_LOOP = {
 };
 export type DetailchartsLoop = typeof DETAILCHARTS_LOOP;
 
+/** Value rasters kept in memory: the full loop of all three variables, ~0.3 MB each. */
+const RASTER_CACHE_SIZE = 100;
+
 /** `<base>/latest.json`: written last by every run, after all of its frames. */
 export interface DetailchartsLatest {
   target: string;
@@ -565,6 +568,9 @@ export function detailchartsSource(
     fetchImpl = (...args: Parameters<typeof fetch>) => fetch(...args),
   } = options;
   const docs = new Map<string, DetailchartsFrameDoc>();
+  // Rasters outlive the map screen (the hook's state does not), so reopening the map
+  // or switching back to a variable reads from memory. Frame files never change.
+  const rasters = new Map<string, Uint16Array>();
 
   const get = async (url: string, signal?: AbortSignal) => {
     const response = await fetchImpl(url, { signal });
@@ -616,8 +622,16 @@ export function detailchartsSource(
     },
 
     async values(manifest, frame, signal) {
+      const url = fileUrl(manifest, frame.values_url);
+      const hit = rasters.get(url);
+      if (hit) {
+        // Re-inserted, so the map's order is least recently used first.
+        rasters.delete(url);
+        rasters.set(url, hit);
+        return hit;
+      }
       // Served with `Content-Encoding: gzip`, so the platform hands back the bare array.
-      const response = await get(fileUrl(manifest, frame.values_url), signal);
+      const response = await get(url, signal);
       const bytes = await response.arrayBuffer();
       const { rows, cols } = manifest.raster;
       if (bytes.byteLength !== rows * cols * 2) {
@@ -627,7 +641,10 @@ export function detailchartsSource(
           `fields: raster is ${bytes.byteLength} bytes, manifest says ${rows * cols * 2}`
         );
       }
-      return new Uint16Array(bytes);
+      const values = new Uint16Array(bytes);
+      rasters.set(url, values);
+      while (rasters.size > RASTER_CACHE_SIZE) rasters.delete(rasters.keys().next().value!);
+      return values;
     },
   };
 }
