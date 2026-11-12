@@ -8,9 +8,9 @@
  * are placed between frames by time (`frameIndexAt`), which keeps that true should the
  * loop ever thin out further back.
  */
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '../../theme';
 import { Text } from '../Text';
 import {
@@ -44,7 +44,10 @@ export function FieldChart({
   const { palette } = useTheme();
   const { prefs } = usePrefs();
   const [width, setWidth] = useState(0);
-  const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+  const onLayout = useCallback(
+    (e: LayoutChangeEvent) => setWidth(Math.round(e.nativeEvent.layout.width)),
+    []
+  );
 
   const times = useMemo(() => frames.map((f) => Date.parse(f.time)), [frames]);
   const unit = manifest.unit;
@@ -83,88 +86,117 @@ export function FieldChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, times, variable, prefs.tempUnit, prefs.windUnit]);
 
-  const all = [
-    ...mapSeries.filter((v): v is number => v != null),
-    ...stationSeries.map((p) => p.v),
-  ];
-  if (!all.length || frames.length < 2) return null;
+  const scale = useMemo(() => {
+    const all = [
+      ...mapSeries.filter((v): v is number => v != null),
+      ...stationSeries.map((p) => p.v),
+    ];
+    if (!all.length) return null;
+    let lo = Math.min(...all);
+    let hi = Math.max(...all);
+    if (hi - lo < 1) {
+      const mid = (hi + lo) / 2;
+      lo = mid - 0.5;
+      hi = mid + 0.5;
+    }
+    return { lo, hi };
+  }, [mapSeries, stationSeries]);
 
-  let lo = Math.min(...all);
-  let hi = Math.max(...all);
-  if (hi - lo < 1) {
-    const mid = (hi + lo) / 2;
-    lo = mid - 0.5;
-    hi = mid + 0.5;
-  }
-  const last = frames.length - 1;
+  const last = Math.max(1, frames.length - 1);
   const usable = Math.max(0, width - 2 * INSET);
   const px = (i: number) => INSET + (i / last) * usable;
-  const py = (v: number) => PAD_Y + (1 - (v - lo) / (hi - lo)) * (HEIGHT - 2 * PAD_Y);
+  const py = (v: number) =>
+    scale ? PAD_Y + (1 - (v - scale.lo) / (scale.hi - scale.lo)) * (HEIGHT - 2 * PAD_Y) : 0;
 
-  const pathOf = (points: { x: number; v: number | null }[]) => {
-    let d = '';
-    let pen = false;
-    for (const p of points) {
-      if (p.v == null) {
-        pen = false;
-        continue;
+  // The lines depend on the data and the width only, never on the slider: a step moves
+  // the cursor (two plain Views) and leaves the SVG alone.
+  const paths = useMemo(() => {
+    if (!scale || !width) return null;
+    const pathOf = (points: { x: number; v: number | null }[]) => {
+      let d = '';
+      let pen = false;
+      for (const p of points) {
+        if (p.v == null) {
+          pen = false;
+          continue;
+        }
+        d += `${pen ? 'L' : 'M'}${px(p.x).toFixed(1)},${py(p.v).toFixed(1)}`;
+        pen = true;
       }
-      d += `${pen ? 'L' : 'M'}${px(p.x).toFixed(1)},${py(p.v).toFixed(1)}`;
-      pen = true;
-    }
-    return d;
-  };
+      return d;
+    };
+    return {
+      map: pathOf(mapSeries.map((v, i) => ({ x: i, v }))),
+      station: pathOf(stationSeries),
+    };
+    // px/py derive from scale, width and the frame count.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale, width, last, mapSeries, stationSeries]);
 
-  const mapPath = pathOf(mapSeries.map((v, i) => ({ x: i, v })));
-  const stationPath = pathOf(stationSeries);
+  if (!scale || frames.length < 2) return null;
+
+  const fmt = (v: number) =>
+    variable === 'wind' && prefs.windUnit === 'ms' ? v.toFixed(1) : String(Math.round(v));
   const cursorX = px(index);
   const mapNow = mapSeries[index];
-  const stationNow = stationSeries.reduce<{ x: number; v: number } | null>(
-    (best, p) => (!best || Math.abs(p.x - index) < Math.abs(best.x - index) ? p : best),
-    null
-  );
-  const fmt = (v: number) => (variable === 'wind' && prefs.windUnit === 'ms' ? v.toFixed(1) : String(Math.round(v)));
 
   return (
     <View onLayout={onLayout} style={{ height: HEIGHT, marginBottom: 6 }}>
-      {width > 0 && (
-        <Svg width={width} height={HEIGHT}>
-          <Line
-            x1={cursorX} x2={cursorX} y1={0} y2={HEIGHT}
-            stroke={palette.muted} strokeWidth={1} strokeOpacity={0.5}
-          />
-          {stationPath ? (
-            <Path d={stationPath} stroke={palette.accent} strokeWidth={2} fill="none" />
-          ) : null}
-          {mapPath ? (
-            <Path
-              d={mapPath} stroke={palette.accent} strokeWidth={2} fill="none"
-              strokeDasharray="4 3"
-            />
-          ) : null}
-          {stationNow && Math.abs(stationNow.x - index) <= 0.5 ? (
-            <Circle cx={px(stationNow.x)} cy={py(stationNow.v)} r={3} fill={palette.accent} />
-          ) : null}
-          {mapNow != null ? (
-            <Circle
-              cx={cursorX} cy={py(mapNow)} r={3}
-              fill={palette.surfaceCard} stroke={palette.accent} strokeWidth={1.5}
-            />
-          ) : null}
-        </Svg>
-      )}
+      {paths ? (
+        <ChartLines
+          width={width}
+          mapPath={paths.map}
+          stationPath={paths.station}
+          color={palette.accent}
+        />
+      ) : null}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute', top: 0, bottom: 0, left: cursorX - 0.5, width: 1,
+          backgroundColor: palette.muted, opacity: 0.5,
+        }}
+      />
+      {mapNow != null ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute', left: cursorX - 3.5, top: py(mapNow) - 3.5,
+            width: 7, height: 7, borderRadius: 3.5, borderWidth: 1.5,
+            borderColor: palette.accent, backgroundColor: palette.surfaceCard,
+          }}
+        />
+      ) : null}
       <Text
         variant="caption" color={palette.muted} tabular
         style={{ position: 'absolute', left: 0, top: -2 }}
       >
-        {fmt(hi)}
+        {fmt(scale.hi)}
       </Text>
       <Text
         variant="caption" color={palette.muted} tabular
         style={{ position: 'absolute', left: 0, bottom: -2 }}
       >
-        {fmt(lo)}
+        {fmt(scale.lo)}
       </Text>
     </View>
   );
 }
+
+const ChartLines = memo(function ChartLines({
+  width, mapPath, stationPath, color,
+}: {
+  width: number;
+  mapPath: string;
+  stationPath: string;
+  color: string;
+}) {
+  return (
+    <Svg width={width} height={HEIGHT}>
+      {stationPath ? <Path d={stationPath} stroke={color} strokeWidth={2} fill="none" /> : null}
+      {mapPath ? (
+        <Path d={mapPath} stroke={color} strokeWidth={2} fill="none" strokeDasharray="4 3" />
+      ) : null}
+    </Svg>
+  );
+});
