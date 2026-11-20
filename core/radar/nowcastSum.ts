@@ -40,9 +40,10 @@
  * summed as they arrive and never kept, so memory stays at six window-sized float
  * grids.
  */
+import { gunzipSync } from 'fflate';
 import { SourceError } from '../sources/http';
 import {
-  GRID_COLS, GRID_ROWS, NOWCAST_BIN_BASE, NOWCAST_MANIFEST_URL,
+  GRID_COLS, GRID_ROWS, NOWCAST_BASE, NOWCAST_BIN_BASE, NOWCAST_MANIFEST_URL,
   boundsFromMercator, decodeRainRate, gridCellAt, type NowcastManifest,
 } from './exactcast';
 import type {
@@ -93,8 +94,15 @@ export function runPrefix(ms: number): string {
   );
 }
 
-export function frameUrl(runMs: number, offsetMin: number): string {
-  return `${NOWCAST_BIN_BASE}/${runPrefix(runMs)}_${offsetMin}.bin`;
+/**
+ * Where a run's frames can live. Runs published since the bucket was reorganised
+ * keep them in `bins/`; older runs still have them in the root. A 48 hour window
+ * straddles the move for two days, so both are tried, newest layout first.
+ */
+export const FRAME_BASES = [NOWCAST_BIN_BASE, NOWCAST_BASE] as const;
+
+export function frameUrl(runMs: number, offsetMin: number, base: string = NOWCAST_BIN_BASE): string {
+  return `${base}/${runPrefix(runMs)}_${offsetMin}.bin`;
 }
 
 /**
@@ -123,9 +131,16 @@ export interface PlannedFrame {
  * twenty minutes — the newer run wins: it was calibrated with more of the gauges'
  * reports in.
  */
-export function planFrames(anchorMs: number, hours: number, runs: readonly number[]): PlannedFrame[] {
-  const known = new Set(runs);
-  known.add(anchorMs);
+export function planFrames(
+  anchorMs: number,
+  hours: number,
+  runs: ReadonlyMap<number, string> | readonly number[]
+): PlannedFrame[] {
+  // A bare list of run times means every run is in `bins/`.
+  const known = new Map<number, string>(
+    Array.isArray(runs) ? runs.map((t) => [t, NOWCAST_BIN_BASE] as const) : (runs as ReadonlyMap<number, string>)
+  );
+  if (!known.has(anchorMs)) known.set(anchorMs, NOWCAST_BIN_BASE);
   const plan: PlannedFrame[] = [];
   const slots = hours * FRAMES_PER_HOUR;
   for (let i = 0; i < slots; i++) {
@@ -135,14 +150,38 @@ export function planFrames(anchorMs: number, hours: number, runs: readonly numbe
     // the slot, offset 0 the run at the slot itself.
     for (const offset of OBSERVED_OFFSETS) {
       const runMs = slotMs - offset * 60_000;
-      if (runMs <= anchorMs && known.has(runMs)) {
-        url = frameUrl(runMs, offset);
+      const base = runMs <= anchorMs ? known.get(runMs) : undefined;
+      if (base) {
+        url = frameUrl(runMs, offset, base);
         break;
       }
     }
     plan.push({ slotMs, url });
   }
   return plan;
+}
+
+// --- Reading a frame ----------------------------------------------------------
+
+/**
+ * A frame's bytes as the raster, whatever the transport did to them.
+ *
+ * The files are gzipped. Served with `Content-Encoding: gzip` the HTTP stack has
+ * already undone that; served without it — a plain `.bin` that happens to be gzip
+ * inside — the bytes arrive compressed, the size check fails, and the frame used to
+ * vanish from the total without a word. The gzip magic number settles which it is.
+ */
+export function frameBytes(bytes: Uint8Array): { frame: Uint8Array | null; gzipped: boolean } {
+  let gzipped = false;
+  if (bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b) {
+    gzipped = true;
+    try {
+      bytes = gunzipSync(bytes);
+    } catch {
+      return { frame: null, gzipped };
+    }
+  }
+  return { frame: bytes.length === GRID_CELLS ? bytes : null, gzipped };
 }
 
 // --- Summing ------------------------------------------------------------------
@@ -406,40 +445,67 @@ const asHours = (frames: number) => Math.round((frames / FRAMES_PER_HOUR) * 10) 
 export function nowcastSumSource(options: NowcastSumOptions): CumulativeSource {
   const { legend = SUM_LEGEND, writePng, fetchImpl = fetch, now = Date.now, concurrency = 8, onProgress } = options;
 
-  // Whether a run exists. A run that exists stays; one that did not is only final
-  // once it is well behind us — a run can still be uploading at the newest marks.
-  const runExists = new Map<number, boolean>();
+  // Where a run's frames are, or null if it has none. A run found stays found; a
+  // miss is only final once it is well behind us — a run can still be uploading.
+  const runBase = new Map<number, string | null>();
   let lookup: { key: string; table: Promise<Int32Array> } | null = null;
   let built: Built | null = null;
   let building: Promise<Built> | null = null;
 
-  const probe = async (runMs: number): Promise<boolean> => {
-    const cached = runExists.get(runMs);
-    if (cached != null) return cached;
-    const url = frameUrl(runMs, 0);
-    let ok = false;
-    try {
-      let res = await fetchImpl(url, { method: 'HEAD' });
-      if (res.status === 405 || res.status === 501) {
-        res = await fetchImpl(url, { headers: { Range: 'bytes=0-0' } });
+  /** A request that is retried while the server says it is busy, rather than read
+   *  as "no such file": a thousand requests in a row is what rate limits are for. */
+  const request = async (url: string, init?: RequestInit): Promise<Response | null> => {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const res = await fetchImpl(url, init);
+        if (res.status !== 429 && res.status < 500) return res;
+      } catch {
+        // Dropped connection: try again like a busy server.
       }
-      ok = res.ok;
-    } catch {
-      return false; // a dropped request is not evidence either way, so not cached
+      await new Promise((r) => setTimeout(r, 400 * 2 ** attempt));
     }
-    if (ok || now() - runMs > 60 * 60_000) runExists.set(runMs, ok);
-    return ok;
+    return null;
   };
 
-  const readFrame = async (url: string): Promise<Uint8Array | null> => {
-    try {
-      const res = await fetchImpl(url);
-      if (!res.ok) return null;
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      return bytes.length === GRID_CELLS ? bytes : null;
-    } catch {
-      return null;
+  /**
+   * How to ask whether a file exists. HEAD is cheapest, but some servers and CDNs
+   * refuse it or answer it differently from GET; a one-byte range is next, and a
+   * plain GET always works. Chosen once per build against a file known to exist —
+   * the newest run's — so a server that rejects HEAD cannot make every older run
+   * look absent.
+   */
+  type ProbeMethod = 'HEAD' | 'RANGE' | 'GET';
+  const exists = async (url: string, method: ProbeMethod): Promise<boolean | null> => {
+    const init: RequestInit =
+      method === 'HEAD' ? { method: 'HEAD' }
+      : method === 'RANGE' ? { headers: { Range: 'bytes=0-0' } }
+      : {};
+    const res = await request(url, init);
+    if (!res) return null; // unknown, not absent
+    return res.ok;
+  };
+
+  const probeRun = async (runMs: number, method: ProbeMethod): Promise<string | null> => {
+    if (runBase.has(runMs)) return runBase.get(runMs)!;
+    let unknown = false;
+    for (const base of FRAME_BASES) {
+      const hit = await exists(frameUrl(runMs, 0, base), method);
+      if (hit) {
+        runBase.set(runMs, base);
+        return base;
+      }
+      if (hit == null) unknown = true;
     }
+    if (!unknown && now() - runMs > 60 * 60_000) runBase.set(runMs, null);
+    return null;
+  };
+
+  type Reject = 'http' | 'size';
+  const readFrame = async (url: string): Promise<{ frame: Uint8Array | null; why?: Reject; gzipped?: boolean }> => {
+    const res = await request(url);
+    if (!res?.ok) return { frame: null, why: 'http' };
+    const { frame, gzipped } = frameBytes(new Uint8Array(await res.arrayBuffer()));
+    return frame ? { frame, gzipped } : { frame: null, why: 'size', gzipped };
   };
 
   const build = async (run: NowcastManifest): Promise<Built> => {
@@ -452,23 +518,55 @@ export function nowcastSumSource(options: NowcastSumOptions): CumulativeSource {
         `prefix "${run.prefix}" is not the run time ${runPrefix(anchorMs)}; cannot find older runs`
       );
     }
-    runExists.set(anchorMs, true);
     const longest = SUM_WINDOW_HOURS[SUM_WINDOW_HOURS.length - 1]!;
 
-    const found: number[] = [];
+    // The probe method, tested on the newest run, which the manifest says exists.
+    let method: ProbeMethod | null = null;
+    let anchorBase: string | null = null;
+    for (const m of ['HEAD', 'RANGE', 'GET'] as const) {
+      runBase.delete(anchorMs);
+      anchorBase = await probeRun(anchorMs, m);
+      if (anchorBase) {
+        method = m;
+        break;
+      }
+    }
+    if (!method || !anchorBase) {
+      throw new SourceError('ExactCast', `newest run's frames not found (${frameUrl(anchorMs, 0)})`);
+    }
+
+    const runs = new Map<number, string>([[anchorMs, anchorBase]]);
     await pool(candidateRuns(anchorMs, longest), concurrency, async (t) => {
-      if (await probe(t)) found.push(t);
+      const base = await probeRun(t, method!);
+      if (base) runs.set(t, base);
     });
 
-    const plan = planFrames(anchorMs, longest, found).filter((f) => f.url);
+    const plan = planFrames(anchorMs, longest, runs).filter((f) => f.url);
     const acc = new WindowAccumulator(anchorMs, SUM_WINDOW_HOURS);
+    const stats = { http: 0, size: 0, gzipped: 0, maxByte: 0 };
     let done = 0;
     onProgress?.(0, plan.length);
     await pool(plan, concurrency, async (f) => {
-      const frame = await readFrame(f.url!);
-      if (frame) acc.add(f.slotMs, frame);
+      const { frame, why, gzipped } = await readFrame(f.url!);
+      if (gzipped) stats.gzipped++;
+      if (frame) {
+        acc.add(f.slotMs, frame);
+        for (let i = 0; i < frame.length; i++) if (frame[i]! > stats.maxByte) stats.maxByte = frame[i]!;
+      } else if (why) {
+        stats[why]++;
+      }
       onProgress?.(++done, plan.length);
     });
+
+    const inRoot = [...runs.values()].filter((b) => b === NOWCAST_BASE).length;
+    const read = acc.found.reduce((a, b) => a + b, 0);
+    const diagnostics =
+      `runs ${runs.size} (bins ${runs.size - inRoot}, root ${inRoot}) · ` +
+      `beelden ${read}/${longest * FRAMES_PER_HOUR} · ` +
+      `afgewezen http ${stats.http}, formaat ${stats.size} · gzip ${stats.gzipped} · ` +
+      `check ${method} · piek ${decodeRainRate(stats.maxByte).toFixed(1)} mm/u` +
+      // Runs off the five-minute grid are never probed; this is where that shows.
+      (anchorMs % SLOT_MS ? ' · anker niet op 5 min' : '');
 
     const key = run.bounds_3857.join(',');
     if (!lookup || lookup.key !== key) lookup = { key, table: mercatorLookup(run.bounds_3857) };
@@ -516,6 +614,7 @@ export function nowcastSumSource(options: NowcastSumOptions): CumulativeSource {
         },
         legend,
         windows,
+        diagnostics,
       },
     };
   };

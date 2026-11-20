@@ -721,6 +721,20 @@ serves them behind the same `CumulativeSource` the server endpoint will use.
 - **Cost:** 575 HEAD requests and up to 576 frames (roughly 40 MB in wet weather)
   each time a new run is opened. A long load is accepted (20 Nov 2026). Nothing is kept on disk between sessions yet; per-hour
   partial sums in the cache directory would cut a reopen to the newest frames.
+- **Why a map can stay empty, and what is done about it (20 Nov 2026).** The
+  projection was checked against KNMI's own grid definition (corners at x 0..700 km,
+  y -3650..-4415 km) and is right. What could empty the map was the download side,
+  all silent: runs from before the move to `bins/` sit in the bucket root (now both
+  are tried); a server refusing HEAD made every older run look absent (the probe
+  method is now tested on the newest run first, falling back to a range request and
+  then a plain GET); gzip bytes without `Content-Encoding` failed the size check
+  (now unpacked with `fflate`); and a 429 counted as "no such run" (now retried).
+- **A diagnostics line sits under the window while testing** — runs found (bins /
+  root), frames read, frames rejected, probe method, peak rate. It belongs to the
+  interim route and goes with it.
+- **Still unverified:** that byte values are the geometric 0.1..128 mm/h scale, and
+  that row 0 of a `.bin` is the north edge. A wrong scale shows as an implausible
+  peak in the diagnostics line; a flipped grid as rain mirrored north–south.
 - **Not verified against the live bucket** — the build environment cannot reach it.
 - The server-side layers (`httpSource`) remain the intended route; switching back is
   one line in `ui/radar/FullMap.tsx`.

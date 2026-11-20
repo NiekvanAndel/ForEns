@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inflateSync, crc32 } from 'node:zlib';
+import { inflateSync, crc32, gzipSync } from 'node:zlib';
 import {
   SUM_LEGEND, SUM_RASTER_COLS, SUM_RASTER_ROWS, WindowAccumulator, candidateRuns,
   encodeTotalsPng, frameShare, frameUrl, mercatorLookup, nowcastSumSource, planFrames,
@@ -159,9 +159,28 @@ describe('encodeTotalsPng', () => {
 
 describe('nowcastSumSource', () => {
   /** A bucket holding runs at the given cadence, every frame raining `mmh`. */
-  const bucket = (cadenceMin: number, mmh: number, prefix = '2026-11-20T12-00', keptHours = 49) => {
-    const runs = new Set([ANCHOR, ...runsEvery(cadenceMin, keptHours)].map(runPrefix));
+  /** How the bucket misbehaves, one switch per cause of an empty map. */
+  interface Quirks {
+    /** Runs older than this many hours are still in the root, as before the move. */
+    movedHoursAgo?: number;
+    /** What a HEAD is answered with when the file exists. */
+    headStatus?: number;
+    /** Serve the frames as gzip bytes without `Content-Encoding`. */
+    rawGzip?: boolean;
+    /** Answer this many requests in a row with 429 before serving. */
+    busyFirst?: number;
+  }
+
+  const bucket = (
+    cadenceMin: number, mmh: number, prefix = '2026-11-20T12-00', keptHours = 49, quirks: Quirks = {}
+  ) => {
+    const runTimes = [ANCHOR, ...runsEvery(cadenceMin, keptHours)];
+    const moved = quirks.movedHoursAgo ?? Infinity;
+    const inBins = new Set(runTimes.filter((t) => ANCHOR - t < moved * 60 * MIN).map(runPrefix));
+    const inRoot = new Set(runTimes.filter((t) => ANCHOR - t >= moved * 60 * MIN).map(runPrefix));
     const frame = new Uint8Array(CELLS).fill(byteFor(mmh));
+    const body = quirks.rawGzip ? gzipSync(frame) : frame;
+    let busy = quirks.busyFirst ?? 0;
     const requested: string[] = [];
     const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -174,9 +193,15 @@ describe('nowcastSumSource', () => {
           bounds_3857: BOUNDS_3857,
         });
       }
-      const m = /\/bins\/(.+)_(-?\d+)\.bin$/.exec(url);
-      if (!m || !runs.has(m[1]!)) return new Response(null, { status: 404 });
-      return init?.method === 'HEAD' ? new Response(null, { status: 200 }) : new Response(frame.slice());
+      if (busy > 0) {
+        busy--;
+        return new Response(null, { status: 429 });
+      }
+      const m = /\.com\/(bins\/)?([^/]+)_(-?\d+)\.bin$/.exec(url);
+      const there = m && (m[1] ? inBins : inRoot).has(m[2]!);
+      if (!there) return new Response(null, { status: 404 });
+      if (init?.method === 'HEAD') return new Response(null, { status: quirks.headStatus ?? 200 });
+      return new Response(body.slice());
     }) as typeof fetch;
     const written = new Map<string, Uint8Array>();
     const source = nowcastSumSource({
@@ -236,6 +261,44 @@ describe('nowcastSumSource', () => {
     expect(twoDays.hours_found).toBeLessThan(41);
   }, 30_000);
 
+  it('finds runs from before the move in the bucket root', async () => {
+    // The bins/ layout went live ten hours ago; everything older is in the root.
+    const { source } = bucket(20, 2, '2026-11-20T12-00', 49, { movedHoursAgo: 10 });
+    const manifest = await source.manifest();
+    expect(manifest.windows.every((w) => w.complete)).toBe(true);
+    expect(manifest.diagnostics).toMatch(/runs 144 \(bins 30, root 114\)/);
+  }, 30_000);
+
+  it('does not let a server that refuses HEAD hide every older run', async () => {
+    // A 403 on HEAD for a file that exists: the probe falls back to a range request.
+    const { source, requested } = bucket(20, 2, '2026-11-20T12-00', 49, { headStatus: 403 });
+    const manifest = await source.manifest();
+    expect(manifest.windows[5]!.complete).toBe(true);
+    expect(manifest.diagnostics).toContain('check RANGE');
+    expect(requested.filter((r) => r.startsWith('HEAD'))).toHaveLength(2);
+  }, 30_000);
+
+  it('unpacks frames that arrive gzipped without a Content-Encoding header', async () => {
+    const { source } = bucket(20, 2, '2026-11-20T12-00', 49, { rawGzip: true });
+    const manifest = await source.manifest();
+    expect(manifest.windows[5]!.complete).toBe(true);
+    expect(manifest.diagnostics).toContain('gzip 576');
+    const mm = sampleMm(manifest, await source.values(manifest.windows[4]!), 52.09, 5.12)!;
+    expect(mm).toBeGreaterThan(47);
+  }, 30_000);
+
+  it('waits out a busy server instead of counting the run as missing', async () => {
+    const { source } = bucket(20, 2, '2026-11-20T12-00', 49, { busyFirst: 2 });
+    const manifest = await source.manifest();
+    expect(manifest.windows[5]!.complete).toBe(true);
+  }, 30_000);
+
+  it('reports what it read, for the screen', async () => {
+    const { source } = bucket(30, 2);
+    const manifest = await source.manifest();
+    expect(manifest.diagnostics).toMatch(/^runs 96 \(bins 96, root 0\) · beelden 384\/576 · afgewezen http 0, formaat 0 · gzip 0 · check HEAD · piek 2\.\d mm\/u$/);
+  }, 30_000);
+
   it('does not rebuild for a run it has already summed', async () => {
     const { source, requested } = bucket(20, 1);
     await source.manifest();
@@ -243,6 +306,20 @@ describe('nowcastSumSource', () => {
     await source.manifest();
     // Only the manifest itself again.
     expect(requested.slice(before)).toEqual(['GET https://nowcast.agroexact.com/latest.json']);
+  }, 30_000);
+
+  it('says so when even the newest run cannot be found', async () => {
+    const { source } = bucket(20, 2, '2026-11-20T12-00', 49, { movedHoursAgo: 0 });
+    // Everything in the root works too; nothing anywhere does not.
+    await expect(source.manifest()).resolves.toBeTruthy();
+    const empty = nowcastSumSource({
+      fetchImpl: (async (input: RequestInfo | URL) =>
+        String(input).endsWith('/latest.json')
+          ? Response.json({ timestamp: new Date(ANCHOR).toISOString(), prefix: '2026-11-20T12-00', offsets: [0], bounds_3857: BOUNDS_3857 })
+          : new Response(null, { status: 404 })) as typeof fetch,
+      writePng: () => '',
+    });
+    await expect(empty.manifest()).rejects.toThrow(/newest run's frames not found/);
   }, 30_000);
 
   it('refuses to guess when the prefix is not the run time', async () => {

@@ -152,6 +152,14 @@ export function CumulativePanel({
         {`${sinceLabel(window)} tot ${clockAt(manifest.anchor)}`}
       </Text>
 
+      {/* Test phase of the phone-side sum: how the layer was put together, so a
+          tester can read off why a map stays empty. Goes with the interim route. */}
+      {manifest.diagnostics ? (
+        <Text variant="caption" color={palette.muted} tabular>
+          {manifest.diagnostics}
+        </Text>
+      ) : null}
+
       <CumulativeChart
         series={series}
         index={index}

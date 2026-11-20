@@ -101,6 +101,9 @@ export interface CumulativeManifest {
   raster: CumulativeRaster;
   legend: CumulativeLegend;
   windows: CumulativeWindow[];
+  /** Not in the server contract: how a layer built on the phone was put together —
+   *  runs found, frames read and rejected — for reading off a tester's screen. */
+  diagnostics?: string;
 }
 
 /**
