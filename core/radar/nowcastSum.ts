@@ -33,10 +33,12 @@
  *
  * ## Cost
  *
- * A day is 288 frames: in wet weather some 20 MB over the network and a few seconds
- * of arithmetic. Up to 24 hours only — the bucket keeps about two days, and a 48 hour
- * window would need daily totals beside the frames. Frames are summed as they arrive
- * and never kept, so memory stays at five window-sized float grids.
+ * Two days is 576 frames: in wet weather some 40 MB over the network and a few
+ * seconds of arithmetic. Slow to load, and accepted as such. The bucket keeps about
+ * two days, so the oldest hours of the 48 hour window may already be gone; they then
+ * count as missing and the provenance line says so, as for any other gap. Frames are
+ * summed as they arrive and never kept, so memory stays at six window-sized float
+ * grids.
  */
 import { SourceError } from '../sources/http';
 import {
@@ -47,8 +49,9 @@ import type {
   CumulativeLegend, CumulativeManifest, CumulativeSource, CumulativeWindow,
 } from './cumulative';
 
-/** The windows this route can honestly offer. 48 hours would run off the bucket. */
-export const SUM_WINDOW_HOURS = [1, 3, 6, 12, 24] as const;
+/** The windows offered, shortest first. 48 hours reaches the edge of what the bucket
+ *  keeps, so it is the one most likely to be short. */
+export const SUM_WINDOW_HOURS = [1, 3, 6, 12, 24, 48] as const;
 
 /**
  * The server's colour ramp for rainfall totals, as `docs/exactcast-cumulative-radar.md`

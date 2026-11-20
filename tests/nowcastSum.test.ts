@@ -159,8 +159,8 @@ describe('encodeTotalsPng', () => {
 
 describe('nowcastSumSource', () => {
   /** A bucket holding runs at the given cadence, every frame raining `mmh`. */
-  const bucket = (cadenceMin: number, mmh: number, prefix = '2026-11-20T12-00') => {
-    const runs = new Set([ANCHOR, ...runsEvery(cadenceMin, 25)].map(runPrefix));
+  const bucket = (cadenceMin: number, mmh: number, prefix = '2026-11-20T12-00', keptHours = 49) => {
+    const runs = new Set([ANCHOR, ...runsEvery(cadenceMin, keptHours)].map(runPrefix));
     const frame = new Uint8Array(CELLS).fill(byteFor(mmh));
     const requested: string[] = [];
     const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -190,19 +190,23 @@ describe('nowcastSumSource', () => {
     return { source, requested, written };
   };
 
-  it('builds five nested windows from a complete day of frames', async () => {
+  it('builds six nested windows from two complete days of frames', async () => {
     const { source, written } = bucket(20, 2);
     const manifest = await source.manifest();
     expect(manifest.source).toBe('nowcast');
     expect(manifest.anchor).toBe('2026-11-20T12:00:00.000Z');
-    expect(manifest.windows.map((w) => w.hours)).toEqual([1, 3, 6, 12, 24]);
+    expect(manifest.windows.map((w) => w.hours)).toEqual([1, 3, 6, 12, 24, 48]);
     expect(manifest.windows.every((w) => w.complete)).toBe(true);
-    expect(manifest.windows.map(frameShare)).toEqual([1, 1, 1, 1, 1]);
+    expect(manifest.windows.map(frameShare)).toEqual([1, 1, 1, 1, 1, 1]);
 
     const day = manifest.windows[4]!;
     expect(day.png_url).toBe('file:///cache/cumulative-2026-11-20T12-00-24h.png');
     expect(source.overlayUrl(day)).toBe(day.png_url);
-    expect(written.size).toBe(5);
+    expect(written.size).toBe(6);
+    const twoDays = manifest.windows[5]!;
+    const mm48 = sampleMm(manifest, await source.values(twoDays), 52.09, 5.12)!;
+    expect(mm48).toBeGreaterThan(94);
+    expect(mm48).toBeLessThan(98);
 
     // 2 mm/h for a day, read back at Utrecht through the existing sampler.
     const mm = sampleMm(manifest, await source.values(day), 52.09, 5.12)!;
@@ -218,6 +222,18 @@ describe('nowcastSumSource', () => {
     expect(day.complete).toBe(false);
     expect(day.hours_found).toBe(16);
     expect(Math.floor(frameShare(day) * 100)).toBe(66);
+    expect(manifest.windows[5]!.hours_found).toBe(32);
+  }, 30_000);
+
+  it('counts hours the bucket no longer keeps as missing', async () => {
+    // Retention of about 40 hours: the 48 hour window is short, the day is whole.
+    const { source } = bucket(20, 2, '2026-11-20T12-00', 40);
+    const manifest = await source.manifest();
+    expect(manifest.windows[4]!.complete).toBe(true);
+    const twoDays = manifest.windows[5]!;
+    expect(twoDays.complete).toBe(false);
+    expect(twoDays.hours_found).toBeGreaterThan(39);
+    expect(twoDays.hours_found).toBeLessThan(41);
   }, 30_000);
 
   it('does not rebuild for a run it has already summed', async () => {

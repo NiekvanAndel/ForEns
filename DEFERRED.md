@@ -704,7 +704,7 @@ line that names the forecast that moved.
 
 The cumulative layer no longer runs on the dummy build. `core/radar/nowcastSum.ts`
 sums the observed `.bin` frames (offsets -15..0) of the nowcast runs into windows of
-1, 3, 6, 12 and 24 hours, draws them as palette PNGs in the cache directory, and
+1, 3, 6, 12, 24 and 48 hours, draws them as palette PNGs in the cache directory, and
 serves them behind the same `CumulativeSource` the server endpoint will use.
 
 - **File names are guessed.** `latest.json` names only the newest run, so every
@@ -715,10 +715,11 @@ serves them behind the same `CumulativeSource` the server endpoint will use.
 - **The total is a floor while the nowcast runs every half hour**: 8 of 12 frames per
   hour. The provenance line says what share of frames there was. AgroExact plans a
   20-minute cadence, which covers every slot.
-- **48 hours is not offered.** The bucket keeps about two days and 576 frames is too
-  much to download; daily totals would be needed.
-- **Cost:** 288 HEAD requests and up to 288 frames (roughly 20 MB in wet weather)
-  each time a new run is opened. Nothing is kept on disk between sessions yet; per-hour
+- **48 hours sits at the edge of the bucket's retention** (about two days). Hours it
+  no longer keeps count as missing and show in the provenance line. Longer retention
+  on AgroExact's side, or daily totals, would make it whole.
+- **Cost:** 575 HEAD requests and up to 576 frames (roughly 40 MB in wet weather)
+  each time a new run is opened. A long load is accepted (20 Nov 2026). Nothing is kept on disk between sessions yet; per-hour
   partial sums in the cache directory would cut a reopen to the newest frames.
 - **Not verified against the live bucket** — the build environment cannot reach it.
 - The server-side layers (`httpSource`) remain the intended route; switching back is
