@@ -700,6 +700,30 @@ line that names the forecast that moved.
 
 ## Open
 
+### Rainfall total summed on the phone — interim (20 Nov 2026)
+
+The cumulative layer no longer runs on the dummy build. `core/radar/nowcastSum.ts`
+sums the observed `.bin` frames (offsets -15..0) of the nowcast runs into windows of
+1, 3, 6, 12 and 24 hours, draws them as palette PNGs in the cache directory, and
+serves them behind the same `CumulativeSource` the server endpoint will use.
+
+- **File names are guessed.** `latest.json` names only the newest run, so every
+  five-minute mark of the last day is probed with a HEAD on `bins/{prefix}_0.bin`.
+  This rests on the prefix being the run time in UTC (checked against the manifest,
+  the layer errors if it is not) and on runs falling on five-minute marks (not
+  checkable: a run at 10:31 is simply never found).
+- **The total is a floor while the nowcast runs every half hour**: 8 of 12 frames per
+  hour. The provenance line says what share of frames there was. AgroExact plans a
+  20-minute cadence, which covers every slot.
+- **48 hours is not offered.** The bucket keeps about two days and 576 frames is too
+  much to download; daily totals would be needed.
+- **Cost:** 288 HEAD requests and up to 288 frames (roughly 20 MB in wet weather)
+  each time a new run is opened. Nothing is kept on disk between sessions yet; per-hour
+  partial sums in the cache directory would cut a reopen to the newest frames.
+- **Not verified against the live bucket** — the build environment cannot reach it.
+- The server-side layers (`httpSource`) remain the intended route; switching back is
+  one line in `ui/radar/FullMap.tsx`.
+
 ### Expo SDK 57 cannot launch when built against the iOS 27 SDK
 
 Built with Xcode 27 the app traps before React runs, on a black screen:

@@ -31,14 +31,17 @@ import type {
   RadarOverlay,
 } from './types';
 
-const BASE = 'https://nowcast.agroexact.com';
-const MANIFEST_URL = `${BASE}/latest.json`;
+export const NOWCAST_BASE = 'https://nowcast.agroexact.com';
+const BASE = NOWCAST_BASE;
+export const NOWCAST_MANIFEST_URL = `${BASE}/latest.json`;
+const MANIFEST_URL = NOWCAST_MANIFEST_URL;
 /** Frames live in per-type folders; the manifests stay in the bucket root. */
 const IMAGE_BASE = `${BASE}/images`;
-const BIN_BASE = `${BASE}/bins`;
+export const NOWCAST_BIN_BASE = `${BASE}/bins`;
+const BIN_BASE = NOWCAST_BIN_BASE;
 
 /** The manifest each run publishes once every frame it names is uploaded. */
-interface Manifest {
+export interface NowcastManifest {
   /** ISO 8601 run time; `offsets` are minutes relative to this. */
   timestamp: string;
   /** Frame files are `images/{prefix}_{offset}.png` / `bins/{prefix}_{offset}.bin`. */
@@ -102,15 +105,19 @@ export function boundsFromMercator(
 // sample a lon/lat, project it into that CRS and map linearly into the bounding box
 // of the product corners.
 
-const GRID_COLS = 700;
-const GRID_ROWS = 765;
+export const GRID_COLS = 700;
+export const GRID_ROWS = 765;
 
 const KNMI_STEREO =
   '+proj=stere +lat_0=90 +lon_0=0 +lat_ts=60 +a=6378140 +b=6356750 +x_0=0 +y_0=0';
 
+/** Built once: handing proj4 the definition string on every call re-parses it,
+ *  which is a tenfold cost when a whole image is projected pixel by pixel. */
+const TO_STEREO = proj4(KNMI_STEREO);
+
 /** lon/lat in degrees → metres in the grid's stereographic CRS. */
 function project(lon: number, lat: number): [number, number] {
-  return proj4(KNMI_STEREO, [lon, lat]) as [number, number];
+  return TO_STEREO.forward([lon, lat]) as [number, number];
 }
 
 // Product corners (SW, NW, NE, SE); their projected bounding box spans the full
@@ -137,6 +144,17 @@ export function gridIndexFor(lat: number, lon: number): number {
   const clamp = (v: number, hi: number) => Math.min(hi, Math.max(0, v));
   const col = clamp(Math.floor(((x - X_MIN) / (X_MAX - X_MIN)) * GRID_COLS), GRID_COLS - 1);
   const row = clamp(Math.floor(((Y_MAX - y) / (Y_MAX - Y_MIN)) * GRID_ROWS), GRID_ROWS - 1);
+  return row * GRID_COLS + col;
+}
+
+/** The grid cell a coordinate falls in, or -1 outside the product. One projection
+ *  instead of the two `isWithinGrid` + `gridIndexFor` would cost, which matters to
+ *  the cumulative layer: it asks for every pixel of a 765×820 image. */
+export function gridCellAt(lat: number, lon: number): number {
+  const [x, y] = project(lon, lat);
+  const col = Math.floor(((x - X_MIN) / (X_MAX - X_MIN)) * GRID_COLS);
+  const row = Math.floor(((Y_MAX - y) / (Y_MAX - Y_MIN)) * GRID_ROWS);
+  if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return -1;
   return row * GRID_COLS + col;
 }
 
@@ -232,7 +250,7 @@ export class ExactCastProvider implements OverlayRadarProvider {
 
   /** The run currently on screen. Held so `frameOverlay` can answer synchronously
    *  during render, and so a second screen does not refetch the manifest. */
-  private run: { manifest: Manifest; bounds: GeoBounds; fetchedMs: number } | null = null;
+  private run: { manifest: NowcastManifest; bounds: GeoBounds; fetchedMs: number } | null = null;
 
   /** One run sampled at one place. The frames are immutable, so this is only
    *  invalidated by a new run or a different location — which is exactly what the
@@ -253,7 +271,7 @@ export class ExactCastProvider implements OverlayRadarProvider {
    */
   private async loadRun(signal?: AbortSignal) {
     if (this.run && Date.now() - this.run.fetchedMs < 60_000) return this.run;
-    const manifest = await fetchJson<Manifest>(MANIFEST_URL, 'ExactCast', {
+    const manifest = await fetchJson<NowcastManifest>(MANIFEST_URL, 'ExactCast', {
       signal,
       headers: { 'Cache-Control': 'no-cache' },
     });

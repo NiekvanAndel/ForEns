@@ -53,6 +53,7 @@ import {
   clockAt, formatMm, sinceLabel,
   type CumulativeManifest, type CumulativeWindow,
 } from '../../core/radar/cumulative';
+import { frameShare } from '../../core/radar/nowcastSum';
 import type { CumulativeReading, SeriesPoint } from '../../core/radar/reading';
 import type { CumulativeStatus } from './useCumulative';
 import { usePrefs } from '../../state/prefs';
@@ -124,7 +125,7 @@ export function CumulativePanel({
           <Text variant="stat" weight="bold" color={palette.appValue} tabular>
             {reading.mm != null ? formatMm(reading.mm) : reading.loading ? '…' : '—'}
           </Text>
-          <Origin reading={reading} source={manifest.source} />
+          <Origin reading={reading} source={manifest.source} window={window} />
         </View>
 
         <Pressable
@@ -170,7 +171,9 @@ export function CumulativePanel({
  * bare dash cannot explain by itself: a location the layer does not cover, and a
  * layer built from synthetic data.
  */
-function Origin({ reading, source }: { reading: CumulativeReading; source: string }) {
+function Origin({
+  reading, source, window,
+}: { reading: CumulativeReading; source: string; window: CumulativeWindow }) {
   const { palette } = useTheme();
   const { prefs } = usePrefs();
 
@@ -195,6 +198,19 @@ function Origin({ reading, source }: { reading: CumulativeReading; source: strin
         {reading.stationName
           ? ta('cumMeasuredAt', prefs.lang).replace('{name}', reading.stationName)
           : ta('cumMeasuredHere', prefs.lang)}
+      </Text>
+    );
+  }
+  if (source === 'nowcast') {
+    // Summed on the phone from the nowcast's frames. While the runs leave gaps the
+    // total is a floor, and by a third at a half-hourly cadence — part of the
+    // reading, not a caveat, so it stays on this one line.
+    const pct = Math.floor(frameShare(window) * 100);
+    return (
+      <Text variant="caption" color={palette.muted}>
+        {pct >= 100
+          ? ta('cumSourceNowcast', prefs.lang)
+          : ta('cumSourceNowcastPartial', prefs.lang).replace('{pct}', String(pct))}
       </Text>
     );
   }

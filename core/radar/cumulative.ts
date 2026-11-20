@@ -337,8 +337,8 @@ export function formatMm(mm: number): string {
  *
  * Not wired up yet: the endpoints require an authenticated user, the app's only
  * credential is a WorkOS bearer token, and `swiftcast.views_api` currently accepts
- * only Django sessions and DRF tokens. The map runs on the bundled fixtures until
- * that is settled — see DEFERRED.md. This exists now so the contract's own behaviour
+ * only Django sessions and DRF tokens. Until that is settled the map sums the
+ * nowcast's own frames on the phone (`./nowcastSum`) — see DEFERRED.md. This exists now so the contract's own behaviour
  * (the 503, the untouched URLs, the manifest passed through as-is) is written down
  * and tested rather than improvised later.
  */

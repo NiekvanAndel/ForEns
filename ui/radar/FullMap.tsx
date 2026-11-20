@@ -109,7 +109,7 @@ import { detailchartsSource, sampleField } from '../../core/fields';
 import { CumulativeBubbles } from './CumulativeBubbles';
 import { useCumulative } from './useCumulative';
 import { useCumulativeReadings } from './useCumulativeReadings';
-import { fixtureSource } from './fixtureSource';
+import { nowcastCumulativeSource } from './nowcastSumSource';
 import type { MapView } from '../../core/radar/bubbles';
 import { Timeline } from './Timeline';
 import { hasNowcastCurve, NowcastPanel } from './NowcastPanel';
@@ -232,7 +232,7 @@ export function FullMap({
   // Only tracked while the bubbles are up: a state update per frame of a pan is not
   // something to do for a layer nobody has switched on.
   const [view, setView] = useState<MapView | null>(null);
-  const cumulative = useCumulative(fixtureSource);
+  const cumulative = useCumulative(nowcastCumulativeSource);
   const totals = layer === 'cumulative';
   // The three Detailcharts layers are one thing to this screen: a scalar field on a
   // loop. Only the variable differs, so they share a hook, a panel and a legend.
@@ -426,7 +426,7 @@ export function FullMap({
                   manifest={cumulative.manifest}
                   windows={cumulative.windows}
                   active={cumulative.window}
-                  source={fixtureSource}
+                  source={nowcastCumulativeSource}
                   beforeId={rainBeforeId}
                 />
                 <CumulativeBubbles
