@@ -33,12 +33,15 @@ import type {
 
 const BASE = 'https://nowcast.agroexact.com';
 const MANIFEST_URL = `${BASE}/latest.json`;
+/** Frames live in per-type folders; the manifests stay in the bucket root. */
+const IMAGE_BASE = `${BASE}/images`;
+const BIN_BASE = `${BASE}/bins`;
 
 /** The manifest each run publishes once every frame it names is uploaded. */
 interface Manifest {
   /** ISO 8601 run time; `offsets` are minutes relative to this. */
   timestamp: string;
-  /** Frame files are `{prefix}_{offset}.png` / `.bin`. */
+  /** Frame files are `images/{prefix}_{offset}.png` / `bins/{prefix}_{offset}.bin`. */
   prefix: string;
   /** [-15..0] observed, [+5..+90] forecast. */
   offsets: number[];
@@ -292,11 +295,11 @@ export class ExactCastProvider implements OverlayRadarProvider {
 
   frameOverlay(frame: RadarFrame): RadarOverlay | null {
     if (!this.run) return null;
-    return { url: `${BASE}/${frame.id}.png`, bounds: this.run.bounds };
+    return { url: `${IMAGE_BASE}/${frame.id}.png`, bounds: this.run.bounds };
   }
 
   frameImageUrls(frames: readonly RadarFrame[]): string[] {
-    return frames.map((f) => `${BASE}/${f.id}.png`);
+    return frames.map((f) => `${IMAGE_BASE}/${f.id}.png`);
   }
 
   async nowcastProfile(lat: number, lon: number, signal?: AbortSignal): Promise<NowcastProfile> {
@@ -316,7 +319,7 @@ export class ExactCastProvider implements OverlayRadarProvider {
         // Against the clock, not against the run: by the time a phone reads a run
         // it is already minutes old.
         offsetMin: Math.round((runMs + offset * 60_000 - nowMs) / 60_000),
-        mmPerHour: await fetchFrameRate(`${BASE}/${manifest.prefix}_${offset}.bin`, index, signal),
+        mmPerHour: await fetchFrameRate(`${BIN_BASE}/${manifest.prefix}_${offset}.bin`, index, signal),
       }))
     );
 

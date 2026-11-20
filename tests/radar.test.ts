@@ -268,9 +268,43 @@ describe('ExactCastProvider', () => {
       { id: '2026-08-19T10-30_90', timeMs: 0, forecast: true },
     ]);
     expect(urls).toEqual([
-      'https://nowcast.agroexact.com/2026-08-19T10-30_-15.png',
-      'https://nowcast.agroexact.com/2026-08-19T10-30_90.png',
+      'https://nowcast.agroexact.com/images/2026-08-19T10-30_-15.png',
+      'https://nowcast.agroexact.com/images/2026-08-19T10-30_90.png',
     ]);
+  });
+
+  it('reads the rain-rate grids from the bins folder', async () => {
+    // The bucket keeps the manifest in its root but the frames in per-type folders.
+    const live = {
+      timestamp: new Date(Date.now() - 30 * 60_000).toISOString(),
+      prefix: '2026-08-19T10-30',
+      offsets: [0, 90],
+      bounds_3857: BOUNDS_3857,
+    };
+    const requested: string[] = [];
+    const stub = new ExactCastProvider();
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requested.push(url);
+      if (url.endsWith('/latest.json')) {
+        return new Response(JSON.stringify(live), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(new Uint8Array(700 * 765), { status: 200 });
+    }) as typeof fetch;
+    try {
+      await stub.nowcastProfile(52.09, 5.12);
+      expect(requested).toContain('https://nowcast.agroexact.com/latest.json');
+      expect(requested.filter((u) => u.endsWith('.bin')).sort()).toEqual([
+        'https://nowcast.agroexact.com/bins/2026-08-19T10-30_0.bin',
+        'https://nowcast.agroexact.com/bins/2026-08-19T10-30_90.bin',
+      ]);
+    } finally {
+      globalThis.fetch = original;
+    }
   });
 });
 
